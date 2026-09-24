@@ -21,6 +21,7 @@ import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.EnvService;
+import io.ontomato.dataengine.service.ProductionEnvironmentLoginPolicy;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,9 @@ public class EnvServiceImpl implements EnvService {
 	
 	@Autowired
 	private SchemaPermissionService schemaPermissionService;
+
+	@Autowired
+	private ProductionEnvironmentLoginPolicy productionEnvironmentLoginPolicy;
 	
 	@Override
 	public void importSchema(User user) throws Exception {
@@ -120,6 +124,9 @@ public class EnvServiceImpl implements EnvService {
 	}
 	
 	private String getProductionEnvTk() throws Exception {
+		if (!productionEnvironmentLoginPolicy.shouldLogin(dataRagConfig.getProductionEnvUser())) {
+			return "";
+		}
 		Map<String, String> headers = new HashMap<String, String>();
 		headers.put("Content-Type", "application/json;charset=utf-8");
 		JSONObject param = new JSONObject();
