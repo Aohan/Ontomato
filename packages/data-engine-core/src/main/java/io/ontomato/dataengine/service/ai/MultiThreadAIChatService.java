@@ -38,7 +38,7 @@ import io.ontomato.dataengine.tools.ABCHarnessFileTools;
 import io.ontomato.dataengine.logging.AgentLlmCallListener;
 import io.ontomato.dataengine.util.LogHelper;
 
-import dev.langchain4j.mcp.McpToolProvider;
+import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
@@ -239,7 +239,7 @@ public class MultiThreadAIChatService {
     private ChatMemoryProvider chatMemoryProvider;
     
     @Autowired
-    private McpToolProvider mcpToolProvider;
+    private ToolProvider toolProvider;
     
     @Autowired
     private SchemaSkillTools schemaSkillTools;
@@ -332,7 +332,7 @@ public class MultiThreadAIChatService {
 				}
 				if(skills == null){
 					chatAgent = newNormalAgent(chatModel)
-							.toolProviders(mcpToolProvider)
+							.toolProviders(toolProvider)
 							.tools(afterCalculatorSkillTools, abcHarnessFileTools,
 									afterCalculatorSubmitTools, afterCalculatorResultSubmitTools)
 							.build();
@@ -341,7 +341,7 @@ public class MultiThreadAIChatService {
 					chatAgent = newNormalAgent(chatModel)
 							.tools(skilltTools, abcHarnessFileTools, afterCalculatorSkillTools,
 									afterCalculatorSubmitTools, afterCalculatorResultSubmitTools)
-							.toolProviders(mcpToolProvider,skills.toolProvider())
+							.toolProviders(toolProvider,skills.toolProvider())
 							.systemMessage("You have access to the following skills:\n" + skills.formatAvailableSkills()
 									+ "\nWhen the user's request relates to one of these skills, activate it first using the `activate_skill` tool before proceeding.")
 							.build();
