@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.ontomato</groupId>
         <artifactId>ontomato</artifactId>
-        <version>4.0.0-dev</version>
+        <version>${revision}</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
