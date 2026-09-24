@@ -1,0 +1,8 @@
+package io.ontomato.dataengine.bean.dashboard;
+
+import lombok.Data;
+
+@Data
+public class DashboardCompoundCondition {
+	
+}
