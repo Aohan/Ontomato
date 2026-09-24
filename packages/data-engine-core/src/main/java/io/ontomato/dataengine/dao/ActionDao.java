@@ -35,6 +35,9 @@ public class ActionDao extends BaseDao {
 	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
+	private AssetLookupPolicy assetLookupPolicy;
+
+	@Autowired
 	private EmbeddingService embeddingService;
 
 	private static final String TABLE_NAME = "action";
@@ -137,6 +140,9 @@ public class ActionDao extends BaseDao {
 	}
 
 	public Object[] queryById(String id) {
+		if (!assetLookupPolicy.shouldQuery(jdbcTemplate, TABLE_NAME)) {
+			return null;
+		}
 		Action action = null;
 		String functionId = null;
 		try {
@@ -160,6 +166,9 @@ public class ActionDao extends BaseDao {
 
 	public List<Object[]> queryList(String status, String functionId, String className, String domainId) {
 		List<Object[]> oList = new ArrayList<Object[]>();
+		if (!assetLookupPolicy.shouldQuery(jdbcTemplate, TABLE_NAME)) {
+			return oList;
+		}
 		try {
 			StringBuilder whereSql = new StringBuilder("1 = 1");
 			List<Object> params = new ArrayList<>();

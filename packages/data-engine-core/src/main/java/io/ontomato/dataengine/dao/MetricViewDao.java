@@ -35,6 +35,9 @@ public class MetricViewDao extends BaseDao {
 	private JdbcTemplate jdbcTemplate;
 
 	@Autowired
+	private AssetLookupPolicy assetLookupPolicy;
+
+	@Autowired
 	private EmbeddingService embeddingService;
 
 	private static final String TABLE_NAME = "metric_view";
@@ -147,6 +150,9 @@ public class MetricViewDao extends BaseDao {
 	}
 
 	public Object[] queryById(String id) {
+		if (!assetLookupPolicy.shouldQuery(jdbcTemplate, TABLE_NAME)) {
+			return null;
+		}
 		MetricView metricView = null;
 		String functionId = null;
 		try {
@@ -170,6 +176,9 @@ public class MetricViewDao extends BaseDao {
 
 	public List<Object[]> queryList(String type, String status, String functionId, String className, String domainId) {
 		List<Object[]> oList = new ArrayList<Object[]>();
+		if (!assetLookupPolicy.shouldQuery(jdbcTemplate, TABLE_NAME)) {
+			return oList;
+		}
 		try {
 			StringBuilder whereSql = new StringBuilder("1 = 1");
 			List<Object> params = new ArrayList<>();
