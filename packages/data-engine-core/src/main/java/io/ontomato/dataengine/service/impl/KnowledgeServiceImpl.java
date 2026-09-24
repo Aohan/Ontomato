@@ -17,6 +17,7 @@ import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.JSONCorrector;
 import io.ontomato.dataengine.service.KnowledgeService;
 import io.ontomato.dataengine.service.LangService;
+import io.ontomato.dataengine.service.UntitledKnowledgeTitlePrefix;
 import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
 import io.ontomato.dataengine.util.UserMessageUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,6 +48,12 @@ public class KnowledgeServiceImpl implements KnowledgeService {
     @Autowired
     private MultiThreadAIChatService multiThreadAIChatService;
 
+    private final UntitledKnowledgeTitlePrefix untitledKnowledgeTitlePrefix;
+
+    public KnowledgeServiceImpl(UntitledKnowledgeTitlePrefix untitledKnowledgeTitlePrefix) {
+        this.untitledKnowledgeTitlePrefix = untitledKnowledgeTitlePrefix;
+    }
+
     Pattern JSON_PATTERN = Pattern.compile("```json([\\s\\S]+)```" );
 
     @Override
@@ -73,7 +80,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         knowledgeEntity.setKnowledgeID(knowledgeid);
         knowledgeEntity.setModifyTime(new Date());
         if(knowledgeTitle == null || knowledgeTitle.isEmpty()){
-            knowledgeEntity.setKnowledgeTitle("业务知识" + knowledgeid);
+            knowledgeEntity.setKnowledgeTitle(untitledKnowledgeTitlePrefix.prefix() + knowledgeid);
         } else {
             knowledgeEntity.setKnowledgeTitle(knowledgeTitle);
         }

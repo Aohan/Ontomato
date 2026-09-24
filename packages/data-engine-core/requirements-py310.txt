@@ -1,0 +1,19 @@
+# DataRAG runtime Python dependencies (CPython 3.10, shared by linux/amd64 and linux/arm64).
+# Versions are based on deploy/python/tools/requirements-py310.txt (read-only reference), selected per DataRAG's actual needs:
+# The prompts restrict Python calculation to pandas and the standard library (python_calculator_prompt.md,
+# after_calculator_prompt.md); embedded code generation uses requests (DslToPythonCodeUtil);
+# The MCP calculation service (mcp/mcpserver.py) uses mcp and sympy and runs built into the backend container.
+pandas==2.3.2
+numpy==2.2.6
+python-dateutil==2.9.0.post0
+six==1.17.0
+pytz==2026.2
+tzdata==2026.2
+requests==2.34.2
+certifi==2026.6.17
+charset-normalizer==3.4.7
+idna==3.18
+urllib3==2.7.0
+# The MCP calculation service (mcp/mcpserver.py, running built into the backend container) and arithmetic evaluation.
+mcp==1.12.1
+sympy==1.14.0

@@ -1,0 +1,25 @@
+[{
+	"as": "suspect_id",
+	"variable": "suspect",
+	"field": "id"
+}, {
+	"as": "suspect_status",
+	"variable": "suspect",
+	"field": "status"
+}, {
+	"as": "suspect_city",
+	"variable": "suspect",
+	"field": "city"
+}, {
+	"as": "category",
+	"variable": "suspect",
+	"field": "category"
+}, {
+	"as": "created_at",
+	"variable": "suspect",
+	"field": "created_at"
+}, {
+	"as": "priority",
+	"variable": "suspect",
+	"field": "priority"
+}]

@@ -1,0 +1,48 @@
+{
+	"idx": 0,
+	"variable": "suspect",
+	"class": "/Person",
+	"conditions": {
+		"properties": {
+			"operator": "logic",
+			"and": [{
+					"field": "status",
+					"operator": "=",
+					"value": "active"
+				},
+				{
+					"field": "temperature",
+					"operator": "between",
+					"value": [
+						20,
+						30
+					]
+				},
+				{
+					"field": "length",
+					"operator": ">",
+					"value": 10
+				},
+				{
+					"field": "name",
+					"operator": "in",
+					"value": [
+						"Peter",
+						"John",
+						"King"
+					]
+				},
+				{
+					"field": "address",
+					"operator": "like",
+					"value": "Beijing"
+				},
+				{
+					"field": "job",
+					"operator": "is not",
+					"value": null
+				}
+			]
+		}
+	}
+}
