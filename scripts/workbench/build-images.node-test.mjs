@@ -186,15 +186,28 @@ function runtimeMeta(state) {
   return JSON.parse(raw.slice("RUNTIME_META_JSON=".length));
 }
 
-test("only the runtime subcommand exists", async () => {
-  await assert.rejects(() => buildWorkbenchApp({}, ["all", "--arch", "arm64"]), /Expected runtime/);
+test("only the runtime and app subcommands exist", async () => {
+  await assert.rejects(() => buildWorkbenchApp({}, ["all", "--arch", "arm64"]), /Expected runtime or app/);
+  await assert.rejects(
+    () => buildWorkbenchApp({}, ["application", "--arch", "arm64"]),
+    /Expected runtime or app/,
+  );
   assert.equal(await buildWorkbenchApp({}, ["--help"]), undefined);
 });
 
 test("the architecture comes only from Make", async () => {
   await assert.rejects(() => buildWorkbenchApp({}, ["runtime"]), /Required --arch/);
+  await assert.rejects(() => buildWorkbenchApp({}, ["app"]), /Required --arch/);
   await assert.rejects(
     () => buildWorkbenchApp({}, ["runtime", "--arch", "arm64", "--pack-app"]),
+    /does not match build action/,
+  );
+  await assert.rejects(
+    () => buildWorkbenchApp({}, ["app", "--arch", "arm64", "--pack-runtime"]),
+    /does not match build action/,
+  );
+  await assert.rejects(
+    () => buildWorkbenchApp({}, ["app", "--arch", "arm64", "--bogus"]),
     /Unknown argument/,
   );
 });

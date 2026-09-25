@@ -4,7 +4,7 @@ HOST_ARCH := $(shell $(NODE) -p "process.arch === 'x64' ? 'amd64' : process.arch
 ARCH ?= $(HOST_ARCH)
 PROMPT_LANG ?= en
 
-.PHONY: build pack pack-app pack-amd64 pack-arm64 pack-app-amd64 pack-app-arm64 workbench-runtime workbench-runtime-pack workbench-runtime-amd64 workbench-runtime-arm64 workbench-runtime-pack-amd64 workbench-runtime-pack-arm64
+.PHONY: build pack pack-app pack-amd64 pack-arm64 pack-app-amd64 pack-app-arm64 workbench-runtime workbench-runtime-pack workbench-runtime-amd64 workbench-runtime-arm64 workbench-runtime-pack-amd64 workbench-runtime-pack-arm64 workbench-app workbench-app-pack workbench-app-amd64 workbench-app-arm64 workbench-app-pack-amd64 workbench-app-pack-arm64
 
 build:
 	$(NODE) apps/data-engine/build.mjs all --arch $(ARCH) --prompt-lang $(PROMPT_LANG)
@@ -32,3 +32,15 @@ workbench-runtime-amd64 workbench-runtime-arm64:
 
 workbench-runtime-pack-amd64 workbench-runtime-pack-arm64:
 	$(MAKE) workbench-runtime-pack ARCH=$(@:workbench-runtime-pack-%=%)
+
+workbench-app:
+	$(NODE) apps/workbench/build.mjs app --arch $(ARCH)
+
+workbench-app-pack:
+	$(NODE) apps/workbench/build.mjs app --arch $(ARCH) --pack-app
+
+workbench-app-amd64 workbench-app-arm64:
+	$(MAKE) workbench-app ARCH=$(@:workbench-app-%=%)
+
+workbench-app-pack-amd64 workbench-app-pack-arm64:
+	$(MAKE) workbench-app-pack ARCH=$(@:workbench-app-pack-%=%)

@@ -1,9 +1,11 @@
-// Host builder for the workbench runtime image. The app entry owns only its
-// product name, sources and work roots; family, contract interface, recipe,
-// tools and requirements are this builder's shared facts. Only the runtime
-// subcommand exists: the app image arrives with its own small package later.
+// Host builder for the workbench runtime and app images. The app entry owns
+// only its product name, sources and work roots; family, contract interface,
+// recipes, tools and requirements are this builder's shared facts. The
+// runtime subcommand builds and locks the shared dependency runtime; the app
+// subcommand consumes an already locked runtime and never rebuilds it.
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -18,24 +20,26 @@ import {
   fingerprint,
   imageLabels,
   inspectImage,
+  loadRuntimeLock,
   output,
   parseOptions,
   readJson,
   readRevision,
+  requireRuntime,
   runtimeTag,
   saveRuntimeLock,
   sourceIdentity,
   validateContract,
 } from "../build-support.mjs";
 import { collectMetadataContext } from "./metadata-context.mjs";
-import { INTERFACE } from "./runtime-contract.mjs";
+import { checkPythonRequirements, INTERFACE } from "./runtime-contract.mjs";
 
 // Family authority is N3 runtime-contract.mjs (not exported there, and N3 is
 // frozen); the interface version is imported from it directly.
 const FAMILY = "node-app";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SCRIPTS = dirname(HERE);
-const FLAGS = { "--arch": "value", "--pack-runtime": "boolean" };
+const FLAGS = { "--arch": "value", "--pack-runtime": "boolean", "--pack-app": "boolean" };
 // Q1: runtime-layout.mjs is required here because install-runtime.mjs imports
 // it; the old full-scripts copy hid that dependency.
 const TOOLS = [
@@ -47,6 +51,27 @@ const TOOLS = [
   "build-support.mjs",
   "data-engine/runtime_dependencies.py",
 ];
+// The app container needs only the stager and its real dependencies: the
+// installer and the metadata collector stay on the host.
+const APP_TOOLS = [
+  "workbench/stage-app.mjs",
+  "workbench/runtime-layout.mjs",
+  "workbench/production-graph.mjs",
+  "workbench/runtime-contract.mjs",
+  "build-support.mjs",
+];
+// Build inputs only, at any depth: never the store, history, outputs, tests
+// or secrets. Mirrors the N4a forbidden set plus the test/env exclusions the
+// app stage allows.
+const WORKSPACE_EXCLUDE = new Set([
+  "node_modules",
+  ".git",
+  ".build",
+  "dist",
+  "target",
+  "coverage",
+  "__tests__",
+]);
 // Only arguments the old Node entry supported; recipe defaults already pin the
 // images, mirrors and index, so these pass through only when the env sets them.
 const BUILD_ARG_NAMES = [
@@ -61,9 +86,9 @@ function baseBuild(arch) {
   return ["buildx", "build", "--provenance=false", "--platform", `linux/${arch}`];
 }
 
-function imageBuildArgs() {
+function imageBuildArgs(names = BUILD_ARG_NAMES) {
   const args = [];
-  for (const name of BUILD_ARG_NAMES) {
+  for (const name of names) {
     const value = process.env[name];
     if (value) args.push("--build-arg", `${name}=${value}`);
   }
@@ -76,12 +101,16 @@ function imageBuildArgs() {
 export function combineIdentity(version, appRoot, entries) {
   const app = entries.find((entry) => entry.root === appRoot);
   if (!app) throw new Error("this version's app repo is not a build source");
+  const dirty = entries.some((entry) => entry.identity.dirty);
   return {
     version,
     revision: app.identity.revision,
     revisionShort: app.identity.revisionShort,
     created: app.identity.created,
-    dirty: entries.some((entry) => entry.identity.dirty),
+    dirty,
+    // The app tag reuses the sampled stamp so repeated builds do not collide;
+    // only its dirty marking follows the combined sources, sampled once.
+    stamp: `${app.identity.stamp.replace(/-dirty$/, "")}${dirty ? "-dirty" : ""}`,
     sources: entries.map((entry) => ({
       id: entry.id,
       revision: entry.identity.revision,
@@ -90,6 +119,27 @@ export function combineIdentity(version, appRoot, entries) {
       created: entry.identity.created,
     })),
   };
+}
+
+export function sampleSources(app, version) {
+  return app.sources.map((source) => ({
+    id: source.id,
+    root: source.root,
+    identity: sourceIdentity(version, source.root, app.lockExclude),
+  }));
+}
+
+function assertFreshRecord(entries, record) {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  for (const source of record.sources)
+    if (source.head !== byId.get(source.id).identity.revision)
+      throw new Error(`source ${source.id} changed during staging; restart the build`);
+}
+
+function assertEntriesCurrent(entries) {
+  for (const entry of entries)
+    if (output("git", ["-C", entry.root, "rev-parse", "HEAD"]) !== entry.identity.revision)
+      throw new Error(`source ${entry.id} changed during staging; restart the build`);
 }
 
 function stageContext(app, arch) {
@@ -102,6 +152,182 @@ async function copyTools(context) {
   for (const rel of TOOLS) cpSync(join(SCRIPTS, rel), join(context, "tools", rel));
   // The staged installer must load without running: its module guard skips main.
   await import(pathToFileURL(join(context, "tools/workbench/install-runtime.mjs")).href);
+}
+
+// Only N4a-visible files enter the workspace copy: git tracked plus new
+// unignored files, further limited to the build's actual inputs (root
+// metadata, apps and packages). Ignored build outputs, local configs and
+// out-of-source docs never enter the context; resource markdown under the
+// package resource dirs is kept. No second packlist: git is the authority.
+const WORKSPACE_ROOT_FILES = new Set(["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"]);
+const RESOURCE_DIRS = new Set(["prompts", "skills", "data", "resources"]);
+
+function workspaceAllowed(path) {
+  const parts = path.split("/");
+  if (parts.length === 1) return WORKSPACE_ROOT_FILES.has(path);
+  if (parts[0] !== "apps" && parts[0] !== "packages") return false;
+  if (parts.some((part) => WORKSPACE_EXCLUDE.has(part))) return false;
+  const base = parts.at(-1);
+  if (base === ".env" || base === ".npmrc" || base.startsWith(".env.")) return false;
+  return !(base.endsWith(".md") && !parts.some((part) => RESOURCE_DIRS.has(part)));
+}
+
+export function copyWorkspace(app, context, record) {
+  const listed = new Map(record.sources.map((source) => [source.id, source]));
+  for (const source of app.sources) {
+    const entry = listed.get(source.id);
+    if (!entry) throw new Error(`collector record has no source: ${source.id}`);
+    // All metadata comes from the collector's captured bytes, never a
+    // second live read: a manifest or lock edited after collection must not
+    // silently change this build's inputs. N4a owns that listing.
+    const captured = new Set(entry.candidates.map((candidate) => candidate.path));
+    for (const rel of captured) {
+      if (!workspaceAllowed(rel)) continue;
+      const from = join(context, "sources", source.id, rel);
+      if (!existsSync(from)) throw new Error(`collector metadata is missing: ${source.id}/${rel}`);
+      const dest = join(context, "workspace", source.id, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      cpSync(from, dest);
+    }
+    // Scope follows the record: only directories that own a non-root
+    // package.json manifest in the captured listing. A Java tree (pom
+    // without package.json) never appears there, so it never enters.
+    const owned = new Set();
+    for (const candidate of entry.candidates) {
+      if (WORKSPACE_ROOT_FILES.has(candidate.path)) continue;
+      if (!candidate.path.endsWith("/package.json")) continue;
+      owned.add(candidate.path.slice(0, -"/package.json".length));
+    }
+    const files = output("git", [
+      "-C",
+      source.root,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+    ])
+      .split("\0")
+      .filter((path) => path !== "");
+    for (const rel of files) {
+      if (!workspaceAllowed(rel)) continue;
+      // Metadata already came from the captured bytes above; a live
+      // second read here would silently overwrite it.
+      if (captured.has(rel)) continue;
+      if (![...owned].some((dir) => rel.startsWith(`${dir}/`)))
+        continue;
+      const dest = join(context, "workspace", source.id, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      cpSync(join(source.root, rel), dest);
+    }
+  }
+}
+
+async function copyAppTools(app, context) {
+  for (const rel of APP_TOOLS) cpSync(join(SCRIPTS, rel), join(context, "tools", rel));
+  cpSync(join(app.publicRoot, "docker/workbench/launch.sh"), join(context, "launch.sh"));
+  // The staged stager must load without running: its module guard skips main.
+  await import(pathToFileURL(join(context, "tools/workbench/stage-app.mjs")).href);
+}
+
+// The locked runtime is consumed read-only: a missing image fails with the
+// import instructions, it is never pulled or rebuilt, and its lock is never
+// written by the app command.
+function existingRuntime(app, arch) {
+  const fp = loadRuntimeLock(app.lockRoot, FAMILY, arch);
+  const tag = requireRuntime(FAMILY, arch, fp);
+  const contract = validateContract(
+    FAMILY,
+    `linux/${arch}`,
+    readImageContract(tag, arch),
+    fp,
+    INTERFACE,
+  );
+  checkPythonRequirements(
+    readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8"),
+    contract.python.packages,
+  );
+  return { tag, fp, contract };
+}
+
+function assertAppImage(tag, arch, component, fp) {
+  const inspected = inspectImage(tag, `linux/${arch}`);
+  const labels = inspected && inspected.Config.Labels ? inspected.Config.Labels : {};
+  if (
+    !inspected ||
+    inspected.Os !== "linux" ||
+    inspected.Architecture !== arch ||
+    labels["io.runtime.component"] !== component ||
+    labels["io.runtime.kind"] !== "app" ||
+    labels["io.runtime.family"] !== FAMILY ||
+    labels[COMPAT_LABEL] !== fp
+  )
+    throw new Error(`Built image identity mismatch: ${tag}`);
+}
+
+async function buildWorkbenchAppImage(app, parsed, version, arch) {
+  const entries = sampleSources(app, version);
+  const context = stageContext(app, arch);
+  const record = collectMetadataContext({
+    sources: app.sources,
+    workspaceId: app.workspaceId,
+    appImporter: app.appImporter,
+    destination: context,
+  });
+  assertFreshRecord(entries, record);
+  copyWorkspace(app, context, record);
+  // The live tree was copied file by file after sampling: the recorded HEADs
+  // must still hold. This is a change check, not an atomic snapshot of dirty
+  // worktree edits, and it never resamples.
+  assertEntriesCurrent(entries);
+  await copyAppTools(app, context);
+  const runtime = existingRuntime(app, arch);
+  writeFileSync(join(context, "runtime-contract.json"), `${JSON.stringify(runtime.contract)}\n`);
+  const combined = combineIdentity(version, app.repoRoot, entries);
+  const meta = {
+    schema: 3,
+    family: FAMILY,
+    component: app.component,
+    kind: "app",
+    version: combined.version,
+    revision: combined.revision,
+    revisionShort: combined.revisionShort,
+    created: combined.created,
+    dirty: combined.dirty,
+    stamp: combined.stamp,
+    arch,
+    platform: `linux/${arch}`,
+    runtimeCompatFingerprint: runtime.fp,
+    sources: combined.sources,
+  };
+  const tag = `${app.component}-app:${combined.stamp}-${arch}`;
+  const alias = `${app.component}-app:deploy`;
+  const dockerfile = join(app.publicRoot, "docker/workbench/Dockerfile.app");
+  console.log(`[build] app ${tag}`);
+  docker([
+    ...baseBuild(arch),
+    ...imageBuildArgs([...BUILD_ARG_NAMES, "NODE_BUILDER_IMAGE"]),
+    "--load",
+    "--build-arg",
+    `WORKSPACE=${record.workspaceId}`,
+    "--build-arg",
+    `APP_META_JSON=${JSON.stringify(meta)}`,
+    ...imageLabels(app.component, "app", combined, runtime.fp, FAMILY),
+    "-t",
+    tag,
+    "-t",
+    alias,
+    "-f",
+    dockerfile,
+    context,
+  ]);
+  assertAppImage(tag, arch, app.component, runtime.fp);
+  console.log(`APP_IMAGE=${tag}\nAPP_DEPLOY_IMAGE=${alias}`);
+  if (parsed["--pack-app"])
+    await exportImage(
+      [tag, alias],
+      join(app.repoRoot, ".build", "pack", `${app.component}-app-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
+    );
 }
 
 function assertWorkbenchImage(tag, arch, fp) {
@@ -137,24 +363,28 @@ function readImageContract(tag, arch) {
 export async function buildWorkbenchApp(app, args) {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(
-      "Use make workbench-runtime [ARCH=amd64|arm64] or make workbench-runtime-pack.\nThe app image arrives with its own small package; only runtime is built here.",
+      "Use make workbench-runtime [ARCH=amd64|arm64], make workbench-runtime-pack,\nmake workbench-app [ARCH=amd64|arm64] or make workbench-app-pack.\nThe app command consumes the locked runtime and never rebuilds it.",
     );
     return;
   }
   const [command, ...flags] = args;
-  if (command !== "runtime")
-    throw new Error("Expected runtime (normally invoked through Make)");
+  if (command !== "runtime" && command !== "app")
+    throw new Error("Expected runtime or app (normally invoked through Make)");
   const parsed = parseOptions(flags, FLAGS);
   const arch = parsed["--arch"];
+  if (command === "app" && parsed["--pack-runtime"])
+    throw new Error("Packaging flag does not match build action");
+  if (command === "runtime" && parsed["--pack-app"])
+    throw new Error("Packaging flag does not match build action");
   const version = readRevision(readFileSync(join(app.publicRoot, "pom.xml"), "utf8"));
+  if (command === "app") {
+    await buildWorkbenchAppImage(app, parsed, version, arch);
+    return;
+  }
   // Each source's identity is captured once, up front: a later read would
   // silently relabel this build's inputs with a newer revision after a long
   // build, and the N4a snapshot must not gain a second authority.
-  const entries = app.sources.map((source) => ({
-    id: source.id,
-    root: source.root,
-    identity: sourceIdentity(version, source.root, app.lockExclude),
-  }));
+  const entries = sampleSources(app, version);
   const context = stageContext(app, arch);
   const record = collectMetadataContext({
     sources: app.sources,
@@ -162,10 +392,7 @@ export async function buildWorkbenchApp(app, args) {
     appImporter: app.appImporter,
     destination: context,
   });
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  for (const source of record.sources)
-    if (source.head !== byId.get(source.id).identity.revision)
-      throw new Error(`source ${source.id} changed during staging; restart the build`);
+  assertFreshRecord(entries, record);
   await copyTools(context);
   writeFileSync(
     join(context, "runtime-requirements.txt"),
