@@ -1,0 +1,135 @@
+# Workbench runtime image: Node 20.3 + Python 3.10, the third-party production
+# dependencies in a fixed virtual store, and the pairing preflight. The
+# application image is assembled into /app; this image never contains
+# application source, build output, default resources or installer inputs.
+#
+# The host entry prepares one build context. Every path below is part of that
+# contract; the driver only copies these entries and never redesigns them.
+#   sources/<source id>/      metadata-only trees from the N4a collector
+#   inputs.json               N4a build input record
+#   tools/                    the public scripts/ root
+#   runtime-requirements.txt  public docker/workbench/requirements.txt
+# The entrypoint and the runtime contract tools are copied out of tools/.
+ARG NODE_RUNTIME_IMAGE=docker.1ms.run/library/node:20.3.0-slim@sha256:bffbb1bf1a3afd6fbdd822bda7f1e7cb07eb407f3dc02bbef1bf414cbaa92afd
+ARG PYTHON_RUNTIME_IMAGE=docker.1ms.run/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG DEBIAN_MIRROR=https://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
+
+# Install stage (has npm/pnpm): installs only the production selection of the
+# app importer, at the fixed virtual store, then removes pnpm's own workspace
+# links and installation locks. The runtime stage does not inherit this stage:
+# npm, pnpm, corepack and the C++ headers under /usr/local/include stay out.
+FROM ${NODE_RUNTIME_IMAGE} AS installer
+
+RUN npm install -g pnpm@9.15.9
+# Playwright's browsers come from apt in the runtime stage (verified in N1).
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+COPY sources/ /src/
+COPY inputs.json /inputs.json
+COPY tools/ /tmp/tools/
+RUN node /tmp/tools/workbench/install-runtime.mjs
+
+FROM ${PYTHON_RUNTIME_IMAGE} AS runtime-files
+
+ARG PIP_INDEX_URL
+ARG DEBIAN_MIRROR
+ARG DEBIAN_SECURITY_MIRROR
+
+# Only the node binary and the runtime dependency tree.
+COPY --from=installer /usr/local/bin/node /usr/local/bin/node
+COPY --from=installer /opt/runtime/node_modules /opt/runtime/node_modules
+# The runtime tools' yaml link, resolved by the installer to the installed
+# third-party package; there is no hand-written pnpm directory name.
+COPY --from=installer /tmp/tool-links/node_modules /runtime/node_modules
+
+COPY runtime-requirements.txt /tmp/runtime-requirements.txt
+
+RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.conf.d/99retries && \
+    sed -i -E \
+      -e "s#https?://deb.debian.org/debian-security#${DEBIAN_SECURITY_MIRROR}#g" \
+      -e "s#https?://deb.debian.org/debian#${DEBIAN_MIRROR}#g" \
+      /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    chromium \
+    fontconfig \
+    fonts-wqy-microhei \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libgbm1 \
+    libglib2.0-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxcb1 \
+ && test -x /usr/bin/chromium \
+ && node --version \
+ && python3 --version | grep -E '^Python 3\.10\.' \
+ && python3 -m pip install --no-cache-dir --only-binary=:all: --index-url "$PIP_INDEX_URL" \
+    -r /tmp/runtime-requirements.txt \
+ && python3 -c "import pandas, sys; assert sys.version_info[:2] == (3, 10); print('pandas', pandas.__version__)" \
+ && rm -rf /usr/local/lib/python3.10/site-packages/pip* /usr/local/lib/python3.10/site-packages/setuptools* /usr/local/lib/python3.10/site-packages/pkg_resources /usr/local/bin/pip* \
+ && python3 -c "import pandas, numpy" \
+ && rm -rf /usr/local/include \
+ && rm -f /etc/apt/apt.conf.d/99retries && rm -rf /var/lib/apt/lists/*
+# pip/setuptools are used only during the build above: at runtime python only
+# execs scripts (numpy/pandas stay importable, pip does not).
+RUN if python3 -m pip --version >/dev/null 2>&1; then echo "pip still present, must be removed from runtime" >&2; exit 1; fi
+
+ENV ABC_REPLAY_PYTHON_COMMAND=python3.10 \
+    HOT_REPORT_PYTHON_COMMAND=python3.10 \
+    CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Node resolves bare imports by walking ancestors of the importing file, so /app
+# reaches this directory without owning node_modules itself.
+WORKDIR /opt/runtime
+RUN ln -s /opt/runtime/node_modules /node_modules
+
+# Runtime tools: the N3 contract CLI, its N2 module and the shared build
+# support. The installer and the N4a collector are build-time only and are not
+# copied here; the single Python helper is the public one, not a second copy.
+COPY tools/build-support.mjs /runtime/scripts/build-support.mjs
+COPY tools/workbench/runtime-contract.mjs /runtime/scripts/workbench/runtime-contract.mjs
+COPY tools/workbench/production-graph.mjs /runtime/scripts/workbench/production-graph.mjs
+COPY tools/data-engine/runtime_dependencies.py /runtime/runtime_dependencies.py
+COPY tools/workbench/container-entrypoint.sh /runtime/container-entrypoint.sh
+RUN chmod 0755 /runtime/container-entrypoint.sh
+
+# The real N3 inspect runs against this installed environment. Only the
+# packages projection enters this stage; the full graph, which carries the
+# enterprise bindings and app paths, stays in the installer and never reaches
+# an image layer.
+FROM runtime-files AS contract
+COPY --from=installer /tmp/packages.json /tmp/packages.json
+COPY --from=installer /tmp/snapshot-paths.json /tmp/snapshot-paths.json
+RUN node /runtime/scripts/workbench/runtime-contract.mjs inspect /tmp/packages.json /tmp/snapshot-paths.json > /runtime/contract.json
+
+FROM scratch AS contract-export
+COPY --from=contract /runtime/contract.json /contract.json
+
+FROM runtime-files AS runtime
+COPY --from=contract /runtime/contract.json /runtime/contract.json
+# Build metadata is traceability only, outside the compatibility contract.
+ARG RUNTIME_META_JSON
+RUN test -n "$RUNTIME_META_JSON" \
+ && printf '%s' "$RUNTIME_META_JSON" > /runtime/.image-meta.json
+
+WORKDIR /app
+ENTRYPOINT ["/runtime/container-entrypoint.sh"]
+# The tsx CLI selects a loader that also works on Node 20.3 (module.register
+# only exists from Node 20.6, so --import tsx is not enough here). The app
+# package owns this script.
+CMD ["/app/launch.sh"]

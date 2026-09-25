@@ -1,0 +1,141 @@
+// Build-time installer for the workbench runtime image. It runs in the installer
+// stage against the N4a metadata context under /src and produces the fixed
+// virtual-store runtime tree plus the inputs of the N3 contract inspect.
+// Workspace members are resolved by pnpm itself; the host passes no globs.
+import { createRequire } from "node:module";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execute, output } from "../build-support.mjs";
+import { productionGraph } from "./production-graph.mjs";
+import { snapshotIndex } from "./runtime-layout.mjs";
+
+const SOURCES = "/src";
+const RUNTIME = "/opt/runtime";
+const STORE = join(RUNTIME, "node_modules/.pnpm");
+const PACKAGES = "/tmp/packages.json";
+const SNAPSHOT_PATHS = "/tmp/snapshot-paths.json";
+const TOOL_LINKS = "/tmp/tool-links/node_modules";
+const SERVER = "@ontomato/workbench-server";
+
+function inside(root, path) {
+  return path === root || path.startsWith(`${root}${sep}`);
+}
+
+function runtimeLinks(nodeModules, runtimeRoot) {
+  for (const name of readdirSync(nodeModules)) {
+    const path = join(nodeModules, name);
+    const stat = lstatSync(path);
+    if (stat.isSymbolicLink()) {
+      const target = realpathSync(path);
+      if (!inside(runtimeRoot, target))
+        throw new Error(`runtime link leaves the runtime: ${path} -> ${target}`);
+    } else if (stat.isDirectory()) runtimeLinks(path, runtimeRoot);
+  }
+}
+
+// pnpm's own hoist links workspace members to their source directories. The
+// full member list is the authority: a link is removed only when it is a
+// symlink to that member's own directory. A same-named link to anything else
+// stays and is rejected by the runtime link check below, and a link that
+// resolves inside the store is an installed package, so it also stays.
+export function finalizeRuntime({ runtimeRoot, members, index }) {
+  const runtime = realpathSync(runtimeRoot);
+  const store = join(runtime, "node_modules/.pnpm");
+  rmSync(join(store, "lock.yaml"), { force: true });
+  rmSync(join(runtime, "node_modules/.modules.yaml"), { force: true });
+  const hoist = join(store, "node_modules");
+  const emptied = new Set();
+  for (const member of members) {
+    const link = join(hoist, member.name);
+    if (!existsSync(link)) continue;
+    if (!lstatSync(link).isSymbolicLink()) continue;
+    if (realpathSync(link) !== realpathSync(member.absolute)) continue;
+    rmSync(link);
+    if (member.name.includes("/")) emptied.add(dirname(link));
+  }
+  // A scope that only held own members leaves the runtime; a scope that still
+  // holds a third-party entry stays.
+  for (const scope of emptied) if (readdirSync(scope).length === 0) rmdirSync(scope);
+  const used = new Set(Object.values(index).map((rel) => rel.split("/")[2]));
+  const present = readdirSync(store).filter(
+    (name) => name !== "node_modules" && statSync(join(store, name)).isDirectory(),
+  );
+  const missing = [...used].filter((dir) => !present.includes(dir));
+  const extra = present.filter((dir) => !used.has(dir));
+  if (missing.length || extra.length)
+    throw new Error(
+      `virtual store does not match the production index: missing ${missing.join(", ")}; extra ${extra.join(", ")}`,
+    );
+  runtimeLinks(join(runtime, "node_modules"), runtime);
+}
+
+// pnpm reports members relative to the workspace root, which is also how the
+// lock importers and the graph link targets are keyed.
+function projects(root, args) {
+  return JSON.parse(output("pnpm", args)).map((project) => ({
+    name: project.name,
+    path: relative(root, project.path).split(sep).join("/"),
+    absolute: project.path,
+    manifest: JSON.parse(readFileSync(join(project.path, "package.json"), "utf8")),
+  }));
+}
+
+function main() {
+  const record = JSON.parse(readFileSync("/inputs.json", "utf8"));
+  const root = join(SOURCES, record.workspaceId);
+  const selection = ["--filter-prod", `${record.application}...`];
+  mkdirSync(join(RUNTIME, "node_modules"), { recursive: true });
+  process.chdir(root);
+  execute("pnpm", [
+    ...selection,
+    "install",
+    "--frozen-lockfile",
+    "--prod",
+    "--virtual-store-dir",
+    STORE,
+  ]);
+  const members = projects(root, ["-r", "list", "--depth", "-1", "--json"]);
+  const selected = projects(root, [...selection, "list", "--depth", "-1", "--json"]);
+  const manifests = Object.fromEntries(members.map((member) => [member.path, member.manifest]));
+  const server = members.find((member) => member.name === SERVER);
+  if (!server) throw new Error(`workspace has no ${SERVER} member`);
+  const yaml = createRequire(join(server.absolute, "package.json"))("yaml");
+  const lock = yaml.parse(readFileSync(join(root, "pnpm-lock.yaml"), "utf8"));
+  const graph = productionGraph(lock, record.appImporter, manifests, process.arch);
+  const closure = Object.keys(graph.bindings).sort().join("\n");
+  const chosen = selected.map((member) => member.path).sort().join("\n");
+  if (closure !== chosen)
+    throw new Error(
+      `pnpm production selection differs from the graph closure\nselected:\n${chosen}\nclosure:\n${closure}`,
+    );
+  const index = snapshotIndex(root, RUNTIME, graph);
+  finalizeRuntime({ runtimeRoot: RUNTIME, members, index });
+  writeFileSync(PACKAGES, `${JSON.stringify({ packages: graph.packages })}\n`);
+  writeFileSync(SNAPSHOT_PATHS, `${JSON.stringify(index, null, 2)}\n`);
+  const binding = graph.bindings[server.path];
+  if (!binding) throw new Error(`${SERVER} is not in the production graph closure`);
+  const yamlKey = binding.dependencies.yaml;
+  if (!yamlKey) throw new Error(`${SERVER} has no production yaml dependency`);
+  mkdirSync(TOOL_LINKS, { recursive: true });
+  symlinkSync(join(RUNTIME, index[yamlKey]), join(TOOL_LINKS, "yaml"));
+  console.log(
+    `INSTALLED ${record.workspaceId} members=${members.length} selected=${selected.length} packages=${Object.keys(graph.packages).length}`,
+  );
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main();
+}
