@@ -22,6 +22,7 @@ import {
   output,
   parseOptions,
   readJson,
+  readRevision,
   requireRuntime,
   runtimeTag,
   saveRuntimeLock,
@@ -40,14 +41,6 @@ const RECIPE_DIR = join(
   "../../docker/data-engine",
 );
 
-export function readRevision(text) {
-  const found = [...text.matchAll(/<revision>([^<]*)<\/revision>/g)].map(
-    (match) => match[1],
-  );
-  if (found.length !== 1 || found[0].length === 0 || found[0].includes("$"))
-    throw new Error("Public POM must contain one concrete revision");
-  return found[0];
-}
 export function selectPromptLanguage(root, lang) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const path = join(root, entry.name);

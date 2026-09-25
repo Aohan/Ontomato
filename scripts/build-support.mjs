@@ -29,6 +29,14 @@ export function canonical(value) {
 export const fingerprint = (contract) =>
   createHash("sha256").update(canonical(contract)).digest("hex");
 export const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+export function readRevision(text) {
+  const found = [...text.matchAll(/<revision>([^<]*)<\/revision>/g)].map(
+    (match) => match[1],
+  );
+  if (found.length !== 1 || found[0].length === 0 || found[0].includes("$"))
+    throw new Error("Public POM must contain one concrete revision");
+  return found[0];
+}
 
 export function execute(
   executable,

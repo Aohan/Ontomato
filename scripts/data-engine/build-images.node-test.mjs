@@ -14,9 +14,9 @@ import { fileURLToPath } from "node:url";
 import {
   checkPythonRequirements,
   importedRuntime,
-  readRevision,
   selectPromptLanguage,
 } from "./build-images.mjs";
+import { readRevision } from "../build-support.mjs";
 
 function temporary(fn) {
   const dir = mkdtempSync(join(tmpdir(), "backend 测试 space-"));
