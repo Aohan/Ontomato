@@ -1,0 +1,7 @@
+{
+  "schema": 3,
+  "family": "java-app",
+  "runtimes": {
+    "linux/arm64": "31d6230ab6e8c11747d3d5848d2aaac502777c571a2c3522220a9745022e2831"
+  }
+}
