@@ -1,0 +1,7 @@
+{
+  "schema": 3,
+  "family": "node-app",
+  "runtimes": {
+    "linux/arm64": "c230180d1ad171e67803de429265e2875141cea9041b4c21c70b605fb35ad823"
+  }
+}

@@ -107,6 +107,26 @@ function main() {
     "--virtual-store-dir",
     STORE,
   ]);
+  // esbuild's postinstall replaces its published bin placeholder (a node
+  // script, so the hoist shim is generated as a node-shim) with the platform
+  // executable after the hoist .bin shims are linked: a cold install leaves a
+  // node-shim pointing at an ELF. Reinstalling from the now-warm store with
+  // scripts skipped restores the executable before linking, so the shims are
+  // generated as direct execs (N1d fixed-store evidence). The relink changes
+  // no selection; the selected==bindings check below still guards the closure.
+  rmSync(join(RUNTIME, "node_modules"), { recursive: true, force: true });
+  execute("pnpm", [
+    ...selection,
+    "install",
+    "--frozen-lockfile",
+    "--prod",
+    "--offline",
+    "--virtual-store-dir",
+    STORE,
+  ]);
+  // Fail closed: a stale shim must never leave the installer stage. The
+  // version is printed into the build log as evidence.
+  execute(join(STORE, "node_modules/.bin/esbuild"), ["--version"]);
   const members = projects(root, ["-r", "list", "--depth", "-1", "--json"]);
   const selected = projects(root, [...selection, "list", "--depth", "-1", "--json"]);
   const manifests = Object.fromEntries(members.map((member) => [member.path, member.manifest]));
