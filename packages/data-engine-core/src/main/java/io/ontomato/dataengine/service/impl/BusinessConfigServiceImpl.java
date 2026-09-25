@@ -120,8 +120,8 @@ public class BusinessConfigServiceImpl implements BusinessConfigService {
 
 	@Override
 	public String getWholeConfigDesc() {
-		return "The initial models and roles of a new domain come from the startup template conf-defaults (the container overwrites the conf copy on every startup), "
-				+ "and long-term deployment differences go through the existing env mapping.\n"
+		return "If conf/application.yml is missing it is copied from the startup template; an existing site file is kept and read on restart. "
+				+ "The existing env placeholder mapping still applies. Persisted domain models and roles are not written back from the file.\n"
 				+ "For a saved domain, the models under `langchain4j.open-ai` (a named model list, including connections and all request parameters) "
 				+ "and agents (model references and execution fields of the five roles) can take effect promptly after being configured through the page or API, and are retained after restart.\n"
 				+ "The configurations `ontomato.datarag.knowledgeMaxResult`, "
@@ -134,8 +134,8 @@ public class BusinessConfigServiceImpl implements BusinessConfigService {
 				+ "`ontomato.datarag.mysqlUrl`, "
 				+ "`ontomato.datarag.mysqlUser`, "
 				+ "`ontomato.datarag.mysqlPassword` all take effect promptly after being configured through the page.\n"
-				+ "Directly editing conf/application.yml on site will be overwritten by the template after restart and is not retained permanently; "
-				+ "apart from these configuration items, other configurations can only take effect after changing the template or the deployment configuration and restarting the application.";
+				+ "Apart from these configuration items, other configurations take effect only after the on-site conf/application.yml is updated, or an environment variable that the kept file still references is updated, and the application is restarted. "
+				+ "BACKEND_ and POSTGRE_ aliases apply through placeholders that remain in that file; removing a placeholder does not guarantee the alias still overrides the file.";
 	}
 
 }
