@@ -78,6 +78,16 @@ const base: ManagerHostContext = {
   locale: "en",
   theme: "light",
   view: "/playground",
+  dataFallbacks: { noBusinessDescription: "未填写业务说明", unnamedAsset: "未命名资产" },
+  // 本文件只核上下文注入与请求，展示值不参与；按契约给出完整的必传对象。
+  presentation: {
+    themeProperties: { light: {}, dark: {} },
+    nodePalette: ["#000001", "#000002", "#000003", "#000004", "#000005", "#000006"],
+    edgeLabel: {},
+    maxFitZoom: null,
+    dataBrowserDescription: () => "",
+    compactDialogs: false,
+  },
 };
 
 describe("宿主上下文注入", () => {

@@ -38,11 +38,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** 企业固定源 c0287200 ontology-manager/src/api.ts:118、:322 的原值。 */
+const enterpriseFallbacks = { noBusinessDescription: "未填写业务说明", unnamedAsset: "未命名资产" };
+
 function setup(credential: ManagerCredential | null) {
   const context: { -readonly [K in keyof ManagerRequestContext]: ManagerRequestContext[K] } = {
     apiBase: "/custom/manager-api",
     credential,
     locale: "en",
+    dataFallbacks: enterpriseFallbacks,
   };
   const failures: ManagerAuthFailureStatus[] = [];
   const client = createManagerClient(context, (status) => failures.push(status));
@@ -115,6 +119,22 @@ describe("凭据与请求头", () => {
 });
 
 describe("旧响应与认证失败", () => {
+  it("dispose 后不再发请求，在途响应也不交付（工作区卸载后的旧后续）", async () => {
+    const pending = deferred();
+    respond = () => pending.promise;
+    const { client } = setup({ type: "token", token: "t" });
+    const inFlight = client.loadOntology();
+    client.dispose();
+    pending.resolve(json({ success: true, data: { classDef: [{ className: "stale" }] } }));
+    await expect(inFlight).rejects.toMatchObject({ name: "AbortError" });
+
+    const before = requests.length;
+    await expect(client.deleteOntologyObject("Order")).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(requests.length).toBe(before);
+  });
+
   it("请求期间凭据变化则丢弃响应，不交付数据", async () => {
     const pending = deferred();
     respond = () => pending.promise;
@@ -172,15 +192,50 @@ describe("旧响应与认证失败", () => {
     expect(failures).toEqual([]);
   });
 
-  it("语言变化后丢弃旧语言的响应", async () => {
+  // 原主系统（c0287200 web/src/utils/api.ts）每次请求取当前语言作请求头，只按凭据核对结果；语言变化不作废同一身份的结果。
+  it("响应返回前只切换语言：同一身份的结果照常交付，下一次请求带新语言", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client } = setup({ type: "token", token: "t" });
     const result = client.loadSmartAssets("metrics");
     context.locale = "zh-CN";
-    pending.resolve(json({ success: true, data: [{ name: "old-locale" }] }));
+    pending.resolve(json({ success: true, data: [{ name: "en-request" }] }));
 
-    await expect(result).rejects.toMatchObject({ name: "AbortError" });
+    await expect(result).resolves.toEqual([expect.objectContaining({ name: "en-request" })]);
+    respond = async () => json({ success: true, data: [] });
+    await client.loadSmartAssets("metrics");
+    expect(requests.map((r) => r.headers["Accept-Language"])).toEqual(["en", "zh-CN"]);
+  });
+
+  it("读取 JSON 期间只切换语言也照常交付；语言与凭据同时变化仍丢弃", async () => {
+    let finishBody!: (body: unknown) => void;
+    let bodyRequested!: () => void;
+    const reading = () => new Promise<void>((resolve) => (bodyRequested = resolve));
+    respond = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: () => {
+          bodyRequested();
+          return new Promise((resolve) => (finishBody = resolve));
+        },
+      }) as unknown as Response;
+    const { context, client } = setup({ type: "token", token: "t" });
+
+    let started = reading();
+    const kept = client.getMetas();
+    await started;
+    context.locale = "zh-CN";
+    finishBody({ success: true, data: { classDef: [{ className: "Order" }] } });
+    await expect(kept).resolves.toMatchObject({ data: { classDef: [{ className: "Order" }] } });
+
+    started = reading();
+    const dropped = client.getMetas();
+    await started;
+    context.locale = "en";
+    context.credential = { type: "token", token: "other" };
+    finishBody({ success: true, data: { classDef: [] } });
+    await expect(dropped).rejects.toMatchObject({ name: "AbortError" });
   });
 
   it("读取 JSON 期间上下文变化也不交付数据", async () => {
@@ -337,6 +392,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
           relationship_rule: { has: { fromclass: "Order", toclass: "Item" } },
         },
       });
+    // 界面语言为 en 时，兜底仍取宿主装配的企业原值。
     const { client } = setup({ type: "token", token: "t" });
 
     await expect(client.loadOntology()).resolves.toEqual({
@@ -362,5 +418,27 @@ describe("数据浏览与可视化建模所需的请求", () => {
         { relationship: "has", showName: "has", fromclass: "Order", toclass: "Item", desc: "has" },
       ],
     });
+  });
+
+  it("两个数据默认值取宿主装配值：空说明与非字符串名称兜底，空字符串名称保留，与界面语言无关", async () => {
+    respond = async (url) =>
+      url.endsWith("/admin/getMetas")
+        ? json({ success: true, data: { classDef: [{ className: "A", classDesc: "" }] } })
+        : json({
+            success: true,
+            data: [{ id: "f1", name: "" }, { id: "f2" }, { id: "f3", name: 7 }],
+          });
+    const oss = {
+      noBusinessDescription: "No business description provided",
+      unnamedAsset: "Unnamed asset",
+    };
+    const { client, context } = setup({ type: "token", token: "t" });
+    context.dataFallbacks = oss;
+    context.locale = "zh-CN";
+
+    const { objects } = await client.loadOntology();
+    expect(objects[0].classDesc).toBe("No business description provided");
+    const assets = await client.loadSmartAssets("functions");
+    expect(assets.map((asset) => asset.name)).toEqual(["", "Unnamed asset", "Unnamed asset"]);
   });
 });

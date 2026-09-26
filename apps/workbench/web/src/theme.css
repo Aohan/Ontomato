@@ -1,0 +1,370 @@
+/**
+ * 🎨 System theme color configuration file
+ *
+ * Color scheme reference: Ontomato — bright logo green
+ */
+
+/* ========================================
+   🌞 Light Theme - Horizon Light
+   ======================================== */
+:root {
+  /* ---- Primary color series - logo green ---- */
+  --el-color-primary: rgb(99, 156, 45);
+  --el-color-primary-light-3: #92ba6c;
+  --el-color-primary-light-5: #b1ce96;
+  --el-color-primary-light-7: #d0e1c0;
+  --el-color-primary-light-8: #e0ebd5;
+  --el-color-primary-light-9: #eff5ea;
+  --el-color-primary-dark-2: #4f7d24;
+
+  /* ---- Functional color series ---- */
+  --el-color-success: #63a33e;
+  --el-color-success-light-8: #c9e5b9;
+  --el-color-success-light-9: #f0f8ea;
+  --el-color-warning: #b17a32;
+  --el-color-warning-light-8: #e3c38d;
+  --el-color-warning-light-9: #fbf5e9;
+  --el-color-danger: #bc4b39;
+  --el-color-danger-light-8: #e2aaa0;
+  --el-color-danger-light-9: #fbefec;
+  --el-color-info: #697267;
+  --el-color-info-light-8: #c1c8be;
+  --el-color-info-light-9: #f1f3ef;
+
+  /* ---- Text color series ---- */
+  --el-text-color-primary: #25321f;
+  --el-text-color-regular: #415035;
+  --el-text-color-secondary: #6f7d63;
+  --el-text-color-tertiary: #a0ad96;
+  --el-text-color-placeholder: #a0ad96;
+
+  /* ---- Background color series ---- */
+  --el-bg-color-page: #fbfdf8;
+  --el-bg-color: #ffffff;
+  --el-bg-color-overlay: #ffffff;
+
+  /* ---- Fill color series ---- */
+  --el-fill-color: #f4faef;
+  --el-fill-color-light: #f8fcf4;
+  --el-fill-color-lighter: #ffffff;
+  --el-fill-color-extra-light: #fcfef9;
+  --el-fill-color-dark: #e7f1de;
+  --el-fill-color-blank: transparent;
+
+  /* ---- Border color series ---- */
+  --el-border-color: #e1ead9;
+  --el-border-color-light: #edf3e7;
+  --el-border-color-lighter: #f4f8ef;
+  --el-border-color-extra-light: #f8fbf5;
+  --el-border-color-dark: #cfddc4;
+
+  /* ---- Shadow series - soft green tint ---- */
+  --el-shadow-sm: 0 2px 8px rgba(99, 156, 45, 0.06);
+  --el-shadow: 0 12px 34px rgba(99, 156, 45, 0.1);
+  --el-shadow-md: 0 18px 45px rgba(99, 156, 45, 0.13);
+  --el-shadow-lg: 0 24px 56px rgba(99, 156, 45, 0.15);
+  --el-shadow-xl: 0 32px 64px rgba(99, 156, 45, 0.18);
+
+  /* ---- Admin page shadows ---- */
+  --shadow-card: 0 12px 34px rgba(99, 156, 45, 0.1);
+  --shadow-card-hover: 0 18px 45px rgba(99, 156, 45, 0.13);
+  --shadow-dropdown: 0 18px 45px rgba(99, 156, 45, 0.13);
+  --shadow-tab: 0 2px 8px rgba(99, 156, 45, 0.06);
+
+  /* ---- Custom shadow extensions ---- */
+  --shadow-primary: 0 14px 24px rgba(99, 156, 45, 0.24);
+  --shadow-primary-hover: 0 18px 30px rgba(99, 156, 45, 0.3);
+
+  /* ---- Semantic text color ---- */
+  --on-primary: #ffffff;
+}
+
+/* ========================================
+   🌙 Dark Theme - Horizon Dark
+   ======================================== */
+html.dark {
+  color-scheme: dark;
+
+  /* ---- Primary color series ---- */
+  --el-color-primary: #8fd04d;
+  --el-color-primary-light-3: #a9db75;
+  --el-color-primary-light-5: #c6e8a6;
+  --el-color-primary-light-7: #e2f3d5;
+  --el-color-primary-light-8: #43652d;
+  --el-color-primary-light-9: #2a421d;
+  --el-color-primary-dark-2: #75bd35;
+
+  /* ---- Functional color series ---- */
+  --el-color-success: #8fcf59;
+  --el-color-success-light-8: #3c5f2b;
+  --el-color-success-light-9: #253f1d;
+  --el-color-warning: #d4a75c;
+  --el-color-warning-light-8: #55421f;
+  --el-color-warning-light-9: #382c17;
+  --el-color-danger: #e07865;
+  --el-color-danger-light-8: #5a2923;
+  --el-color-danger-light-9: #3a1f1b;
+  --el-color-info: #98a595;
+  --el-color-info-light-8: #303a2e;
+  --el-color-info-light-9: #20281f;
+
+  /* ---- Text color series ---- */
+  --el-text-color-primary: #f2f8ee;
+  --el-text-color-regular: #d8e6d0;
+  --el-text-color-secondary: #aebea4;
+  --el-text-color-tertiary: #839378;
+  --el-text-color-placeholder: #6d7f63;
+
+  /* ---- Background color series ---- */
+  --el-bg-color-page: #121b10;
+  --el-bg-color: #1a2616;
+  --el-bg-color-overlay: #21331c;
+
+  /* ---- Fill color series ---- */
+  --el-fill-color: #263820;
+  --el-fill-color-light: #2c4325;
+  --el-fill-color-lighter: #36502e;
+  --el-fill-color-extra-light: #3f5c35;
+  --el-fill-color-dark: #1d2c19;
+  --el-fill-color-blank: transparent;
+
+  /* ---- Border color series ---- */
+  --el-border-color: #3b5632;
+  --el-border-color-light: #30472a;
+  --el-border-color-lighter: #263a22;
+  --el-border-color-extra-light: #3b5632;
+  --el-border-color-dark: #557346;
+
+  /* ---- Shadow series ---- */
+  --el-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --el-shadow: 0 12px 34px rgba(0, 0, 0, 0.4);
+  --el-shadow-md: 0 18px 45px rgba(0, 0, 0, 0.5);
+  --el-shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.5);
+  --el-shadow-xl: 0 32px 64px rgba(0, 0, 0, 0.6);
+
+  /* ---- Admin page shadows ---- */
+  --shadow-card: 0 12px 34px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 18px 45px rgba(0, 0, 0, 0.4);
+  --shadow-dropdown: 0 18px 45px rgba(0, 0, 0, 0.4);
+  --shadow-tab: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* ---- Custom shadow extensions ---- */
+  --shadow-primary: 0 14px 24px rgba(143, 208, 77, 0.26);
+  --shadow-primary-hover: 0 18px 30px rgba(143, 208, 77, 0.34);
+
+  /* ---- Semantic text color ---- */
+  --on-primary: #ffffff;
+}
+
+/* ========================================
+   📝 Design Token Notes
+   ======================================== 
+   
+    Color usage guide:
+     - primary: primary actions, links, focus states (#639C2D)
+     - success: success states, completion indicators (#63A33E)
+     - warning: warnings, cautionary notes (#B17A32)
+     - danger: errors, delete actions (#BC4B39)
+     - info: informational hints, secondary text (#697267)
+    - on-primary: text color on primary (#FFFFFF)
+    
+    Background hierarchy:
+    - page: the lowest-level background (#FBFDF8)
+    - bg: content area background (#FFFFFF)
+    - overlay: overlay and dialog backgrounds
+    
+    Fill color usage scenarios:
+    - lighter/extra-light: inside cards, separator regions (#FCFEF9)
+    - light: default button state (#F8FCF4)
+    - fill-color: hover state (#F4FAEF)
+    - dark: selected, active state (#E7F1DE)
+    
+    Shadow usage:
+    - shadow-primary: primary button glow shadow
+     - shadow-card: soft card shadow (green tint)
+  */
+
+/* ========================================
+   📋 Admin Table Styles - Modern Minimal
+   ======================================== */
+
+/* ---- Table container ---- */
+.el-table.admin-table {
+  background: var(--el-bg-color);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--el-border-color);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.el-table.admin-table::before {
+  height: 0;
+}
+
+/* ---- Table header ---- */
+.el-table.admin-table th.el-table__cell {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--el-border-color-dark);
+  padding: 0 var(--spacing-lg);
+  height: 44px;
+}
+
+.el-table.admin-table th.el-table__cell .cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Cells ---- */
+.el-table.admin-table td.el-table__cell {
+  background-color: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--el-border-color-light);
+  transition: background-color var(--transition-fast);
+  padding: 0 var(--spacing-lg);
+  height: 48px;
+}
+
+/* ---- Last row has no bottom border ---- */
+.el-table.admin-table .el-table__body tr:last-child td.el-table__cell {
+  border-bottom: none;
+}
+
+/* ---- Striped rows ---- */
+.el-table.admin-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background-color: var(--el-fill-color-extra-light) !important;
+}
+
+/* ---- Hover effect ---- */
+.el-table.admin-table .el-table__body tr:hover > td.el-table__cell {
+  background-color: var(--el-fill-color-light) !important;
+}
+
+.el-table.admin-table--striped .el-table__body tr.el-table__row--striped:hover > td.el-table__cell {
+  background-color: var(--el-fill-color) !important;
+}
+
+/* ---- Selected row ---- */
+.el-table.admin-table .el-table__body tr.current-row > td.el-table__cell {
+  background-color: var(--el-fill-color) !important;
+}
+
+/* ---- Fixed column shadow optimization ---- */
+.el-table.admin-table .el-table__fixed::before,
+.el-table.admin-table .el-table__fixed-right::before {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+/* ---- Empty data state ---- */
+.el-table.admin-table .el-table__empty-block {
+  background-color: var(--el-bg-color);
+}
+
+.el-table.admin-table .el-table__empty-text {
+  color: var(--el-text-color-secondary);
+}
+
+/* ---- Tags in table ---- */
+.el-table.admin-table .el-tag {
+  white-space: nowrap;
+  margin-right: var(--spacing-xs);
+}
+
+/* ---- Button groups in table ---- */
+.el-table.admin-table .el-button-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+}
+
+/* ---- Space component in table ---- */
+.el-table.admin-table .el-space {
+  flex-wrap: nowrap;
+  gap: var(--spacing-xs);
+}
+
+/* ========================================
+   🎯 Operation Column - Operation Cell
+   ======================================== */
+
+/* Operation column cell */
+.el-table.admin-table td.el-table__cell.operation-cell {
+  padding: 0 var(--spacing-sm) !important;
+  vertical-align: middle !important;
+}
+
+/* Operation column header */
+.el-table.admin-table th.el-table__cell.operation-cell .cell {
+  display: flex;
+  justify-content: center;
+}
+
+/* Operation column inner cell container - flex layout centering */
+.el-table.admin-table td.el-table__cell.operation-cell .cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  flex-wrap: nowrap;
+}
+
+/* Base styles for operation buttons */
+.el-table.admin-table .operation-cell .el-button {
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  height: auto;
+  min-height: auto;
+  line-height: 1.5;
+  font-weight: var(--font-medium);
+  font-size: var(--text-xs);
+  transition: all var(--transition-fast);
+}
+
+/* Link-type button styles in the operation column */
+.el-table.admin-table .operation-cell .el-button.is-link {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.el-table.admin-table .operation-cell .el-button.is-link:hover {
+  background: var(--el-fill-color-light);
+}
+
+.el-table.admin-table .operation-cell .el-button.is-link:active {
+  background: var(--el-fill-color);
+}
+
+/* Reset button selected/focus state */
+.el-table.admin-table .operation-cell .el-button.is-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--el-color-primary) 20%, transparent);
+  background: var(--el-fill-color-light);
+}
+
+/* Button spacing is already controlled uniformly by the cell's gap */
+.el-table.admin-table .operation-cell .el-button + .el-button {
+  margin-left: 0;
+}
+
+/* ========================================
+   📐 Table Cell Content Truncation
+   ======================================== */
+
+.el-table.admin-table .cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+  line-height: 1.5;
+}

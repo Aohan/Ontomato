@@ -8,3 +8,6 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+__pycache__/
+# 工作台运行数据（apps/workbench 以仓根为产品运行根）
+/data/

@@ -1,2 +1,3 @@
 packages:
-  - "packages/ontology-manager"
+  - "packages/*"
+  - "apps/*"

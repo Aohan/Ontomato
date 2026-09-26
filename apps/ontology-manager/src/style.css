@@ -1,0 +1,22 @@
+/* 独立外壳的文档级规则（原 ontology-manager/src/style.css 的 html/body/#app 部分）；组件高度由这里给定。 */
+html,
+body,
+#app {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--el-bg-color-page);
+}
+
+#app {
+  height: 100vh;
+}
+
+.manager-shell-status {
+  margin: 0;
+  padding: 24px;
+  color: var(--el-text-color-regular);
+}

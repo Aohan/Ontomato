@@ -1,0 +1,315 @@
+/* Admin Module Common Styles - shared styles for the admin module */
+
+/* Toolbar styles */
+.toolbar,
+.admin-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: var(--spacing-sm) !important;
+  height: 54px;
+  margin-bottom: var(--spacing-lg) !important;
+  padding: 10px 12px !important;
+  background: var(--el-bg-color) !important;
+  border: 1px solid var(--el-border-color) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+.toolbar .el-button,
+.admin-toolbar .el-button {
+  margin-left: 0 !important;
+}
+
+.toolbar .el-input,
+.toolbar .el-select,
+.toolbar .el-date-editor,
+.admin-toolbar .el-input,
+.admin-toolbar .el-select,
+.admin-toolbar .el-date-editor {
+  max-width: 100%;
+}
+
+.toolbar .search-input,
+.admin-toolbar .search-input {
+  width: 240px;
+}
+
+.toolbar .toolbar-actions,
+.admin-toolbar .toolbar-actions,
+.toolbar .toolbar-right,
+.admin-toolbar .toolbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+@media (max-width: 768px) {
+  .toolbar,
+  .admin-toolbar {
+    height: auto;
+    min-height: 54px;
+    align-items: stretch !important;
+  }
+
+  .toolbar .el-input,
+  .toolbar .el-select,
+  .toolbar .el-date-editor,
+  .admin-toolbar .el-input,
+  .admin-toolbar .el-select,
+  .admin-toolbar .el-date-editor {
+    width: 100% !important;
+  }
+
+  .toolbar .toolbar-actions,
+  .admin-toolbar .toolbar-actions,
+  .toolbar .toolbar-right,
+  .admin-toolbar .toolbar-right {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+/* Pagination styles */
+.admin-pagination {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Table base wrapper - width & overflow handled by theme.css .admin-table */
+.admin-table {
+  width: 100%;
+}
+
+/* Dialog styles */
+.admin-dialog .dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+/* Form styles */
+.admin-form .el-form-item {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Card styles */
+.admin-card {
+  background: var(--el-bg-color);
+  border-radius: var(--radius-2xl);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-card);
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--el-border-color);
+}
+
+.admin-card .el-button--primary,
+.admin-dialog .el-button--primary,
+.admin-toolbar .el-button--primary {
+  box-shadow: none;
+}
+
+.admin-card .el-button--primary:hover,
+.admin-card .el-button--primary:focus,
+.admin-card .el-button--primary:active,
+.admin-dialog .el-button--primary:hover,
+.admin-dialog .el-button--primary:focus,
+.admin-dialog .el-button--primary:active,
+.admin-toolbar .el-button--primary:hover,
+.admin-toolbar .el-button--primary:focus,
+.admin-toolbar .el-button--primary:active {
+  box-shadow: none;
+}
+
+/* Empty state styles */
+.admin-empty {
+  padding: var(--spacing-xl) var(--spacing-lg);
+  text-align: center;
+}
+
+/* Loading container */
+.admin-loading {
+  min-height: 200px;
+}
+
+/* Status badge styles */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+}
+
+.status-badge.status-success {
+  background: var(--el-color-success-light-9);
+  color: var(--el-color-success);
+}
+
+.status-badge.status-warning {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+.status-badge.status-danger {
+  background: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+}
+
+.status-badge.status-info {
+  background: var(--el-color-info-light-9);
+  color: var(--el-color-info);
+}
+
+/* Dialog width tiers */
+.dialog-width-sm {
+  width: 500px;
+}
+
+.dialog-width-md {
+  width: 650px;
+}
+
+.dialog-width-lg {
+  width: 800px;
+}
+
+.dialog-width-xl {
+  width: 950px;
+}
+
+/* Multi-select dropdown panel width - ensures proper sizing when trigger is width:100% in dialog */
+.admin-select-popper {
+  min-width: 200px !important;
+  max-width: 400px !important;
+  width: auto !important;
+}
+
+/* Responsive dialog widths */
+@media (max-width: 1024px) {
+  .dialog-width-sm,
+  .dialog-width-md,
+  .dialog-width-lg,
+  .dialog-width-xl {
+    width: 90%;
+    max-width: 100%;
+  }
+}
+
+/* Card grid for table/card mode views */
+.admin-card-grid {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: var(--spacing-md);
+  align-content: start;
+  padding: 2px;
+}
+
+.crud-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--el-bg-color) !important;
+  border: 1px solid var(--el-border-color) !important;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.crud-card .el-card__header {
+  padding: 12px 16px;
+  background: var(--el-bg-color);
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.crud-card .el-card__body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: initial;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-body {
+  padding: 14px 16px 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.card-field {
+  font-size: 13px;
+  line-height: 1.65;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.card-field:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  color: var(--el-text-color-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.field-value {
+  color: var(--el-text-color-regular);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.card-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 8px 16px;
+  background: var(--el-fill-color-lighter);
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.card-text {
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  line-height: 1.65;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 72px;
+  max-height: 220px;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .admin-card-grid {
+    grid-template-columns: 1fr;
+  }
+}

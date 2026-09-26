@@ -1,7 +1,21 @@
+import { ontologyText } from "./i18n";
+
 export type ManagerCredential =
   | { type: "token"; token: string }
   | { type: "apiKey"; apiKey: string }
   | { type: "anonymous" };
+
+/**
+ * 宿主静态装配的两个数据默认值：它们会预填进编辑表单或随保存载荷提交，属于数据语义，
+ * 不随界面语言、凭据种类变化。两版外壳各传原值（企业「未填写业务说明」「未命名资产」，
+ * 开源 "No business description provided"、"Unnamed asset"）。
+ */
+export interface ManagerDataFallbacks {
+  /** 对象类型没有业务说明（空值）时使用的说明。 */
+  readonly noBusinessDescription: string;
+  /** 智能资产的 name 不是字符串时使用的名称。 */
+  readonly unnamedAsset: string;
+}
 
 export interface ManagerRequestContext {
   /** DataRAG 代理入口，不含末尾斜杠；请求发往 `${apiBase}/data-query/*`。 */
@@ -9,6 +23,7 @@ export interface ManagerRequestContext {
   /** null 表示宿主已清除或尚未取得凭据：不发业务请求，也不当作匿名。 */
   readonly credential: ManagerCredential | null;
   readonly locale: string;
+  readonly dataFallbacks: ManagerDataFallbacks;
 }
 
 /** 401 为认证失效，402 为 License 失败；如何处理由宿主决定。 */
@@ -26,9 +41,12 @@ function credentialIdentity(credential: ManagerCredential | null) {
   }
 }
 
-/** 决定一次请求语义的上下文：来源、语言与凭据（按值）。 */
-function requestSource(context: ManagerRequestContext) {
-  return JSON.stringify([context.apiBase, context.locale, credentialIdentity(context.credential)]);
+/**
+ * 宿主身份：API 入口与凭据（按值）。变化即换了数据来源或用户：根组件据此重建工作区，请求层据此丢弃旧响应。
+ * 语言不属于身份（与原主系统一致）：只决定每次发送时的 Accept-Language。
+ */
+export function hostSource(context: ManagerRequestContext) {
+  return JSON.stringify([context.apiBase, credentialIdentity(context.credential)]);
 }
 
 function credentialHeaders(credential: ManagerCredential): Record<string, string> {
@@ -121,21 +139,26 @@ export interface SmartAsset {
 export type ManagerClient = ReturnType<typeof createManagerClient>;
 
 /**
- * 每个 Manager 实例一份的 DataRAG 请求层。每次请求读取 context 的当前值；
- * 响应返回或 JSON 读完时 apiBase、语言或凭据已变化则丢弃（AbortError），不通知宿主也不交付数据。
+ * 每个 Manager 工作区实例一份的 DataRAG 请求层。每次请求读取 context 的当前值；
+ * 响应返回或 JSON 读完时 apiBase 或凭据已变化则丢弃（AbortError），不通知宿主也不交付数据；
+ * 只有语言变化时同一身份的在途结果照常交付，之后的请求带新语言。
+ * dispose 后（工作区已卸载）不再发出任何请求：确认框或多步操作的旧后续不会带着新上下文发送。
  */
 export function createManagerClient(
   context: ManagerRequestContext,
   onAuthFailure: (status: ManagerAuthFailureStatus) => void
 ) {
+  let disposed = false;
+  const stale = () =>
+    new DOMException(ontologyText(context.locale, "staleResponseDropped"), "AbortError");
+
   async function send(path: string, init: { method: "GET" | "POST"; body?: string }) {
+    if (disposed) throw stale();
     const credential = context.credential;
-    if (!credential) throw new Error("未提供凭据");
-    const source = requestSource(context);
+    if (!credential) throw new Error(ontologyText(context.locale, "credentialMissing"));
+    const source = hostSource(context);
     const assertCurrent = () => {
-      if (requestSource(context) !== source) {
-        throw new DOMException("宿主上下文已变化，已丢弃旧响应", "AbortError");
-      }
+      if (disposed || hostSource(context) !== source) throw stale();
     };
 
     const response = await fetch(`${context.apiBase}/data-query${path}`, {
@@ -149,10 +172,16 @@ export function createManagerClient(
     });
     assertCurrent();
     if (response.status === 401 || response.status === 402) onAuthFailure(response.status);
-    if (!response.ok) throw new Error(`请求失败 (${response.status})`);
+    if (!response.ok) {
+      throw new Error(
+        ontologyText(context.locale, "requestFailedStatus", { status: response.status })
+      );
+    }
     const json = await response.json();
     assertCurrent();
-    if (json?.success === false) throw new Error(json.message || json.error || "请求失败");
+    if (json?.success === false) {
+      throw new Error(json.message || json.error || ontologyText(context.locale, "requestFailed"));
+    }
     return json;
   }
 
@@ -178,7 +207,7 @@ export function createManagerClient(
     const objects = (data.classDef || []).map((item: Record<string, any>) => ({
       className: item.className,
       showName: item.showName || item.classDesc || item.className,
-      classDesc: item.classDesc || "未填写业务说明",
+      classDesc: item.classDesc || context.dataFallbacks.noBusinessDescription,
       attrs: (item.attrs || []).map((attr: Record<string, any>) => ({
         name: attr.name,
         showName: attr.showName || attr.name,
@@ -361,7 +390,7 @@ export function createManagerClient(
     return source.map((asset: Record<string, unknown>) => ({
       ...asset,
       id: typeof asset.id === "string" ? asset.id : undefined,
-      name: typeof asset.name === "string" ? asset.name : "未命名资产",
+      name: typeof asset.name === "string" ? asset.name : context.dataFallbacks.unnamedAsset,
       description: typeof asset.description === "string" ? asset.description : null,
       status: typeof asset.status === "string" ? asset.status : undefined,
       origin: typeof asset.origin === "string" ? asset.origin : undefined,
@@ -377,6 +406,9 @@ export function createManagerClient(
   }
 
   return {
+    dispose: () => {
+      disposed = true;
+    },
     requestSmartAsset,
     getMetas,
     loadOntology,
