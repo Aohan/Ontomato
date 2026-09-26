@@ -1,10 +1,13 @@
-// Host-side metadata context collector for the workbench runtime build (N4a).
-// Copies only package and workspace/lock metadata from explicit Git source roots
-// into a new exclusive destination. It does not resolve workspace members, parse
-// workspace YAML, run pnpm, or write runtime compatibility metadata.
+// pnpm workspace build context shared by the workbench and Manager builders.
+// Host-side metadata context collector (N4a): copies only package and
+// workspace/lock metadata from explicit Git source roots into a new exclusive
+// destination. It does not resolve workspace members, parse workspace YAML,
+// run pnpm, or write runtime compatibility metadata. copyWorkspace then adds
+// the owners' Git-visible sources next to the captured metadata.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -14,7 +17,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
-import { canonical } from "../build-support.mjs";
+import { canonical, output } from "./build-support.mjs";
 
 const ROOT_METADATA = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"];
 // Build and dependency directories, matching both product repositories' .gitignore.
@@ -156,4 +159,99 @@ export function collectMetadataContext({ sources, workspaceId, appImporter, dest
   };
   writeFileSync(join(destination, "inputs.json"), `${JSON.stringify(record, null, 2)}\n`);
   return record;
+}
+
+// Build inputs only, at any depth: never the store, history, outputs, tests
+// or secrets. Mirrors the N4a forbidden set plus the test/env exclusions the
+// app stage allows.
+const WORKSPACE_EXCLUDE = new Set([
+  "node_modules",
+  ".git",
+  ".build",
+  "dist",
+  "target",
+  "coverage",
+  "__tests__",
+]);
+// Only N4a-visible files enter the workspace copy: git tracked plus new
+// unignored files, further limited to the build's actual inputs (root
+// metadata, apps and packages). Ignored build outputs, local configs and
+// out-of-source docs never enter the context; resource markdown under the
+// package resource dirs is kept. No second packlist: git is the authority.
+const WORKSPACE_ROOT_FILES = new Set(["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"]);
+const RESOURCE_DIRS = new Set(["prompts", "skills", "data", "resources"]);
+
+function workspaceAllowed(path) {
+  const parts = path.split("/");
+  if (parts.length === 1) return WORKSPACE_ROOT_FILES.has(path);
+  if (parts[0] !== "apps" && parts[0] !== "packages") return false;
+  if (parts.some((part) => WORKSPACE_EXCLUDE.has(part))) return false;
+  const base = parts.at(-1);
+  if (base === ".env" || base === ".npmrc" || base.startsWith(".env.")) return false;
+  return !(base.endsWith(".md") && !parts.some((part) => RESOURCE_DIRS.has(part)));
+}
+
+// A Manager build names its owners per source id; the workbench passes none
+// and keeps every JS owner of the record. A named owner must be a package of
+// that source in the record, so a wrong or missing name fails instead of
+// shipping a context without that package's sources.
+function selectOwners(id, owned, owners) {
+  if (owners === undefined) return owned;
+  const named = owners[id];
+  if (named === undefined) throw new Error(`no source owners named for ${id}`);
+  for (const dir of named)
+    if (!owned.has(dir)) throw new Error(`source ${id} has no package ${dir}`);
+  return new Set(named);
+}
+
+export function copyWorkspace(app, context, record, owners) {
+  const listed = new Map(record.sources.map((source) => [source.id, source]));
+  for (const source of app.sources) {
+    const entry = listed.get(source.id);
+    if (!entry) throw new Error(`collector record has no source: ${source.id}`);
+    // All metadata comes from the collector's captured bytes, never a
+    // second live read: a manifest or lock edited after collection must not
+    // silently change this build's inputs. N4a owns that listing.
+    const captured = new Set(entry.candidates.map((candidate) => candidate.path));
+    for (const rel of captured) {
+      if (!workspaceAllowed(rel)) continue;
+      const from = join(context, "sources", source.id, rel);
+      if (!existsSync(from)) throw new Error(`collector metadata is missing: ${source.id}/${rel}`);
+      const dest = join(context, "workspace", source.id, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      cpSync(from, dest);
+    }
+    // Scope follows the record: only directories that own a non-root
+    // package.json manifest in the captured listing. A Java tree (pom
+    // without package.json) never appears there, so it never enters.
+    const owned = new Set();
+    for (const candidate of entry.candidates) {
+      if (WORKSPACE_ROOT_FILES.has(candidate.path)) continue;
+      if (!candidate.path.endsWith("/package.json")) continue;
+      owned.add(candidate.path.slice(0, -"/package.json".length));
+    }
+    const selected = selectOwners(source.id, owned, owners);
+    const files = output("git", [
+      "-C",
+      source.root,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "-z",
+    ])
+      .split("\0")
+      .filter((path) => path !== "");
+    for (const rel of files) {
+      if (!workspaceAllowed(rel)) continue;
+      // Metadata already came from the captured bytes above; a live
+      // second read here would silently overwrite it.
+      if (captured.has(rel)) continue;
+      if (![...selected].some((dir) => rel.startsWith(`${dir}/`)))
+        continue;
+      const dest = join(context, "workspace", source.id, rel);
+      mkdirSync(dirname(dest), { recursive: true });
+      cpSync(join(source.root, rel), dest);
+    }
+  }
 }

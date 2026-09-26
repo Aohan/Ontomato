@@ -13,8 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { test } from "node:test";
-import { fingerprint, sourceIdentity } from "../build-support.mjs";
-import { buildWorkbenchApp, combineIdentity } from "./build-images.mjs";
+import { combineIdentity, fingerprint, sourceIdentity } from "../build-support.mjs";
+import { buildWorkbenchApp } from "./build-images.mjs";
 
 const VERSION = "9.9.9-test";
 const LOCK_EXCLUDE = "apps/workbench/runtime-lock.json";

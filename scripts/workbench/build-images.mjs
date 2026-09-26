@@ -5,7 +5,6 @@
 // subcommand consumes an already locked runtime and never rebuilds it.
 import {
   cpSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -14,6 +13,9 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
+  assertEntriesCurrent,
+  assertFreshRecord,
+  combineIdentity,
   COMPAT_LABEL,
   docker,
   exportImage,
@@ -27,11 +29,11 @@ import {
   readRevision,
   requireRuntime,
   runtimeTag,
+  sampleSources,
   saveRuntimeLock,
-  sourceIdentity,
   validateContract,
 } from "../build-support.mjs";
-import { collectMetadataContext } from "./metadata-context.mjs";
+import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
 import { checkPythonRequirements, INTERFACE } from "./runtime-contract.mjs";
 
 // Family authority is N3 runtime-contract.mjs (not exported there, and N3 is
@@ -60,18 +62,6 @@ const APP_TOOLS = [
   "workbench/runtime-contract.mjs",
   "build-support.mjs",
 ];
-// Build inputs only, at any depth: never the store, history, outputs, tests
-// or secrets. Mirrors the N4a forbidden set plus the test/env exclusions the
-// app stage allows.
-const WORKSPACE_EXCLUDE = new Set([
-  "node_modules",
-  ".git",
-  ".build",
-  "dist",
-  "target",
-  "coverage",
-  "__tests__",
-]);
 // Only arguments the old Node entry supported; recipe defaults already pin the
 // images, mirrors and index, so these pass through only when the env sets them.
 const BUILD_ARG_NAMES = [
@@ -95,53 +85,6 @@ function imageBuildArgs(names = BUILD_ARG_NAMES) {
   return args;
 }
 
-// One version from the public POM; each source keeps its own revision/dirty.
-// The top revision is this version's app repo, the top dirty covers every
-// participating source, otherwise a dirty public tree could ship as clean.
-export function combineIdentity(version, appRoot, entries) {
-  const app = entries.find((entry) => entry.root === appRoot);
-  if (!app) throw new Error("this version's app repo is not a build source");
-  const dirty = entries.some((entry) => entry.identity.dirty);
-  return {
-    version,
-    revision: app.identity.revision,
-    revisionShort: app.identity.revisionShort,
-    created: app.identity.created,
-    dirty,
-    // The app tag reuses the sampled stamp so repeated builds do not collide;
-    // only its dirty marking follows the combined sources, sampled once.
-    stamp: `${app.identity.stamp.replace(/-dirty$/, "")}${dirty ? "-dirty" : ""}`,
-    sources: entries.map((entry) => ({
-      id: entry.id,
-      revision: entry.identity.revision,
-      revisionShort: entry.identity.revisionShort,
-      dirty: entry.identity.dirty,
-      created: entry.identity.created,
-    })),
-  };
-}
-
-export function sampleSources(app, version) {
-  return app.sources.map((source) => ({
-    id: source.id,
-    root: source.root,
-    identity: sourceIdentity(version, source.root, app.lockExclude),
-  }));
-}
-
-function assertFreshRecord(entries, record) {
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  for (const source of record.sources)
-    if (source.head !== byId.get(source.id).identity.revision)
-      throw new Error(`source ${source.id} changed during staging; restart the build`);
-}
-
-function assertEntriesCurrent(entries) {
-  for (const entry of entries)
-    if (output("git", ["-C", entry.root, "rev-parse", "HEAD"]) !== entry.identity.revision)
-      throw new Error(`source ${entry.id} changed during staging; restart the build`);
-}
-
 function stageContext(app, arch) {
   const base = join(app.repoRoot, ".build", "contexts", "workbench", arch);
   mkdirSync(base, { recursive: true });
@@ -152,75 +95,6 @@ async function copyTools(context) {
   for (const rel of TOOLS) cpSync(join(SCRIPTS, rel), join(context, "tools", rel));
   // The staged installer must load without running: its module guard skips main.
   await import(pathToFileURL(join(context, "tools/workbench/install-runtime.mjs")).href);
-}
-
-// Only N4a-visible files enter the workspace copy: git tracked plus new
-// unignored files, further limited to the build's actual inputs (root
-// metadata, apps and packages). Ignored build outputs, local configs and
-// out-of-source docs never enter the context; resource markdown under the
-// package resource dirs is kept. No second packlist: git is the authority.
-const WORKSPACE_ROOT_FILES = new Set(["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"]);
-const RESOURCE_DIRS = new Set(["prompts", "skills", "data", "resources"]);
-
-function workspaceAllowed(path) {
-  const parts = path.split("/");
-  if (parts.length === 1) return WORKSPACE_ROOT_FILES.has(path);
-  if (parts[0] !== "apps" && parts[0] !== "packages") return false;
-  if (parts.some((part) => WORKSPACE_EXCLUDE.has(part))) return false;
-  const base = parts.at(-1);
-  if (base === ".env" || base === ".npmrc" || base.startsWith(".env.")) return false;
-  return !(base.endsWith(".md") && !parts.some((part) => RESOURCE_DIRS.has(part)));
-}
-
-export function copyWorkspace(app, context, record) {
-  const listed = new Map(record.sources.map((source) => [source.id, source]));
-  for (const source of app.sources) {
-    const entry = listed.get(source.id);
-    if (!entry) throw new Error(`collector record has no source: ${source.id}`);
-    // All metadata comes from the collector's captured bytes, never a
-    // second live read: a manifest or lock edited after collection must not
-    // silently change this build's inputs. N4a owns that listing.
-    const captured = new Set(entry.candidates.map((candidate) => candidate.path));
-    for (const rel of captured) {
-      if (!workspaceAllowed(rel)) continue;
-      const from = join(context, "sources", source.id, rel);
-      if (!existsSync(from)) throw new Error(`collector metadata is missing: ${source.id}/${rel}`);
-      const dest = join(context, "workspace", source.id, rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      cpSync(from, dest);
-    }
-    // Scope follows the record: only directories that own a non-root
-    // package.json manifest in the captured listing. A Java tree (pom
-    // without package.json) never appears there, so it never enters.
-    const owned = new Set();
-    for (const candidate of entry.candidates) {
-      if (WORKSPACE_ROOT_FILES.has(candidate.path)) continue;
-      if (!candidate.path.endsWith("/package.json")) continue;
-      owned.add(candidate.path.slice(0, -"/package.json".length));
-    }
-    const files = output("git", [
-      "-C",
-      source.root,
-      "ls-files",
-      "--cached",
-      "--others",
-      "--exclude-standard",
-      "-z",
-    ])
-      .split("\0")
-      .filter((path) => path !== "");
-    for (const rel of files) {
-      if (!workspaceAllowed(rel)) continue;
-      // Metadata already came from the captured bytes above; a live
-      // second read here would silently overwrite it.
-      if (captured.has(rel)) continue;
-      if (![...owned].some((dir) => rel.startsWith(`${dir}/`)))
-        continue;
-      const dest = join(context, "workspace", source.id, rel);
-      mkdirSync(dirname(dest), { recursive: true });
-      cpSync(join(source.root, rel), dest);
-    }
-  }
 }
 
 async function copyAppTools(app, context) {
@@ -279,7 +153,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
   // The live tree was copied file by file after sampling: the recorded HEADs
   // must still hold. This is a change check, not an atomic snapshot of dirty
   // worktree edits, and it never resamples.
-  assertEntriesCurrent(entries);
+  assertEntriesCurrent(entries, "staging");
   await copyAppTools(app, context);
   const runtime = existingRuntime(app, arch);
   writeFileSync(join(context, "runtime-contract.json"), `${JSON.stringify(runtime.contract)}\n`);
@@ -454,9 +328,7 @@ export async function buildWorkbenchApp(app, args) {
   // The lock must describe this build's inputs: a source that moved since the
   // start fails instead of being relabeled or retried. This reads HEAD only;
   // it never saves a new dirty identity.
-  for (const entry of entries)
-    if (output("git", ["-C", entry.root, "rev-parse", "HEAD"]) !== entry.identity.revision)
-      throw new Error(`source ${entry.id} changed during the build; restart the build`);
+  assertEntriesCurrent(entries, "the build");
   saveRuntimeLock(app.lockRoot, FAMILY, arch, contract, INTERFACE);
   console.log(`RUNTIME_IMAGE=${tag}\nRUNTIME_DEPLOY_IMAGE=${alias}\nRUNTIME_COMPAT_FINGERPRINT=${fp}`);
   if (parsed["--pack-runtime"])

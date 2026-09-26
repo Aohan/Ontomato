@@ -14,7 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
-import { collectMetadataContext } from "./metadata-context.mjs";
+import { collectMetadataContext, copyWorkspace } from "./pnpm-workspace-context.mjs";
 
 // Local identity only; the user's Git configuration and real repositories are never touched.
 const GIT = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid"];
@@ -224,4 +224,108 @@ test("fails and keeps outputs when candidates change between the two passes", (t
     readFileSync(join(destination, "sources/ontomato/package.json")),
     readFileSync(join(fixture.publicRoot, "package.json")),
   );
+});
+
+// copyWorkspace owner selection (Manager is the second consumer). The two
+// sources carry a Manager app/package next to other packages, tests, local
+// env files and docs; only Git-visible inputs of the named owners may enter.
+function managerPair(t) {
+  const fixture = workspaceFixture(t);
+  const { publicRoot, privateRoot } = fixture;
+  json(join(publicRoot, "apps/ontology-manager/package.json"), { name: "@ontomato/ontology-manager-app" });
+  text(join(publicRoot, "apps/ontology-manager/src/main.ts"), "export const app = 1;\n");
+  text(join(publicRoot, "apps/ontology-manager/src/__tests__/main.test.ts"), "test;\n");
+  text(join(publicRoot, "apps/ontology-manager/.env.local"), "TOKEN=1\n");
+  text(join(publicRoot, "apps/ontology-manager/README.md"), "# doc\n");
+  json(join(publicRoot, "packages/ontology-manager/package.json"), { name: "@ontomato/ontology-manager" });
+  text(join(publicRoot, "packages/ontology-manager/src/index.ts"), "export {};\n");
+  text(join(publicRoot, "packages/core/src/core.ts"), "export {};\n");
+  text(join(publicRoot, "apps/workbench/src/server.ts"), "export {};\n");
+  commit(publicRoot, "public manager fixture");
+  json(join(privateRoot, "apps/ontology-manager/package.json"), { name: "@enterprise/ontology-manager-app" });
+  text(join(privateRoot, "apps/ontology-manager/src/main.ts"), "export const enterprise = 1;\n");
+  text(join(privateRoot, "apps/workbench/src/server.ts"), "export {};\n");
+  commit(privateRoot, "private manager fixture");
+  return fixture;
+}
+
+function stage(fixture, owners) {
+  const context = join(fixture.dir, "context");
+  const app = { sources: sourcesOf(fixture) };
+  const record = collectMetadataContext({
+    sources: app.sources,
+    workspaceId: "enterprise",
+    appImporter: "apps/ontology-manager",
+    destination: context,
+  });
+  return { context, app, record, copy: () => copyWorkspace(app, context, record, owners) };
+}
+
+function filesUnder(root, prefix = "") {
+  return readdirSync(join(root, prefix), { withFileTypes: true })
+    .flatMap((entry) => {
+      const rel = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      return entry.isDirectory() ? filesUnder(root, rel) : [rel];
+    })
+    .sort();
+}
+
+const MANAGER_OWNERS = {
+  ontomato: ["apps/ontology-manager", "packages/ontology-manager"],
+  enterprise: ["apps/ontology-manager"],
+};
+
+test("named owners per source id get their sources; every other package keeps only captured metadata", (t) => {
+  const fixture = managerPair(t);
+  const { context, record, copy } = stage(fixture, MANAGER_OWNERS);
+  // A manifest edited after collection must not reach the context: metadata
+  // comes only from the captured bytes.
+  json(join(fixture.publicRoot, "packages/core/package.json"), { name: "@ontomato/core", edited: true });
+  copy();
+  assert.deepEqual(filesUnder(join(context, "workspace")), [
+    "enterprise/apps/ontology-manager/package.json",
+    "enterprise/apps/ontology-manager/src/main.ts",
+    "enterprise/apps/workbench/package.json",
+    "enterprise/package.json",
+    "enterprise/pnpm-lock.yaml",
+    "enterprise/pnpm-workspace.yaml",
+    "ontomato/apps/ontology-manager/package.json",
+    "ontomato/apps/ontology-manager/src/main.ts",
+    "ontomato/apps/workbench/package.json",
+    "ontomato/package.json",
+    "ontomato/packages/core/package.json",
+    "ontomato/packages/ontology-manager/package.json",
+    "ontomato/packages/ontology-manager/src/index.ts",
+    "ontomato/pnpm-lock.yaml",
+    "ontomato/pnpm-workspace.yaml",
+  ]);
+  for (const source of record.sources)
+    for (const candidate of source.candidates) {
+      const copied = join(context, "workspace", source.id, candidate.path);
+      if (!existsSync(copied)) continue;
+      assert.equal(digest(copied), candidate.sha256, `${source.id}/${candidate.path}`);
+    }
+  assert.equal(record.application, "@enterprise/ontology-manager-app");
+});
+
+test("without owners the workbench keeps every JS owner of the record", (t) => {
+  const fixture = managerPair(t);
+  const { context, copy } = stage(fixture, undefined);
+  copy();
+  for (const rel of [
+    "ontomato/packages/core/src/core.ts",
+    "ontomato/apps/workbench/src/server.ts",
+    "ontomato/packages/ontology-manager/src/index.ts",
+    "enterprise/apps/workbench/src/server.ts",
+  ])
+    assert.equal(existsSync(join(context, "workspace", rel)), true, rel);
+});
+
+test("a source without named owners or an owner that is not its package is rejected", (t) => {
+  const fixture = managerPair(t);
+  const missing = stage(fixture, { ontomato: MANAGER_OWNERS.ontomato });
+  assert.throws(missing.copy, /no source owners named for enterprise/);
+  rmSync(missing.context, { recursive: true, force: true });
+  const wrong = stage(fixture, { ...MANAGER_OWNERS, enterprise: ["packages/ontology-manager"] });
+  assert.throws(wrong.copy, /source enterprise has no package packages\/ontology-manager/);
 });

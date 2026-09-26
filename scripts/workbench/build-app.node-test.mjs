@@ -15,9 +15,9 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { buildWorkbenchApp, copyWorkspace } from "./build-images.mjs";
+import { buildWorkbenchApp } from "./build-images.mjs";
 import { fingerprint } from "../build-support.mjs";
-import { collectMetadataContext } from "./metadata-context.mjs";
+import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
 import { productionClosure, productionFingerprint } from "./runtime-contract.mjs";
 import { assembleAppStage, stageDirectory } from "./stage-app.mjs";
 

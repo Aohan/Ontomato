@@ -211,6 +211,17 @@ test("source identity reads the given repo and excludes only the service lock", 
     writeFileSync(join(dir, "other.txt"), "wip");
     assert.equal(sourceIdentity("4.0.0-dev", dir, lock).dirty, true);
   }));
+test("without a runtime lock the whole source state counts", () =>
+  temporary((dir) => {
+    git(dir, ["init"]);
+    writeFileSync(join(dir, "keep.txt"), "a");
+    git(dir, ["add", "keep.txt"]);
+    git(dir, ["commit", "-m", "init"]);
+    assert.equal(sourceIdentity("4.0.0-dev", dir).dirty, false);
+    mkdirSync(join(dir, "apps/data-engine"), { recursive: true });
+    writeFileSync(join(dir, "apps/data-engine/runtime-lock.json"), "{}\n");
+    assert.equal(sourceIdentity("4.0.0-dev", dir).dirty, true);
+  }));
 test("a missing runtime image is an inspect failure and does not build", () => {
   assert.throws(
     () => requireRuntime(FAMILY, "arm64", "a".repeat(64)),
