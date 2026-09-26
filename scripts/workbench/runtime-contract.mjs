@@ -169,6 +169,14 @@ export function pairMetadata(app, runtime, contract, actualArch) {
     throw new Error("Runtime contract metadata is inconsistent");
 }
 
+// Deployment assembly: the startup pairing plus the architecture the assembler
+// expects (the retired assemble-check.sh rule). Startup `pair` is unchanged.
+export function assembleMetadata(app, runtime, contract, actualArch, expectedArch) {
+  pairMetadata(app, runtime, contract, actualArch);
+  if (expectedArch !== actualArch)
+    throw new Error(`Assembly architecture mismatch: expected ${expectedArch}, actual ${actualArch}`);
+}
+
 function parseLock(text) {
   return createRequire(import.meta.url)("yaml").parse(text);
 }
@@ -232,6 +240,16 @@ async function main() {
       readJson("/runtime/.image-meta.json"),
       readContract("/runtime/contract.json"),
       liveArch(),
+    );
+  } else if (command === "assemble") {
+    if (args.length !== 1 || !["amd64", "arm64"].includes(args[0]))
+      throw new Error("assemble requires the expected architecture amd64|arm64");
+    assembleMetadata(
+      readJson("/app/.image-meta.json"),
+      readJson("/runtime/.image-meta.json"),
+      readContract("/runtime/contract.json"),
+      liveArch(),
+      args[0],
     );
   } else if (command === "check-build") {
     if (args.length !== 3) throw new Error("check-build requires graph, contract and fingerprint");

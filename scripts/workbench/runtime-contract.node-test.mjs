@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { fingerprint } from "../build-support.mjs";
 import {
   INTERFACE,
+  assembleMetadata,
   assertPair,
   buildContract,
   checkAgainst,
@@ -229,6 +232,29 @@ test("pair rejects schema, kind, family, arch and fingerprint mismatches", () =>
     () => pairMetadata(app, runtime, { ...contract, family: "java-app" }, "arm64"),
     /metadata is inconsistent/,
   );
+});
+
+test("assemble pairs like startup and then requires the expected architecture", () => {
+  const base = productionClosure(bundle(), lock(), "linux/arm64");
+  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
+  const fp = fingerprint(contract);
+  const app = { schema: 3, kind: "app", family: "node-app", runtimeCompatFingerprint: fp };
+  const runtime = { schema: 3, kind: "runtime", family: "node-app", arch: "arm64", runtimeCompatFingerprint: fp };
+  assembleMetadata(app, runtime, contract, "arm64", "arm64");
+  assert.throws(() => assembleMetadata(app, runtime, contract, "arm64", "amd64"), /Assembly architecture mismatch: expected amd64, actual arm64/);
+  // Every pairing failure still fails first.
+  assert.throws(() => assembleMetadata({ ...app, kind: "runtime" }, runtime, contract, "arm64", "arm64"), /image kind/);
+  assert.throws(() => assembleMetadata(app, { ...runtime, arch: "amd64" }, contract, "arm64", "arm64"), /architecture mismatch/);
+  assert.throws(() => assembleMetadata(app, runtime, { ...contract, family: "java-app" }, "arm64", "arm64"), /metadata is inconsistent/);
+});
+
+test("the assemble command rejects a missing or unknown expected architecture before reading metadata", () => {
+  const cli = fileURLToPath(new URL("./runtime-contract.mjs", import.meta.url));
+  for (const args of [["assemble"], ["assemble", "x86_64"], ["assemble", "arm64", "extra"]]) {
+    const run = spawnSync(process.execPath, [cli, ...args], { encoding: "utf8" });
+    assert.equal(run.status, 1, args.join(" "));
+    assert.match(run.stderr, /^\[contract\] assemble requires the expected architecture amd64\|arm64/);
+  }
 });
 
 test("python pins match exactly and reject drift or ranges", () => {

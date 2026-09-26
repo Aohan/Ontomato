@@ -60,13 +60,14 @@ function identities(pub, ent) {
   ];
 }
 
-function descriptor(root, component = "workbench-opensource") {
+function descriptor(root, component = "ontomato", runtimeImageName = "node-app-runtime") {
   return {
     repoRoot: root,
     publicRoot: root,
     lockRoot: join(root, "apps/workbench"),
     lockExclude: LOCK_EXCLUDE,
     component,
+    runtimeImageName,
     workspaceId: "ontomato",
     appImporter: "apps/workbench",
     sources: [{ id: "ontomato", root }],
@@ -75,7 +76,7 @@ function descriptor(root, component = "workbench-opensource") {
 
 function enterpriseDescriptor(pub, ent) {
   return {
-    ...descriptor(ent, "workbench-enterprise"),
+    ...descriptor(ent, "data-agent", "data-agent-runtime"),
     publicRoot: pub,
     workspaceId: "enterprise",
     appImporter: "apps/workbench",
@@ -319,6 +320,19 @@ test("success saves the fingerprint for this arch only, with snapshot metadata",
     meta.sources.map((source) => [source.id, source.revision, source.dirty]),
     [["ontomato", start.ontomato, true], ["enterprise", start.enterprise, false]],
   );
+  const build = readFileSync(join(docker.state, "args.jsonl"), "utf8").trim().split("\n").map(JSON.parse).find((argv) => argv.includes("runtime"));
+  const tags = build.filter((arg, i) => build[i - 1] === "-t");
+  assert.deepEqual(tags, [`node-app-runtime:compat-${expected.slice(0, 16)}-arm64`, "data-agent-runtime:deploy-arm64"]);
+});
+
+test("the runtime package is named after the product's runtime image name", async (t) => {
+  const root = repo(t, "@ontomato/workbench");
+  const docker = fakeDocker(t, root);
+  await withDocker({ ...docker, mode: "ok" }, async () => {
+    await buildWorkbenchApp(descriptor(root), ["runtime", "--arch", "arm64", "--pack-runtime"]);
+  });
+  const fp = JSON.parse(readFileSync(join(root, LOCK_EXCLUDE), "utf8")).runtimes["linux/arm64"];
+  assert.deepEqual(readdirSync(join(root, ".build/pack")), [`node-app-runtime-compat-${fp.slice(0, 16)}-arm64.tar.gz`]);
 });
 
 test("a source moving mid-build fails without relabeling or writing a lock", async (t) => {

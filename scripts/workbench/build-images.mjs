@@ -85,6 +85,13 @@ function imageBuildArgs(names = BUILD_ARG_NAMES) {
   return args;
 }
 
+// The product's stable runtime alias; the entry's runtimeImageName is the one
+// source of this name and of the runtime package prefix. The compatibility tag
+// itself stays runtimeTag(node-app, fp, arch).
+function runtimeAlias(app, arch) {
+  return `${app.runtimeImageName}:deploy-${arch}`;
+}
+
 function stageContext(app, arch) {
   const base = join(app.repoRoot, ".build", "contexts", "workbench", arch);
   mkdirSync(base, { recursive: true });
@@ -196,6 +203,12 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     context,
   ]);
   assertAppImage(tag, arch, app.component, runtime.fp);
+  // Same sampled HEADs as staging; no resampling. Only then is the locked,
+  // already imported runtime re-tagged to this product's alias (never rebuilt).
+  assertEntriesCurrent(entries, "the build");
+  const deployRuntime = runtimeAlias(app, arch);
+  docker(["tag", runtime.tag, deployRuntime]);
+  console.log(`RUNTIME_IMAGE=${runtime.tag}\nRUNTIME_DEPLOY_IMAGE=${deployRuntime}\nRUNTIME_COMPAT_FINGERPRINT=${runtime.fp}`);
   console.log(`APP_IMAGE=${tag}\nAPP_DEPLOY_IMAGE=${alias}`);
   if (parsed["--pack-app"])
     await exportImage(
@@ -306,7 +319,7 @@ export async function buildWorkbenchApp(app, args) {
     sources: combined.sources,
   };
   const tag = runtimeTag(FAMILY, fp, arch);
-  const alias = `${app.component}-runtime:deploy-${arch}`;
+  const alias = runtimeAlias(app, arch);
   console.log(`[build] runtime ${tag}`);
   docker([
     ...common,
@@ -334,6 +347,6 @@ export async function buildWorkbenchApp(app, args) {
   if (parsed["--pack-runtime"])
     await exportImage(
       [tag, alias],
-      join(app.repoRoot, ".build", "pack", `${FAMILY}-runtime-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
+      join(app.repoRoot, ".build", "pack", `${app.runtimeImageName}-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
     );
 }
