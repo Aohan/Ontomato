@@ -78,6 +78,8 @@ export default [
       "scripts/dev-command.mjs",
       "scripts/dev-command.node-test.mjs",
       "scripts/product-targets.node-test.mjs",
+      "scripts/dev-stack.mjs",
+      "scripts/dev-stack.node-test.mjs",
       "apps/data-engine/dev.mjs",
       "scripts/data-engine/dev-java.mjs",
       "scripts/data-engine/dev-java.node-test.mjs",

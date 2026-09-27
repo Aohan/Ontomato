@@ -1,0 +1,31 @@
+# 本机开发用 PostgreSQL。只由产品根 dev.sh 以显式 -p/-f 调用；账号密码仅本机示例。
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ontomato
+      POSTGRES_PASSWORD: ontomato
+      TZ: Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql
+      # 复用部署脚本的建库文件：它建立 ontomato 与 datarag，只在空卷首次初始化时执行。
+      - ../deploy/initdb.sql:/docker-entrypoint-initdb.d/create-databases.sql:ro
+    labels:
+      dev.stack.root: "${DEV_STACK_ROOT:?DEV_STACK_ROOT not set}"
+      dev.stack.product: "${DEV_STACK_PRODUCT:?DEV_STACK_PRODUCT not set}"
+    # TCP：镜像 init 服务不监听 127.0.0.1，所以这里等到 initdb（含建库脚本）完成才通过。
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ontomato -d datarag"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+    labels:
+      dev.stack.root: "${DEV_STACK_ROOT:?DEV_STACK_ROOT not set}"
+      dev.stack.product: "${DEV_STACK_PRODUCT:?DEV_STACK_PRODUCT not set}"
