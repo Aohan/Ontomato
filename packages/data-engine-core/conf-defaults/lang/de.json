@@ -1,0 +1,322 @@
+[
+  {
+    "key": "lang",
+    "value": "德语"
+  },
+  {
+    "key": "Abc.notInService",
+    "value": "ABC ist vorübergehend nicht verfügbar"
+  },
+  {
+    "key": "Auth.register.success",
+    "value": "Autorisierung erfolgreich aktiviert"
+  },
+  {
+    "key": "Maintenance.action.paramError",
+    "value": "Ungültige Anfrageparameter"
+  },
+  {
+    "key": "Data.queryM3.error",
+    "value": "Abfrage der M3-Datenbank fehlgeschlagen"
+  },
+  {
+    "key": "Data.remoteDB.notSupport",
+    "value": "Diese Funktion wird im Nicht-M3-Modus nicht unterstützt"
+  },
+  {
+    "key": "Data.dataPermission.noPermission",
+    "value": "Sie haben keine Datenberechtigung"
+  },
+  {
+    "key": "Data.object.notExist",
+    "value": "Objekt nicht gefunden"
+  },
+  {
+    "key": "Dashboard.data.error",
+    "value": "Datenabruf fehlgeschlagen"
+  },
+  {
+    "key": "Dashboard.param.error",
+    "value": "Ungültige benutzerdefinierte Parameter"
+  },
+  {
+    "key": "Admin.relationship.nameError",
+    "value": "Ungültiges Format des Beziehungsnamens"
+  },
+  {
+    "key": "Admin.relationship.fromClassNotFound",
+    "value": "Quellklasse nicht gefunden"
+  },
+  {
+    "key": "Admin.relationship.toClassNotFound",
+    "value": "Zielklasse nicht gefunden"
+  },
+  {
+    "key": "Admin.relationship.exist",
+    "value": "Beziehung existiert bereits"
+  },
+  {
+    "key": "Admin.class.exist",
+    "value": "Klasse existiert bereits"
+  },
+  {
+    "key": "Admin.class.notFound",
+    "value": "Klasse nicht gefunden"
+  },
+  {
+    "key": "Admin.attr.formatError",
+    "value": "Ungültiges Attributformat"
+  },
+  {
+    "key": "Admin.attr.typeError",
+    "value": "Ungültiger Attributtyp"
+  },
+  {
+    "key": "Admin.attr.exist",
+    "value": "Attribut existiert bereits"
+  },
+  {
+    "key": "Admin.attr.notFound",
+    "value": "Attribut nicht gefunden"
+  },
+  {
+    "key": "Admin.indicator.exist",
+    "value": "Indikator existiert bereits"
+  },
+  {
+    "key": "PythonExecutor.execute.timeout",
+    "value": "Python-Ausführungszeit überschritten (Minuten)"
+  },
+  {
+    "key": "QuestionCard.originCondition",
+    "value": "Ursprüngliche Bedingung"
+  },
+  {
+    "key": "QuestionCard.replaceTo",
+    "value": "Ersetzt durch"
+  },
+  {
+    "key": "QuestionCard.totalNum",
+    "value": "Gesamtanzahl Datensätze"
+  },
+  {
+    "key": "QuestionCard.showNum",
+    "value": "Angezeigte Datensätze"
+  },
+  {
+    "key": "QuestionCard.canGetByUrl",
+    "value": "Alle Daten sind über den Abfragelink zugänglich"
+  },
+  {
+    "key": "AuditLog.datasetDesc.upd",
+    "value": "Datensatzbeschreibung geändert"
+  },
+  {
+    "key": "AuditLog.relationship.add",
+    "value": "Beziehungstyp hinzugefügt"
+  },
+  {
+    "key": "AuditLog.relationship.del",
+    "value": "Beziehungstyp gelöscht"
+  },
+  {
+    "key": "AuditLog.relationship.upd",
+    "value": "Beziehungstyp geändert"
+  },
+  {
+    "key": "AuditLog.class.add",
+    "value": "Objektklasse hinzugefügt"
+  },
+  {
+    "key": "AuditLog.class.del",
+    "value": "Objektklasse gelöscht"
+  },
+  {
+    "key": "AuditLog.class.upd",
+    "value": "Objektklasse geändert"
+  },
+  {
+    "key": "AuditLog.class",
+    "value": "Objektklasse"
+  },
+  {
+    "key": "AuditLog.attr.add",
+    "value": "Attribut hinzugefügt"
+  },
+  {
+    "key": "AuditLog.attr.del",
+    "value": "Attribut gelöscht"
+  },
+  {
+    "key": "AuditLog.attr.upd",
+    "value": "Attribut geändert"
+  },
+  {
+    "key": "AuditLog.attr",
+    "value": "Attribut"
+  },
+  {
+    "key": "AuditLog.indicator.add",
+    "value": "Indikator hinzugefügt"
+  },
+  {
+    "key": "AuditLog.indicator.del",
+    "value": "Indikator gelöscht"
+  },
+  {
+    "key": "AuditLog.indicator.upd",
+    "value": "Indikator geändert"
+  },
+  {
+    "key": "AuditLog.businessExample.add",
+    "value": "Geschäftsbeispiel hinzugefügt"
+  },
+  {
+    "key": "AuditLog.businessExample.upd",
+    "value": "Geschäftsbeispiel geändert"
+  },
+  {
+    "key": "AuditLog.businessExample.del",
+    "value": "Geschäftsbeispiel gelöscht"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.add",
+    "value": "Geschäftswissen hinzugefügt"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.upd",
+    "value": "Geschäftswissen geändert"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.del",
+    "value": "Geschäftswissen gelöscht"
+  },
+  {
+    "key": "Action.notGenerated",
+    "value": "Aktion nicht generiert"
+  },
+  {
+    "key": "Action.notFound",
+    "value": "Aktion existiert nicht"
+  },
+  {
+    "key": "Action.cannotModifySystem",
+    "value": "Systemaktion kann nicht geändert werden"
+  },
+  {
+    "key": "Action.cannotDeleteSystem",
+    "value": "Systemaktion kann nicht gelöscht werden"
+  },
+  {
+    "key": "Action.domainMismatch",
+    "value": "Domäne der Aktion stimmt nicht überein"
+  },
+  {
+    "key": "Action.notPublished",
+    "value": "Aktion nicht veröffentlicht"
+  },
+  {
+    "key": "Action.parseCodeExplainFailed",
+    "value": "Parsen des Code-Erklärungsergebnisses fehlgeschlagen"
+  },
+  {
+    "key": "Function.notFound",
+    "value": "Funktion existiert nicht"
+  },
+  {
+    "key": "Function.cannotBeEmpty",
+    "value": "Funktion darf nicht leer sein"
+  },
+  {
+    "key": "Function.notWrite",
+    "value": "Funktion ist keine Schreibfunktion"
+  },
+  {
+    "key": "Function.notRead",
+    "value": "Funktion ist keine Lesefunktion"
+  },
+  {
+    "key": "Function.cannotModifySystem",
+    "value": "Systemfunktion kann nicht geändert werden"
+  },
+  {
+    "key": "Function.cannotDeleteSystem",
+    "value": "Systemfunktion kann nicht gelöscht werden"
+  },
+  {
+    "key": "Function.domainMismatch",
+    "value": "Domäne der Funktion stimmt nicht überein"
+  },
+  {
+    "key": "Function.referencedByMetricView",
+    "value": "Von MetricView referenzierte Funktion kann nicht geändert oder gelöscht werden"
+  },
+  {
+    "key": "Function.referencedByAction",
+    "value": "Von Action referenzierte Funktion kann nicht geändert oder gelöscht werden"
+  },
+  {
+    "key": "Function.referencedByWriteTask",
+    "value": "Von WriteTask referenzierte Funktion kann nicht geändert oder gelöscht werden"
+  },
+  {
+    "key": "MetricView.notGenerated",
+    "value": "MetricView nicht generiert"
+  },
+  {
+    "key": "MetricView.notFound",
+    "value": "MetricView existiert nicht"
+  },
+  {
+    "key": "MetricView.cannotModifySystem",
+    "value": "System-MetricView kann nicht geändert werden"
+  },
+  {
+    "key": "MetricView.cannotDeleteSystem",
+    "value": "System-MetricView kann nicht gelöscht werden"
+  },
+  {
+    "key": "MetricView.domainMismatch",
+    "value": "Domäne der MetricView stimmt nicht überein"
+  },
+  {
+    "key": "MetricView.notPublished",
+    "value": "MetricView nicht veröffentlicht"
+  },
+  {
+    "key": "MetricView.snapshotNotFound",
+    "value": "Hot-Daten-Ergebnis-Snapshot existiert nicht oder ist abgelaufen"
+  },
+  {
+    "key": "MetricView.snapshotUnreadable",
+    "value": "Hot-Daten-Ergebnis-Snapshot konnte nicht gelesen werden"
+  },
+  {
+    "key": "WriteTask.notFound",
+    "value": "WriteTask existiert nicht"
+  },
+  {
+    "key": "WriteTask.domainMismatch",
+    "value": "Domäne des WriteTask stimmt nicht überein"
+  },
+  {
+    "key": "WriteTask.functionMustBeNoParam",
+    "value": "Funktion muss parameterlos sein"
+  },
+  {
+    "key": "WriteTask.invalidStatus",
+    "value": "Ungültiger WriteTask-Status"
+  },
+  {
+    "key": "WriteTask.invalidCrontab",
+    "value": "Ungültiger Crontab-Ausdruck für WriteTask"
+  },
+  {
+    "key": "WriteFunctionOperation.classNotExist",
+    "value": "Klasse existiert nicht"
+  },
+  {
+    "key": "WriteFunctionOperation.relationNotExist",
+    "value": "Relation existiert nicht"
+  }
+]

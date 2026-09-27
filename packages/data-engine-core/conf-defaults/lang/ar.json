@@ -1,0 +1,322 @@
+[
+  {
+    "key": "lang",
+    "value": "阿拉伯语"
+  },
+  {
+    "key": "Abc.notInService",
+    "value": "ABC غير متاح مؤقتًا"
+  },
+  {
+    "key": "Auth.register.success",
+    "value": "تم تفعيل الترخيص بنجاح"
+  },
+  {
+    "key": "Maintenance.action.paramError",
+    "value": "معلمات الطلب غير صالحة"
+  },
+  {
+    "key": "Data.queryM3.error",
+    "value": "فشل الاستعلام عن قاعدة بيانات M3"
+  },
+  {
+    "key": "Data.remoteDB.notSupport",
+    "value": "هذه الميزة غير مدعومة في وضع غير M3"
+  },
+  {
+    "key": "Data.dataPermission.noPermission",
+    "value": "ليس لديك صلاحية الوصول إلى البيانات"
+  },
+  {
+    "key": "Data.object.notExist",
+    "value": "الكائن غير موجود"
+  },
+  {
+    "key": "Dashboard.data.error",
+    "value": "فشل استرداد البيانات"
+  },
+  {
+    "key": "Dashboard.param.error",
+    "value": "المعلمات المخصصة غير صالحة"
+  },
+  {
+    "key": "Admin.relationship.nameError",
+    "value": "تنسيق اسم العلاقة غير صالح"
+  },
+  {
+    "key": "Admin.relationship.fromClassNotFound",
+    "value": "الفئة المصدر غير موجودة"
+  },
+  {
+    "key": "Admin.relationship.toClassNotFound",
+    "value": "الفئة الهدف غير موجودة"
+  },
+  {
+    "key": "Admin.relationship.exist",
+    "value": "العلاقة موجودة بالفعل"
+  },
+  {
+    "key": "Admin.class.exist",
+    "value": "الفئة موجودة بالفعل"
+  },
+  {
+    "key": "Admin.class.notFound",
+    "value": "الفئة غير موجودة"
+  },
+  {
+    "key": "Admin.attr.formatError",
+    "value": "تنسيق السمة غير صالح"
+  },
+  {
+    "key": "Admin.attr.typeError",
+    "value": "نوع السمة غير صالح"
+  },
+  {
+    "key": "Admin.attr.exist",
+    "value": "السمة موجودة بالفعل"
+  },
+  {
+    "key": "Admin.attr.notFound",
+    "value": "السمة غير موجودة"
+  },
+  {
+    "key": "Admin.indicator.exist",
+    "value": "المؤشر موجود بالفعل"
+  },
+  {
+    "key": "PythonExecutor.execute.timeout",
+    "value": "انتهت مهلة تنفيذ Python (دقائق)"
+  },
+  {
+    "key": "QuestionCard.originCondition",
+    "value": "الشرط الأصلي"
+  },
+  {
+    "key": "QuestionCard.replaceTo",
+    "value": "تم الاستبدال بـ"
+  },
+  {
+    "key": "QuestionCard.totalNum",
+    "value": "إجمالي السجلات"
+  },
+  {
+    "key": "QuestionCard.showNum",
+    "value": "عرض السجلات"
+  },
+  {
+    "key": "QuestionCard.canGetByUrl",
+    "value": "يمكن الوصول إلى جميع البيانات عبر رابط الاستعلام"
+  },
+  {
+    "key": "AuditLog.datasetDesc.upd",
+    "value": "تعديل وصف مجموعة البيانات"
+  },
+  {
+    "key": "AuditLog.relationship.add",
+    "value": "إضافة نوع علاقة"
+  },
+  {
+    "key": "AuditLog.relationship.del",
+    "value": "حذف نوع علاقة"
+  },
+  {
+    "key": "AuditLog.relationship.upd",
+    "value": "تعديل نوع علاقة"
+  },
+  {
+    "key": "AuditLog.class.add",
+    "value": "إضافة فئة كائن"
+  },
+  {
+    "key": "AuditLog.class.del",
+    "value": "حذف فئة كائن"
+  },
+  {
+    "key": "AuditLog.class.upd",
+    "value": "تعديل فئة كائن"
+  },
+  {
+    "key": "AuditLog.class",
+    "value": "فئة الكائن"
+  },
+  {
+    "key": "AuditLog.attr.add",
+    "value": "إضافة سمة"
+  },
+  {
+    "key": "AuditLog.attr.del",
+    "value": "حذف سمة"
+  },
+  {
+    "key": "AuditLog.attr.upd",
+    "value": "تعديل سمة"
+  },
+  {
+    "key": "AuditLog.attr",
+    "value": "السمة"
+  },
+  {
+    "key": "AuditLog.indicator.add",
+    "value": "إضافة مؤشر"
+  },
+  {
+    "key": "AuditLog.indicator.del",
+    "value": "حذف مؤشر"
+  },
+  {
+    "key": "AuditLog.indicator.upd",
+    "value": "تعديل مؤشر"
+  },
+  {
+    "key": "AuditLog.businessExample.add",
+    "value": "إضافة مثال تجاري"
+  },
+  {
+    "key": "AuditLog.businessExample.upd",
+    "value": "تعديل مثال تجاري"
+  },
+  {
+    "key": "AuditLog.businessExample.del",
+    "value": "حذف مثال تجاري"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.add",
+    "value": "إضافة معرفة تجارية"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.upd",
+    "value": "تعديل معرفة تجارية"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.del",
+    "value": "حذف معرفة تجارية"
+  },
+  {
+    "key": "Action.notGenerated",
+    "value": "لم يتم إنشاء الإجراء"
+  },
+  {
+    "key": "Action.notFound",
+    "value": "الإجراء غير موجود"
+  },
+  {
+    "key": "Action.cannotModifySystem",
+    "value": "لا يمكن تعديل الإجراء النظامي"
+  },
+  {
+    "key": "Action.cannotDeleteSystem",
+    "value": "لا يمكن حذف الإجراء النظامي"
+  },
+  {
+    "key": "Action.domainMismatch",
+    "value": "مجال الإجراء غير متطابق"
+  },
+  {
+    "key": "Action.notPublished",
+    "value": "الإجراء غير منشور"
+  },
+  {
+    "key": "Action.parseCodeExplainFailed",
+    "value": "فشل تحليل نتيجة شرح الكود"
+  },
+  {
+    "key": "Function.notFound",
+    "value": "الدالة غير موجودة"
+  },
+  {
+    "key": "Function.cannotBeEmpty",
+    "value": "لا يمكن أن تكون الدالة فارغة"
+  },
+  {
+    "key": "Function.notWrite",
+    "value": "الدالة ليست دالة كتابة"
+  },
+  {
+    "key": "Function.notRead",
+    "value": "الدالة ليست دالة قراءة"
+  },
+  {
+    "key": "Function.cannotModifySystem",
+    "value": "لا يمكن تعديل الدالة النظامية"
+  },
+  {
+    "key": "Function.cannotDeleteSystem",
+    "value": "لا يمكن حذف الدالة النظامية"
+  },
+  {
+    "key": "Function.domainMismatch",
+    "value": "مجال الدالة غير متطابق"
+  },
+  {
+    "key": "Function.referencedByMetricView",
+    "value": "لا يمكن تعديل أو حذف الدالة المشار إليها بواسطة MetricView"
+  },
+  {
+    "key": "Function.referencedByAction",
+    "value": "لا يمكن تعديل أو حذف الدالة المشار إليها بواسطة Action"
+  },
+  {
+    "key": "Function.referencedByWriteTask",
+    "value": "لا يمكن تعديل أو حذف الدالة المشار إليها بواسطة WriteTask"
+  },
+  {
+    "key": "MetricView.notGenerated",
+    "value": "لم يتم إنشاء MetricView"
+  },
+  {
+    "key": "MetricView.notFound",
+    "value": "MetricView غير موجود"
+  },
+  {
+    "key": "MetricView.cannotModifySystem",
+    "value": "لا يمكن تعديل MetricView النظامي"
+  },
+  {
+    "key": "MetricView.cannotDeleteSystem",
+    "value": "لا يمكن حذف MetricView النظامي"
+  },
+  {
+    "key": "MetricView.domainMismatch",
+    "value": "مجال MetricView غير متطابق"
+  },
+  {
+    "key": "MetricView.notPublished",
+    "value": "MetricView غير منشور"
+  },
+  {
+    "key": "MetricView.snapshotNotFound",
+    "value": "لقطة نتيجة البيانات الساخنة غير موجودة أو انتهت صلاحيتها"
+  },
+  {
+    "key": "MetricView.snapshotUnreadable",
+    "value": "فشل قراءة لقطة نتيجة البيانات الساخنة"
+  },
+  {
+    "key": "WriteTask.notFound",
+    "value": "WriteTask غير موجود"
+  },
+  {
+    "key": "WriteTask.domainMismatch",
+    "value": "مجال WriteTask غير متطابق"
+  },
+  {
+    "key": "WriteTask.functionMustBeNoParam",
+    "value": "يجب أن تكون الدالة بدون معاملات"
+  },
+  {
+    "key": "WriteTask.invalidStatus",
+    "value": "حالة WriteTask غير صالحة"
+  },
+  {
+    "key": "WriteTask.invalidCrontab",
+    "value": "تعبير crontab الخاص بـ WriteTask غير صالح"
+  },
+  {
+    "key": "WriteFunctionOperation.classNotExist",
+    "value": "الفئة غير موجودة"
+  },
+  {
+    "key": "WriteFunctionOperation.relationNotExist",
+    "value": "العلاقة غير موجودة"
+  }
+]

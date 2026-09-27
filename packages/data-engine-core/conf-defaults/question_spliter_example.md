@@ -1,63 +1,63 @@
-### Example 1: Single sub-query (detail query)
-**Original question**: Query the faculty and staff who have taken Thailand-themed photography works, and return their names, their departments, current administrative duties, current societies they serve, positions held, and their "Thailand-themed" photography works.
+### 示例1：单子查询（明细查询）
+**原问题**：查询拍照过泰国题材的摄影作品的教职工，返回他们的姓名、所属院系、当前行政职务、当前任职学会、任职职务和“泰国题材”的摄影作品。
 
-**Key judgments**:
-- A single sub-query is sufficient: all information can be obtained through connectivity centered on `person`.
-- Vector field handling: the `photo_works` field requires vector retrieval (consistent with item 3 of the business knowledge).
-- Time status: the administrative duty must be filtered by `last_flag='Yes'`.
+**关键判断**：
+- 单子查询即可完成：所有信息可通过`person`为中心连通获取。
+- 向量字段处理：`photo_works`字段需使用向量检索（符合业务知识第3条）。
+- 时间状态：行政职务需过滤`last_flag='是'`。
 
 ```json
 {
-  "question": "Query the faculty and staff who have taken Thailand-themed photography works, and return their names, their departments, current administrative duties, current societies they serve, positions held, and their \"Thailand-themed\" photography works",
+  "question": "查询拍照过泰国题材的摄影作品的教职工，返回他们的姓名、所属院系、当前行政职务、当前任职学会、任职职务和“泰国题材”的摄影作品",
   "subQueries": [
     {
-      "subQuestion": "Query the faculty and staff who have taken Thailand-themed photography works, and return their names, their departments, current administrative duties, current societies they serve, positions held, and their \"Thailand-themed\" photography works",
+      "subQuestion": "查询拍照过泰国题材的摄影作品的教职工，返回他们的姓名、所属院系、当前行政职务、当前任职学会、任职职务和“泰国题材”的摄影作品",
       "subgraph": {
         "path": [
           {
             "source": "/univ_demo/person",
-            "relation": "HR organization relation of faculty and staff",
+            "relation": "教职工人事所属组织机构关系",
             "target": "/univ_demo/org"
           },
           {
             "source": "/univ_demo/person",
-            "relation": "Current administrative duty of faculty and staff",
+            "relation": "教职工担任的当前行政职务",
             "target": "/univ_demo/mgn_duty"
           },
           {
             "source": "/univ_demo/person",
-            "relation": "History of changes in society positions held by faculty and staff",
+            "relation": "教职工担任的学会职务履历变化",
             "target": "/univ_demo/szxxsb_xh"
           }
         ],
         "nodes": [
           {
             "node": "/univ_demo/person",
-            "filters": "Photography works vector match Thailand",
-            "select": "name, photo_works(query \"Thailand\")",
-            "filter_source": "From the original question: faculty and staff who have taken Thailand-themed photography works",
-            "select_reason": "The question requires returning the names of faculty and staff and their Thailand-themed photography works"
+            "filters": "摄影作品向量匹配泰国",
+            "select": "name, photo_works(query“泰国”)",
+            "filter_source": "原问题中：拍照过泰国题材的摄影作品的教职工",
+            "select_reason": "问题要求返回教职工名称和泰国题材摄影作品"
           },
           {
             "node": "/univ_demo/org",
             "filters": "",
             "select": "name",
             "filter_source": "",
-            "select_reason": "The question requires returning the name of the department"
+            "select_reason": "问题要求返回所属院系名称"
           },
           {
             "node": "/univ_demo/mgn_duty",
-            "filters": "Whether it is the current administrative duty = Yes",
+            "filters": "是否现行政职务 = 是",
             "select": "title",
-            "filter_source": "The original question asks for the current administrative duty",
-            "select_reason": "The question requires returning the administrative duty"
+            "filter_source": "原问题要查当前行政职务",
+            "select_reason": "问题要求返回行政职务"
           },
           {
             "node": "/univ_demo/szxxsb_xh",
-            "filters": "Term end time (pq_jssj) is empty or Term end time (pq_jssj) is greater than the current time",
+            "filters": "聘期结束时间(pq_jssj) 是 空 或 聘期结束时间(pq_jssj) 大于 当前时间",
             "select": "xm_name, wcrpm",
-            "filter_source": "The equivalent logic for the current society served is: there is no \"Term end time\" or \"Term end time\" is greater than the current time",
-            "select_reason": "The question requires returning the current society served and the position held"
+            "filter_source": "当前任职学会等价逻辑是：没有“聘期结束时间”或“聘期结束时间”大于当前时间",
+            "select_reason": "问题要求返回任职学会、任职职务"
           }
         ]
       },
@@ -74,45 +74,45 @@
 }
 ```
 
-### Example 2: Proportion calculation (must split + post-calculation)
-**Original question**: Calculate, for each HR unit, the number of faculty and staff with a doctoral degree, the total number of faculty and staff, and the proportion of doctoral degree holders.
+### 示例2：比例计算（必须拆分+后算）
+**原问题**：计算各个人事单位中，博士学位教职工和全部教职工的人数以及博士所占的比例。
 
-**Key judgments**:
-- Must split: it involves aggregation over different filter conditions (doctoral degree vs. all), and a single ABC cannot handle conditional aggregation.
-- Post-calculation is required: the proportion calculation is a cross-result operation and must be completed through finalCalculation.
+**关键判断**：
+- 必须拆分：涉及不同筛选条件的聚合（博士 vs 全部），单个ABC无法处理条件聚合。
+- 需要后算：比例计算属于跨结果运算，必须通过finalCalculation完成。
 
 ```json
 {
-  "question": "Calculate, for each HR unit, the number of faculty and staff with a doctoral degree, the total number of faculty and staff, and the proportion of doctoral degree holders.",
+  "question": "计算各个人事单位中，博士学位教职工和全部教职工的人数以及博士所占的比例。",
   "subQueries": [
     {
-      "subQuestion": "Count the number of faculty and staff with a doctoral degree in each HR unit",
+      "subQuestion": "统计各个人事单位的博士学位教职工人数",
       "subgraph": {
         "path": [
           {
             "source": "/univ_demo/person",
-            "relation": "HR organization relation of faculty and staff",
+            "relation": "教职工人事所属组织机构关系",
             "target": "/univ_demo/org"
           }
         ],
         "nodes": [
           {
             "node": "/univ_demo/person",
-            "filters": "degree_level = 'Doctoral degree'",
+            "filters": "degree_level = '博士'",
             "select": "account, org.name",
-            "filter_source": "The original question requires counting faculty and staff with a doctoral degree",
-            "select_reason": "account is used for counting, org.name for grouping"
+            "filter_source": "原问题要求统计博士学位教职工",
+            "select_reason": "account用于计数，org.name用于分组"
           },
           {
             "node": "/univ_demo/org",
-            "filters": "None",
+            "filters": "无",
             "select": "name",
-            "filter_source": "None",
-            "select_reason": "The organization name serves as the grouping dimension and display field"
+            "filter_source": "无",
+            "select_reason": "单位名称作为分组维度和展示字段"
           }
         ]
       },
-      "C_Step": "Group by HR unit and count distinct account to get the number of people with a doctoral degree in each unit",
+      "C_Step": "按人事单位分组，对account去重计数，得到各单位博士人数",
       "classes": ["/univ_demo/person", "/univ_demo/org"],
       "DSL_relationship": true,
       "DSL_C_Step_group_by": true,
@@ -121,33 +121,33 @@
       "DSL_C_Step_sort": false
     },
     {
-      "subQuestion": "Count the total number of faculty and staff in each HR unit",
+      "subQuestion": "统计各个人事单位的全部教职工人数",
       "subgraph": {
         "path": [
           {
             "source": "/univ_demo/person",
-            "relation": "HR organization relation of faculty and staff",
+            "relation": "教职工人事所属组织机构关系",
             "target": "/univ_demo/org"
           }
         ],
         "nodes": [
           {
             "node": "/univ_demo/person",
-            "filters": "None",
+            "filters": "无",
             "select": "account, org.name",
-            "filter_source": "The original question requires counting all faculty and staff",
-            "select_reason": "account is used for counting, org.name for grouping"
+            "filter_source": "原问题要求统计全部教职工",
+            "select_reason": "account用于计数，org.name用于分组"
           },
           {
             "node": "/univ_demo/org",
-            "filters": "None",
+            "filters": "无",
             "select": "name",
-            "filter_source": "None",
-            "select_reason": "The organization name serves as the grouping dimension and display field"
+            "filter_source": "无",
+            "select_reason": "单位名称作为分组维度和展示字段"
           }
         ]
       },
-      "C_Step": "Group by HR unit and count distinct account to get the total number of people in each unit",
+      "C_Step": "按人事单位分组，对account去重计数，得到各单位总人数",
       "classes": ["/univ_demo/person", "/univ_demo/org"],
       "DSL_relationship": true,
       "DSL_C_Step_group_by": true,
@@ -156,43 +156,43 @@
       "DSL_C_Step_sort": false
     }
   ],
-  "finalCalculation": "Join the results of the two sub-queries by unit and calculate the proportion of doctoral degree holders = number of people with a doctoral degree / total number of people"
+  "finalCalculation": "将两个子查询结果按单位关联，计算博士比例 = 博士人数 / 总人数"
 }
 ```
 
-### Example 3: Statistics and details required at the same time (must split)
-**Original question**: Query the faculty and staff of the School of Computer Science who joined in 2020 or later, who have received a "national-level or provincial/ministerial-level young talent program" honor, and who are under 45 years old, the graduate students they supervise, the number of "Artificial Intelligence"-related papers published in journals or conferences of level A or B, and list the paper details, the details of the authors and supervising teachers, and the honors.
+### 示例3：统计+明细同时要（必须拆分）
+**原问题**：查询计算机学院中，2020年以来入职的、获得过"国家级或省部级青年人才计划"荣誉的、不满45岁的教职工，他们指导的研究生，在A类或B类的期刊或会议上发表的"人工智能"相关的论文数量，同时列出论文的详细信息、作者和指导老师的详细信息、以及荣誉。
 
-**Key judgments**:
-- Must split: the question requires both the "number of papers" (statistics) and the "paper details" (details), while one ABC can only output one table form.
-- The two sub-queries share the same subgraph path, but their C_Step differs.
+**关键判断**：
+- 必须拆分：问题同时要求"论文数量"（统计）和"论文详细信息"（明细），一个ABC只能输出一种表形态。
+- 两个子查询共享相同子图路径，但C_Step不同。
 
 ```json
 {
-  "question": "Query the faculty and staff of the School of Computer Science who joined in 2020 or later, who have received a \"national-level or provincial/ministerial-level young talent program\" honor, and who are under 45 years old, the graduate students they supervise, the number of \"Artificial Intelligence\"-related papers published in journals or conferences of level A or B, and list the paper details, the details of the authors and supervising teachers, and the honors",
+  "question": "查询计算机学院中，2020年以来入职的、获得过“国家级或省部级青年人才计划”荣誉的、不满45岁的教职工，他们指导的研究生，在A类或B类的期刊或会议上发表的“人工智能”相关的论文数量，同时列出论文的详细信息、作者和指导老师的详细信息、以及荣誉",
   "subQueries": [
     {
-      "subQuestion": "Query the detailed information of the qualifying faculty and staff, graduate students, papers and related honors",
+      "subQuestion": "查询满足条件的教职工、研究生、论文及相关荣誉的明细信息",
       "subgraph": {
         "path": [
           {
             "source": "/univ_demo/person",
-            "relation": "HR organization relation of faculty and staff",
+            "relation": "教职工人事所属组织机构关系",
             "target": "/univ_demo/org"
           },
           {
             "source": "/univ_demo/person",
-            "relation": "Records of talent program honors, awards and achievements of faculty and staff",
+            "relation": "教职工人才工程荣誉奖励业绩成果记录",
             "target": "/univ_demo/szxxsb"
           },
           {
             "source": "/univ_demo/person",
-            "relation": "Faculty and staff supervising graduate students",
+            "relation": "教职工指导研究生",
             "target": "/univ_demo/student_master"
           },
           {
             "source": "/univ_demo/student_master",
-            "relation": "Owns paper",
+            "relation": "拥有论文",
             "target": "/univ_demo/paper"
           }
         ],
@@ -201,36 +201,36 @@
             "node": "/univ_demo/person",
             "filters": "lx_date >= '2020-01-01' AND age < 45",
             "select": "name",
-            "filter_source": "From the original question: \"joined in 2020 or later\" and \"under 45 years old\"",
-            "select_reason": "Return the name of the supervising teacher"
+            "filter_source": "原问题中：“2020年以来入职的”和“不满45岁的”",
+            "select_reason": "返回指导老师姓名"
           },
           {
             "node": "/univ_demo/org",
-            "filters": "name = 'School of Computer Science'",
+            "filters": "name = '计算机学院'",
             "select": "",
-            "filter_source": "From the original question: \"of the School of Computer Science\"",
+            "filter_source": "原问题中：“计算机学院中”",
             "select_reason": ""
           },
           {
             "node": "/univ_demo/szxxsb",
-            "filters": "gccrc in ('National-level talent A','National-level talent B','National-level talent C','Provincial/ministerial-level talent') AND xm_name like '%Young Talent%'",
+            "filters": "gccrc in ('国家级人才A类','国家级人才B类','国家级人才C类','省部级人才') AND xm_name like '%青年人才%'",
             "select": "xm_name",
-            "filter_source": "From the original question: \"has received a \"national-level or provincial/ministerial-level young talent program\" honor\"",
-            "select_reason": "Return the honors of the teacher"
+            "filter_source": "原问题中：“获得过“国家级或省部级青年人才计划”荣誉的”",
+            "select_reason": "返回教师荣誉"
           },
           {
             "node": "/univ_demo/student_master",
             "filters": "",
             "select": "name",
             "filter_source": "",
-            "select_reason": "Return the name of the paper author"
+            "select_reason": "返回论文作者姓名"
           },
           {
             "node": "/univ_demo/paper",
-            "filters": "level in ('A','B') AND type in ('Journal','Conference') AND keywords like '%Artificial Intelligence%'",
+            "filters": "level in ('A类','B类') AND type in ('期刊','会议') AND keywords like '%人工智能%'",
             "select": "title,abstract,journals,level,type,paper_file",
-            "filter_source": "From the original question: \"papers related to \"Artificial Intelligence\" published in journals or conferences of level A or B\"",
-            "select_reason": "Return paper-related information"
+            "filter_source": "原问题中：“在A类或B类的期刊或会议上发表的“人工智能”相关的论文”",
+            "select_reason": "返回论文相关信息"
           }
         ]
       },
@@ -243,57 +243,57 @@
       "DSL_C_Step_sort": false
     },
     {
-      "subQuestion": "Count the number of qualifying papers",
+      "subQuestion": "统计满足条件的论文数量",
       "subgraph": {
         "path": [
           {
             "source": "/univ_demo/person",
-            "relation": "HR organization relation of faculty and staff",
+            "relation": "教职工人事所属组织机构关系",
             "target": "/univ_demo/org"
           },
           {
             "source": "/univ_demo/person",
-            "relation": "Records of talent program honors, awards and achievements of faculty and staff",
+            "relation": "教职工人才工程荣誉奖励业绩成果记录",
             "target": "/univ_demo/szxxsb"
           },
           {
             "source": "/univ_demo/person",
-            "relation": "Faculty and staff supervising graduate students",
+            "relation": "教职工指导研究生",
             "target": "/univ_demo/student_master"
           },
           {
             "source": "/univ_demo/student_master",
-            "relation": "Owns paper",
+            "relation": "拥有论文",
             "target": "/univ_demo/paper"
           }
         ],
         "nodes": [
           {
             "node": "/univ_demo/paper",
-            "filters": "level in ('A','B') AND type in ('Journal','Conference') AND keywords like '%Artificial Intelligence%'",
+            "filters": "level in ('A类','B类') AND type in ('期刊','会议') AND keywords like '%人工智能%'",
             "select": "title",
-            "filter_source": "From the original question: \"papers related to \"Artificial Intelligence\" published in journals or conferences of level A or B\"",
-            "select_reason": "The title field is used for counting"
+            "filter_source": "原问题中：“在A类或B类的期刊或会议上发表的“人工智能”相关的论文”",
+            "select_reason": "title字段用于计数"
           },
           {
             "node": "/univ_demo/person",
             "filters": "lx_date >= '2020-01-01' AND age < 45",
             "select": "",
-            "filter_source": "From the original question: \"joined in 2020 or later\" and \"under 45 years old\"",
+            "filter_source": "原问题中：“2020年以来入职的”和“不满45岁的”",
             "select_reason": ""
           },
           {
             "node": "/univ_demo/org",
-            "filters": "name = 'School of Computer Science'",
+            "filters": "name = '计算机学院'",
             "select": "",
-            "filter_source": "From the original question: \"of the School of Computer Science\"",
+            "filter_source": "原问题中：“计算机学院中”",
             "select_reason": ""
           },
           {
             "node": "/univ_demo/szxxsb",
-            "filters": "gccrc in ('National-level talent A','National-level talent B','National-level talent C','Provincial/ministerial-level talent') AND xm_name like '%Young Talent%'",
+            "filters": "gccrc in ('国家级人才A类','国家级人才B类','国家级人才C类','省部级人才') AND xm_name like '%青年人才%'",
             "select": "",
-            "filter_source": "From the original question: \"has received a \"national-level or provincial/ministerial-level young talent program\" honor\"",
+            "filter_source": "原问题中：“获得过“国家级或省部级青年人才计划”荣誉的”",
             "select_reason": ""
           },
           {
@@ -305,7 +305,7 @@
           }
         ]
       },
-      "C_Step": "Count the number of papers count(title)",
+      "C_Step": "统计论文数量count(title)",
       "classes": ["/univ_demo/person", "/univ_demo/org", "/univ_demo/szxxsb", "/univ_demo/student_master", "/univ_demo/paper"],
       "DSL_relationship": true,
       "DSL_C_Step_group_by": false,
@@ -318,32 +318,32 @@
 }
 ```
 
-### Example 4: Counts and proportions on a single class (split + post-calculation required)
-**Original question**: Count the number and proportion of active faculty and staff by gender.
+### 示例4：单类的计数与占比（必须拆分并后算）
+**原问题**：按性别统计在职教职工人数与占比。
 
-**Key judgments**:
-- Must split + post-calculation: although the group statistics by gender can be done in a single sub-query, the "proportion" needs to be computed as a ratio to the total number of people, which is a cross-result operation.
-- In fact two sub-queries are needed: one for group statistics by gender, and one for counting the total number of people.
+**关键判断**：
+- 必须拆分+后算：虽然按性别分组统计可单子查询完成，但"占比"需要与总人数计算比例，涉及跨结果运算。
+- 实际需要两个子查询：一个按性别分组统计，一个统计总人数。
 
 ```json
 {
-  "question": "Count the number and proportion of active faculty and staff by gender",
+  "question": "按性别统计在职教职工人数与占比",
   "subQueries": [
     {
-      "subQuestion": "Count the number of people of each gender, grouped by gender",
+      "subQuestion": "按性别分组统计各性别人数",
       "subgraph": {
         "path": [],
         "nodes": [
           {
             "node": "/univ_demo/person",
-            "filters": "status = 'Active'",
+            "filters": "status = '在职'",
             "select": "account, sex",
-            "filter_source": "The original question requires counting active faculty and staff",
-            "select_reason": "account is used for counting, sex for grouping"
+            "filter_source": "原问题要求统计在职教职工",
+            "select_reason": "account用于计数，sex用于分组"
           }
         ]
       },
-      "C_Step": "Group by gender and count distinct account",
+      "C_Step": "按性别分组，对account去重计数",
       "classes": ["/univ_demo/person"],
       "DSL_relationship": false,
       "DSL_C_Step_group_by": true,
@@ -352,20 +352,20 @@
       "DSL_C_Step_sort": false
     },
     {
-      "subQuestion": "Count the total number of active faculty and staff",
+      "subQuestion": "统计全部在职教职工人数",
       "subgraph": {
         "path": [],
         "nodes": [
           {
             "node": "/univ_demo/person",
-            "filters": "status = 'Active'",
+            "filters": "status = '在职'",
             "select": "account",
-            "filter_source": "The original question requires counting active faculty and staff",
-            "select_reason": "account is used for counting"
+            "filter_source": "原问题要求统计在职教职工",
+            "select_reason": "account用于计数"
           }
         ]
       },
-      "C_Step": "Count distinct account",
+      "C_Step": "统计account去重计数",
       "classes": ["/univ_demo/person"],
       "DSL_relationship": false,
       "DSL_C_Step_group_by": false,
@@ -374,6 +374,6 @@
       "DSL_C_Step_sort": false
     }
   ],
-  "finalCalculation": "Divide the number of people of each gender in sub-query 1 by the total number of people in sub-query 2 to get the proportion of each gender"
+  "finalCalculation": "将子查询1的各性别人数分别除以子查询2的总人数，得到各性别占比"
 }
 ```

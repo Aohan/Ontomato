@@ -1,3 +1,3 @@
-	6.2 save_table represents the name of the temporary table to store; it must start with `/`, the second character must be a letter, there is no requirement on the following characters, and the length must not exceed 64 characters. It takes effect when to_user is false, and when to_user is true this item is not needed,
+	6.2 save_table表示存储的临时表名，要以`/`开头，第二个字符为字母，后面字符没有要求，长度不超过64个字符. 当to_user为false时起作用，to_user为true时，不需要这项，
 
-	In DSL, a temporary table can only be referenced as an intermediate result within a single execution of the same DSL object. The step that produces the temporary table and the step that references the temporary table must be placed in the steps of the same DSL object and executed as a whole through one executeDsl call. It is strictly forbidden to first "save" a temporary table with one executeDsl call and then reference it in another DSL or another executeDsl call.
+	在DSL中，临时表只能作为同一个DSL对象单次执行中的中间结果引用。产生临时表的step和引用该临时表的step必须放在同一个DSL对象的steps中，并通过一次executeDsl调用整体执行。严禁先用一次executeDsl调用“保存”临时表，再在另一个DSL或另一次executeDsl调用中引用它。

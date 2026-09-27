@@ -1,1 +1,1 @@
-	6.5 limit represents from which position to start and how many rows of data to take at most, and consists of offset and count; offset represents from which position to start, and count represents how many rows of data to take at most.
+	6.5 limit表示从什么位置开始，最多取多少条数据，由offset和count组成，offset表示从什么位置开始，count表示最多取多少条数据.

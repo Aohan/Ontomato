@@ -55,3 +55,8 @@ RUN test -n "$RUNTIME_COMPAT_FINGERPRINT" \
 WORKDIR /deploy
 ENTRYPOINT ["/opt/datarag/bin/container-entrypoint.sh"]
 CMD []
+
+# Same runtime with the JVM argument an edition's native library needs; the entrypoint
+# passes CMD to the JVM. Selected explicitly by the entry (the public edition uses runtime).
+FROM runtime AS runtime-native
+CMD ["-Djna.library.path=/opt/datarag/lib"]

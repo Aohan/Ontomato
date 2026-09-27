@@ -1,1 +1,1 @@
-	6.7 group_by, sort and limit can be implemented in the same step.
+	6.7 group_by,sort,limit可以在同一个step内实现.

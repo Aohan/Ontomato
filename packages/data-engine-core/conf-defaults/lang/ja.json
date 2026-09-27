@@ -1,0 +1,322 @@
+[
+  {
+    "key": "lang",
+    "value": "日语"
+  },
+  {
+    "key": "Abc.notInService",
+    "value": "ABCは現在ご利用いただけません"
+  },
+  {
+    "key": "Auth.register.success",
+    "value": "ライセンス認証に成功しました"
+  },
+  {
+    "key": "Maintenance.action.paramError",
+    "value": "リクエストパラメータが無効です"
+  },
+  {
+    "key": "Data.queryM3.error",
+    "value": "M3データベースのクエリに失敗しました"
+  },
+  {
+    "key": "Data.remoteDB.notSupport",
+    "value": "非M3モードではこの機能はサポートされていません"
+  },
+  {
+    "key": "Data.dataPermission.noPermission",
+    "value": "データ権限がありません"
+  },
+  {
+    "key": "Data.object.notExist",
+    "value": "オブジェクトが存在しません"
+  },
+  {
+    "key": "Dashboard.data.error",
+    "value": "データの取得に失敗しました"
+  },
+  {
+    "key": "Dashboard.param.error",
+    "value": "カスタムパラメータが無効です"
+  },
+  {
+    "key": "Admin.relationship.nameError",
+    "value": "リレーション名の形式が無効です"
+  },
+  {
+    "key": "Admin.relationship.fromClassNotFound",
+    "value": "ソースクラスが存在しません"
+  },
+  {
+    "key": "Admin.relationship.toClassNotFound",
+    "value": "ターゲットクラスが存在しません"
+  },
+  {
+    "key": "Admin.relationship.exist",
+    "value": "リレーションは既に存在します"
+  },
+  {
+    "key": "Admin.class.exist",
+    "value": "クラスは既に存在します"
+  },
+  {
+    "key": "Admin.class.notFound",
+    "value": "クラスが存在しません"
+  },
+  {
+    "key": "Admin.attr.formatError",
+    "value": "属性の形式が無効です"
+  },
+  {
+    "key": "Admin.attr.typeError",
+    "value": "属性の型が無効です"
+  },
+  {
+    "key": "Admin.attr.exist",
+    "value": "属性は既に存在します"
+  },
+  {
+    "key": "Admin.attr.notFound",
+    "value": "属性が存在しません"
+  },
+  {
+    "key": "Admin.indicator.exist",
+    "value": "インジケーターは既に存在します"
+  },
+  {
+    "key": "PythonExecutor.execute.timeout",
+    "value": "Python実行タイムアウト（分）"
+  },
+  {
+    "key": "QuestionCard.originCondition",
+    "value": "元の条件"
+  },
+  {
+    "key": "QuestionCard.replaceTo",
+    "value": "置換後"
+  },
+  {
+    "key": "QuestionCard.totalNum",
+    "value": "総レコード数"
+  },
+  {
+    "key": "QuestionCard.showNum",
+    "value": "表示レコード数"
+  },
+  {
+    "key": "QuestionCard.canGetByUrl",
+    "value": "全データはクエリリンクから取得できます"
+  },
+  {
+    "key": "AuditLog.datasetDesc.upd",
+    "value": "データセット説明を変更"
+  },
+  {
+    "key": "AuditLog.relationship.add",
+    "value": "リレーションタイプを追加"
+  },
+  {
+    "key": "AuditLog.relationship.del",
+    "value": "リレーションタイプを削除"
+  },
+  {
+    "key": "AuditLog.relationship.upd",
+    "value": "リレーションタイプを変更"
+  },
+  {
+    "key": "AuditLog.class.add",
+    "value": "オブジェクトクラスを追加"
+  },
+  {
+    "key": "AuditLog.class.del",
+    "value": "オブジェクトクラスを削除"
+  },
+  {
+    "key": "AuditLog.class.upd",
+    "value": "オブジェクトクラスを変更"
+  },
+  {
+    "key": "AuditLog.class",
+    "value": "オブジェクトクラス"
+  },
+  {
+    "key": "AuditLog.attr.add",
+    "value": "属性を追加"
+  },
+  {
+    "key": "AuditLog.attr.del",
+    "value": "属性を削除"
+  },
+  {
+    "key": "AuditLog.attr.upd",
+    "value": "属性を変更"
+  },
+  {
+    "key": "AuditLog.attr",
+    "value": "属性"
+  },
+  {
+    "key": "AuditLog.indicator.add",
+    "value": "指標を追加"
+  },
+  {
+    "key": "AuditLog.indicator.del",
+    "value": "指標を削除"
+  },
+  {
+    "key": "AuditLog.indicator.upd",
+    "value": "指標を変更"
+  },
+  {
+    "key": "AuditLog.businessExample.add",
+    "value": "ビジネスサンプルを追加"
+  },
+  {
+    "key": "AuditLog.businessExample.upd",
+    "value": "ビジネスサンプルを変更"
+  },
+  {
+    "key": "AuditLog.businessExample.del",
+    "value": "ビジネスサンプルを削除"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.add",
+    "value": "ビジネスナレッジを追加"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.upd",
+    "value": "ビジネスナレッジを変更"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.del",
+    "value": "ビジネスナレッジを削除"
+  },
+  {
+    "key": "Action.notGenerated",
+    "value": "actionが生成されませんでした"
+  },
+  {
+    "key": "Action.notFound",
+    "value": "actionが存在しません"
+  },
+  {
+    "key": "Action.cannotModifySystem",
+    "value": "システムactionは変更できません"
+  },
+  {
+    "key": "Action.cannotDeleteSystem",
+    "value": "システムactionは削除できません"
+  },
+  {
+    "key": "Action.domainMismatch",
+    "value": "actionのドメインが一致しません"
+  },
+  {
+    "key": "Action.notPublished",
+    "value": "actionが公開されていません"
+  },
+  {
+    "key": "Action.parseCodeExplainFailed",
+    "value": "コード説明結果の解析に失敗しました"
+  },
+  {
+    "key": "Function.notFound",
+    "value": "functionが存在しません"
+  },
+  {
+    "key": "Function.cannotBeEmpty",
+    "value": "functionは空にできません"
+  },
+  {
+    "key": "Function.notWrite",
+    "value": "functionは書き込み関数ではありません"
+  },
+  {
+    "key": "Function.notRead",
+    "value": "functionは読み取り関数ではありません"
+  },
+  {
+    "key": "Function.cannotModifySystem",
+    "value": "システムfunctionは変更できません"
+  },
+  {
+    "key": "Function.cannotDeleteSystem",
+    "value": "システムfunctionは削除できません"
+  },
+  {
+    "key": "Function.domainMismatch",
+    "value": "functionのドメインが一致しません"
+  },
+  {
+    "key": "Function.referencedByMetricView",
+    "value": "MetricViewから参照されているfunctionは変更・削除できません"
+  },
+  {
+    "key": "Function.referencedByAction",
+    "value": "Actionから参照されているfunctionは変更・削除できません"
+  },
+  {
+    "key": "Function.referencedByWriteTask",
+    "value": "WriteTaskから参照されているfunctionは変更・削除できません"
+  },
+  {
+    "key": "MetricView.notGenerated",
+    "value": "metricViewが生成されませんでした"
+  },
+  {
+    "key": "MetricView.notFound",
+    "value": "metricViewが存在しません"
+  },
+  {
+    "key": "MetricView.cannotModifySystem",
+    "value": "システムmetricViewは変更できません"
+  },
+  {
+    "key": "MetricView.cannotDeleteSystem",
+    "value": "システムmetricViewは削除できません"
+  },
+  {
+    "key": "MetricView.domainMismatch",
+    "value": "metricViewのドメインが一致しません"
+  },
+  {
+    "key": "MetricView.notPublished",
+    "value": "metricViewが公開されていません"
+  },
+  {
+    "key": "MetricView.snapshotNotFound",
+    "value": "ホットデータの結果スナップショットが存在しないか、有効期限が切れています"
+  },
+  {
+    "key": "MetricView.snapshotUnreadable",
+    "value": "ホットデータの結果スナップショットの読み取りに失敗しました"
+  },
+  {
+    "key": "WriteTask.notFound",
+    "value": "writeTaskが存在しません"
+  },
+  {
+    "key": "WriteTask.domainMismatch",
+    "value": "writeTaskのドメインが一致しません"
+  },
+  {
+    "key": "WriteTask.functionMustBeNoParam",
+    "value": "functionは無引数関数である必要があります"
+  },
+  {
+    "key": "WriteTask.invalidStatus",
+    "value": "writeTaskの状態が不正です"
+  },
+  {
+    "key": "WriteTask.invalidCrontab",
+    "value": "writeTaskのcrontab式が不正です"
+  },
+  {
+    "key": "WriteFunctionOperation.classNotExist",
+    "value": "クラスが存在しません"
+  },
+  {
+    "key": "WriteFunctionOperation.relationNotExist",
+    "value": "リレーションが存在しません"
+  }
+]

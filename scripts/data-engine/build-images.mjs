@@ -1,4 +1,5 @@
-// Shared data-engine image orchestration. Product names and source lists come from the app entry.
+// Shared data-engine image orchestration. Product names, sources, resources and the
+// edition's export inputs come from the app entry's description; the CLI is parsed once.
 import {
   cpSync,
   existsSync,
@@ -12,6 +13,8 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertEntriesCurrent,
+  combineIdentity,
   COMPAT_LABEL,
   docker,
   exportImage,
@@ -25,12 +28,12 @@ import {
   readRevision,
   requireRuntime,
   runtimeTag,
+  sampleSources,
   saveRuntimeLock,
-  sourceIdentity,
   validateContract,
 } from "../build-support.mjs";
 
-const FLAGS = {
+export const JAVA_FLAGS = {
   "--arch": "value",
   "--prompt-lang": "value",
   "--pack-runtime": "boolean",
@@ -72,6 +75,8 @@ function resetDirectory(path) {
   rmSync(path, { recursive: true, force: true });
   mkdirSync(path, { recursive: true });
 }
+// One label carries the real source combination (top revision: the app repo).
+const SOURCES_LABEL = "io.runtime.sources";
 function copyFrom(root, source, destination) {
   mkdirSync(dirname(destination), { recursive: true });
   cpSync(join(root, source), destination, { recursive: true });
@@ -104,7 +109,10 @@ function readImageContract(image, arch) {
     ]),
   );
 }
-function assertImage(image, arch, kind, component, fp, lang, promptLabel) {
+function labelArgs(labels) {
+  return Object.entries(labels).flatMap(([key, value]) => ["--label", `${key}=${value}`]);
+}
+function assertImage(image, arch, kind, component, fp, expected) {
   const inspected = inspectImage(image, `linux/${arch}`);
   const labels = inspected && inspected.Config.Labels ? inspected.Config.Labels : {};
   if (
@@ -114,7 +122,7 @@ function assertImage(image, arch, kind, component, fp, lang, promptLabel) {
     labels["io.runtime.component"] !== component ||
     labels["io.runtime.kind"] !== kind ||
     labels[COMPAT_LABEL] !== fp ||
-    (lang && labels[promptLabel] !== lang)
+    Object.entries(expected).some(([key, value]) => labels[key] !== value)
   )
     throw new Error(`Built image identity mismatch: ${image}`);
 }
@@ -129,12 +137,36 @@ export function importedRuntime(app, arch) {
     app.interfaceVersion,
   );
   checkPythonRequirements(
-    readFileSync(join(app.repoRoot, app.requirements), "utf8"),
+    readFileSync(join(app.requirements.root, app.requirements.path), "utf8"),
     contract.python.packages,
   );
   return { tag, alias: `${app.component}-runtime:deploy-${arch}`, fp, contract };
 }
-function exportJava(app, arch) {
+// Central export needs no settings or checker. The secret export takes the Maven
+// settings file only as a BuildKit secret (never copied or read here), the target
+// native library, the license profile, and one artifact check run in the same
+// JDK stage on the exported jar, named by Maven's default <artifactId>-<version>.jar.
+function secretExportArgs(secret, version) {
+  if (!existsSync(secret.mavenSettings))
+    throw new Error(
+      `Missing Maven settings at ${secret.mavenSettings}; provide the private repository configuration as a BuildKit secret.`,
+    );
+  return [
+    "--secret",
+    `id=maven-settings,src=${secret.mavenSettings}`,
+    "--build-arg",
+    `KEEP_NATIVE=${secret.keepNative}`,
+    "--build-arg",
+    `LICENSE_PROFILE=${secret.licenseProfile}`,
+    "--build-arg",
+    `APP_CHECK_SCRIPT=${secret.check.script}`,
+    "--build-arg",
+    `APP_CHECK_JAR=/out/app/lib/${secret.check.jarArtifactId}-${version}.jar`,
+    "--build-arg",
+    `APP_CHECK_ARG=${secret.check.argument}`,
+  ];
+}
+function exportJava(app, arch, entries, version) {
   const context = join(app.repoRoot, ".build", "contexts", arch, "export");
   const dest = join(app.repoRoot, ".build", "contexts", arch, "exported");
   resetDirectory(context);
@@ -142,12 +174,17 @@ function exportJava(app, arch) {
   for (const tree of app.contextTrees)
     for (const path of tree.paths)
       copyFrom(tree.root, path, join(context, tree.dest, path));
-  console.log("MAVEN_EXPORT=export-central");
+  // The trees were copied file by file after sampling: the sampled HEADs must hold.
+  assertEntriesCurrent(entries, "staging");
+  const target = app.secretExport ? "export-secret" : "export-central";
+  const secretArgs = app.secretExport ? secretExportArgs(app.secretExport, version) : [];
+  console.log(`MAVEN_EXPORT=${target}`);
   docker([
     ...baseBuild(arch),
     ...envArgs(app.exportImages),
+    ...secretArgs,
     "--target",
-    "export-central",
+    target,
     "--build-arg",
     `REACTOR_DIR=${app.reactorDir}`,
     "--build-arg",
@@ -167,15 +204,14 @@ function exportJava(app, arch) {
 function stageRuntime(app, arch, exported) {
   const context = join(app.repoRoot, ".build", "contexts", arch, "runtime");
   resetDirectory(context);
-  copyFrom(app.repoRoot, app.requirements, join(context, "requirements-py310.txt"));
-  copyFrom(app.repoRoot, app.mcp, join(context, "mcp/mcpserver.py"));
+  copyFrom(app.requirements.root, app.requirements.path, join(context, "requirements-py310.txt"));
+  copyFrom(app.mcp.root, app.mcp.path, join(context, "mcp/mcpserver.py"));
   cpSync(join(exported, "runtime-lib"), join(context, "lib"), { recursive: true });
-  for (const [source, dest] of app.bin)
-    copyFrom(app.repoRoot, source, join(context, dest));
+  for (const [root, source, dest] of app.bin) copyFrom(root, source, join(context, dest));
   writeFileSync(join(context, "runtime-arch.txt"), arch);
   return context;
 }
-function buildRuntime(app, arch, identity, exported) {
+function buildRuntime(app, arch, identity, entries, exported) {
   const context = stageRuntime(app, arch, exported);
   const directory = join(app.repoRoot, ".build", `runtime-contract-${arch}`);
   const common = [
@@ -203,23 +239,27 @@ function buildRuntime(app, arch, identity, exported) {
   const tag = runtimeTag(app.family, fp, arch);
   const alias = `${app.component}-runtime:deploy-${arch}`;
   console.log(`[build] runtime ${tag}`);
+  const sources = { [SOURCES_LABEL]: JSON.stringify(identity.sources) };
   docker([
     ...common,
     "--target",
-    "runtime",
+    app.runtimeTarget,
     "--load",
     "--build-arg",
     `RUNTIME_COMPAT_FINGERPRINT=${fp}`,
     ...imageLabels(app.family, "runtime", identity, fp, app.family),
+    ...labelArgs(sources),
     "-t",
     tag,
     "-t",
     alias,
     context,
   ]);
-  assertImage(tag, arch, "runtime", app.family, fp);
+  assertImage(tag, arch, "runtime", app.family, fp, sources);
   if (fingerprint(readImageContract(tag, arch)) !== fp)
     throw new Error("Built runtime contract differs from exported contract");
+  // The lock describes this build's inputs: a source that moved since sampling fails.
+  assertEntriesCurrent(entries, "the build");
   saveRuntimeLock(app.lockRoot, app.family, arch, contract, app.interfaceVersion);
   return { tag, alias, fp, contract };
 }
@@ -232,20 +272,27 @@ function stageApp(app, arch, exported, lang) {
   cpSync(join(exported, "app", "lib"), join(context, "payload", "lib"), {
     recursive: true,
   });
-  copyFrom(app.repoRoot, app.requirements, join(context, "requirements-py310.txt"));
-  for (const [source, dest] of app.resources) {
-    const destination = join(context, dest);
-    copyFrom(app.repoRoot, source, destination);
-    selectPromptLanguage(destination, lang);
-  }
+  copyFrom(app.requirements.root, app.requirements.path, join(context, "requirements-py310.txt"));
+  // Resources are copied in the entry's listed order (a later source overwrites the
+  // same name); the prompt language is selected once per target after all copies.
+  for (const [root, source, dest] of app.resources) copyFrom(root, source, join(context, dest));
+  for (const dest of new Set(app.resources.map(([, , dest]) => dest)))
+    selectPromptLanguage(join(context, dest), lang);
   if (!existsSync(join(context, app.requiredSkill)))
     throw new Error("Missing default trend-forecaster skill");
+  for (const [name, content] of Object.entries(app.payloadFiles))
+    writeFileSync(join(context, "payload", name), content);
   return context;
 }
-function buildApp(app, arch, identity, exported, runtime, lang) {
+function buildApp(app, arch, identity, entries, exported, runtime, lang) {
   const context = stageApp(app, arch, exported, lang);
-  const tag = `${app.component}-app:${identity.stamp}-${arch}`;
+  const tag = `${app.component}-app:${identity.stamp}${app.appTagSuffix}-${arch}`;
   const alias = `${app.component}-app:deploy`;
+  const labels = {
+    [app.promptLabel]: lang,
+    ...app.appLabels,
+    [SOURCES_LABEL]: JSON.stringify(identity.sources),
+  };
   console.log(`[build] app ${tag} (prompt=${lang})`);
   docker([
     ...baseBuild(arch),
@@ -255,8 +302,7 @@ function buildApp(app, arch, identity, exported, runtime, lang) {
     "--build-arg",
     `RUNTIME_COMPAT_FINGERPRINT=${runtime.fp}`,
     ...imageLabels(app.component, "app", identity, runtime.fp, app.family),
-    "--label",
-    `${app.promptLabel}=${lang}`,
+    ...labelArgs(labels),
     "-t",
     tag,
     "-t",
@@ -265,7 +311,8 @@ function buildApp(app, arch, identity, exported, runtime, lang) {
     dockerfile("Dockerfile.app"),
     context,
   ]);
-  assertImage(tag, arch, "app", app.component, runtime.fp, lang, app.promptLabel);
+  assertImage(tag, arch, "app", app.component, runtime.fp, labels);
+  assertEntriesCurrent(entries, "the build");
   docker(["tag", runtime.tag, runtime.alias]);
   return { tag, alias };
 }
@@ -276,38 +323,41 @@ async function pack(app, image, role) {
     join(app.repoRoot, ".build", "pack", `${app.component}-${role}-${suffix}.tar.gz`),
   );
 }
-export async function buildJavaApp(app, args) {
-  if (args.includes("--help") || args.includes("-h")) {
-    console.log(
-      "Use make [ARCH=amd64|arm64] [PROMPT_LANG=zh|en], make pack, or make pack-app.\npack-app uses the locked, imported runtime and never rebuilds it.",
-    );
-    return;
-  }
-  const [command, ...flags] = args;
+// The one CLI parse. Help returns before any Git, settings or Docker read; the
+// entry prints its own help. Edition flags (the private --license-mode) are part
+// of `flags` and are interpreted by that entry only.
+export function parseJavaArgs(args, flags) {
+  if (args.includes("--help") || args.includes("-h")) return { help: true };
+  const [command, ...rest] = args;
   if (!["all", "app"].includes(command))
     throw new Error("Expected all or app (normally invoked through Make)");
-  const parsed = parseOptions(flags, FLAGS);
+  const parsed = parseOptions(rest, flags);
+  if (command === "app" && parsed["--pack-runtime"])
+    throw new Error("Packaging flag does not match build action");
+  return { help: false, command, parsed };
+}
+export async function buildJavaApp(app, { command, parsed }) {
   const arch = parsed["--arch"];
   const lang = parsed["--prompt-lang"] ?? app.promptLang;
   if (!["zh", "en"].includes(lang)) throw new Error("Expected --prompt-lang zh|en");
-  if (command === "app" && parsed["--pack-runtime"])
-    throw new Error("Packaging flag does not match build action");
   console.log(`DOCKERFILES=${RECIPE_DIR}`);
   const version = readRevision(readFileSync(app.versionPom, "utf8"));
-  const identity = sourceIdentity(version, app.repoRoot, app.lockExclude);
+  // Each source is sampled once; later checks read HEAD only and never resample.
+  const entries = sampleSources(app, version);
+  const identity = combineIdentity(version, app.repoRoot, entries);
   console.log(
     `SOURCE_REVISION=${identity.revision} SOURCE_DIRTY=${identity.dirty} VERSION=${version}`,
   );
   output("docker", ["version", "--format", "{{.Server.Version}}"]);
   // Lock and imported-image failures happen before the Maven export.
   const imported = command === "app" ? importedRuntime(app, arch) : null;
-  const exported = exportJava(app, arch);
-  const runtime = imported ?? buildRuntime(app, arch, identity, exported);
+  const exported = exportJava(app, arch, entries, version);
+  const runtime = imported ?? buildRuntime(app, arch, identity, entries, exported);
   console.log(
     `RUNTIME_IMAGE=${runtime.tag}\nRUNTIME_DEPLOY_IMAGE=${runtime.alias}\nRUNTIME_COMPAT_FINGERPRINT=${runtime.fp}`,
   );
   if (parsed["--pack-runtime"]) await pack(app, runtime, "runtime");
-  const built = buildApp(app, arch, identity, exported, runtime, lang);
+  const built = buildApp(app, arch, identity, entries, exported, runtime, lang);
   console.log(`APP_IMAGE=${built.tag}\nAPP_DEPLOY_IMAGE=${built.alias}`);
   if (parsed["--pack-app"]) await pack(app, built, "app");
 }

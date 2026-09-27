@@ -1,74 +1,74 @@
-These examples illustrate query planning and DSL construction. Their classes, fields, relationships and values are illustrative. For an actual query, use the dataset definitions and business knowledge supplied in the current input; do not import example definitions or business filters into another dataset.
-> Summarize the example analysis briefly in the response; write the JSON code block to a workspace DSL file and submit it through `submitDsl`, without repeating it in the response.
+以下示例仅演示查询规划和 DSL 写法，类名、字段、关系与取值均为示意。实际查询必须以本次输入的数据集定义和业务知识为准，不得将示例中的定义或业务条件套用到其他数据集。
+> 示例中的分析过程对应正文简述；JSON 代码块写入工作区 DSL 文件后通过 `submitDsl` 提交，不在正文重复输出。
 
-## Business Knowledge (used only in the examples)
+## 业务知识（仅示例中使用）
 
-1. When querying full-time teachers, the default conditions are: establishment type = 'Government-affiliated' and staff category = 'Full-time teaching position'.
-2. The faculty affiliation organization must use the `sz_g` field, and records where `sz_g` is empty must be excluded.
-3. When filtering the current administrative duty in `/univ_demo/mgn_duty`, you must add the filter condition `last_flag = "Yes"`.
-4. When filtering the current highest professional technical position in `/univ_demo/tech_duty`, you must add the filter condition `last_flag = "Yes"`.
-5. When extracting photography works (vector) of a specified theme, vector retrieval must be used, that is, the `query` field.
-6. When extracting papers, vector retrieval is **forbidden**; use `keywords like xxx` to filter papers of a specified theme.
+1. 查询专任教师时默认条件为： 编制类别='事业编' 且 人员分类='专任教师岗位'。
+2. 师资归属单位必须使用`sz_g`字段，并且排除 `sz_g` 为空的记录。
+3. `/univ_demo/mgn_duty` 筛选当前行政职务必须增加筛选条件 `last_flag = "是"` 。
+4. `/univ_demo/tech_duty` 筛选现任最高专业技术职务必须增加筛选条件 `last_flag = "是"`。
+5. 提取指定主题的摄影作品（vector）时，需要使用向量检索，即`query`字段。
+6. 提取论文时**禁止**使用向量检索，请使用`keywords like xxx`筛选指定主题论文。
 
-## Example 1: Star Graph -- Multiple Relationships Around the Same Faculty Member
+## 示例 1：星状图 —— 多关系围绕同一教职工
 
-### 1. Problem, ABC Steps and Graph Structure Description
+### 1. 问题、ABC 步骤与图结构说明
 
-**Problem Description**
+**问题描述**
 
-> Question: Count the currently active people who have received talent program honors or awards, and count the number of people by `professional technical position level`.
+> 问题：统计当前在职的获得过人才工程荣誉奖励的人员、并按`专业技术职务级别`统计人数。
 
-> Here "professional technical position level" corresponds to the field `duty_level` in the `/univ_demo/tech_duty` table.
+> 这里“专业技术职务级别”对应 `/univ_demo/tech_duty` 表中的字段 `duty_level`。
 
-**A_Step: path table**
+**A_Step：path 表**
 
-| Source object                | Relationship                    | Target object                   |
+| 起始对象                | 关系                    | 目标对象                   |
 | ------------------- | --------------------- | ---------------------- |
 | `/univ_demo/person` | `person_to_szxxsb`    | `/univ_demo/szxxsb`    |
 | `/univ_demo/person` | `person_to_tech_duty` | `/univ_demo/tech_duty` |
 
-> Explanation:
+> 解释：
 >
-> * The center of the star is `/univ_demo/person`;
-> * It is connected via relationship edges such as the staff ID to the talent program honor records `/univ_demo/szxxsb` and the professional technical position records `/univ_demo/tech_duty`.
+> * 星状中心是 `/univ_demo/person`；
+> * 分别通过工号等关系边连接到人才工程荣誉记录 `/univ_demo/szxxsb` 和专业技术职务记录 `/univ_demo/tech_duty`。
 
-**B_Step: nodes table**
+**B_Step：nodes 表**
 
-| Object class                    | Filter conditions                       | Extracted fields         | Condition source       | Extraction reason                               |
+| 对象类                    | 筛选条件                       | 提取字段         | 条件来源       | 提取原因                               |
 | ---------------------- | -------------------------- | ------------ | ---------- | ---------------------------------- |
-| `/univ_demo/person`    | `status` = 'Active' | `account`    | Business knowledge | Identify faculty and staff by staff ID and perform deduplicated counting                     |
-| `/univ_demo/szxxsb`    | No specific conditions (a related record only needs to exist)            | —            | Question requirement      | Used to determine whether the person "has received talent program honors or awards"                |
-| `/univ_demo/tech_duty` | `last_flag = "Yes"`          | `duty_level` | Business knowledge + question | Only count the "current highest professional technical position", grouped by `duty_level` |
+| `/univ_demo/person`    | `status` = '在职' | `account`    | 业务知识 | 用工号识别教职工并做去重计数                     |
+| `/univ_demo/szxxsb`    | 无特定条件（只需存在关联记录）            | —            | 问题要求      | 用于判断是否“获得过人才工程荣誉奖励”                |
+| `/univ_demo/tech_duty` | `last_flag = "是"`          | `duty_level` | 业务知识 + 问题 | 只统计“现任最高专业技术职务”，并按 `duty_level` 分组 |
 
-* **C_Step**: On the detail table of "faculty and staff within the active scope + at least one talent program honor record + current highest professional technical position record", use `duty_level` as the grouping field to perform `group_by`, and perform a `count distinct` on the staff ID `account` of faculty and staff, obtaining "the number of faculty and staff counted by professional technical position level".
+* **C_Step**：在“满足在职范围的教职工 + 至少一条人才工程荣誉记录 + 现任最高专业技术职务记录”的明细表上，将 `duty_level` 作为分组字段进行`group_by`，对教职工工号 `account` 做 `count distinct` 去重计数，得到“按专业技术职务级别统计的教职工人数”。
 
-### 2. Example of File Delivery Content (the analysis process is only briefly described in the main text)
+### 2. 文件交付内容示例（分析过程只在正文简述）
 
-1. Analysis and architecture planning
-*   **Read ABC**: Step A defines a star graph centered on `person`, connecting `szxxsb` and `tech_duty`. Step B has filter conditions. Step C explicitly requires grouping by `duty_level` (**group_by**) and counting distinct `account` values (**count distinct**).
-*   **Logic derivation and DSL planning**:
-    *   Step count determination: Step C is detected to contain **aggregation (count)** and **grouping (group_by)**; according to the DSL rules, **it must be planned as 2 Steps**.
-    *   Temporary table field pre-embedding: to implement the logic of Step C in Step 2, Step 1 must first output the "grouping key" `duty_level` and the "calculation key" `account` to the temporary table as ordinary fields.
+1. 分析与架构规划
+*   **读取 ABC**：A 步骤定义了以 `person` 为中心，连接 `szxxsb` 和 `tech_duty` 的星状图。B 步骤有筛选条件。C 步骤明确要求按 `duty_level` **分组(group_by)** 并对 `account` **去重计数(count distinct)**。
+*   **逻辑推导与 DSL 规划**：
+    *   Step 数量判定：检测到 C 步骤包含 **聚合(count)** 和 **分组(group_by)**，根据 DSL 规则，**必须规划为 2 Steps**。
+    *   临时表字段预埋：为了在 Step 2 实现 C 步骤的逻辑，Step 1 必须先把“分组键” `duty_level` 和“计算键” `account` 作为普通字段输出到临时表。
 
-2. Perform structured translation
-*   **Step 1 (data extraction layer)**:
-    *   Graph: Translate the two paths of Step A into `relationship`.
-    *   Conditions: Strictly following Step B, add `status = 'Active'` on the `person` object and `last_flag = "Yes"` on the `tech_duty` object.
-    *   Output: According to the plan, output `person.account` and `tech_duty.duty_level` to the temporary table.
-*   **Step 2 (calculation expression layer)**:
-    *   Input: Reference the temporary table of Step 1.
-    *   Output: In response to Step C, put `duty_level` into `group_by`; in `fields`, add `function: "count"` and `distinct: true` to the `account` field.
+2. 执行结构化翻译
+*   **Step 1 (数据提取层)**：
+    *   Graph：将 A 步骤的两条路径翻译为 `relationship`。
+    *   Conditions：严格按照 B 步骤，在 `person` 对象上添加 `status = '在职'`，在 `tech_duty` 对象上添加 `last_flag = "是"`。
+    *   Output：根据规划，将 `person.account` 和 `tech_duty.duty_level` 输出到临时表。
+*   **Step 2 (计算表达层)**：
+    *   Input：引用 Step 1 的临时表。
+    *   Output：响应 C 步骤，将 `duty_level` 填入 `group_by`；在 `fields` 中对 `account` 字段添加 `function: "count"` 和 `distinct: true`。
 
-3. Self-check
-*   Reject hallucination**: Confirm that classes such as `person`, `tech_duty`, `szxxsb` and fields such as `status`, `last_flag` all exist in the dataset.
-*   Instruction following**: The DSL fully covers the path, filter, grouping and aggregation requirements of ABC, with nothing omitted.
-*   Syntax logic:
-    *   Group By check: The output of Step 2 contains both the ordinary field `tech_duty_level` and the aggregate field `person_account (count distinct)`, and `group_by` is configured correctly.
-    *   Step isolation: The aggregation operation `function` is correctly isolated in Step 2.
+3. 自检
+*   拒绝幻觉**：确认 `person`, `tech_duty`, `szxxsb` 等类和 `status`, `last_flag` 等字段均在数据集中存在。
+*   指令遵循**：DSL 完整覆盖了 ABC 的路径、筛选、分组和聚合要求，没有遗漏。
+*   语法逻辑：
+    *   Group By 检查：Step 2 的 output 中同时存在普通字段 `tech_duty_level` 和聚合字段 `person_account (count distinct)`，`group_by` 已正确配置。
+    *   Step 隔离：聚合操作 `function` 被正确地隔离在 Step 2 中。
 
 ```json
 {
-    "problem": "Count the people who have currently received talent program honors or awards, and count the number of people by `professional technical position level`.",
+    "problem": "统计当前获得过人才工程荣誉奖励的人员、并按`专业技术职务级别`统计人数。",
     "answer": {
       "steps": [
         {
@@ -83,7 +83,7 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                     "conditions": {
                       "properties": {
                         "operator": "logic",
-                        "and": [{"field": "status", "operator": "=", "value": "Active"}]
+                        "and": [{"field": "status", "operator": "=", "value": "在职"}]
                       }
                     }
                   },
@@ -93,7 +93,7 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                     "variable": "tech_duty",
                     "class": "/univ_demo/tech_duty",
                     "conditions": {
-                      "properties": {"operator": "logic", "and": [{"field": "last_flag", "operator": "=", "value": "Yes"}]}
+                      "properties": {"operator": "logic", "and": [{"field": "last_flag", "operator": "=", "value": "是"}]}
                     }
                   }
                 ],
@@ -135,68 +135,68 @@ These examples illustrate query planning and DSL construction. Their classes, fi
 }
 ```
 
-## Example 2: Vector Retrieval -- Complex Filtering and Multi-dimensional Attribute Extraction
+## 示例 2：向量检索 —— 复杂筛选与多维属性提取
 
-### 1. Problem, ABC Steps and Graph Structure Description
+### 1. 问题、ABC 步骤与图结构说明
 
-**Problem Description**
+**问题描述**
 
-> Question: Query the faculty and staff who have taken Thailand-themed photography works, and return their names, their departments, current administrative duties, current societies they serve, positions held, and their "Thailand-themed" photography works.
+> 问题：查询拍照过泰国题材的摄影作品的教职工，返回他们的姓名、所属院系、当前行政职务、当前任职学会、任职职务和“泰国题材”的摄影作品。
 
-**A_Step: path table**
+**A_Step：path 表**
 
-| Source object | Relationship | Target object |
+| 起始对象 | 关系 | 目标对象 |
 | :--- | :--- | :--- |
 | `/univ_demo/person` | `person_to_org` | `/univ_demo/org` |
 | `/univ_demo/person` | `person_to_mgn_duty` | `/univ_demo/mgn_duty` |
 | `/univ_demo/person` | `person_to_szxxsb_xh` | `/univ_demo/szxxsb_xh` |
 
-> Explanation:
+> 解释：
 >
->   * The central node is `/univ_demo/person` (faculty and staff);
->   * It connects outward to the department organization (`org`), the administrative duty (`mgn_duty`) and the society position records (`szxxsb_xh`);
->   * Note: `person_to_szxxsb_xh` is the relationship connecting faculty and staff with their society position records.
+>   * 中心节点为 `/univ_demo/person`（教职工）；
+>   * 分别向外连接院系组织（`org`）、行政职务（`mgn_duty`）和学会任职记录（`szxxsb_xh`）；
+>   * 注：`person_to_szxxsb_xh` 为连接教职工与学会任职记录的关系。
 
-**B_Step: nodes table**
+**B_Step：nodes 表**
 
-| Object class | Filter conditions | Extracted fields | Condition source | Extraction reason |
+| 对象类 | 筛选条件 | 提取字段 | 条件来源 | 提取原因 |
 | :--- | :--- | :--- | :--- | :--- |
-| `/univ_demo/person` | `photo_works` vector match "Thailand" | `name`, `photo_works` | Question ("have taken Thailand-themed") | Need to return the names and the works matching the question |
-| `/univ_demo/org` | No additional conditions | `name` | Question requirement | Return the "department" |
-| `/univ_demo/mgn_duty` | `last_flag = "Yes"` | `title` | Business knowledge + question | Must be the "current" administrative duty |
-| `/univ_demo/szxxsb_xh` | `pq_jssj` is null OR `pq_jssj` > current time (2025-11-30 07:33:17) | `xm_name`, `wcrpm` | Business logic (current position) | Define "current society served" and return the society name and position |
+| `/univ_demo/person` | `photo_works` 向量匹配 "泰国" | `name`, `photo_works` | 问题（“拍照过泰国题材”） | 需返回姓名及符合题意的作品 |
+| `/univ_demo/org` | 无额外条件 | `name` | 问题要求 | 返回“所属院系” |
+| `/univ_demo/mgn_duty` | `last_flag = "是"` | `title` | 业务知识 + 问题 | 必须是“当前”行政职务 |
+| `/univ_demo/szxxsb_xh` | `pq_jssj` 为空 OR `pq_jssj` > 当前时间（2025-11-30 07:33:17） | `xm_name`, `wcrpm` | 业务逻辑（当前任职） | 定义“当前任职学会”并返回学会名与职务 |
 
-  * **C_Step**: No aggregation calculation is needed. On the filtered connected subgraph, directly extract the above fields and display them flattened by faculty and staff dimension.
+  * **C_Step**：无需聚合计算。在筛选出的连通子图上，直接提取上述字段，按教职工维度平铺展示即可。
 
 
-### 2. Example of File Delivery Content (the analysis process is only briefly described in the main text)
+### 2. 文件交付内容示例（分析过程只在正文简述）
 
-1. Analysis and architecture planning
-*   **Read ABC**: Step A defines a graph in which `person` is connected to multiple classes. Step B requires extracting multiple fields, including the **vector** type field `photo_works`. Step C is empty; this is a detail query.
-*   **Logic derivation and DSL planning**:
-    *   Step count determination: Although Step C is empty, Step B requires outputting a `vector` field. According to the DSL rules, **the output of a vector field must use 2 Steps** (Step 1 extracts the objects, Step 2 retrieves the vector file with the `query` parameter). Therefore, it must be planned as 2 Steps.
-    *   Temporary table field pre-embedding: Step 1 needs to output all the fields ultimately required, including `person.name`, `org.name`, `mgn_duty.title` and `person.photo_works`, etc.
+1. 分析与架构规划
+*   **读取 ABC**：A 步骤定义了 `person` 连接多个类的图。B 步骤要求提取多个字段，其中包括 `photo_works` 这个 **vector（向量）** 类型字段。C 步骤为空，是明细查询。
+*   **逻辑推导与 DSL 规划**：
+    *   Step 数量判定：虽然 C 步骤为空，但 B 步骤要求输出 `vector` 字段。根据 DSL 规则，**向量字段的输出必须使用 2 Steps**（Step 1 提取对象，Step 2 带 `query` 参数获取向量文件）。因此，必须规划为 2 Steps。
+    *   临时表字段预埋：Step 1 需要输出所有最终需要的字段，包括 `person.name`, `org.name`, `mgn_duty.title` 以及 `person.photo_works` 等。
 
-2. Perform structured translation
-*   **Step 1 (data extraction layer)**:
-    *   Graph & Conditions: Map the paths of Step A and the filter conditions of Step B (including the `vector` filter of `person`, the `last_flag` filter of `mgn_duty`, and the `OR` logic of `szxxsb_xh`) one by one.
-    *   Output: Output all fields that need to be output (including `photo_works`) to the temporary table as-is.
-*   **Step 2 (calculation expression layer)**:
-    *   Input: Reference the temporary table of Step 1.
-    *   Output:
-        *   Output all ordinary fields.
-        *   **Vector output**: For the `photo_works` field, strictly according to the DSL rules, attach the `query: "Thailand"` parameter on output to ensure that the photography works returned match the theme.
+2. 执行结构化翻译
+*   **Step 1 (数据提取层)**：
+    *   Graph & Conditions：将 A 步骤的路径和 B 步骤的筛选条件（包括 `person` 的 `vector` 筛选，`mgn_duty` 的 `last_flag` 筛选，以及 `szxxsb_xh` 的 `OR` 逻辑）一一映射。
+    *   Output：将所有需要输出的字段（包括 `photo_works`）原样输出到临时表。
+*   **Step 2 (计算表达层)**：
+    *   Input：引用 Step 1 的临时表。
+    *   Output：
+        *   输出所有普通字段。
+        *   **Vector 输出**：对 `photo_works` 字段，严格按照 DSL 规则，在输出时附加 `query: "泰国"` 参数，以确保返回的是与主题匹配的摄影作品。
 
-3. Self-check
-*   Reject hallucination**: Confirm that all classes, relationships and fields exist.
-*   Instruction following: All filter conditions in ABC, including the `vector` filter and the `OR` logic, are reflected in the DSL.
-*   Syntax logic:
-    *   **Vector rule check**: Confirm that the 2 Steps rule for vector output is followed, and that the `photo_works` field in Step 2 carries the `query` parameter.
-    *   **Step isolation**: Responsibilities are clear; Step 1 handles the graph query and Step 2 handles formatting and vector file retrieval.
+3. 自检
+*   拒绝幻觉**：确认所有类、关系、字段都存在。
+*   指令遵循：ABC 中的所有筛选条件，包括 `vector` 筛选和 `OR` 逻辑，都已在 DSL 中体现。
+*   语法逻辑：
+    *   **Vector 规则检查**：确认遵循了向量输出的 2 Steps 规则，并且 Step 2 的 `photo_works` 字段带有 `query` 参数。
+    *   **Step 隔离**：职责清晰，Step 1 负责图查询，Step 2 负责格式化和向量文件获取。
 
 ```json
 {
-    "problem": "Query the faculty and staff who have taken Thailand-themed photography works, and return their names, their departments, current administrative duties, current societies they serve, positions held, and their \"Thailand-themed\" photography works",
+    "problem": "查询拍照过泰国题材的摄影作品的教职工，返回他们的姓名、所属院系、当前行政职务、当前任职学会、任职职务和“泰国题材”的摄影作品",
     "answer": {
       "steps": [
         {
@@ -210,7 +210,7 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                     "class": "/univ_demo/person",
                     "conditions": {
                       "vector": {
-                        "properties": {"operator": "logic", "and": [{"field": "photo_works", "query": "Thailand"}]}
+                        "properties": {"operator": "logic", "and": [{"field": "photo_works", "query": "泰国"}]}
                       }
                     }
                   },
@@ -220,7 +220,7 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                     "variable": "mgn_duty",
                     "class": "/univ_demo/mgn_duty",
                     "conditions": {
-                      "properties": {"operator": "logic", "and": [{"field": "last_flag", "operator": "=", "value": "Yes"}]}
+                      "properties": {"operator": "logic", "and": [{"field": "last_flag", "operator": "=", "value": "是"}]}
                     }
                   },
                   {
@@ -267,12 +267,12 @@ These examples illustrate query planning and DSL construction. Their classes, fi
           "output": {
             "to_user": true,
             "fields": [
-              {"variable": "temp01", "field": "person_name", "as": "Name"},
-              {"variable": "temp01", "field": "dept_name", "as": "Department"},
-              {"variable": "temp01", "field": "admin_title", "as": "Current Administrative Duty"},
-              {"variable": "temp01", "field": "society_name", "as": "Current Society Served"},
-              {"variable": "temp01", "field": "society_position", "as": "Position Held"},
-              {"variable": "temp01", "field": "photo_works", "query": "Thailand", "as": "Photography Works"}
+              {"variable": "temp01", "field": "person_name", "as": "姓名"},
+              {"variable": "temp01", "field": "dept_name", "as": "所属院系"},
+              {"variable": "temp01", "field": "admin_title", "as": "当前行政职务"},
+              {"variable": "temp01", "field": "society_name", "as": "当前任职学会"},
+              {"variable": "temp01", "field": "society_position", "as": "任职职务"},
+              {"variable": "temp01", "field": "photo_works", "query": "泰国", "as": "摄影作品"}
             ]
           }
         }
@@ -282,58 +282,58 @@ These examples illustrate query planning and DSL construction. Their classes, fi
 ```
 
 
-## Example 3: Tree Graph -- Multi-hop Paths and Text Filtering
+## 示例 3：树状图 -- 多跳路径与文本筛选
 
-### 1. Problem, ABC Steps and Graph Structure Description
+### 1. 问题、ABC 步骤与图结构说明
 
-**Problem Description**
+**问题描述**
 
-> Question: Query the faculty and staff of the School of Computer Science who joined in 2020 or later, who have received a "national-level or provincial/ministerial-level young talent program" honor, and who are under 45 years old, the detailed information of the "Artificial Intelligence"-related papers published in journals or conferences of level A or B by the graduate students they supervise
+> 问题：查询计算机学院中，2020年以来入职的、获得过“国家级或省部级青年人才计划”荣誉的、不满45岁的教职工，他们指导的研究生，在A类或B类的期刊或会议上发表的“人工智能”相关的论文的详细信息
 
-**A_Step: path table**
+**A_Step：path 表**
 
-| Path ID | Source object | Relationship | Target object |
+| 路径ID | 起始对象 | 关系 | 目标对象 |
 | ---- | ---- | ---- | ---- |
-| P1 | /univ_demo/person | HR organization relation of faculty and staff | /univ_demo/org |
-| P2 | /univ_demo/person | Records of talent program honors, awards and achievements of faculty and staff | /univ_demo/szxxsb |
-| P3 | /univ_demo/person | Faculty and staff supervising graduate students | /univ_demo/student_master |
-| P4 | /univ_demo/student_master | Owns paper | /univ_demo/paper |
+| P1 | /univ_demo/person | 教职工人事所属组织机构关系 | /univ_demo/org |
+| P2 | /univ_demo/person | 教职工人才工程荣誉奖励业绩成果记录 | /univ_demo/szxxsb |
+| P3 | /univ_demo/person | 教职工指导研究生 | /univ_demo/student_master |
+| P4 | /univ_demo/student_master | 拥有论文 | /univ_demo/paper |
 
-**B_Step: nodes table**
+**B_Step：nodes 表**
 
-| Object class | Filter conditions | Extracted fields | Condition source | Extraction reason |
+| 对象类 | 筛选条件 | 提取字段 | 条件来源 | 提取原因 |
 | ---- | ---- | ---- | ---- | ---- |
-| /univ_demo/person | lx_date >= '2020-01-01 00:00:00' AND age < 45 AND staff_type = 'Full-time teaching position' AND person_sort = 'Government-affiliated' | name, account, sz_g | In the original question: "joined in 2020 or later", "under 45 years old", "full-time teaching" | The question requires returning the faculty and staff name, staff ID and affiliation organization |
-| /univ_demo/org | name = 'School of Computer Science' | name | In the original question: "of the School of Computer Science" | The question requires returning the department name |
-| /univ_demo/szxxsb | gccrc IN ('National-level talent A', 'National-level talent B', 'National-level talent C', 'Provincial/ministerial-level talent') AND xm_name LIKE '%Young Talent Program%' | xm_name, gccrc | In the original question: "who have received a "national-level or provincial/ministerial-level young talent program" honor" | The question requires returning the honor information |
-| /univ_demo/student_master |  | name, account |  | The question requires returning the graduate student name and student ID |
-| /univ_demo/paper | level IN ('A', 'B') AND type IN ('Journal', 'Conference') AND keywords LIKE '%Artificial Intelligence%' | title, abstract, journals, level, type, paper_file | In the original question: "the "Artificial Intelligence"-related papers published in journals or conferences of level A or B" | The question requires returning the paper details |
+| /univ_demo/person | lx_date >= '2020-01-01 00:00:00' AND age < 45 AND staff_type = '专任教师岗位' AND person_sort = '事业编' | name, account, sz_g | 原问题中：“2020年以来入职的”、“不满45岁的”、“专任教师” | 问题要求返回教职工姓名、工号和所属单位 |
+| /univ_demo/org | name = '计算机学院' | name | 原问题中：“计算机学院中” | 问题要求返回所属院系名称 |
+| /univ_demo/szxxsb | gccrc IN ('国家级人才A类', '国家级人才B类', '国家级人才C类', '省部级人才') AND xm_name LIKE '%青年人才计划%' | xm_name, gccrc | 原问题中：“获得过“国家级或省部级青年人才计划”荣誉的” | 问题要求返回荣誉信息 |
+| /univ_demo/student_master |  | name, account |  | 问题要求返回研究生姓名和学号 |
+| /univ_demo/paper | level IN ('A类', 'B类') AND type IN ('期刊', '会议') AND keywords LIKE '%人工智能%' | title, abstract, journals, level, type, paper_file | 原问题中：“在A类或B类的期刊或会议上发表的“人工智能”相关的论文” | 问题要求返回论文详细信息 |
 
-### 2. Example of File Delivery Content (the analysis process is only briefly described in the main text)
+### 2. 文件交付内容示例（分析过程只在正文简述）
 
-1. Analysis and architecture planning
-*   **Read ABC**: Step A defines a long chain `person -> student -> paper`. Step B contains a large number of filter conditions. Step C is empty; this is a detail query.
-*   **Logic derivation and DSL planning**:
-    *   Step count determination: This is a typical detail query; at first glance it seems to need only 1 Step. However, the final output requires **display aliases that contain spaces** (e.g. `Faculty Name`). According to the supplement to your DSL rules: "the alias `as` of an output field in the first step **must start with an English letter and contain only English letters, digits and underscores thereafter (`[A-Za-z][A-Za-z0-9_]*`)**". Therefore, to output display aliases that contain spaces, **you must plan 2 Steps**: Step 1 outputs with valid aliases to a temporary table, Step 2 outputs from the temporary table and renames them to the display aliases.
-    *   Temporary table field pre-embedding: Step 1 must output all fields that ultimately need to be displayed, using compliant English aliases.
+1. 分析与架构规划
+*   **读取 ABC**：A 步骤定义了一个 `person -> student -> paper` 的长链路。B 步骤包含大量筛选条件。C 步骤为空，是明细查询。
+*   **逻辑推导与 DSL 规划**：
+    *   Step 数量判定：这是一个典型的明细查询，乍一看似乎只需要 1 个 Step。但是，最终输出要求**中文别名**（如“教职工姓名”）。根据你的 DSL 规则补充：“第一个 step 中输出字段的别名 `as` **以英文字母开头，后续只能包含英文字母、数字和下划线（`[A-Za-z][A-Za-z0-9_]*`）**”。因此，为了实现中文别名输出，**必须规划为 2 Steps**：Step 1 用英文别名输出到临时表，Step 2 再从临时表输出并重命名为中文。
+    *   临时表字段预埋：Step 1 必须输出所有最终需要展示的字段，并使用合规的英文别名。
 
-2. Perform structured translation
-*   **Step 1 (data extraction layer)**:
-    *   Graph & Conditions: Fully translate the long chain of Step A and all the filter conditions of Step B (such as `lx_date`, `age`, `gccrc`, `keywords`, etc.).
-    *   Output: Output all fields to the temporary table with English aliases (such as `teacher_name`, `student_name`, `paper_title`).
-*   **Step 2 (calculation expression layer)**:
-    *   Input: Reference the temporary table of Step 1.
-    *   Output: Output all fields in the temporary table as-is, but replace all `as` attributes with the display aliases required by the user.
+2. 执行结构化翻译
+*   **Step 1 (数据提取层)**：
+    *   Graph & Conditions：将 A 步骤的长链路和 B 步骤的所有筛选条件（如 `lx_date`, `age`, `gccrc`, `keywords` 等）完整翻译。
+    *   Output：将所有字段用英文别名（如 `teacher_name`, `student_name`, `paper_title`）输出到临时表。
+*   **Step 2 (计算表达层)**：
+    *   Input：引用 Step 1 的临时表。
+    *   Output：将临时表中的所有字段原样输出，但 `as` 属性全部替换为用户要求的中文别名。
 
-3. Self-check
-*   Reject hallucination: Confirm that all classes and relationships on the long chain are correct.
-*   Instruction following: Every filter condition in ABC is reflected in Step 1.
-*   Syntax logic:
-    *   Alias rule check: Confirm that Step 1 uses English aliases and that Step 2 renames them to display aliases containing spaces, which complies with the DSL rules.
-    *   Text retrieval check: Confirm that the `keywords` field uses the `like` operator rather than the `vector` `query`, which complies with the business knowledge requirements.
+3. 自检
+*   拒绝幻觉：确认长链路上的所有类和关系都正确无误。
+*   指令遵循：ABC 中的每一个筛选条件都已在 Step 1 中体现。
+*   语法逻辑：
+    *   别名规则检查：确认 Step 1 使用了英文别名，Step 2 使用了中文别名，符合 DSL 规则。
+    *   文本检索检查：确认对 `keywords` 字段使用的是 `like` 操作符，而不是 `vector` 的 `query`，符合业务知识要求。
 ```json
 {
-    "problem": "Query the faculty and staff of the School of Computer Science who joined in 2020 or later, who have received a \"national-level or provincial/ministerial-level young talent program\" honor, and who are under 45 years old, the detailed information of the \"Artificial Intelligence\"-related papers published in journals or conferences of level A or B by the graduate students they supervise",
+    "problem": "查询计算机学院中，2020年以来入职的、获得过“国家级或省部级青年人才计划”荣誉的、不满45岁的教职工，他们指导的研究生，在A类或B类的期刊或会议上发表的“人工智能”相关的论文的详细信息",
     "answer": {
       "steps": [
         {
@@ -351,8 +351,8 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                         "and": [
                           {"field": "lx_date", "operator": ">=", "value": "2020-01-01 00:00:00"},
                           {"field": "age", "operator": "<", "value": 45},
-                          {"field": "staff_type", "operator": "=", "value": "Full-time teaching position"},
-                          {"field": "person_sort", "operator": "=", "value": "Government-affiliated"}
+                          {"field": "staff_type", "operator": "=", "value": "专任教师岗位"},
+                          {"field": "person_sort", "operator": "=", "value": "事业编"}
                         ]
                       }
                     }
@@ -362,7 +362,7 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                     "variable": "org",
                     "class": "/univ_demo/org",
                     "conditions": {
-                      "properties": {"operator": "logic", "and": [{"field": "name", "operator": "=", "value": "School of Computer Science"}]}
+                      "properties": {"operator": "logic", "and": [{"field": "name", "operator": "=", "value": "计算机学院"}]}
                     }
                   },
                   {
@@ -373,8 +373,8 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                       "properties": {
                         "operator": "logic",
                         "and": [
-                          {"field": "gccrc", "operator": "in", "value": ["National-level talent A", "National-level talent B", "National-level talent C", "Provincial/ministerial-level talent"]},
-                          {"field": "xm_name", "operator": "like", "value": "%Young Talent Program%"}
+                          {"field": "gccrc", "operator": "in", "value": ["国家级人才A类", "国家级人才B类", "国家级人才C类", "省部级人才"]},
+                          {"field": "xm_name", "operator": "like", "value": "%青年人才计划%"}
                         ]
                       }
                     }
@@ -388,9 +388,9 @@ These examples illustrate query planning and DSL construction. Their classes, fi
                       "properties": {
                         "operator": "logic",
                         "and": [
-                          {"field": "level", "operator": "in", "value": ["A", "B"]},
-                          {"field": "type", "operator": "in", "value": ["Journal", "Conference"]},
-                          {"field": "keywords", "operator": "like", "value": "%Artificial Intelligence%"}
+                          {"field": "level", "operator": "in", "value": ["A类", "B类"]},
+                          {"field": "type", "operator": "in", "value": ["期刊", "会议"]},
+                          {"field": "keywords", "operator": "like", "value": "%人工智能%"}
                         ]
                       }
                     }
@@ -436,19 +436,19 @@ These examples illustrate query planning and DSL construction. Their classes, fi
           "output": {
             "to_user": true,
             "fields": [
-              {"variable": "temp01", "field": "teacher_name", "as": "Faculty Name"},
-              {"variable": "temp01", "field": "teacher_account", "as": "Faculty ID"},
-              {"variable": "temp01", "field": "org_name", "as": "Department"},
-              {"variable": "temp01", "field": "honor_name", "as": "Honor Name"},
-              {"variable": "temp01", "field": "honor_level", "as": "Honor Level"},
-              {"variable": "temp01", "field": "student_name", "as": "Graduate Student Name"},
-              {"variable": "temp01", "field": "student_account", "as": "Student ID"},
-              {"variable": "temp01", "field": "paper_title", "as": "Paper Title"},
-              {"variable": "temp01", "field": "paper_abstract", "as": "Paper Abstract"},
-              {"variable": "temp01", "field": "paper_journals", "as": "Journal/Conference Name"},
-              {"variable": "temp01", "field": "paper_level", "as": "Paper Level"},
-              {"variable": "temp01", "field": "paper_type", "as": "Paper Type"},
-              {"variable": "temp01", "field": "paper_file", "as": "Paper File"}
+              {"variable": "temp01", "field": "teacher_name", "as": "教职工姓名"},
+              {"variable": "temp01", "field": "teacher_account", "as": "教职工工号"},
+              {"variable": "temp01", "field": "org_name", "as": "所属院系"},
+              {"variable": "temp01", "field": "honor_name", "as": "荣誉名称"},
+              {"variable": "temp01", "field": "honor_level", "as": "荣誉级别"},
+              {"variable": "temp01", "field": "student_name", "as": "研究生姓名"},
+              {"variable": "temp01", "field": "student_account", "as": "研究生学号"},
+              {"variable": "temp01", "field": "paper_title", "as": "论文标题"},
+              {"variable": "temp01", "field": "paper_abstract", "as": "论文摘要"},
+              {"variable": "temp01", "field": "paper_journals", "as": "期刊/会议名称"},
+              {"variable": "temp01", "field": "paper_level", "as": "论文等级"},
+              {"variable": "temp01", "field": "paper_type", "as": "论文类型"},
+              {"variable": "temp01", "field": "paper_file", "as": "论文文件"}
             ]
           }
         }
@@ -457,4 +457,4 @@ These examples illustrate query planning and DSL construction. Their classes, fi
 }
 ```
 
-**The above examples are for demonstration only; when actually executing, please refer to the `input information`**
+**以上示例仅为演示内容，实际执行时请参考`输入信息`**

@@ -1,5 +1,5 @@
-		6.3.2 If a non-bucket type field needs a group aggregation operation, the aggregation operation must be defined according to the following logic
+		6.3.2 如果非bucket类型字段需要分组汇聚操作时，需要按如下逻辑定义汇聚操作
    
-		- When there is a function field, it indicates that an aggregate calculation is needed on this attribute field; the aggregate calculation supports avg for the average, count for counting, min for the minimum, max for the maximum and sum for summation, and it aggregates the entire result set
+		- 当有function字段时说明需要对这个属性字段进行聚合计算，聚合计算支持avg取平均,count计数,min取最小,max取最大,sum求加和，其聚合整个结果集
 
-		- When there is a function aggregate calculation, it needs to be in a different step from the query, that is, the function aggregate calculation is required to act only on the fields of the temporary table
+		- 当有function聚合计算时,需要和查询分不同的step，也就是要求function聚合计算只能作用于临时表的字段

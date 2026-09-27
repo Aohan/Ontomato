@@ -1,0 +1,9 @@
+{
+	"classlist":[
+	],
+	"relationship_rule":{
+	},
+	"classDef":[ 
+	],
+	"datasetdesc":"This dataset builds a complete object model for hospital space management, covering 10 core classes such as hospital, campus, building, floor, room and personnel. By clearly defining hierarchical containment relationships and attribute fields, it realizes structured spatial management from campus to room, and associates the using department, managing personnel and personnel information, supporting refined analysis of space resources and personnel allocation."
+}

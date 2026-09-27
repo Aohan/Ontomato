@@ -1,0 +1,322 @@
+[
+  {
+    "key": "lang",
+    "value": "繁体中文"
+  },
+  {
+    "key": "Abc.notInService",
+    "value": "ABC暫不可用"
+  },
+  {
+    "key": "Auth.register.success",
+    "value": "授權啟用成功"
+  },
+  {
+    "key": "Maintenance.action.paramError",
+    "value": "請求參數錯誤"
+  },
+  {
+    "key": "Data.queryM3.error",
+    "value": "查詢M3資料庫失敗"
+  },
+  {
+    "key": "Data.remoteDB.notSupport",
+    "value": "非M3模式不支援此功能"
+  },
+  {
+    "key": "Data.dataPermission.noPermission",
+    "value": "您沒有資料權限"
+  },
+  {
+    "key": "Data.object.notExist",
+    "value": "物件不存在"
+  },
+  {
+    "key": "Dashboard.data.error",
+    "value": "獲取資料失敗"
+  },
+  {
+    "key": "Dashboard.param.error",
+    "value": "自訂參數錯誤"
+  },
+  {
+    "key": "Admin.relationship.nameError",
+    "value": "關聯名稱格式錯誤"
+  },
+  {
+    "key": "Admin.relationship.fromClassNotFound",
+    "value": "來源物件類別不存在"
+  },
+  {
+    "key": "Admin.relationship.toClassNotFound",
+    "value": "目標物件類別不存在"
+  },
+  {
+    "key": "Admin.relationship.exist",
+    "value": "關聯已存在"
+  },
+  {
+    "key": "Admin.class.exist",
+    "value": "物件類別已存在"
+  },
+  {
+    "key": "Admin.class.notFound",
+    "value": "物件類別不存在"
+  },
+  {
+    "key": "Admin.attr.formatError",
+    "value": "屬性格式錯誤"
+  },
+  {
+    "key": "Admin.attr.typeError",
+    "value": "屬性型別錯誤"
+  },
+  {
+    "key": "Admin.attr.exist",
+    "value": "屬性已存在"
+  },
+  {
+    "key": "Admin.attr.notFound",
+    "value": "屬性不存在"
+  },
+  {
+    "key": "Admin.indicator.exist",
+    "value": "指標已存在"
+  },
+  {
+    "key": "PythonExecutor.execute.timeout",
+    "value": "python執行逾時（分鐘）"
+  },
+  {
+    "key": "QuestionCard.originCondition",
+    "value": "原始條件"
+  },
+  {
+    "key": "QuestionCard.replaceTo",
+    "value": "被替換成"
+  },
+  {
+    "key": "QuestionCard.totalNum",
+    "value": "共有記錄數"
+  },
+  {
+    "key": "QuestionCard.showNum",
+    "value": "這裡只顯示記錄數"
+  },
+  {
+    "key": "QuestionCard.canGetByUrl",
+    "value": "全部資料可以透過查詢連結獲取"
+  },
+  {
+    "key": "AuditLog.datasetDesc.upd",
+    "value": "修改資料集描述"
+  },
+  {
+    "key": "AuditLog.relationship.add",
+    "value": "新增關聯類型"
+  },
+  {
+    "key": "AuditLog.relationship.del",
+    "value": "刪除關聯類型"
+  },
+  {
+    "key": "AuditLog.relationship.upd",
+    "value": "修改關聯類型"
+  },
+  {
+    "key": "AuditLog.class.add",
+    "value": "新增物件類別"
+  },
+  {
+    "key": "AuditLog.class.del",
+    "value": "刪除物件類別"
+  },
+  {
+    "key": "AuditLog.class.upd",
+    "value": "修改物件類別"
+  },
+  {
+    "key": "AuditLog.class",
+    "value": "物件類別"
+  },
+  {
+    "key": "AuditLog.attr.add",
+    "value": "新增屬性"
+  },
+  {
+    "key": "AuditLog.attr.del",
+    "value": "刪除屬性"
+  },
+  {
+    "key": "AuditLog.attr.upd",
+    "value": "修改屬性"
+  },
+  {
+    "key": "AuditLog.attr",
+    "value": "屬性"
+  },
+  {
+    "key": "AuditLog.indicator.add",
+    "value": "新增指標"
+  },
+  {
+    "key": "AuditLog.indicator.del",
+    "value": "刪除指標"
+  },
+  {
+    "key": "AuditLog.indicator.upd",
+    "value": "修改指標"
+  },
+  {
+    "key": "AuditLog.businessExample.add",
+    "value": "新增業務範例"
+  },
+  {
+    "key": "AuditLog.businessExample.upd",
+    "value": "修改業務範例"
+  },
+  {
+    "key": "AuditLog.businessExample.del",
+    "value": "刪除業務範例"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.add",
+    "value": "新增業務知識"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.upd",
+    "value": "修改業務知識"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.del",
+    "value": "刪除業務知識"
+  },
+  {
+    "key": "Action.notGenerated",
+    "value": "未生成action"
+  },
+  {
+    "key": "Action.notFound",
+    "value": "action不存在"
+  },
+  {
+    "key": "Action.cannotModifySystem",
+    "value": "不允許修改系統action"
+  },
+  {
+    "key": "Action.cannotDeleteSystem",
+    "value": "不允許刪除系統action"
+  },
+  {
+    "key": "Action.domainMismatch",
+    "value": "action的域不一致"
+  },
+  {
+    "key": "Action.notPublished",
+    "value": "action未發佈"
+  },
+  {
+    "key": "Action.parseCodeExplainFailed",
+    "value": "解析代碼解釋結果失敗"
+  },
+  {
+    "key": "Function.notFound",
+    "value": "function不存在"
+  },
+  {
+    "key": "Function.cannotBeEmpty",
+    "value": "function不能為空"
+  },
+  {
+    "key": "Function.notWrite",
+    "value": "function不是寫函數"
+  },
+  {
+    "key": "Function.notRead",
+    "value": "function不是讀函數"
+  },
+  {
+    "key": "Function.cannotModifySystem",
+    "value": "不允許修改系統function"
+  },
+  {
+    "key": "Function.cannotDeleteSystem",
+    "value": "不允許刪除系統function"
+  },
+  {
+    "key": "Function.domainMismatch",
+    "value": "function的域不一致"
+  },
+  {
+    "key": "Function.referencedByMetricView",
+    "value": "被MetricView引用的Function不能修改或刪除"
+  },
+  {
+    "key": "Function.referencedByAction",
+    "value": "被Action引用的Function不能修改或刪除"
+  },
+  {
+    "key": "Function.referencedByWriteTask",
+    "value": "被WriteTask引用的Function不能修改或刪除"
+  },
+  {
+    "key": "MetricView.notGenerated",
+    "value": "未生成metricView"
+  },
+  {
+    "key": "MetricView.notFound",
+    "value": "metricView不存在"
+  },
+  {
+    "key": "MetricView.cannotModifySystem",
+    "value": "不允許修改系統metricView"
+  },
+  {
+    "key": "MetricView.cannotDeleteSystem",
+    "value": "不允許刪除系統metricView"
+  },
+  {
+    "key": "MetricView.domainMismatch",
+    "value": "metricView的域不一致"
+  },
+  {
+    "key": "MetricView.notPublished",
+    "value": "metricView未發佈"
+  },
+  {
+    "key": "MetricView.snapshotNotFound",
+    "value": "熱資料結果快照不存在或已過期"
+  },
+  {
+    "key": "MetricView.snapshotUnreadable",
+    "value": "熱資料結果快照讀取失敗"
+  },
+  {
+    "key": "WriteTask.notFound",
+    "value": "writeTask不存在"
+  },
+  {
+    "key": "WriteTask.domainMismatch",
+    "value": "writeTask的域不一致"
+  },
+  {
+    "key": "WriteTask.functionMustBeNoParam",
+    "value": "function必須是無參函數"
+  },
+  {
+    "key": "WriteTask.invalidStatus",
+    "value": "writeTask的狀態非法"
+  },
+  {
+    "key": "WriteTask.invalidCrontab",
+    "value": "writeTask的crontab表達式非法"
+  },
+  {
+    "key": "WriteFunctionOperation.classNotExist",
+    "value": "類不存在"
+  },
+  {
+    "key": "WriteFunctionOperation.relationNotExist",
+    "value": "關係不存在"
+  }
+]
