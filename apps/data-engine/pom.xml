@@ -13,6 +13,10 @@
 
     <artifactId>data-engine-app</artifactId>
 
+    <properties>
+        <spring-boot.run.skip>false</spring-boot.run.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>io.ontomato</groupId>

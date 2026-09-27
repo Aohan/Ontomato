@@ -263,6 +263,16 @@ function buildRuntime(app, arch, identity, entries, exported) {
   saveRuntimeLock(app.lockRoot, app.family, arch, contract, app.interfaceVersion);
   return { tag, alias, fp, contract };
 }
+// The entry's resources under `context`, shared by the app image and the host dev entry:
+// copied in the listed order (a later source overwrites the same name), then the prompt
+// language is selected once per target after all copies.
+export function stageResources(app, context, lang) {
+  for (const [root, source, dest] of app.resources) copyFrom(root, source, join(context, dest));
+  for (const dest of new Set(app.resources.map(([, , dest]) => dest)))
+    selectPromptLanguage(join(context, dest), lang);
+  if (!existsSync(join(context, app.requiredSkill)))
+    throw new Error("Missing default trend-forecaster skill");
+}
 function stageApp(app, arch, exported, lang) {
   const context = join(app.repoRoot, ".build", "contexts", arch, "app");
   resetDirectory(context);
@@ -273,13 +283,7 @@ function stageApp(app, arch, exported, lang) {
     recursive: true,
   });
   copyFrom(app.requirements.root, app.requirements.path, join(context, "requirements-py310.txt"));
-  // Resources are copied in the entry's listed order (a later source overwrites the
-  // same name); the prompt language is selected once per target after all copies.
-  for (const [root, source, dest] of app.resources) copyFrom(root, source, join(context, dest));
-  for (const dest of new Set(app.resources.map(([, , dest]) => dest)))
-    selectPromptLanguage(join(context, dest), lang);
-  if (!existsSync(join(context, app.requiredSkill)))
-    throw new Error("Missing default trend-forecaster skill");
+  stageResources(app, context, lang);
   for (const [name, content] of Object.entries(app.payloadFiles))
     writeFileSync(join(context, "payload", name), content);
   return context;

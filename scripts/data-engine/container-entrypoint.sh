@@ -11,7 +11,6 @@ APP_SKILLS="$APP_ROOT/skills"
 RUNTIME_LIB=/opt/datarag/lib
 DEPLOY_DIR=/deploy
 CONF_DIR="$DEPLOY_DIR/conf"
-SKILLS_DIR="$DEPLOY_DIR/skills"
 MCP_HOST=127.0.0.1
 MCP_PORT=18500
 
@@ -35,22 +34,10 @@ python "$PAIR_CONTRACT" pair
 runtime_fp="$(cat /opt/datarag/runtime-compat-fingerprint)"
 runtime_arch="$(cat /opt/datarag/runtime-arch)"
 
-# 4) Data directory: all of /deploy is mounted from a single host directory; on first start with an empty directory it is created automatically
-mkdir -p "$CONF_DIR" "$SKILLS_DIR" "$DEPLOY_DIR/logs" "$DEPLOY_DIR/python"
-
-# 5) Product file sync (overwrite same names, add new files, keep extra files).
-#    application.yml and mcp-clients.yml are copied only when missing.
+# 4/5) Data directory and product file sync: all of /deploy is mounted from a single host directory
+#      (created on first start); the shared sync script owns the sync rule.
 [ -d "$CONF_DEFAULTS" ] || die "$CONF_DEFAULTS is missing, the application image is incomplete"
-shopt -s dotglob nullglob
-for src in "$CONF_DEFAULTS"/*; do
-  name="${src##*/}"
-  [ "$name" = "mcp-clients.yml" ] && [ -e "$CONF_DIR/mcp-clients.yml" ] && continue
-  [ "$name" = "application.yml" ] && [ -e "$CONF_DIR/application.yml" ] && continue
-  cp -a "$src" "$CONF_DIR/"
-done
-echo "[entrypoint] conf synced -> ${CONF_DIR} (overwrite same names, add new files, keep extras; application.yml and mcp-clients.yml only added when missing)"
-cp -a "$APP_SKILLS/." "$SKILLS_DIR/"
-echo "[entrypoint] skills synced -> ${SKILLS_DIR}"
+bash "$(dirname "$0")/sync-product-files.sh" "$CONF_DEFAULTS" "$APP_SKILLS" "$DEPLOY_DIR"
 
 # 6) The MCP calculation service runs built into the backend container (started first, polled for up to 30 seconds)
 [ -f /opt/datarag/mcp/mcpserver.py ] || die "missing /opt/datarag/mcp/mcpserver.py, the runtime image is incomplete"
