@@ -4,6 +4,10 @@
   "type": "module",
   "packageManager": "pnpm@9.15.9",
   "scripts": {
+    "dev": "node scripts/dev-command.mjs dev",
+    "dev:server": "node scripts/dev-command.mjs server",
+    "dev:web": "pnpm --dir apps/workbench dev:web",
+    "dev:ontology-manager": "node scripts/dev-command.mjs manager",
     "typecheck:workbench": "pnpm --filter @ontomato/contracts --filter @ontomato/workbench-server --filter @ontomato/workbench typecheck",
     "test:workbench": "pnpm --filter @ontomato/workbench-server --filter @ontomato/workbench test",
     "lint:workbench": "eslint packages/contracts packages/workbench-server apps/workbench"
@@ -12,6 +16,7 @@
     "@eslint/js": "^10.0.1",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
+    "concurrently": "^9.2.1",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.8.0",

@@ -17,3 +17,14 @@ Ontomato 的公共产品源码仓，包含工作台、数据引擎与本体管�
 宿主需要 Node、Git、Docker 和 GNU Make。`ARCH` 默认是本机架构，`PROMPT_LANG` 默认 `en`。`JDK_IMAGE`、`JRE_IMAGE`、`PYTHON_RUNTIME_IMAGE` 只在环境变量有值时传给构建，用来覆盖 Dockerfile 里的镜像源；脚本不保存第二套默认镜像。
 
 `make pack` 在一个进程里做一次 Maven 导出，同时生成 runtime 和 app，并在核验通过后把当前架构的指纹写入 `apps/data-engine/runtime-lock.json`。`make pack-app` 只使用已经导入的 runtime，不会构建 runtime。
+
+## 本机开发（Node + 主网页 + Manager）
+
+`pnpm install` 后，根目录一次启动三个进程：
+
+- `pnpm dev`：concurrently 同时运行下面三个脚本，前台运行，Ctrl-C 停止全部；
+- `pnpm dev:server`：Node 服务（在 `apps/workbench` 执行 `tsx watch src/index.ts`，默认端口 3000）；
+- `pnpm dev:web`：主网页 Vite 开发服务（端口 5173，`/api` 与 `/config.js` 代理到 3000）；
+- `pnpm dev:ontology-manager`：本体管理器 Vite 开发服务（端口 5174，`/api/data-query` 代理到 `DATARAG_ORIGIN`）。
+
+Node 服务读取产品根 `.env`（进程环境优先），运行数据写在产品根 `data/`。本体管理器的 `DATARAG_ORIGIN` 在公共版没有默认值，未配置时启动报错，需在 `.env` 或环境变量中给出 DataRAG 根地址。Java 数据引擎、PostgreSQL 和 Python MCP 需要另行准备；本入口只有上述三个进程，不是全栈启动。

@@ -71,8 +71,13 @@ export default [
     },
   },
   {
-    // 应用的 Node 构建入口（.mjs）：运行在 Node，只补 Node 全局。
-    files: ["apps/*/build.mjs", "apps/*/build.node-test.mjs"],
+    // 运行在 Node 的 .mjs 入口（应用构建入口与开发入口）：只补 Node 全局。
+    files: [
+      "apps/*/build.mjs",
+      "apps/*/build.node-test.mjs",
+      "scripts/dev-command.mjs",
+      "scripts/dev-command.node-test.mjs",
+    ],
     languageOptions: { globals: globals.node },
   },
   {
