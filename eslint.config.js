@@ -72,7 +72,7 @@ export default [
   },
   {
     // 应用的 Node 构建入口（.mjs）：运行在 Node，只补 Node 全局。
-    files: ["apps/workbench/build.mjs"],
+    files: ["apps/*/build.mjs", "apps/*/build.node-test.mjs"],
     languageOptions: { globals: globals.node },
   },
   {
