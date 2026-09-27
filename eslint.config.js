@@ -77,6 +77,7 @@ export default [
       "apps/*/build.node-test.mjs",
       "scripts/dev-command.mjs",
       "scripts/dev-command.node-test.mjs",
+      "scripts/product-targets.node-test.mjs",
     ],
     languageOptions: { globals: globals.node },
   },

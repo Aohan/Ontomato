@@ -4,9 +4,11 @@ HOST_ARCH := $(shell $(NODE) -p "process.arch === 'x64' ? 'amd64' : process.arch
 ARCH ?= $(HOST_ARCH)
 PROMPT_LANG ?= en
 
-.PHONY: data-engine pack-data-engine pack-data-engine-app data-engine-amd64 data-engine-arm64 pack-data-engine-amd64 pack-data-engine-arm64 pack-data-engine-app-amd64 pack-data-engine-app-arm64 build pack pack-app pack-amd64 pack-arm64 pack-app-amd64 pack-app-arm64 workbench-runtime workbench-runtime-pack workbench-runtime-amd64 workbench-runtime-arm64 workbench-runtime-pack-amd64 workbench-runtime-pack-arm64 workbench-app workbench-app-pack workbench-app-amd64 workbench-app-arm64 workbench-app-pack-amd64 workbench-app-pack-arm64 ontology-manager pack-ontology-manager ontology-manager-amd64 ontology-manager-arm64 pack-ontology-manager-amd64 pack-ontology-manager-arm64
+include scripts/product-targets.mk
 
-# data-engine (Java) targets; build/pack/pack-app keep forwarding to them for now.
+.PHONY: data-engine pack-data-engine pack-data-engine-app data-engine-amd64 data-engine-arm64 pack-data-engine-amd64 pack-data-engine-arm64 pack-data-engine-app-amd64 pack-data-engine-app-arm64 workbench-runtime workbench-runtime-pack workbench-runtime-amd64 workbench-runtime-arm64 workbench-runtime-pack-amd64 workbench-runtime-pack-arm64 workbench-app workbench-app-pack workbench-app-amd64 workbench-app-arm64 workbench-app-pack-amd64 workbench-app-pack-arm64 ontology-manager pack-ontology-manager ontology-manager-amd64 ontology-manager-arm64 pack-ontology-manager-amd64 pack-ontology-manager-arm64
+
+# data-engine (Java) targets.
 data-engine:
 	$(NODE) apps/data-engine/build.mjs all --arch $(ARCH) --prompt-lang $(PROMPT_LANG)
 
@@ -24,18 +26,6 @@ pack-data-engine-amd64 pack-data-engine-arm64:
 
 pack-data-engine-app-amd64 pack-data-engine-app-arm64:
 	$(MAKE) pack-data-engine-app ARCH=$(@:pack-data-engine-app-%=%)
-
-build: data-engine
-
-pack: pack-data-engine
-
-pack-app: pack-data-engine-app
-
-pack-amd64 pack-arm64:
-	$(MAKE) pack ARCH=$(@:pack-%=%)
-
-pack-app-amd64 pack-app-arm64:
-	$(MAKE) pack-app ARCH=$(@:pack-app-%=%)
 
 workbench-runtime:
 	$(NODE) apps/workbench/build.mjs runtime --arch $(ARCH)

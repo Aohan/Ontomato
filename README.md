@@ -10,13 +10,21 @@ Ontomato 的公共产品源码仓，包含工作台、数据引擎与本体管�
 
 企业扩展在独立私有仓维护。公共仓应能够独立构建，不依赖企业源码、私有授权 SDK 或企业构建凭据。
 
-## 构建 data-engine
+## 产品构建入口
 
-根目录的 `make build`、`make pack` 和 `make pack-app` 目前只构建数据引擎。它们不构建工作台或本体管理器，也不表示整个产品已经可以打包。
+根目录的 `make` 默认执行 `make build`，按顺序构建 Node runtime、Node app、Java data-engine 与 Manager。`make pack` 导出 Node runtime、Node app、Java runtime、Java app 与 Manager 五类镜像包；`make pack-app` 只导出 Node app、Java app 与 Manager 三类应用包。
 
-宿主需要 Node、Git、Docker 和 GNU Make。`ARCH` 默认是本机架构，`PROMPT_LANG` 默认 `en`。`JDK_IMAGE`、`JRE_IMAGE`、`PYTHON_RUNTIME_IMAGE` 只在环境变量有值时传给构建，用来覆盖 Dockerfile 里的镜像源；脚本不保存第二套默认镜像。
+| 命令 | 生成范围 |
+| --- | --- |
+| `make build` | workbench-runtime → workbench-app → data-engine → ontology-manager |
+| `make pack` | workbench-runtime-pack → workbench-app-pack → pack-data-engine → pack-ontology-manager |
+| `make pack-app` | workbench-app-pack → pack-data-engine-app → pack-ontology-manager |
+| `make pack-amd64` / `pack-arm64` | 以指定架构执行 `pack` |
+| `make pack-app-amd64` / `pack-app-arm64` | 以指定架构执行 `pack-app` |
 
-`make pack` 在一个进程里做一次 Maven 导出，同时生成 runtime 和 app，并在核验通过后把当前架构的指纹写入 `apps/data-engine/runtime-lock.json`。`make pack-app` 只使用已经导入的 runtime，不会构建 runtime。
+`pack-app` 只复用 Node 与 Java 已经导入的匹配 runtime，不重建 runtime；Manager 仍打独立镜像，没有 manager runtime。分服务目标（`workbench-runtime-pack`、`workbench-app-pack`、`pack-data-engine`、`pack-data-engine-app`、`pack-ontology-manager` 及其架构变体）仍可单独调用。
+
+宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。`JDK_IMAGE`、`JRE_IMAGE`、`PYTHON_RUNTIME_IMAGE` 只在环境变量有值时传给构建，用来覆盖 Dockerfile 里的镜像源；脚本不保存第二套默认镜像。这 5 个应用制品不含 PostgreSQL 与部署离线 bundle：PostgreSQL 由部署流程另行提供，离线 bundle 尚未在本仓落地；当前也没有私有 Linux 实物、完整 CI 或 dev.sh 的验收结论。
 
 ## 本机开发（Node + 主网页 + Manager）
 
