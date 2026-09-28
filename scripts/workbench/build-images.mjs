@@ -52,6 +52,7 @@ const TOOLS = [
   "workbench/container-entrypoint.sh",
   "build-support.mjs",
   "data-engine/runtime_dependencies.py",
+  "third_party_notices.py",
 ];
 // The app container needs only the stager and its real dependencies: the
 // installer and the metadata collector stay on the host.
@@ -61,6 +62,7 @@ const APP_TOOLS = [
   "workbench/production-graph.mjs",
   "workbench/runtime-contract.mjs",
   "build-support.mjs",
+  "third_party_notices.py",
 ];
 // Only arguments the old Node entry supported; recipe defaults already pin the
 // images, mirrors and index, so these pass through only when the env sets them.
@@ -97,6 +99,13 @@ function stageContext(app, arch) {
   const base = join(app.repoRoot, ".build", "contexts", "workbench", arch);
   mkdirSync(base, { recursive: true });
   return mkdtempSync(join(base, "run-"));
+}
+
+// Both images ship the public repository's own license files beside the
+// generated third-party notices.
+function copyLicenses(app, context) {
+  for (const name of ["LICENSE", "NOTICE"])
+    cpSync(join(app.publicRoot, name), join(context, name));
 }
 
 async function copyTools(context) {
@@ -163,6 +172,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
   // worktree edits, and it never resamples.
   assertEntriesCurrent(entries, "staging");
   await copyAppTools(app, context);
+  copyLicenses(app, context);
   const runtime = existingRuntime(app, arch);
   writeFileSync(join(context, "runtime-contract.json"), `${JSON.stringify(runtime.contract)}\n`);
   const combined = combineIdentity(version, app.repoRoot, entries);
@@ -192,6 +202,8 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     "--load",
     "--build-arg",
     `WORKSPACE=${record.workspaceId}`,
+    "--build-arg",
+    `APPLICATION=${record.application}`,
     "--build-arg",
     `APP_META_JSON=${JSON.stringify(meta)}`,
     ...imageLabels(app.component, "app", combined, runtime.fp, FAMILY),
@@ -282,6 +294,7 @@ export async function buildWorkbenchApp(app, args) {
   });
   assertFreshRecord(entries, record);
   await copyTools(context);
+  copyLicenses(app, context);
   writeFileSync(
     join(context, "runtime-requirements.txt"),
     readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt")),

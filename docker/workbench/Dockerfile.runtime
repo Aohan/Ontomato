@@ -9,6 +9,7 @@
 #   inputs.json               N4a build input record
 #   tools/                    the public scripts/ root
 #   runtime-requirements.txt  public docker/workbench/requirements.txt
+#   LICENSE, NOTICE           the public repository's own license files
 # The entrypoint and the runtime contract tools are copied out of tools/.
 ARG NODE_RUNTIME_IMAGE=docker.1ms.run/library/node:20.3.0-slim@sha256:bffbb1bf1a3afd6fbdd822bda7f1e7cb07eb407f3dc02bbef1bf414cbaa92afd
 ARG PYTHON_RUNTIME_IMAGE=docker.1ms.run/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
@@ -89,6 +90,22 @@ RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.co
 # pip/setuptools are used only during the build above: at runtime python only
 # execs scripts (numpy/pandas stay importable, pip does not).
 RUN if python3 -m pip --version >/dev/null 2>&1; then echo "pip still present, must be removed from runtime" >&2; exit 1; fi
+
+# Third-party notices of what this image installs, under /licenses, outside
+# every runtime contract input: the production node_modules from the
+# installer's pnpm report (the same store paths are copied above), the
+# distributions pip left installed, and the license of the node binary, which
+# is copied alone. The system section names where the base keeps its own.
+COPY LICENSE NOTICE /licenses/
+COPY --from=installer /usr/local/LICENSE /licenses/nodejs/LICENSE
+RUN --mount=type=bind,from=installer,source=/tmp/npm-licenses.json,target=/tmp/npm-licenses.json \
+    --mount=type=bind,source=tools/third_party_notices.py,target=/tmp/third_party_notices.py \
+    python3 /tmp/third_party_notices.py /licenses/THIRD_PARTY_NOTICES.txt --npm /tmp/npm-licenses.json --python <<'EOF'
+Debian packages of the python:3.10-slim-bookworm base and the apt-installed
+Chromium, fonts and libraries: /usr/share/doc/<package>/copyright
+Python 3.10 interpreter and standard library: /usr/local/lib/python3.10/LICENSE.txt
+Node.js binary (copied alone from the installer stage's Node image): /licenses/nodejs/LICENSE
+EOF
 
 ENV ABC_REPLAY_PYTHON_COMMAND=python3.10 \
     HOT_REPORT_PYTHON_COMMAND=python3.10 \

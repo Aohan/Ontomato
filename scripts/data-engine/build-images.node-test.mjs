@@ -236,6 +236,7 @@ else if (args[0] === "buildx") {
     mkdirSync(join(dest, "runtime-lib"), { recursive: true });
     for (const m of buildArg("APP_LIB_MODULES").split(" ")) writeFileSync(join(dest, "app/lib", m.split("/").pop() + ".jar"), "jar");
     writeFileSync(join(dest, "runtime-lib/dep.jar"), "dep");
+    writeFileSync(join(dest, "maven-licenses.json"), "[]");
     if (buildArg("KEEP_NATIVE")) writeFileSync(join(dest, "runtime-lib", buildArg("KEEP_NATIVE")), "so");
   } else if (target === "contract-export") {
     mkdirSync(dest, { recursive: true });
@@ -297,6 +298,9 @@ test("recipes: the secret export checks one explicit script on the exported jar;
   const central = build.slice(build.indexOf("FROM recipe AS build-central"), build.indexOf("FROM scratch AS export-central"));
   assert.match(secret, /test -n "\$\{APP_CHECK_SCRIPT\}" && test -n "\$\{APP_CHECK_JAR\}" && test -n "\$\{APP_CHECK_ARG\}" \\\n && MAVEN_SETTINGS=\/run\/secrets\/maven-settings \/usr\/local\/bin\/export-java.sh \\\n && sh "\$\{APP_CHECK_SCRIPT\}" "\$\{APP_CHECK_JAR\}" "\$\{APP_CHECK_ARG\}"\n/);
   assert.doesNotMatch(central, /APP_CHECK/);
+  // Both exports run the one export script, which writes the jar license records.
+  assert.match(build, /org\.codehaus\.mojo:license-maven-plugin:2\.4\.0:add-third-party[\s\S]*cp "\$\{reactor\}\/\$\{APP_MODULE\}\/target\/generated-sources\/license\/maven-licenses\.json" \/out\/maven-licenses\.json\n/);
+  assert.match(runtime, /third_party_notices\.py \/licenses\/THIRD_PARTY_NOTICES\.txt --python --jars \/opt\/datarag\/lib \/tmp\/maven-licenses\.json/);
   assert.doesNotMatch(build + runtime, /verify-license|data-engine-enterprise|license-mode|LicenseConfig/);
   assert.match(runtime, /\nFROM runtime-files AS runtime\n[\s\S]*ENTRYPOINT \["\/opt\/datarag\/bin\/container-entrypoint.sh"\]\nCMD \[\]\n[\s\S]*FROM runtime AS runtime-native\nCMD \["-Djna.library.path=\/opt\/datarag\/lib"\]\n$/);
 });
@@ -315,12 +319,21 @@ test("public build: central export of the public tree only, runtime target, one-
   assert.ok(runtime && !docker.build("runtime-native"));
   assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/container-entrypoint.sh", "bin/runtime-contract.py", "bin/runtime_dependencies.py"]);
   assert.equal(runtime.context["requirements-py310.txt"], "numpy==2.2.6\n");
+  // Third-party notice inputs; the public LICENSE and NOTICE go to both images.
+  const shipped = (name) => readFileSync(join(RECIPES, "../..", name), "utf8");
+  assert.equal(runtime.context["maven-licenses.json"], "[]");
+  assert.equal(runtime.context["tools/third_party_notices.py"], shipped("scripts/third_party_notices.py"));
+  assert.equal(Object.keys(runtime.context).some((p) => p.startsWith("lib/") && p !== "lib/dep.jar"), false);
   const app = docker.build("app");
   assert.equal(app.context["payload/conf-defaults/prompt.md"], "public English\n");
   assert.equal(app.context["payload/conf-defaults/static/login.html"], "oss page\n");
   assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
   assert.equal(Object.keys(app.context).some((p) => /\.en\.[^./]+$/.test(p)), false);
   assert.equal("payload/license-mode" in app.context, false);
+  for (const name of ["LICENSE", "NOTICE"]) {
+    assert.equal(runtime.context[name], shipped(name));
+    assert.equal(app.context[`payload/licenses/${name}`], shipped(name));
+  }
   const head = git(fx.pub, "rev-parse", "HEAD");
   const tag = app.args[app.args.indexOf("-t") + 1];
   assert.match(tag, new RegExp(`^datarag-opensource-app:${VERSION}-\\d{8}-\\d{6}-g${head.slice(0, 12)}-arm64$`));
