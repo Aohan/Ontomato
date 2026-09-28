@@ -55,7 +55,10 @@ function connection(type: string): DataAdapterConnection {
           <el-row v-if="selected.fields.includes('url')" :gutter="24">
             <el-col :span="adapterDisplay.urlSpan">
               <el-form-item :label="t('admin.connectionUrl')">
-                <el-input v-model="connection(selected.type).url" />
+                <el-input
+                  v-model="connection(selected.type).url"
+                  :placeholder="selected.examples.url"
+                />
               </el-form-item>
             </el-col>
           </el-row>
@@ -65,7 +68,10 @@ function connection(type: string): DataAdapterConnection {
           >
             <el-col v-if="selected.fields.includes('user')" :span="adapterDisplay.credentialSpan">
               <el-form-item :label="t('common.username')">
-                <el-input v-model="connection(selected.type).user" />
+                <el-input
+                  v-model="connection(selected.type).user"
+                  :placeholder="selected.examples.user"
+                />
               </el-form-item>
             </el-col>
             <el-col

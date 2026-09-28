@@ -61,6 +61,8 @@ export interface DataAdapterInfo {
   label: string;
   sql: boolean;
   fields: DataAdapterField[];
+  /** 输入框示例（只含有示例的字段），由适配器模块声明。 */
+  examples: Partial<Record<DataAdapterField, string>>;
 }
 
 export interface BusinessConfig {

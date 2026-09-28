@@ -31,6 +31,11 @@ public class SqlServerAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
+	public Map<String, String> connectionExamples() {
+		return Map.of("url", "jdbc:sqlserver://host:port;database=db", "user", "sa");
+	}
+
+	@Override
 	public DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule) {
 		return new SqlServerAdapter(connection, jsonRule);
 	}

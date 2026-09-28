@@ -31,6 +31,11 @@ public class GaussDBAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
+	public Map<String, String> connectionExamples() {
+		return Map.of("url", "jdbc:postgresql://host:port/db", "user", "gaussdb");
+	}
+
+	@Override
 	public DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule) {
 		return new GaussDBAdapter(connection, jsonRule);
 	}

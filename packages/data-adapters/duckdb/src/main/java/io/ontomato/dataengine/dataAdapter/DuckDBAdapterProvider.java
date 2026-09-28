@@ -31,6 +31,11 @@ public class DuckDBAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
+	public Map<String, String> connectionExamples() {
+		return Map.of("url", "jdbc:duckdb:/data/example.duckdb");
+	}
+
+	@Override
 	public DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule) {
 		return new DuckDBAdapter(connection, jsonRule);
 	}

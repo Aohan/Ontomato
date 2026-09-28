@@ -31,6 +31,11 @@ public class Db2AdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
+	public Map<String, String> connectionExamples() {
+		return Map.of("url", "jdbc:db2://host:port/db", "user", "db2inst1");
+	}
+
+	@Override
 	public DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule) {
 		return new Db2Adapter(connection, jsonRule);
 	}

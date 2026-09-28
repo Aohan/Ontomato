@@ -23,6 +23,9 @@ public interface DataAdapterProvider {
 	/** Connection fields the adapter reads, each one of "url", "user", "password". */
 	List<String> connectionFields();
 
+	/** Input hints shown for connection fields, field name to example value; fields without a hint are absent. */
+	Map<String, String> connectionExamples();
+
 	/** jsonRule may be null for operations that do not translate DSL. */
 	DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule);
 }

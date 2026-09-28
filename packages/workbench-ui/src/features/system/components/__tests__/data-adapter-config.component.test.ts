@@ -10,18 +10,72 @@ import { businessConfig } from "../../../../../../../apps/workbench/web/src/busi
 
 /** 两版后端 GET /businessConfig/dataAdapters 的返回：开源只装 postgresql，企业装 9 个（按 label 排序）。 */
 const openSourceAdapters: DataAdapterInfo[] = [
-  { type: "postgresql", label: "PostgreSQL", sql: true, fields: ["url", "user", "password"] },
+  {
+    type: "postgresql",
+    label: "PostgreSQL",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
+  },
 ];
 const enterpriseAdapters: DataAdapterInfo[] = [
-  { type: "db2", label: "DB2", sql: true, fields: ["url", "user", "password"] },
-  { type: "dm", label: "DM", sql: true, fields: ["url", "user", "password"] },
-  { type: "duckdb", label: "DuckDB", sql: true, fields: ["url"] },
-  { type: "gaussdb", label: "GaussDB", sql: true, fields: ["url", "user", "password"] },
-  { type: "m3", label: "M3", sql: false, fields: [] },
-  { type: "mysql", label: "MySQL", sql: true, fields: ["url", "user", "password"] },
-  { type: "oracle", label: "Oracle", sql: true, fields: ["url", "user", "password"] },
-  { type: "postgresql", label: "PostgreSQL", sql: true, fields: ["url", "user", "password"] },
-  { type: "sqlserver", label: "SQL Server", sql: true, fields: ["url", "user", "password"] },
+  {
+    type: "db2",
+    label: "DB2",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:db2://host:port/db", user: "db2inst1" },
+  },
+  {
+    type: "dm",
+    label: "DM",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:dm://host:port/db", user: "SYSDBA" },
+  },
+  {
+    type: "duckdb",
+    label: "DuckDB",
+    sql: true,
+    fields: ["url"],
+    examples: { url: "jdbc:duckdb:/data/example.duckdb" },
+  },
+  {
+    type: "gaussdb",
+    label: "GaussDB",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:postgresql://host:port/db", user: "gaussdb" },
+  },
+  { type: "m3", label: "M3", sql: false, fields: [], examples: {} },
+  {
+    type: "mysql",
+    label: "MySQL",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:mysql://host:port/db?useSSL=false", user: "root" },
+  },
+  {
+    type: "oracle",
+    label: "Oracle",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:oracle:thin:@//host:port/service", user: "system" },
+  },
+  {
+    type: "postgresql",
+    label: "PostgreSQL",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
+  },
+  {
+    type: "sqlserver",
+    label: "SQL Server",
+    sql: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "jdbc:sqlserver://host:port;database=db", user: "sa" },
+  },
 ];
 
 const backend = vi.hoisted(() => ({
@@ -85,6 +139,9 @@ const radioLabels = (card: Card) => card.findAll(".el-radio").map((radio) => rad
 const formLabels = (card: Card) =>
   card.findAll(".el-form-item__label").map((label) => label.text());
 
+const placeholders = (card: Card) =>
+  card.findAll("input.el-input__inner").map((input) => input.attributes("placeholder"));
+
 describe("数据适配器卡片按后端列表渲染", () => {
   it("开源版列表只有 postgresql：只显示这一项，选中当前类型并回填已保存连接", async () => {
     const card = await mountCard(openSourceAdapters, "postgresql", {
@@ -117,7 +174,7 @@ describe("数据适配器卡片按后端列表渲染", () => {
     expect(vi.mocked(adminApi.useDataAdapter)).toHaveBeenCalledTimes(1);
   });
 
-  it("DuckDB 只有 url：表单只显示连接地址，保存只提交该类型的字段", async () => {
+  it("DuckDB 只有 url：表单只显示连接地址并以模块示例作占位，保存只提交该类型的字段", async () => {
     const card = await mountCard(enterpriseAdapters, "m3", {
       mysql: { url: "jdbc:mysql://other", user: "root", password: "x" },
     });
@@ -129,6 +186,7 @@ describe("数据适配器卡片按后端列表渲染", () => {
     await flushPromises();
 
     expect(formLabels(card)).toEqual([t("admin.adapterMode"), t("admin.connectionUrl")]);
+    expect(placeholders(card)).toEqual(["jdbc:duckdb:/data/example.duckdb"]);
     await card.find("input.el-input__inner").setValue("jdbc:duckdb:/data/a.duckdb");
     await card.find("button.el-button--primary").trigger("click");
     await flushPromises();
@@ -136,7 +194,7 @@ describe("数据适配器卡片按后端列表渲染", () => {
     expect(backend.used).toEqual([{ type: "duckdb", url: "jdbc:duckdb:/data/a.duckdb" }]);
   });
 
-  it("切换到带三项字段的类型：保存该类型的 url、user、password", async () => {
+  it("切换到带三项字段的类型：url、user 以模块示例作占位，保存该类型的 url、user、password", async () => {
     const card = await mountCard(enterpriseAdapters, "m3", {
       mysql: { url: "jdbc:mysql://db/app", user: "root", password: "pw" },
     });
@@ -152,6 +210,11 @@ describe("数据适配器卡片按后端列表渲染", () => {
       t("admin.connectionUrl"),
       t("common.username"),
       t("common.password"),
+    ]);
+    expect(placeholders(card)).toEqual([
+      "jdbc:mysql://host:port/db?useSSL=false",
+      "root",
+      "******",
     ]);
     await card.find("button.el-button--primary").trigger("click");
     await flushPromises();

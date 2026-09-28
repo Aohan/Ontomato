@@ -31,6 +31,11 @@ public class OracleAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
+	public Map<String, String> connectionExamples() {
+		return Map.of("url", "jdbc:oracle:thin:@//host:port/service", "user", "system");
+	}
+
+	@Override
 	public DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule) {
 		return new OracleAdapter(connection, jsonRule);
 	}

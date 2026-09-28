@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,8 +51,9 @@ class BusinessConfigControllerDataAdapterTest {
 		businessConfig.setDataAdapter("postgresql");
 		when(businessConfigService.get("d1")).thenReturn(businessConfig);
 		DataAdapterRegistry registry = new DataAdapterRegistry(List.of(
-				new FakeDataAdapterProvider("postgresql", "PostgreSQL", List.of("url", "user", "password")),
-				new FakeDataAdapterProvider("duckdb", "DuckDB", List.of("url")),
+				new FakeDataAdapterProvider("postgresql", "PostgreSQL", List.of("url", "user", "password"),
+						Map.of("url", "jdbc:postgresql://host:port/db", "user", "postgres")),
+				new FakeDataAdapterProvider("duckdb", "DuckDB", List.of("url"), Map.of("url", "jdbc:duckdb:/data/example.duckdb")),
 				new FakeDataAdapterProvider("m3", "M3", List.of())), new DataRagConfig());
 		ReflectionTestUtils.setField(controller, "businessConfigService", businessConfigService);
 		ReflectionTestUtils.setField(controller, "dataAdapterRegistry", registry);
@@ -63,9 +65,11 @@ class BusinessConfigControllerDataAdapterTest {
 
 		assertTrue(ret.getBooleanValue("success"));
 		assertEquals(JSON.parseArray("["
-				+ "{\"type\":\"duckdb\",\"label\":\"DuckDB\",\"sql\":true,\"fields\":[\"url\"]},"
-				+ "{\"type\":\"m3\",\"label\":\"M3\",\"sql\":false,\"fields\":[]},"
-				+ "{\"type\":\"postgresql\",\"label\":\"PostgreSQL\",\"sql\":true,\"fields\":[\"url\",\"user\",\"password\"]}]"),
+				+ "{\"type\":\"duckdb\",\"label\":\"DuckDB\",\"sql\":true,\"fields\":[\"url\"],"
+				+ "\"examples\":{\"url\":\"jdbc:duckdb:/data/example.duckdb\"}},"
+				+ "{\"type\":\"m3\",\"label\":\"M3\",\"sql\":false,\"fields\":[],\"examples\":{}},"
+				+ "{\"type\":\"postgresql\",\"label\":\"PostgreSQL\",\"sql\":true,\"fields\":[\"url\",\"user\",\"password\"],"
+				+ "\"examples\":{\"url\":\"jdbc:postgresql://host:port/db\",\"user\":\"postgres\"}}]"),
 				JSON.parseArray(JSON.toJSONString(ret.get("data"))));
 	}
 

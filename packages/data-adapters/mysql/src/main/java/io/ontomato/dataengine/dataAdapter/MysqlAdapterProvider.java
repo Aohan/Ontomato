@@ -31,6 +31,11 @@ public class MysqlAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
+	public Map<String, String> connectionExamples() {
+		return Map.of("url", "jdbc:mysql://host:port/db?useSSL=false", "user", "root");
+	}
+
+	@Override
 	public DataAdapter create(DataAdapterConnection connection, DataRagConfig dataRagConfig, Map<String, Object> jsonRule) {
 		return new MysqlAdapter(connection, jsonRule);
 	}

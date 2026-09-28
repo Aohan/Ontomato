@@ -143,7 +143,13 @@ vi.mock("../../../admin", () => ({
     listDataAdapters: vi.fn(async () => ({
       success: true,
       data: [
-        { type: "postgresql", label: "PostgreSQL", sql: true, fields: ["url", "user", "password"] },
+        {
+          type: "postgresql",
+          label: "PostgreSQL",
+          sql: true,
+          fields: ["url", "user", "password"],
+          examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
+        },
       ],
     })),
     getSystemModelConfig: vi.fn(async () => ({

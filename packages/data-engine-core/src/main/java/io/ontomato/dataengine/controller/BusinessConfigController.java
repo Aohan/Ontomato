@@ -388,6 +388,7 @@ public class BusinessConfigController {
     		item.put("label", provider.label());
     		item.put("sql", provider.sql());
     		item.put("fields", provider.connectionFields());
+    		item.put("examples", provider.connectionExamples());
     		data.add(item);
     	}
     	JSONObject ret = new JSONObject();
