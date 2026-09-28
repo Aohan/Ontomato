@@ -105,11 +105,6 @@
                 <version>12.8.1.jre11</version>
             </dependency>
             <dependency>
-                <groupId>com.ibm.db2</groupId>
-                <artifactId>jcc</artifactId>
-                <version>11.5.9.0</version>
-            </dependency>
-            <dependency>
                 <groupId>org.opengauss</groupId>
                 <artifactId>opengauss-jdbc</artifactId>
                 <version>5.1.0-og</version>
