@@ -30,7 +30,7 @@ services:
     image: datarag-opensource:${COMPOSE_PROJECT_NAME:-ontomato}-unified-${ARCH:?ARCH not set}
     pull_policy: build
     build:
-      context: ../docker/data-engine
+      context: ./assemble/data-engine
       dockerfile: Dockerfile.assemble
       pull: false
       network: none
@@ -71,7 +71,7 @@ services:
     image: ontomato:${COMPOSE_PROJECT_NAME:-ontomato}-unified-${ARCH:?ARCH not set}
     pull_policy: build
     build:
-      context: ../docker/workbench
+      context: ./assemble/workbench
       dockerfile: Dockerfile.assemble
       pull: false
       network: none
