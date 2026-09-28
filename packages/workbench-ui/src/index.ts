@@ -33,8 +33,6 @@ export type {
 } from "./features/admin/components/intelligence-engine/knowledge-manager";
 export type {
   BusinessConfigAdapterDisplay,
-  BusinessConfigAdapterMode,
-  BusinessConfigExtraAdapter,
   BusinessConfigLanguageLabels,
   BusinessConfigProps,
 } from "./features/system/business-config";

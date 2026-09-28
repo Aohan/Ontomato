@@ -28,6 +28,7 @@ import {
   type BackendAgentConfig,
   type BackendModelConfig,
   type BusinessConfig,
+  type DataAdapterInfo,
   type GeneralConfigKey,
 } from "../types";
 import type { BusinessConfigProps } from "../business-config";
@@ -69,27 +70,6 @@ const backendListRef = ref<{ markSaved: () => void } | null>(null);
 const systemCardRef = ref<{ markSaved: () => void } | null>(null);
 const querySettingsRef = ref<{ markSaved: () => void } | null>(null);
 
-const dataAdapterAliases: Record<string, string> = {
-  postgre: "postgre",
-  postgres: "postgre",
-  postgresql: "postgre",
-  pgsql: "postgre",
-  sqlserver: "sqlserver",
-  sql_server: "sqlserver",
-  "sql-server": "sqlserver",
-  gaussdb: "gaussdb",
-  gauss: "gaussdb",
-  gauss_db: "gaussdb",
-  gaussdbdataadapter: "gaussdb",
-};
-
-function normalizeDataAdapterMode(value: unknown) {
-  const mode = String(value || "")
-    .trim()
-    .toLowerCase();
-  return dataAdapterAliases[mode] || mode || props.defaultDataAdapter;
-}
-
 let config = reactive<BusinessConfig>({
   models: [],
   agents: {
@@ -107,15 +87,11 @@ let config = reactive<BusinessConfig>({
   questionSpliterTries: 1,
   questionSpliterTimeout: 300000,
   lang: props.defaultLanguage,
-  dataAdapter: props.defaultDataAdapter,
-  mysqlDataAdapterProperties: null,
-  pgsqlDataAdapterProperties: null,
-  oracleDataAdapterProperties: null,
-  sqlServerDataAdapterProperties: null,
-  db2DataAdapterProperties: null,
-  gaussDBDataAdapterProperties: null,
-  duckDBDataAdapterProperties: null,
+  dataAdapter: "",
+  dataAdapterConnections: {},
 });
+// 本版本后端已安装的数据适配器，随业务配置一起加载。
+const dataAdapters = ref<DataAdapterInfo[]>([]);
 
 // 已保存模型：角色选项只认它，草稿里新增但未保存的模型不进入角色引用。
 const savedModels = ref<Pick<BackendModelConfig, "name" | "displayName">[]>([]);
@@ -134,8 +110,12 @@ async function loadConfig() {
   backendLoadError.value = "";
   modelRefreshError.value = "";
   try {
-    const res = await adminApi.getBusinessConfig();
+    const [res, adaptersRes] = await Promise.all([
+      adminApi.getBusinessConfig(),
+      adminApi.listDataAdapters(),
+    ]);
     if (res?.success) {
+      dataAdapters.value = adaptersRes.data;
       const data = res.data as BusinessConfig;
       config.models = data.models ?? [];
       markModelsSaved();
@@ -154,14 +134,8 @@ async function loadConfig() {
       config.questionSpliterTries = data.questionSpliterTries ?? 1;
       config.questionSpliterTimeout = data.questionSpliterTimeout ?? 300000;
       config.lang = data.lang || props.defaultLanguage;
-      config.dataAdapter = normalizeDataAdapterMode(data.dataAdapter);
-      config.mysqlDataAdapterProperties = data.mysqlDataAdapterProperties || null;
-      config.pgsqlDataAdapterProperties = data.pgsqlDataAdapterProperties || null;
-      config.oracleDataAdapterProperties = data.oracleDataAdapterProperties || null;
-      config.sqlServerDataAdapterProperties = data.sqlServerDataAdapterProperties || null;
-      config.db2DataAdapterProperties = data.db2DataAdapterProperties || null;
-      config.gaussDBDataAdapterProperties = data.gaussDBDataAdapterProperties || null;
-      config.duckDBDataAdapterProperties = data.duckDBDataAdapterProperties || null;
+      config.dataAdapter = data.dataAdapter;
+      config.dataAdapterConnections = data.dataAdapterConnections;
       dataAdapterMode.value = config.dataAdapter;
     } else {
       backendLoadError.value = res?.message || t("admin.loadConfigFailed");
@@ -369,92 +343,20 @@ async function saveGeneralField(key: GeneralConfigKey) {
   await saveGeneralConfig(key, config[key]);
 }
 
-const dataAdapterMode = ref(props.defaultDataAdapter);
+const dataAdapterMode = ref("");
 const savingAdapter = ref(false);
 
 async function saveDataAdapter() {
   savingAdapter.value = true;
   try {
-    if (props.extraAdapter && dataAdapterMode.value === props.extraAdapter.mode) {
-      await props.extraAdapter.save();
-      ElMessage.success(t(props.extraAdapter.successKey));
-    } else if (dataAdapterMode.value === "postgre") {
-      const pgsql = config.pgsqlDataAdapterProperties || {
-        pgsqlUrl: "",
-        pgsqlUser: "",
-        pgsqlPassword: "",
-      };
-      await adminApi.usePostgreDataAdapter({
-        pgsqlUrl: pgsql.pgsqlUrl,
-        pgsqlUser: pgsql.pgsqlUser,
-        pgsqlPassword: pgsql.pgsqlPassword,
-      });
-      ElMessage.success(t("admin.switchToPostgre"));
-    } else if (dataAdapterMode.value === "mysql") {
-      const mysql = config.mysqlDataAdapterProperties || {
-        mysqlUrl: "",
-        mysqlUser: "",
-        mysqlPassword: "",
-      };
-      await adminApi.useMysqlDataAdapter({
-        mysqlUrl: mysql.mysqlUrl,
-        mysqlUser: mysql.mysqlUser,
-        mysqlPassword: mysql.mysqlPassword,
-      });
-      ElMessage.success(t("admin.switchToMysql"));
-    } else if (dataAdapterMode.value === "oracle") {
-      const oracle = config.oracleDataAdapterProperties || {
-        oracleUrl: "",
-        oracleUser: "",
-        oraclePassword: "",
-      };
-      await adminApi.useOracleDataAdapter({
-        oracleUrl: oracle.oracleUrl,
-        oracleUser: oracle.oracleUser,
-        oraclePassword: oracle.oraclePassword,
-      });
-      ElMessage.success(t("admin.switchToOracle"));
-    } else if (dataAdapterMode.value === "sqlserver") {
-      const sqlServer = config.sqlServerDataAdapterProperties || {
-        sqlServerUrl: "",
-        sqlServerUser: "",
-        sqlServerPassword: "",
-      };
-      await adminApi.useSqlServerDataAdapter({
-        sqlServerUrl: sqlServer.sqlServerUrl,
-        sqlServerUser: sqlServer.sqlServerUser,
-        sqlServerPassword: sqlServer.sqlServerPassword,
-      });
-      ElMessage.success(t("admin.switchToSqlServer"));
-    } else if (dataAdapterMode.value === "db2") {
-      const db2 = config.db2DataAdapterProperties || {
-        db2Url: "",
-        db2User: "",
-        db2Password: "",
-      };
-      await adminApi.useDb2DataAdapter({
-        db2Url: db2.db2Url,
-        db2User: db2.db2User,
-        db2Password: db2.db2Password,
-      });
-      ElMessage.success(t("admin.switchToDB2"));
-    } else if (dataAdapterMode.value === "gaussdb") {
-      const gaussDB = config.gaussDBDataAdapterProperties || {
-        gaussDBUrl: "",
-        gaussDBUser: "",
-        gaussDBPassword: "",
-      };
-      await adminApi.useGaussDbDataAdapter({
-        gaussDBUrl: gaussDB.gaussDBUrl,
-        gaussDBUser: gaussDB.gaussDBUser,
-        gaussDBPassword: gaussDB.gaussDBPassword,
-      });
-      ElMessage.success(t("admin.switchToGaussDB"));
-    } else if (dataAdapterMode.value === "duckdb") {
-      const duckDB = config.duckDBDataAdapterProperties || { duckdbUrl: "" };
-      await adminApi.useDuckDBDataAdapter({ duckdbUrl: duckDB.duckdbUrl });
-      ElMessage.success(t("admin.switchToDuckDB"));
-    }
+    const adapter = dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
+    // 只提交该类型声明的连接字段；有字段的类型其连接对象由卡片表单建立。
+    const connection = config.dataAdapterConnections[adapter.type];
+    await adminApi.useDataAdapter({
+      type: adapter.type,
+      ...Object.fromEntries(adapter.fields.map((field) => [field, connection[field]])),
+    });
+    ElMessage.success(t("admin.switchedDataAdapter", { name: adapter.label }));
     config.dataAdapter = dataAdapterMode.value;
   } catch (e: any) {
     ElMessage.error(e.message || t("admin.saveFailed"));
@@ -739,8 +641,7 @@ onMounted(() => {
         <DataAdapterConfigCard
           v-model:config="config"
           v-model:mode="dataAdapterMode"
-          :adapter-modes="adapterModes"
-          :extra-adapter="extraAdapter"
+          :adapters="dataAdapters"
           :adapter-display="adapterDisplay"
           :saving="savingAdapter"
           :disabled="loading || !!backendLoadError"

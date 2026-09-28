@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import { ElButton, ElTag, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import { ArrowLeft, Box, Link2, Maximize2, Minus, Pencil, Plus, Trash2 } from "lucide-vue-next";
@@ -26,6 +26,7 @@ const {
   deleteOntologyRelation,
   getBusinessConfig,
   getMetas,
+  listDataAdapters,
   updateOntologyAttribute,
   updateOntologyObject,
 } = useManagerClient();
@@ -144,42 +145,21 @@ let graph: Graph | null = null;
 
 const classList = ref<ClassDef[]>([]);
 const relationList = ref<RelationDef[]>([]);
-const isMysqlAdapter = ref(false);
-const isPostgresAdapter = ref(false);
-
-const showJoinFields = computed(() => isMysqlAdapter.value || isPostgresAdapter.value);
+// 当前数据适配器是 SQL 类（后端适配器列表的 sql 标记）时，关系可填关联字段。
+const showJoinFields = ref(false);
 
 const selectedNode = ref<ClassDef | null>(null);
 const selectedEdge = ref<RelationDef | null>(null);
 
-const SQL_ADAPTERS = [
-  "mysql",
-  "postgre",
-  "postgres",
-  "postgresql",
-  "pgsql",
-  "oracle",
-  "sqlserver",
-  "sql_server",
-  "sql-server",
-  "db2",
-  "gaussdb",
-  "gauss",
-  "gauss_db",
-];
-
 async function loadAdapterConfig() {
   try {
-    const res = await getBusinessConfig();
-    if (res?.data?.dataAdapter) {
-      const adapter = String(res.data.dataAdapter || "").toLowerCase();
-      const isSql = SQL_ADAPTERS.includes(adapter);
-      isMysqlAdapter.value = isSql;
-      isPostgresAdapter.value = isSql;
-    }
+    const [config, adapters] = await Promise.all([getBusinessConfig(), listDataAdapters()]);
+    const current: string = config.data.dataAdapter;
+    showJoinFields.value = (adapters.data as { type: string; sql: boolean }[]).some(
+      ({ type, sql }) => type === current && sql
+    );
   } catch {
-    isMysqlAdapter.value = false;
-    isPostgresAdapter.value = false;
+    showJoinFields.value = false;
   }
 }
 const loading = ref(false);

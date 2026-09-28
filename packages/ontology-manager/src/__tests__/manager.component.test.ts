@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, h, nextTick, reactive, type App } from "vue";
 import OntologyManager from "../OntologyManager.vue";
 import type { ManagerHostContext, ManagerPresentation } from "../context";
-import { graphRecord } from "./graph-double";
+import { graphHandlers, graphRecord } from "./graph-double";
 
 // 只替身图谱库内部；根组件、页面、请求客户端与 fetch 调用都是真实代码。
 vi.mock("@antv/g6", async () => ({ Graph: (await import("./graph-double")).GraphDouble }));
@@ -27,6 +27,8 @@ let holdPaths: Set<string>;
 let statusFor: (path: string) => number;
 let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
+let dataAdapter: string;
+let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -51,8 +53,8 @@ function respond(url: string): Response {
   if (path === "/admin/getMetas") return json(metasFor(url));
   if (path === "/data/getWholeClassDataByPage")
     return json({ success: true, data: [{ id: "row-1" }], total_count: 1 });
-  if (path === "/businessConfig/getConfig")
-    return json({ success: true, data: { dataAdapter: "mysql" } });
+  if (path === "/businessConfig/getConfig") return json({ success: true, data: { dataAdapter } });
+  if (path === "/businessConfig/dataAdapters") return json({ success: true, data: dataAdapters });
   if (path === "/function/queryList") return json({ success: true, data: functions });
   if (path.endsWith("/queryList")) return json({ success: true, data: [] });
   return json({ success: true, data: {} });
@@ -70,6 +72,11 @@ beforeEach(() => {
   statusFor = () => 200;
   metasFor = () => metas(["Order", "Item"]);
   functions = [];
+  dataAdapter = "mysql";
+  dataAdapters = [
+    { type: "m3", label: "M3", sql: false, fields: [] },
+    { type: "mysql", label: "MySQL", sql: true, fields: ["url", "user", "password"] },
+  ];
   vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
     const path = url.replace(/^.*\/data-query/, "");
     requests.push({
@@ -338,6 +345,20 @@ describe("OntologyManager 根组件与真实页面", () => {
     clickButton("Back to graph");
     await settle();
     expect(views.at(-1)).toBe("/playground");
+  });
+
+  it.each([
+    ["mysql", true],
+    ["m3", false],
+  ])("可视化建模：当前适配器 %s 按后端列表的 sql 标记决定关系是否填关联字段", async (current, sql) => {
+    dataAdapter = current;
+    mountHost({ ...base, view: "/visual-modeling?focus=object&id=Order&back=playground" });
+    await settle();
+    expect(paths()).toContain("/businessConfig/dataAdapters");
+
+    graphHandlers["edge:dblclick"]!({ edge: { id: "has" } });
+    await settle();
+    expect(openDialog("Rel Desc").textContent?.includes("Src Field")).toBe(sql);
   });
 
   it("仅 locale/theme 变化时打开的编辑对话框与输入保留，不重新加载", async () => {

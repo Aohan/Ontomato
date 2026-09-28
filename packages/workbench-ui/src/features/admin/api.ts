@@ -1,5 +1,5 @@
 import { apiGet, apiPost, nodeApiFetch, nodeApiGet, nodeApiPost } from "../../utils/api";
-import type { AgentKey, GeneralConfigKey } from "../system";
+import type { AgentKey, DataAdapterConnection, GeneralConfigKey } from "../system";
 
 const generalConfigSaveEndpoints: Record<GeneralConfigKey, string> = {
   knowledgeMaxResult: "/businessConfig/saveKnowledgeMaxResult",
@@ -22,19 +22,9 @@ export const adminApi = {
   saveEmbeddingModel: (payload: unknown) => apiPost("/businessConfig/saveEmbeddingModel", payload),
   saveGeneralConfig: (key: GeneralConfigKey, value: unknown) =>
     apiPost(generalConfigSaveEndpoints[key], { [key]: value }),
-  usePostgreDataAdapter: (payload: unknown) =>
-    apiPost("/businessConfig/usePostgreDataAdapter", payload),
-  useMysqlDataAdapter: (payload: unknown) =>
-    apiPost("/businessConfig/useMysqlDataAdapter", payload),
-  useOracleDataAdapter: (payload: unknown) =>
-    apiPost("/businessConfig/useOracleDataAdapter", payload),
-  useSqlServerDataAdapter: (payload: unknown) =>
-    apiPost("/businessConfig/useSqlServerDataAdapter", payload),
-  useDb2DataAdapter: (payload: unknown) => apiPost("/businessConfig/useDb2DataAdapter", payload),
-  useGaussDbDataAdapter: (payload: unknown) =>
-    apiPost("/businessConfig/useGaussDBDataAdapter", payload),
-  useDuckDBDataAdapter: (payload: unknown) =>
-    apiPost("/businessConfig/useDuckDBDataAdapter", payload),
+  listDataAdapters: () => apiGet("/businessConfig/dataAdapters"),
+  useDataAdapter: (payload: { type: string } & DataAdapterConnection) =>
+    apiPost("/businessConfig/useDataAdapter", payload),
   testEmbeddingModel: (payload: unknown) => apiPost("/businessConfig/testEmbeddingModel", payload),
   getSystemModelConfig: () => nodeApiGet("/system-model-config"),
   saveSystemModelConfig: (payload: unknown) => nodeApiPost("/system-model-config/save", payload),
