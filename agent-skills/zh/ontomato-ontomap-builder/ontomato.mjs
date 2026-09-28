@@ -5,16 +5,6 @@ import { fileURLToPath } from "node:url";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 
-const ADAPTERS = {
-  mysql: "/businessConfig/useMysqlDataAdapter",
-  postgresql: "/businessConfig/usePostgreDataAdapter",
-  oracle: "/businessConfig/useOracleDataAdapter",
-  sqlserver: "/businessConfig/useSqlServerDataAdapter",
-  db2: "/businessConfig/useDb2DataAdapter",
-  gaussdb: "/businessConfig/useGaussDBDataAdapter",
-  duckdb: "/businessConfig/useDuckDBDataAdapter",
-};
-
 function die(message) {
   console.error(message);
   process.exit(1);
@@ -137,7 +127,8 @@ async function ask(cfg, argv) {
 
 function usage() {
   die(`usage:
-  ontomato.mjs use-datasource <mysql|postgresql|oracle|sqlserver|db2|gaussdb|duckdb> <json|@file>
+  ontomato.mjs list-datasources
+  ontomato.mjs use-datasource <type> <json|@file>
   ontomato.mjs get-ontomap
   ontomato.mjs set-ontomap <json|@file>
   ontomato.mjs ask [--lang <tag>] <question>`);
@@ -148,11 +139,17 @@ async function main() {
   const cmd = argv[0];
   const cfg = loadConfig();
   if (!cfg.envUrl) die("envUrl is required in application.yml");
+  if (cmd === "list-datasources") {
+    const json = await requestJson(cfg, "GET", "/businessConfig/dataAdapters");
+    console.log(JSON.stringify(json.data, null, 2));
+    return;
+  }
   if (cmd === "use-datasource") {
-    const backendPath = ADAPTERS[argv[1]];
-    if (!backendPath) die("type must be mysql, postgresql, oracle, sqlserver, db2, gaussdb, or duckdb");
+    if (argv[1] == null) die("use-datasource requires a datasource type");
     if (argv[2] == null) die("use-datasource requires a JSON payload");
-    await requestJson(cfg, "POST", backendPath, JSON.parse(readInput(argv[2])));
+    const payload = JSON.parse(readInput(argv[2]));
+    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) die("use-datasource payload must be a JSON object");
+    await requestJson(cfg, "POST", "/businessConfig/useDataAdapter", { ...payload, type: argv[1] });
     console.log("datasource set");
     return;
   }

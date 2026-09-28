@@ -1,6 +1,6 @@
 ---
 name: ontomato-ontomap-builder
-description: 为一个数据源建立 ontomap（语义层定义），导入 Ontomato，并用自然语言查询数据。在接入 MySQL、PostgreSQL、Oracle、SQL Server、DB2、GaussDB 或 DuckDB、编写或替换 ontomap、或用自然语言提问时使用。
+description: 为一个数据源建立 ontomap（语义层定义），导入 Ontomato，并用自然语言查询数据。在接入本部署支持的数据库、编写或替换 ontomap、或用自然语言提问时使用。
 ---
 
 # ontomap（语义层定义）
@@ -27,18 +27,20 @@ envUrl: http://host:3000
 ## 工作流
 
 1. 填写 `application.yml`。
-2. `node ontomato.mjs use-datasource <type> @payload.json`
-3. 用你自己的数据库工具查看业务库的表和数据。本技能不查询该库。
-4. 按该结构编写 ontomap。
-5. `node ontomato.mjs set-ontomap @ontomap.json`
-6. `node ontomato.mjs get-ontomap`，与所写文件核对。
-7. 用几个能覆盖主要表和关系的简单问题执行 `node ontomato.mjs ask "..."`。答不出或答错时，回头补 `desc` 和关系，再重新 set。
+2. `node ontomato.mjs list-datasources`，看本部署支持哪些数据库类型、每种要哪些连接字段。
+3. `node ontomato.mjs use-datasource <type> @payload.json`
+4. 用你自己的数据库工具查看业务库的表和数据。本技能不查询该库。
+5. 按该结构编写 ontomap。
+6. `node ontomato.mjs set-ontomap @ontomap.json`
+7. `node ontomato.mjs get-ontomap`，与所写文件核对。
+8. 用几个能覆盖主要表和关系的简单问题执行 `node ontomato.mjs ask "..."`。答不出或答错时，回头补 `desc` 和关系，再重新 set。
 
 ## 命令
 
 在本目录执行 `node ontomato.mjs <command>`，或传入脚本路径。JSON 可以是参数，也可以是 `@文件`。
 
 ```
+node ontomato.mjs list-datasources
 node ontomato.mjs use-datasource <type> '<json>'
 node ontomato.mjs use-datasource <type> @payload.json
 node ontomato.mjs get-ontomap
@@ -48,97 +50,32 @@ node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang zh "共有多少人？"
 ```
 
-`type` 为 `mysql`、`postgresql`、`oracle`、`sqlserver`、`db2`、`gaussdb` 或 `duckdb`。
+`type` 取 `list-datasources` 列出的类型之一。
 
 `ask` 会发送 `Accept-Language`。默认是 `en`。要中文回答时传入 `--lang zh`。
 
 响应体为 `{success, message, data}` 且 `success: false` 时，脚本打印 `message` 并以非零状态退出。HTTP 非 2xx 时打印状态码和响应体，并以非零状态退出。
 
-## 数据源请求体
+## 连接数据源
 
-JDBC URL 不要带 `serverTimezone=Asia/Shanghai` 这类地区化参数。下面的密码都是占位符。
+1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`。打印本部署实际安装的数据适配器。每项有 `type`、`label`、`sql`、`fields`（该类型需要的连接字段）和 `examples`（每个字段的示例值）。
+2. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`。脚本把 `type` 合并进 JSON 后提交。按该类型 `fields` 列出的字段提交，一般是 `url`、`user`、`password`。
 
-### mysql
+实际可用的类型取决于部署安装了哪些适配器，以 `list-datasources` 为准。
 
-`POST /api/data-query/businessConfig/useMysqlDataAdapter`
+## 各数据库连接要点
 
-```json
-{
-  "mysqlUrl": "jdbc:mysql://db.example:3306/my_database?useUnicode=true&characterEncoding=utf8&useSSL=false",
-  "mysqlUser": "app",
-  "mysqlPassword": "change-me"
-}
-```
+JDBC URL 不要带 `serverTimezone=Asia/Shanghai` 这类地区化参数。
 
-### postgresql
-
-`POST /api/data-query/businessConfig/usePostgreDataAdapter`
-
-```json
-{
-  "pgsqlUrl": "jdbc:postgresql://db.example:5432/my_database?currentSchema=public",
-  "pgsqlUser": "app",
-  "pgsqlPassword": "change-me"
-}
-```
-
-### oracle
-
-`POST /api/data-query/businessConfig/useOracleDataAdapter`
-
-```json
-{
-  "oracleUrl": "jdbc:oracle:thin:@db.example:1521:orcl",
-  "oracleUser": "app",
-  "oraclePassword": "change-me"
-}
-```
-
-### sqlserver
-
-`POST /api/data-query/businessConfig/useSqlServerDataAdapter`
-
-```json
-{
-  "sqlServerUrl": "jdbc:sqlserver://db.example:1433;databaseName=my_database",
-  "sqlServerUser": "app",
-  "sqlServerPassword": "change-me"
-}
-```
-
-### db2
-
-`POST /api/data-query/businessConfig/useDb2DataAdapter`
-
-```json
-{
-  "db2Url": "jdbc:db2://db.example:50000/my_database",
-  "db2User": "app",
-  "db2Password": "change-me"
-}
-```
-
-### gaussdb
-
-`POST /api/data-query/businessConfig/useGaussDBDataAdapter`
-
-```json
-{
-  "gaussDBUrl": "jdbc:opengauss://db.example:5432/my_database",
-  "gaussDBUser": "app",
-  "gaussDBPassword": "change-me"
-}
-```
-
-### duckdb
-
-`POST /api/data-query/businessConfig/useDuckDBDataAdapter`
-
-```json
-{
-  "duckdbUrl": "jdbc:duckdb:/data/warehouse.duckdb"
-}
-```
+| 类型 | 要点 |
+| --- | --- |
+| mysql | 可带 `useUnicode=true&characterEncoding=utf8&useSSL=false` 这类参数，例如 `jdbc:mysql://db.example:3306/my_database?useUnicode=true&characterEncoding=utf8&useSSL=false`。 |
+| postgresql | 用 `currentSchema` 在 URL 里指定 schema，例如 `jdbc:postgresql://db.example:5432/my_database?currentSchema=public`。 |
+| oracle | thin 写法，例如 `jdbc:oracle:thin:@db.example:1521:orcl`。 |
+| sqlserver | 用 `databaseName` 在 URL 里选库，例如 `jdbc:sqlserver://db.example:1433;databaseName=my_database`。 |
+| db2 | 例如 `jdbc:db2://db.example:50000/my_database`。 |
+| gaussdb | 协议头是 `jdbc:opengauss://`，例如 `jdbc:opengauss://db.example:5432/my_database`。 |
+| duckdb | 地址是后端能访问到的文件路径，例如 `jdbc:duckdb:/data/warehouse.duckdb`；只要 `url`。 |
 
 ## ontomap
 
