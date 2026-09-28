@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.BusinessConfig.MysqlDataAdapterProperties;
 import io.ontomato.dataengine.config.DaoConst;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.config.EmbeddingModelProperties;
@@ -102,12 +101,6 @@ public class BusinessConfigServiceImpl implements BusinessConfigService {
 		drc.setQuestionSpliterTries(businessConfig.getQuestionSpliterTries());
 		drc.setQuestionSpliterTimeout(businessConfig.getQuestionSpliterTimeout());
 		drc.setDataAdapter(businessConfig.getDataAdapter());
-		if (businessConfig.getMysqlDataAdapterProperties() != null) {
-			MysqlDataAdapterProperties mysqlDataAdapterProperties = businessConfig.getMysqlDataAdapterProperties();
-			drc.setMysqlUrl(mysqlDataAdapterProperties.getMysqlUrl());
-			drc.setMysqlUser(mysqlDataAdapterProperties.getMysqlUser());
-			drc.setMysqlPassword(mysqlDataAdapterProperties.getMysqlPassword());
-		}
 		ontomato.put("datarag", drc);
 		ontomato.put("sso", identityRuntimeSettings.ssoSettings());
 		ontomato.put("ldap", identityRuntimeSettings.ldapSettings());
@@ -130,10 +123,7 @@ public class BusinessConfigServiceImpl implements BusinessConfigService {
 				+ "`ontomato.datarag.dslCookerTimeout`, "
 				+ "`ontomato.datarag.questionSpliterTries`, "
 				+ "`ontomato.datarag.questionSpliterTimeout`, "
-				+ "`ontomato.datarag.dataAdapter`, "
-				+ "`ontomato.datarag.mysqlUrl`, "
-				+ "`ontomato.datarag.mysqlUser`, "
-				+ "`ontomato.datarag.mysqlPassword` all take effect promptly after being configured through the page.\n"
+				+ "`ontomato.datarag.dataAdapter` all take effect promptly after being configured through the page.\n"
 				+ "Apart from these configuration items, other configurations take effect only after the on-site conf/application.yml is updated, or an environment variable that the kept file still references is updated, and the application is restarted. "
 				+ "BACKEND_ and POSTGRE_ aliases apply through placeholders that remain in that file; removing a placeholder does not guarantee the alias still overrides the file.";
 	}

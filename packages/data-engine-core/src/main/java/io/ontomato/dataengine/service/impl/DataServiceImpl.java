@@ -25,7 +25,7 @@ import io.ontomato.dataengine.dao.sys.CSysDomain;
 import io.ontomato.dataengine.dao.sys.SysDomain;
 import io.ontomato.dataengine.dao.sys.SysDomainDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
-import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.DataService;
@@ -45,6 +45,9 @@ public class DataServiceImpl implements DataService {
 	
 	@Autowired
     DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -158,7 +161,7 @@ public class DataServiceImpl implements DataService {
 											}
 										}
 										BusinessConfig businessConfig = businessConfigService.get(domainId);
-										DataAdapter adapter = DataAdapterFactory.getAdapter(businessConfig);
+										DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 										if (adapter.useM3()) {
 											JSONObject wholeData = cutWholeData(domainId);
 											log.info("TYPE_CUT writeWholeData start...");
@@ -464,7 +467,7 @@ public class DataServiceImpl implements DataService {
 		Map relationship_rule = (Map)jsonRule.get("relationship_rule");
 		String rootClass = (String)((List)jsonRule.get("classlist")).get(0);
 		
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig, jsonRule);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		
 		Map<String, Map<String, Object>> classDefMap = new HashMap<String, Map<String, Object>>();
 		for (Map<String, Object> classDef : classDefs) {
@@ -714,7 +717,7 @@ public class DataServiceImpl implements DataService {
 	public JSONObject queryNextByNode(JSONObject n, String lang, String domainId) {
 		JSONObject ret = new JSONObject();
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(businessConfig);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 		if (adapter.useM3()) {
 			try {
 				Map<String, JSONObject> nodeMap = new HashMap<String, JSONObject>();
@@ -785,7 +788,7 @@ public class DataServiceImpl implements DataService {
 	public JSONObject queryInfoByNode(JSONObject node, String lang, UserDataPermission permission, String domainId) {
 		JSONObject ret = new JSONObject();
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 		try {
 			Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
 			List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
@@ -848,7 +851,7 @@ public class DataServiceImpl implements DataService {
 			answer.put("steps", steps);
 			dsl.put("answer", answer);
 			dsls.add(dsl);
-			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), UUID.randomUUID().toString(), false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), UUID.randomUUID().toString(), false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 			Map<String, Object> dataMap = results[0].rawResponse();
 			Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			
@@ -1018,7 +1021,7 @@ public class DataServiceImpl implements DataService {
 	            dsl.put("answer", answer);
 	            dsls.add(dsl);
 	            
-	            DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+	            DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 	            Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 	            JSONArray rows = new JSONArray();
 	            if (rowPermissionDataMap.get("data") != null 
@@ -1151,7 +1154,7 @@ public class DataServiceImpl implements DataService {
         dsls.add(dsl);
         
         BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 		Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
         if (rowPermissionDataMap.get("data") != null 
         		&& ((List)rowPermissionDataMap.get("data")).size() > 0 
@@ -1177,7 +1180,7 @@ public class DataServiceImpl implements DataService {
 
 	private JSONObject getClassDataByPage(JSONObject classSearch, String lang, UserDataPermission permission, boolean withBizzKey, String domainId) {
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 		
 		JSONObject ret = new JSONObject();
 		
@@ -1279,7 +1282,7 @@ public class DataServiceImpl implements DataService {
             dsl.put("answer", answer);
             dsls.add(dsl);
             
-			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 			Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
             JSONArray rows = new JSONArray();
             if (rowPermissionDataMap.get("data") != null 
@@ -1380,7 +1383,7 @@ public class DataServiceImpl implements DataService {
 			        dsls.add(dsl);
 			        
 			        BusinessConfig businessConfig = businessConfigService.get(domainId);
-			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 			        Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			        if (rowPermissionDataMap.get("data") != null 
 			        		&& ((List)rowPermissionDataMap.get("data")).size() > 0 

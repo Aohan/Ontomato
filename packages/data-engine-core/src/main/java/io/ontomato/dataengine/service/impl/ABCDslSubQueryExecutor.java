@@ -13,6 +13,7 @@ import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.bean.abcQuestion.ABCSubQueryTask;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.dao.ABCSubQueryTaskDao;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.logging.DiagnosticEventLogger;
@@ -39,6 +40,7 @@ public class ABCDslSubQueryExecutor implements Runnable {
 	private ABCSubQueryTaskDao abcSubQueryTaskDao;
 	private DataRagConfig dataRagConfig;
 	private BusinessConfig businessConfig;
+	private DataAdapterRegistry dataAdapterRegistry;
 	private String lang;
 	private String domainId;
 	
@@ -52,6 +54,7 @@ public class ABCDslSubQueryExecutor implements Runnable {
 			ABCSubQueryTaskDao abcSubQueryTaskDao,
 			DataRagConfig dataRagConfig,
 			BusinessConfig businessConfig,
+			DataAdapterRegistry dataAdapterRegistry,
 			String lang,
 			String domainId) {
 		this.subQueryTask = subQueryTask;
@@ -63,6 +66,7 @@ public class ABCDslSubQueryExecutor implements Runnable {
 		this.abcSubQueryTaskDao = abcSubQueryTaskDao;
 		this.dataRagConfig = dataRagConfig;
 		this.businessConfig = businessConfig;
+		this.dataAdapterRegistry = dataAdapterRegistry;
 		this.lang = lang;
 		this.domainId = domainId;
 	}
@@ -125,7 +129,7 @@ public class ABCDslSubQueryExecutor implements Runnable {
 				m3StartedPayload.put("m3Mode", "V1");
 				DiagnosticEventLogger.emit("m3.query.started", sqSessionId, m3StartedPayload);
 				m3Started = true;
-				DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, evaluation.getDslStr(), sessionId, false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+				DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), evaluation.getDslStr(), sessionId, false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 				m3Time = System.currentTimeMillis() - now;
 				dataMap = results[0].rawResponse();
 				rowPermissionDataMap = results[1].rawResponse();

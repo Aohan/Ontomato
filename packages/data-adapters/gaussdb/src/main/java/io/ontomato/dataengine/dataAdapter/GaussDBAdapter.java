@@ -2,12 +2,12 @@ package io.ontomato.dataengine.dataAdapter;
 
 import java.sql.Connection;
 import java.sql.Date;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,7 +20,6 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
 import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.BusinessConfig.OracleDataAdapterProperties;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
@@ -28,24 +27,24 @@ import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class OracleAdapter implements DataAdapter {
+public class GaussDBAdapter implements DataAdapter {
 
-	private OracleDataAdapterProperties oracleDataAdapterProperties;
+	private DataAdapterConnection connection;
 	private Map<String, Object> jsonRule;
 
-	public OracleAdapter(OracleDataAdapterProperties oracleDataAdapterProperties, Map<String, Object> jsonRule) {
-		this.oracleDataAdapterProperties = oracleDataAdapterProperties;
+	public GaussDBAdapter(DataAdapterConnection connection, Map<String, Object> jsonRule) {
+		this.connection = connection;
 		this.jsonRule = jsonRule;
 	}
 
 	@Override
 	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
-		log.info("[" + sessionId + "] Oracle DSL to query: " + queryJson);
+		log.info("[" + sessionId + "] DSL to query GaussDB: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
-		log.info("[" + sessionId + "] Converted Oracle sql: " + sql);
-		JSONArray data = executeSql(oracleDataAdapterProperties, sql);
+		log.info("[" + sessionId + "] Converted GaussDB sql: " + sql);
+		JSONArray data = executeSql(connection, sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -139,7 +138,7 @@ public class OracleAdapter implements DataAdapter {
 												+ " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										sqlCond = "\"" + alias + "\".\"" + attr + "\" " + cond.getString("operator")
-												+ " TO_DATE('1970-01-01','YYYY-MM-DD') + (" + cond.getLong("value") + " / 86400)";
+												+ " TO_TIMESTAMP(" + cond.getLong("value") + ")";
 									}
 								} else if ("like".equals(cond.getString("operator"))
 										|| "not like".equals(cond.getString("operator"))) {
@@ -160,7 +159,7 @@ public class OracleAdapter implements DataAdapter {
 												+ " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										sqlCond = "\"" + alias + "\".\"" + attr + "\" " + cond.getString("operator")
-												+ " TO_DATE('1970-01-01','YYYY-MM-DD') + (" + cond.getLong("value") + " / 86400)";
+												+ " TO_TIMESTAMP(" + cond.getLong("value") + ")";
 									}
 								} else if ("between".equals(cond.getString("operator"))) {
 									JSONArray value = cond.getJSONArray("value");
@@ -168,9 +167,9 @@ public class OracleAdapter implements DataAdapter {
 										sqlCond = "(\"" + alias + "\".\"" + attr + "\" >= " + value.get(0)
 												+ " and \"" + alias + "\".\"" + attr + "\" <= " + value.get(1) + ")";
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
-										sqlCond = "(\"" + alias + "\".\"" + attr + "\" >= TO_DATE('1970-01-01','YYYY-MM-DD') + ("
-												+ value.getLong(0) + " / 86400) and \"" + alias + "\".\"" + attr
-												+ "\" <= TO_DATE('1970-01-01','YYYY-MM-DD') + (" + value.getLong(1) + " / 86400))";
+										sqlCond = "(\"" + alias + "\".\"" + attr + "\" >= TO_TIMESTAMP("
+												+ value.getLong(0) + ") and \"" + alias + "\".\"" + attr
+												+ "\" <= TO_TIMESTAMP(" + value.getLong(1) + "))";
 									}
 								} else if ("in".equals(cond.getString("operator"))) {
 									JSONArray value = cond.getJSONArray("value");
@@ -191,7 +190,7 @@ public class OracleAdapter implements DataAdapter {
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										String in = "";
 										for (int j = 0; j < value.size(); j++) {
-											in += "TO_DATE('1970-01-01','YYYY-MM-DD') + (" + value.getLong(j) + " / 86400),";
+											in += "TO_TIMESTAMP(" + value.getLong(j) + "),";
 										}
 										in = "(" + in.substring(0, in.length() - 1) + ")";
 										sqlCond = "\"" + alias + "\".\"" + attr + "\" in " + in;
@@ -239,8 +238,8 @@ public class OracleAdapter implements DataAdapter {
 							String fromField = (String) relationDef.get("fromField");
 							String toField = (String) relationDef.get("toField");
 							if (inJoinIdxs.isEmpty()) {
-								innerJoinSqls.add(fromClassAlias[0] + " \"" + fromClassAlias[1] + "\""
-										+ " inner join " + toClassAlias[0] + " \"" + toClassAlias[1] + "\""
+								innerJoinSqls.add(fromClassAlias[0] + " as \"" + fromClassAlias[1] + "\""
+										+ " inner join " + toClassAlias[0] + " as \"" + toClassAlias[1] + "\""
 										+ " on \"" + fromClassAlias[1] + "\".\"" + fromField
 										+ "\" = \"" + toClassAlias[1] + "\".\"" + toField + "\"");
 								inJoinIdxs.add(fromIdx);
@@ -249,7 +248,7 @@ public class OracleAdapter implements DataAdapter {
 								innerJoinClassesList.add(innerJoinClasses);
 								inJoinRelIndexes.add(i);
 							} else if (inJoinIdxs.contains(fromIdx) && !inJoinIdxs.contains(toIdx)) {
-								innerJoinSqls.add("inner join " + toClassAlias[0] + " \"" + toClassAlias[1] + "\""
+								innerJoinSqls.add("inner join " + toClassAlias[0] + " as \"" + toClassAlias[1] + "\""
 										+ " on \"" + fromClassAlias[1] + "\".\"" + fromField
 										+ "\" = \"" + toClassAlias[1] + "\".\"" + toField + "\"");
 								inJoinIdxs.add(toIdx);
@@ -257,7 +256,7 @@ public class OracleAdapter implements DataAdapter {
 								innerJoinClassesList.add(innerJoinClasses);
 								inJoinRelIndexes.add(i);
 							} else if (!inJoinIdxs.contains(fromIdx) && inJoinIdxs.contains(toIdx)) {
-								innerJoinSqls.add("inner join " + fromClassAlias[0] + " \"" + fromClassAlias[1] + "\""
+								innerJoinSqls.add("inner join " + fromClassAlias[0] + " as \"" + fromClassAlias[1] + "\""
 										+ " on \"" + fromClassAlias[1] + "\".\"" + fromField
 										+ "\" = \"" + toClassAlias[1] + "\".\"" + toField + "\"");
 								inJoinIdxs.add(fromIdx);
@@ -290,7 +289,7 @@ public class OracleAdapter implements DataAdapter {
 					subSelectFrom += innerJoinSql + "\n";
 				}
 			} else {
-				subSelectFrom = objects.getJSONObject(0).getString("class") + " \""
+				subSelectFrom = objects.getJSONObject(0).getString("class") + " as \""
 						+ objects.getJSONObject(0).getString("variable") + "\"";
 			}
 
@@ -317,7 +316,7 @@ public class OracleAdapter implements DataAdapter {
 			if (steps.size() == 1) {
 				subSelectSql = appendGroupByHaving(firstStep, subSelectSql, null);
 				subSelectSql = appendOrderBy(firstStep, subSelectSql, null);
-				subSelectSql = appendOffsetFetch(firstStep, subSelectSql);
+				subSelectSql = appendLimit(firstStep, subSelectSql);
 				return subSelectSql;
 			} else {
 				JSONObject secondStep = steps.getJSONObject(1);
@@ -351,11 +350,11 @@ public class OracleAdapter implements DataAdapter {
 						+ "    " + select + "\n"
 						+ "from (\n"
 						+ subSelectSql + "\n"
-						+ ") \"" + tmpClassAs + "\"";
+						+ ") as \"" + tmpClassAs + "\"";
 
 				sql = appendGroupByHaving(secondStep, sql, tmpClassAs);
 				sql = appendOrderBy(secondStep, sql, tmpClassAs);
-				sql = appendOffsetFetch(secondStep, sql);
+				sql = appendLimit(secondStep, sql);
 				return sql;
 			}
 		} catch (Exception e) {
@@ -417,7 +416,7 @@ public class OracleAdapter implements DataAdapter {
 		return sql;
 	}
 
-	private String appendOffsetFetch(JSONObject step, String sql) {
+	private String appendLimit(JSONObject step, String sql) {
 		if (step.getJSONObject("output").getJSONObject("limit") == null) {
 			return sql;
 		}
@@ -425,8 +424,8 @@ public class OracleAdapter implements DataAdapter {
 		if (offset == null) {
 			offset = 0;
 		}
-		sql += "\noffset " + offset + " rows fetch next "
-				+ step.getJSONObject("output").getJSONObject("limit").getInteger("count") + " rows only";
+		sql += "\nlimit " + step.getJSONObject("output").getJSONObject("limit").getInteger("count")
+				+ " offset " + offset;
 		return sql;
 	}
 
@@ -445,8 +444,8 @@ public class OracleAdapter implements DataAdapter {
 					select += ", ";
 				}
 			}
-			String sql = "select " + select + " from " + className + " fetch first 1 rows only";
-			JSONArray data = executeSql(oracleDataAdapterProperties, sql);
+			String sql = "select " + select + " from " + className + " limit 1";
+			JSONArray data = executeSql(connection, sql);
 			if (data.size() > 0) {
 				JSONObject datum = data.getJSONObject(0);
 				Set<String> keys = datum.keySet();
@@ -469,7 +468,7 @@ public class OracleAdapter implements DataAdapter {
 		}
 	}
 
-	private JSONArray executeSql(OracleDataAdapterProperties oracleDataAdapterProperties, String sql) throws Exception {
+	private JSONArray executeSql(DataAdapterConnection props, String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -477,10 +476,7 @@ public class OracleAdapter implements DataAdapter {
 		ResultSet rs = null;
 		try {
 			JSONArray rows = new JSONArray();
-			conn = DriverManager.getConnection(
-					oracleDataAdapterProperties.getOracleUrl(),
-					oracleDataAdapterProperties.getOracleUser(),
-					oracleDataAdapterProperties.getOraclePassword());
+			conn = createDataSource(props).getConnection();
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();
@@ -516,6 +512,18 @@ public class OracleAdapter implements DataAdapter {
 				try { conn.close(); } catch (Exception e) { log.error(e.getMessage(), e); }
 			}
 		}
+	}
+
+	SimpleDriverDataSource createDataSource(DataAdapterConnection props) {
+		String url = props.getUrl();
+		if (url != null && url.startsWith("jdbc:postgresql:")) {
+			url = "jdbc:opengauss:" + url.substring("jdbc:postgresql:".length());
+		}
+		return new SimpleDriverDataSource(
+				new org.opengauss.Driver(),
+				url,
+				props.getUser(),
+				props.getPassword());
 	}
 
 	@Override

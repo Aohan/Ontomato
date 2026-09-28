@@ -10,7 +10,7 @@ import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
-import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.SandboxService;
 
@@ -22,6 +22,9 @@ public class SandboxServiceImpl implements SandboxService {
 	
 	@Autowired
 	private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -85,7 +88,7 @@ public class SandboxServiceImpl implements SandboxService {
 	
 	private DataAdapter getDataAdapter(String domainId) {
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 		return adapter;
 	}
 

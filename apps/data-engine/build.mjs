@@ -4,6 +4,8 @@ import { buildJavaApp, JAVA_FLAGS, parseJavaArgs } from "../../scripts/data-engi
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(appRoot, "../..");
+// Every public adapter module is in the reactor (the root pom lists them all); this app installs postgresql only.
+const PUBLIC_ADAPTERS = ["postgresql", "mysql", "oracle", "sqlserver", "db2", "gaussdb", "duckdb"];
 const HELP =
   "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=zh|en], make pack-data-engine, or make pack-data-engine-app.\npack-data-engine-app uses the locked, imported runtime and never rebuilds it.";
 
@@ -20,8 +22,8 @@ export const app = {
   promptLabel: "io.ontomato.prompt.lang",
   reactorDir: "ontomato",
   appModule: "apps/data-engine",
-  appLibModules: ["packages/data-engine-core", "apps/data-engine"],
-  excludeArtifactIds: "data-engine-core,data-engine-app",
+  appLibModules: ["packages/data-engine-core", "packages/data-adapters/postgresql", "apps/data-engine"],
+  excludeArtifactIds: "data-engine-core,data-adapter-postgresql,data-engine-app",
   contextTrees: [
     {
       dest: "ontomato",
@@ -33,6 +35,7 @@ export const app = {
         ".mvn",
         "packages/data-engine-core/pom.xml",
         "packages/data-engine-core/src/main",
+        ...PUBLIC_ADAPTERS.flatMap((type) => [`packages/data-adapters/${type}/pom.xml`, `packages/data-adapters/${type}/src/main`]),
         "apps/data-engine/pom.xml",
         "apps/data-engine/src/main",
       ],

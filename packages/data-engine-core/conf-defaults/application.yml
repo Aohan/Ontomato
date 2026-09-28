@@ -35,7 +35,7 @@ ontomato:
     knowledge_maxResult: 10
     toolsdatamaxsize: 20
     toolAndPythonRetry: 3
-    data-adapter: ${BACKEND_DATA_ADAPTER:m3}
+    data-adapter: ${BACKEND_DATA_ADAPTER:postgresql}
     production-env-url: ${BACKEND_PRODUCTION_ENV_URL:}
     production-env-user: ${BACKEND_PRODUCTION_ENV_USER:}
     production-env-pwd: ${BACKEND_PRODUCTION_ENV_PASSWORD:}

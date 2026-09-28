@@ -14,6 +14,7 @@ import com.alibaba.fastjson2.JSONWriter.Feature;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.dao.JSONRuleDao;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.logging.AgentCallContext;
@@ -32,6 +33,9 @@ public class DataDetectorSkillTools {
 	
 	@Autowired
     private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
     private BusinessConfigService businessConfigService;
@@ -126,7 +130,7 @@ public class DataDetectorSkillTools {
 			        
 			        List<String> values = new ArrayList<String>();
 			        BusinessConfig businessConfig = businessConfigService.get(callContext.getDomainId());
-			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, false, jsonRule, vectorResourceDao, new UserDataPermission(), HttpRequestUtil.M3Mode.V1, callContext.getDomainId());
+			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, false, jsonRule, vectorResourceDao, new UserDataPermission(), HttpRequestUtil.M3Mode.V1, callContext.getDomainId());
 			        Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			        if (rowPermissionDataMap.get("data") != null 
 			        		&& ((List)rowPermissionDataMap.get("data")).size() > 0 

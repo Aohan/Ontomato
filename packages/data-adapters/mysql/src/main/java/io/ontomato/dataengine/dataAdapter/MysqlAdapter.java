@@ -20,7 +20,6 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
 import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.BusinessConfig.MysqlDataAdapterProperties;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
@@ -30,11 +29,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class MysqlAdapter implements DataAdapter {
 	
-	private MysqlDataAdapterProperties mysqlDataAdapterProperties;
+	private DataAdapterConnection connection;
 	private Map<String, Object> jsonRule;
 	
-	public MysqlAdapter(MysqlDataAdapterProperties mysqlDataAdapterProperties, Map<String, Object> jsonRule) {
-		this.mysqlDataAdapterProperties = mysqlDataAdapterProperties;
+	public MysqlAdapter(DataAdapterConnection connection, Map<String, Object> jsonRule) {
+		this.connection = connection;
 		this.jsonRule = jsonRule;
 	}
 
@@ -45,7 +44,7 @@ public class MysqlAdapter implements DataAdapter {
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] converted mysql sql: " + sql);
-		JSONArray data = executeSql(mysqlDataAdapterProperties, sql);
+		JSONArray data = executeSql(connection, sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -409,7 +408,7 @@ public class MysqlAdapter implements DataAdapter {
 	    		}
 	    	}
 	    	String sql = "select " + select + " from " + className + " limit 1";
-	    	JSONArray data = executeSql(mysqlDataAdapterProperties, sql);
+	    	JSONArray data = executeSql(connection, sql);
 	    	if (data.size() > 0) {
 	        	JSONObject datum = data.getJSONObject(0);
 	        	Set<String> keys = datum.keySet();
@@ -433,7 +432,7 @@ public class MysqlAdapter implements DataAdapter {
 		}
 	}
 	
-	private JSONArray executeSql(MysqlDataAdapterProperties mysqlDataAdapterProperties, String sql) throws Exception {
+	private JSONArray executeSql(DataAdapterConnection connection, String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -441,7 +440,7 @@ public class MysqlAdapter implements DataAdapter {
 		ResultSet rs = null;
 		try {
 			JSONArray rows = new JSONArray();
-			conn = DriverManager.getConnection(mysqlDataAdapterProperties.getMysqlUrl(), mysqlDataAdapterProperties.getMysqlUser(), mysqlDataAdapterProperties.getMysqlPassword());
+			conn = DriverManager.getConnection(connection.getUrl(), connection.getUser(), connection.getPassword());
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();

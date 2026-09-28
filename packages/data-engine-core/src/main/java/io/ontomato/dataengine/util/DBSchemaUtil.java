@@ -2,8 +2,7 @@ package io.ontomato.dataengine.util;
 
 import com.alibaba.fastjson2.JSON;
 import io.ontomato.dataengine.bean.function.Parameter;
-import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -265,10 +264,10 @@ public class DBSchemaUtil {
      * Generate the DDL definitions and sample data of the classes.
      * Generate relationship type definitions and relationship chain descriptions.
      * @param classes
-     * @param dataRagConfig
+     * @param adapter supplies the sample data
      * @return
      */
-    public static Map<String, String> getClassDefWord(Map<String, Object> jsonRule, List<String> classes, DataRagConfig dataRagConfig, BusinessConfig businessConfig) {
+    public static Map<String, String> getClassDefWord(Map<String, Object> jsonRule, List<String> classes, DataAdapter adapter) {
 
         Map<String, String> mapDBClassesSchema =  new HashMap<String, String>();
 
@@ -450,7 +449,7 @@ public class DBSchemaUtil {
                     break;
                 }
             }
-            sbMarkDownClassDefs.append(className + " sample data:\n```json\n" + HttpRequestUtil.getSampleDataByClassName(dataRagConfig, businessConfig, className, attrs) + "\n```\n");
+            sbMarkDownClassDefs.append(className + " sample data:\n```json\n" + HttpRequestUtil.getSampleDataByClassName(adapter, className, attrs) + "\n```\n");
         }
 
         // Add class definitions and sample data

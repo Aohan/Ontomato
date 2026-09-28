@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.dao.JSONRuleDao;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.logging.AgentCallContext;
@@ -45,6 +46,9 @@ public class DslSkillTools {
 	
 	@Autowired
     private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
     private BusinessConfigService businessConfigService;
@@ -106,7 +110,7 @@ public class DslSkillTools {
 			DiagnosticEventLogger.emit("m3.query.started", sessionId, m3StartedPayload);
 			m3Start = System.currentTimeMillis();
 			m3Started = true;
-			DslExecutionResult queryResult = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, dslStr, sessionId, false, jsonRule, vectorResourceDao, new UserDataPermission(), HttpRequestUtil.M3Mode.V1, callContext.getDomainId())[0];
+			DslExecutionResult queryResult = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, sessionId, false, jsonRule, vectorResourceDao, new UserDataPermission(), HttpRequestUtil.M3Mode.V1, callContext.getDomainId())[0];
 			JSONObject dataMap = queryResult.data();
 			if (queryResult.failed()) {
 				String rawError = MultiThreadAIChatService.rawErrorText(queryResult.failure().cause());

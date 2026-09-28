@@ -27,6 +27,7 @@ import io.ontomato.dataengine.bean.dashboard.DashboardConditionVectorOutput;
 import io.ontomato.dataengine.bean.dashboard.DashboardConditionVectorWhere;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
@@ -45,6 +46,9 @@ public class DashboardServiceImpl implements DashboardService {
 	
 	@Autowired
     private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -494,7 +498,7 @@ public class DashboardServiceImpl implements DashboardService {
 		String dslsStr = JSON.toJSONString(dsls, Feature.WriteMapNullValue);
 		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
-		DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, dslsStr, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+		DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslsStr, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
 		Map<String, Object> rowPermissionDataMap = result.data();
 		if (!result.failed()) { // DSL executed successfully
 			JSONObject rowColPermissionDataMap = DslPermissionUtil.dealDslAnswerWithPermission(JSONObject.parseObject(JSON.toJSONString(rowPermissionDataMap, Feature.WriteMapNullValue)), permission, classDefs);

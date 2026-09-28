@@ -12,6 +12,7 @@ import com.alibaba.fastjson2.JSONWriter.Feature;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.AdminService;
@@ -29,6 +30,9 @@ public class DslServiceImpl implements DslService {
 	
 	@Autowired
     private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -53,7 +57,7 @@ public class DslServiceImpl implements DslService {
 		JSONArray dsls = new JSONArray();
     	dsls.add(dsl);
 		Map<String, Object> jsonRule = adminService.getJSONRule(user.getDomainId());
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, m3Mode, user.getDomainId());
+		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, m3Mode, user.getDomainId());
 		return results[1].rawResponse();
 	}
 
@@ -68,7 +72,7 @@ public class DslServiceImpl implements DslService {
 		JSONArray dsls = new JSONArray();
     	dsls.add(dsl);
 		Map<String, Object> jsonRule = adminService.getJSONRule(user.getDomainId());
-    	List<String> nodeIds = HttpRequestUtil.getNodeIds(dataRagConfig, businessConfig, JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), jsonRule, vectorResourceDao, permission, user.getDomainId());
+    	List<String> nodeIds = HttpRequestUtil.getNodeIds(dataAdapterRegistry.create(businessConfig, jsonRule), JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), jsonRule, vectorResourceDao, permission, user.getDomainId());
     	return nodeIds;
 	}
 
@@ -93,7 +97,7 @@ public class DslServiceImpl implements DslService {
 		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
 		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
     	
-		DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, dslStr, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+		DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
 		JSONObject dataMap = new JSONObject();
 		dataMap.putAll(result.data());
 		if (result.failed()) {

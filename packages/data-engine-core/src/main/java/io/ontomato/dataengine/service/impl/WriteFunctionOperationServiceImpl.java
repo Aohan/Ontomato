@@ -13,7 +13,7 @@ import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.JSONRuleDao;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
-import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.WriteFunctionOperationService;
@@ -26,6 +26,9 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	
 	@Autowired
 	private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -119,13 +122,13 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	
 	private DataAdapter getDataAdapter(String domainId) {
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 		return adapter;
 	}
 	
 	private DataAdapter getDataAdapter(String domainId, Map<String, Object> jsonRule) {
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig, jsonRule);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		return adapter;
 	}
 
