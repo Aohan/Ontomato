@@ -46,7 +46,7 @@ export const app = {
     [repoRoot, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"],
     [repoRoot, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"],
     [repoRoot, "scripts/data-engine/runtime_dependencies.py", "bin/runtime_dependencies.py"],
-    [repoRoot, "scripts/data-engine/sync-product-files.sh", "bin/sync-product-files.sh"],
+    [repoRoot, "scripts/data-engine/sync-product-files.py", "bin/sync-product-files.py"],
   ],
   pairContract: "/opt/datarag/bin/runtime-contract.py",
   runtimeTarget: "runtime",

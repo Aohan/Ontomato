@@ -1,16 +1,30 @@
 // The shared host Java dev tool against a synthetic product: prerequisites fail before Maven,
-// argv/cwd/profile/env/PATH/exit code reach a fake wrapper, the real sync script keeps site
-// configuration and extras across runs, and signals are forwarded. No real Maven or product runs.
+// argv/cwd/profile/env/PATH/exit code reach a fake wrapper, the real Python sync keeps site
+// configuration and extras across runs, and signals are forwarded. The shell fixture (sh wrapper,
+// sh venv python, SIGTERM) and the .cmd launcher case are each limited to the platform they can
+// really run on, so a host without that platform reports skips instead of passes.
+// No real Maven or product runs.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { test } from "node:test";
-import { readDotEnv, startDevJava } from "./dev-java.mjs";
+import {
+  mavenInvocation,
+  mavenWrapper,
+  mergeEnvironment,
+  prependPythonPath,
+  pythonExecutable,
+  readDotEnv,
+  startDevJava,
+} from "./dev-java.mjs";
 
 const DEV_JAVA = new URL("./dev-java.mjs", import.meta.url).href;
 const SKILL = "payload/skills/aftercalculate/trend-forecaster/SKILL.md";
+// The fake product spawns `#!/bin/sh` scripts, so it only exists where a POSIX shell does.
+const posixOnly = { skip: process.platform === "win32" ? "POSIX shell fixture" : false };
+const windowsOnly = { skip: process.platform === "win32" ? false : "Windows cmd.exe only" };
 const put = (root, files) => {
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -36,8 +50,9 @@ function product(t, { env = "FOO=bar\n", venv = true } = {}) {
   chmodSync(join(root, "fake-mvnw"), 0o755);
   mkdirSync(appDir, { recursive: true });
   if (env !== null) writeFileSync(join(appDir, ".env"), env);
+  // The venv Python is the real interpreter, because dev-java runs the shared sync through it.
   if (venv) {
-    put(appDir, { ".venv/bin/python": "#!/bin/sh\n" });
+    put(appDir, { ".venv/bin/python": '#!/bin/sh\nexec python3 "$@"\n' });
     chmodSync(join(appDir, ".venv/bin/python"), 0o755);
   }
   const app = {
@@ -55,7 +70,55 @@ test(".env is read literally, split at the first =, blank keys and # lines skipp
   assert.deepEqual(readDotEnv("# note\n\nA=1\nB=a b=c\n=skip\nBARE\n#C=3\n"), { A: "1", B: "a b=c", BARE: "" });
 });
 
-test("missing .env, missing venv python or a bad PROMPT_LANG stop before staging or Maven", (t) => {
+test("CRLF only loses the line terminator: value spaces and further = survive", () => {
+  assert.deepEqual(readDotEnv("# site\r\nA=1\r\nB=a b=c\r\nC= \r\nBARE\r\n"), { A: "1", B: "a b=c", C: " ", BARE: "" });
+});
+
+test("the venv Python and the Maven wrapper follow the platform layout", () => {
+  const appDir = join("repo", "apps", "data-engine");
+  assert.equal(pythonExecutable(appDir, "linux"), join(appDir, ".venv", "bin", "python"));
+  assert.equal(pythonExecutable(appDir, "darwin"), join(appDir, ".venv", "bin", "python"));
+  assert.equal(pythonExecutable(appDir, "win32"), join(appDir, ".venv", "Scripts", "python.exe"));
+  assert.equal(mavenWrapper(appDir, "linux"), join(appDir, "mvnw"));
+  assert.equal(mavenWrapper(appDir, "win32"), join(appDir, "mvnw.cmd"));
+});
+
+test("Windows merges case-insensitive names once, the file value winning, and keeps one PATH", () => {
+  const merged = mergeEnvironment({ Path: "C:\\inherited", TEMP: "t" }, { PATH: "C:\\file", TEMP: "file" }, "win32");
+  assert.deepEqual(merged, { PATH: "C:\\file", TEMP: "file" });
+  prependPythonPath(merged, "C:\\venv\\Scripts", "win32");
+  assert.deepEqual(merged, { PATH: ["C:\\venv\\Scripts", "C:\\file"].join(delimiter), TEMP: "file" });
+});
+
+test("POSIX keeps PATH case-sensitive and a custom Path does not touch it", () => {
+  const merged = mergeEnvironment({ PATH: "/usr/bin", Path: "/custom" }, { Path: "/file" }, "linux");
+  assert.deepEqual(merged, { PATH: "/usr/bin", Path: "/file" });
+  prependPythonPath(merged, "/repo/.venv/bin", "linux");
+  assert.deepEqual(merged, { PATH: ["/repo/.venv/bin", "/usr/bin"].join(delimiter), Path: "/file" });
+});
+
+test("a Windows .cmd wrapper receives arguments, cwd and exit code through cmd.exe", windowsOnly, async (t) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "dev-java cmd ")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const record = join(root, "record.json");
+  const wrapper = join(root, "fake mvnw", "mvnw.cmd");
+  put(root, {
+    "fake mvnw/record.mjs": 'import { writeFileSync } from "node:fs";\nwriteFileSync(process.env.FAKE_RECORD, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }));\nprocess.exit(Number(process.env.FAKE_EXIT));\n',
+    "fake mvnw/mvnw.cmd": `@echo off\r\n"${process.execPath}" "%~dp0record.mjs" %*\r\nexit /b %ERRORLEVEL%\r\n`,
+  });
+  const args = ["-B", "-ntp", "-Dname=a b", "-Ddir=C:\\out\\", '-Dq="x"'];
+  const invocation = mavenInvocation(wrapper, args);
+  const child = spawn(invocation.command, invocation.args, {
+    cwd: root,
+    env: { ...process.env, FAKE_RECORD: record, FAKE_EXIT: "7" },
+    stdio: "ignore",
+    windowsVerbatimArguments: invocation.verbatim,
+  });
+  assert.deepEqual(await finish(child), { code: 7, signal: null });
+  assert.deepEqual(JSON.parse(read(record)), { cwd: root, args });
+});
+
+test("missing .env, missing venv python or a bad PROMPT_LANG stop before staging or Maven", posixOnly, (t) => {
   for (const [setup, inherited, message] of [
     [{ env: null }, {}, /Missing .*\.env/],
     [{ venv: false }, {}, /Missing .*\.venv\/bin\/python: prepare it once/],
@@ -68,7 +131,7 @@ test("missing .env, missing venv python or a bad PROMPT_LANG stop before staging
   }
 });
 
-test("the wrapper gets the reactor argv, profile, user args, .env over inherited env, venv PATH and its exit code comes back", async (t) => {
+test("the wrapper gets the reactor argv, profile, user args, .env over inherited env, venv PATH and its exit code comes back", posixOnly, async (t) => {
   const fx = product(t, { env: "# site\nSPACED=a b=c\nSHARED=file\nBARE\n" });
   const child = startDevJava({ ...fx.options, profiles: ["dev-override"] }, ["-o", "-Dx=y"],
     { ...fx.inherited, SHARED: "inherited", KEEP: "k", FAKE_EXIT: "3" });
@@ -80,7 +143,7 @@ test("the wrapper gets the reactor argv, profile, user args, .env over inherited
   ].join("\n"));
 });
 
-test("sync: templates only when missing, site config and extras kept, defaults and language refreshed", async (t) => {
+test("sync: templates only when missing, site config and extras kept, defaults and language refreshed", posixOnly, async (t) => {
   const fx = product(t);
   const dev = (path) => join(fx.appDir, ".dev", path);
   await finish(startDevJava(fx.options, [], fx.inherited));
@@ -100,7 +163,7 @@ test("sync: templates only when missing, site config and extras kept, defaults a
   assert.equal(read(dev("skills/aftercalculate/trend-forecaster/SKILL.md")), "skill v2\n");
 });
 
-test("runDevJava forwards SIGTERM to the wrapper and exits with its code", async (t) => {
+test("runDevJava forwards SIGTERM to the wrapper and exits with its code", posixOnly, async (t) => {
   const fx = product(t);
   put(fx.root, { "fake-mvnw": '#!/bin/sh\ntrap \'echo TERM >> "$FAKE_RECORD"; exit 143\' TERM\necho started > "$FAKE_RECORD"\nwhile :; do sleep 0.1; done\n' });
   const script = `import { runDevJava } from ${JSON.stringify(DEV_JAVA)}; runDevJava(${JSON.stringify(fx.options)});`;

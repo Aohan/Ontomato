@@ -37,7 +37,7 @@ runtime_arch="$(cat /opt/datarag/runtime-arch)"
 # 4/5) Data directory and product file sync: all of /deploy is mounted from a single host directory
 #      (created on first start); the shared sync script owns the sync rule.
 [ -d "$CONF_DEFAULTS" ] || die "$CONF_DEFAULTS is missing, the application image is incomplete"
-bash "$(dirname "$0")/sync-product-files.sh" "$CONF_DEFAULTS" "$APP_SKILLS" "$DEPLOY_DIR"
+python "$(dirname "$0")/sync-product-files.py" "$CONF_DEFAULTS" "$APP_SKILLS" "$DEPLOY_DIR"
 
 # 6) The MCP calculation service runs built into the backend container (started first, polled for up to 30 seconds)
 [ -f /opt/datarag/mcp/mcpserver.py ] || die "missing /opt/datarag/mcp/mcpserver.py, the runtime image is incomplete"
