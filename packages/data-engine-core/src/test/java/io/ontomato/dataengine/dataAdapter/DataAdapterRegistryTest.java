@@ -58,6 +58,18 @@ class DataAdapterRegistryTest {
 	}
 
 	@Test
+	void aTypeWithoutSavedConnectionGetsAnEmptyOne() {
+		FakeDataAdapterProvider mysql = new FakeDataAdapterProvider("mysql", "MySQL", SQL_FIELDS);
+		DataAdapterRegistry registry = new DataAdapterRegistry(List.of(mysql), new DataRagConfig());
+		BusinessConfig businessConfig = new BusinessConfig();
+		businessConfig.setDataAdapter("mysql");
+
+		registry.create(businessConfig, null);
+
+		assertEquals(new DataAdapterConnection(), mysql.lastConnection);
+	}
+
+	@Test
 	void aTypeThatIsNotInstalledIsReportedWithoutFallback() {
 		DataAdapterRegistry registry = new DataAdapterRegistry(List.of(
 				new FakeDataAdapterProvider("postgresql", "PostgreSQL", SQL_FIELDS)), new DataRagConfig());

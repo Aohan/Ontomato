@@ -19,7 +19,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
-import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
@@ -590,8 +589,7 @@ public class OracleAdapter implements DataAdapter {
 	}
 
 	@Override
-	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, BusinessConfig businessConfig,
-			VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
+	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
 		// TODO Auto-generated method stub
 		return null;
 	}

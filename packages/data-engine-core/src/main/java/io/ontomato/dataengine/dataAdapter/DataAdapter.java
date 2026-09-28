@@ -5,7 +5,6 @@ import java.util.Map;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
@@ -42,6 +41,6 @@ public interface DataAdapter {
 	
 	public void deleteEdge(String namespace, String relationName, String sourceClassName, String sourceObjId, String targetClassName, String targetObjId) throws Exception;
 	
-	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, BusinessConfig businessConfig, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception;
+	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception;
 	
 }

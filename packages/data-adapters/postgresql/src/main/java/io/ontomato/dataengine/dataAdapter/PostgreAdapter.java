@@ -21,7 +21,6 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
 import io.ontomato.dataengine.bean.DslExecutionResult;
-import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
@@ -1158,7 +1157,7 @@ public class PostgreAdapter implements DataAdapter {
 	}
 	
 	@Override
-	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, BusinessConfig businessConfig, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
+	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
 		boolean inSandbox = inSandbox(sandboxId);
 		
 		UserDataPermission userDataPermission = new UserDataPermission();

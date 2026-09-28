@@ -116,8 +116,7 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId) throws Exception {
 		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
 		DataAdapter adapter = getDataAdapter(domainId, jsonRule);
-		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		return adapter.query(dsl, sandboxId, domainId, businessConfig, vectorResourceDao, dataRagConfig);
+		return adapter.query(dsl, sandboxId, domainId, vectorResourceDao, dataRagConfig);
 	}
 	
 	private DataAdapter getDataAdapter(String domainId) {
