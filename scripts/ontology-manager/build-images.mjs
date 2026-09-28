@@ -22,6 +22,13 @@ const FLAGS = { "--arch": "value", "--pack": "boolean" };
 const RECIPE = "docker/ontology-manager";
 // Copied to the context root, where the recipe's final stage COPYs them.
 const RUNTIME_FILES = ["config.js.template", "nginx.conf.template", "docker-entrypoint.sh"];
+// The public repository's own license files and the notice generator:
+// [source under publicRoot, context path the recipe names].
+const LICENSE_FILES = [
+  ["LICENSE", "LICENSE"],
+  ["NOTICE", "NOTICE"],
+  ["scripts/third_party_notices.py", "tools/third_party_notices.py"],
+];
 // The per-source revisions/dirty flags; no second metadata file is written.
 const SOURCES_LABEL = "io.runtime.sources";
 
@@ -72,6 +79,8 @@ export async function buildManagerImage(app, args) {
   assertEntriesCurrent(entries, "staging");
   for (const name of RUNTIME_FILES)
     cpSync(join(app.publicRoot, RECIPE, name), join(context, name));
+  for (const [source, dest] of LICENSE_FILES)
+    cpSync(join(app.publicRoot, source), join(context, dest));
   const combined = combineIdentity(version, app.repoRoot, entries);
   const tag = `${app.component}:${combined.stamp}-${arch}`;
   const alias = `${app.component}:deploy-${arch}`;

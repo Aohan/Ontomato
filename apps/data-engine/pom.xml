@@ -23,6 +23,12 @@
             <artifactId>data-engine-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Installed data adapters: this list alone decides which ones the edition reports and offers. -->
+        <dependency>
+            <groupId>io.ontomato</groupId>
+            <artifactId>data-adapter-postgresql</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

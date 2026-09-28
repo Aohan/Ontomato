@@ -400,9 +400,14 @@ export function createManagerClient(
     })) as SmartAsset[];
   }
 
-  /** 可视化建模据 data.dataAdapter 判断是否 SQL 适配器。 */
+  /** 可视化建模读取 data.dataAdapter（当前适配器类型）。 */
   function getBusinessConfig() {
     return send("/businessConfig/getConfig", { method: "GET" });
+  }
+
+  /** 本版本已安装的数据适配器；可视化建模据当前类型的 sql 标记决定是否显示关联字段。 */
+  function listDataAdapters() {
+    return send("/businessConfig/dataAdapters", { method: "GET" });
   }
 
   return {
@@ -424,5 +429,6 @@ export function createManagerClient(
     loadObjectData,
     loadSmartAssets,
     getBusinessConfig,
+    listDataAdapters,
   };
 }

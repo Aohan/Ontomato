@@ -62,6 +62,11 @@ public class BusinessConfigDao {
 						"business_config record still contains role-side model parameters; run the upgrade migration first (domainId="
 								+ domainId + "): " + e.getMessage());
 			}
+			if (LegacyDataAdapterConnections.migrate(stored)) {
+				content = JSON.toJSONString(stored, Feature.WriteMapNullValue);
+				jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET content = ? WHERE id = ?", content, domainId);
+				log.info("business_config data adapter connections migrated (domainId={})", domainId);
+			}
 			return JSON.parseObject(
 					content, BusinessConfig.class, JSONReader.Feature.DisableReferenceDetect);
 		} catch (org.springframework.dao.EmptyResultDataAccessException e) {

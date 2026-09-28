@@ -7,11 +7,9 @@ import com.alibaba.fastjson2.JSONWriter.Feature;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.ontomato.dataengine.bean.DslExecutionResult;
-import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
-import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +51,7 @@ public class HttpRequestUtil {
     // Returns [execution result without permission, row permission execution result]; each item contains the query data or failure fact and the original DSL
     public static DslExecutionResult[] getM3Data(
     		DataRagConfig dataRagConfig, 
-    		BusinessConfig businessConfig, 
+    		DataAdapter adapter, 
     		String queryJson, 
     		String sessionId, 
     		boolean onlySearchPermissionData,
@@ -72,11 +70,11 @@ public class HttpRequestUtil {
     	JSONObject rowPermissionDsl = addVectorAndRowPermissionResult[3] == null ? null : (JSONObject)addVectorAndRowPermissionResult[3];
     	boolean addPermission = addVectorAndRowPermissionResult[4] == null ? null : (boolean)addVectorAndRowPermissionResult[4];
         
-        DslExecutionResult rowPermissionResult = getM3Data(dataRagConfig, businessConfig, rowPermissionDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, m3Mode, jsonRule);
+        DslExecutionResult rowPermissionResult = getM3Data(dataRagConfig, adapter, rowPermissionDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, m3Mode, jsonRule);
         DslExecutionResult result = DslExecutionResult.success(new JSONObject());
         if (!onlySearchPermissionData) { // when data without permission is needed
         	if (addPermission) { // the DSL after adding row permission differs from the DSL without permission
-				result = getM3Data(dataRagConfig, businessConfig, originDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, m3Mode, jsonRule);
+				result = getM3Data(dataRagConfig, adapter, originDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, m3Mode, jsonRule);
         	} else { // no difference
 				result = rowPermissionResult.copy();
         	}
@@ -87,8 +85,7 @@ public class HttpRequestUtil {
     }
     
     public static List<String> getNodeIds(
-    		DataRagConfig dataRagConfig, 
-    		BusinessConfig businessConfig, 
+    		DataAdapter adapter, 
     		String queryJson,
     		Map<String, Object> jsonRule,
     		VectorResourceDao vectorResourceDao, 
@@ -103,7 +100,7 @@ public class HttpRequestUtil {
     	Set<String> nodeIds = new HashSet<String>();
     	String nodeDslStr = DslUtil.fromQuestionDslToNodeDsl("[" + JSON.toJSONString(rowPermissionDsl, Feature.WriteMapNullValue) + "]");
         try {
-			String nodeResp = getData(dataRagConfig, businessConfig, nodeDslStr, null, M3Mode.V1, jsonRule, new ArrayList<String>());
+			String nodeResp = getData(adapter, nodeDslStr, null, M3Mode.V1, new ArrayList<String>());
         	for (Map map : JSON.parseArray(nodeResp, Map.class)) {
         		List answer = (List)map.get("answer");
         		for (Object obj : answer) {
@@ -163,7 +160,7 @@ public class HttpRequestUtil {
     
     private static DslExecutionResult getM3Data(
     		DataRagConfig dataRagConfig, 
-    		BusinessConfig businessConfig, 
+    		DataAdapter adapter, 
     		JSONObject dsl, 
     		String sessionId, 
     		Map<String, List<String>> selectAsFilePathsMap, 
@@ -175,7 +172,7 @@ public class HttpRequestUtil {
 		List<String> generatedMqls = new ArrayList<String>();
     	
 		try {
-			String JsonData = getData(dataRagConfig, businessConfig, "[" + JSON.toJSONString(dsl, Feature.WriteMapNullValue) + "]", sessionId, m3Mode, jsonRule, generatedMqls);
+			String JsonData = getData(adapter, "[" + JSON.toJSONString(dsl, Feature.WriteMapNullValue) + "]", sessionId, m3Mode, generatedMqls);
 			if (JsonData != null) {
         	log.info("M3 returned data, sessionId-{}>>>:\n{}",sessionId,JsonData);
             LogHelper.m3ReturnData(JsonData);
@@ -278,14 +275,12 @@ public class HttpRequestUtil {
 		return DslExecutionResult.failure(dataMap, cause);
 	}
 
-    private static String getData(DataRagConfig dataRagConfig, BusinessConfig businessConfig, String queryJson, String sessionId, M3Mode m3Mode, Map<String, Object> jsonRule, List<String> generatedMqls) throws Exception {
-    	DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig, jsonRule);
+    private static String getData(DataAdapter adapter, String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
 		return adapter.executeDsl(queryJson, sessionId, m3Mode, generatedMqls);
     }
     
-    public static String getSampleDataByClassName(DataRagConfig dataRagConfig, BusinessConfig businessConfig, String className, List<String> attrs) {
+    public static String getSampleDataByClassName(DataAdapter adapter, String className, List<String> attrs) {
     	String sampleDataDirName = "sampleData";
-    	DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig);
     	String sampleDataFileName = adapter.getSampleDataFileName(sampleDataDirName, className);
     	String sampleDataContent = getSampleDataByClassNameFromCache(sampleDataFileName);
     	

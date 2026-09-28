@@ -8,6 +8,9 @@
 #                           adjacent so workspace links keep working
 #   config.js.template, nginx.conf.template, docker-entrypoint.sh
 #                           the Nginx runtime files of this recipe
+#   LICENSE, NOTICE         the public repository's own license files
+#   tools/third_party_notices.py
+#                           the public notice generator
 # WORKSPACE (source id of the workspace root) and APPLICATION (the selected
 # app's package name) always come from the builder; they have no default.
 ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:20.3.0@sha256:fc738db1cbb81214be1719436605e9d7d84746e5eaf0629762aeba114aa0c28d
@@ -28,6 +31,17 @@ WORKDIR /build/workspace/${WORKSPACE}
 RUN pnpm install --frozen-lockfile --filter "${APPLICATION}..."
 WORKDIR /build/workspace/${WORKSPACE}/apps/ontology-manager
 RUN pnpm build
+# Third-party notices of the web bundle (bundling drops the packages' license
+# comments), from pnpm's report of exactly the selection installed above, dev
+# dependencies included: listing more than the bundle uses is accepted where
+# listing less is not.
+COPY tools/third_party_notices.py /tmp/third_party_notices.py
+RUN pnpm --filter "${APPLICATION}..." licenses list --json > /tmp/npm-licenses.json
+RUN python3 /tmp/third_party_notices.py /licenses/THIRD_PARTY_NOTICES.txt --npm /tmp/npm-licenses.json <<'EOF'
+Alpine packages of the nginx:1.27-alpine base and gettext: each package's
+license identifier is its L: field in /lib/apk/db/installed
+nginx and its modules: /usr/share/licenses/<package>/COPYRIGHT
+EOF
 
 FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
 
@@ -35,6 +49,8 @@ ARG WORKSPACE
 
 RUN apk add --no-cache gettext
 COPY --from=web-builder /build/workspace/${WORKSPACE}/apps/ontology-manager/dist /usr/share/nginx/html
+COPY LICENSE NOTICE /licenses/
+COPY --from=web-builder /licenses/ /licenses/
 COPY config.js.template /usr/share/nginx/html/config.js.template
 COPY nginx.conf.template /etc/nginx/templates/ontology-manager.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh

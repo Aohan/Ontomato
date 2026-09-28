@@ -17,7 +17,7 @@ import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.core.utils.ProductionLoginCipher;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
-import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.EnvService;
@@ -34,6 +34,9 @@ public class EnvServiceImpl implements EnvService {
 	
 	@Autowired
     private DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -103,7 +106,7 @@ public class EnvServiceImpl implements EnvService {
 				namespace = null;
 			}
 			BusinessConfig businessConfig = businessConfigService.get(domainId);
-			DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig);
+			DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 			adapter.truncateNamespace(namespace);
 			adapter.dropNamespace(namespace);
 			adapter.createNamespace(namespace);
@@ -233,7 +236,7 @@ public class EnvServiceImpl implements EnvService {
 		
 		// Import data
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = DataAdapterFactory.getAdapter(dataRagConfig, businessConfig, jsonRule);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		for (int i = 0; i < objDatas.size(); i++) {
 			JSONObject objData = objDatas.getJSONObject(i);
 			String className = objData.getString("className").trim();

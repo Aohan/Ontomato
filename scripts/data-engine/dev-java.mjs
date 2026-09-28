@@ -3,7 +3,8 @@
 // no bash), then run the reactor's spring-boot:run in the foreground. MCP, PostgreSQL and readiness
 // belong to the full-stack entry.
 import { spawn, spawnSync } from "node:child_process";
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdForeground } from "../dev-command.mjs";
@@ -15,6 +16,31 @@ const SYNC = join(dirname(fileURLToPath(import.meta.url)), "sync-product-files.p
 // full-stack entry for the MCP/skills service, and Windows venvs put it under Scripts/python.exe.
 export function pythonExecutable(appDir, platform = process.platform) {
   return join(appDir, ".venv", ...(platform === "win32" ? ["Scripts", "python.exe"] : ["bin", "python"]));
+}
+
+// The venv follows the product's requirements file: created with the host Python when missing and
+// reinstalled when the file changes. The installed file's hash is kept inside the venv, so a venv
+// created by hand is brought up to date once and then reused.
+export function ensurePythonEnv(appDir, requirements, env = process.env, platform = process.platform) {
+  const python = pythonExecutable(appDir, platform);
+  const venv = join(appDir, ".venv");
+  const marker = join(venv, "requirements.sha256");
+  const hash = createHash("sha256").update(readFileSync(requirements)).digest("hex");
+  if (executable(python) && existsSync(marker) && readFileSync(marker, "utf8") === hash) return python;
+  if (!executable(python)) {
+    const host = platform === "win32" ? ["py", "-3"] : ["python3"];
+    runSetup(host[0], [...host.slice(1), "-m", "venv", venv], env, `Creating ${venv} with ${host.join(" ")}`);
+  }
+  runSetup(python, ["-m", "pip", "install", "-r", requirements], env, `Installing ${requirements}`);
+  writeFileSync(marker, hash);
+  return python;
+}
+
+function runSetup(command, args, env, description) {
+  console.log(`[python] ${description}`);
+  const result = spawnSync(command, args, { env, stdio: "inherit" });
+  if (result.status !== 0)
+    throw new Error(`${description} failed${result.error ? `: ${result.error.message}` : ""}; Python 3.10+ is required`);
 }
 
 // The official Maven wrapper pair shipped by the reactor root.
@@ -114,18 +140,14 @@ export function prependPythonPath(env, venvBin, platform = process.platform) {
   env[key] = `${venvBin}${delimiter}${env[key]}`;
 }
 
-// Everything that can fail on missing local setup fails here, before any staging or Maven.
+// Everything that can fail on missing local setup fails here, before any staging or Maven; the
+// Python venv is prepared here too.
 export function startDevJava({ app, appDir, wrapper, profiles }, userArgs, inherited = process.env) {
   const lang = inherited.PROMPT_LANG ?? app.promptLang;
   if (!["en", "zh"].includes(lang)) throw new Error("PROMPT_LANG must be en or zh");
   const envFile = join(appDir, ".env");
   if (!existsSync(envFile)) throw new Error(`Missing ${envFile}: create it with this app's Java settings first`);
-  const python = pythonExecutable(appDir);
-  if (!executable(python))
-    throw new Error(
-      `Missing ${python}: prepare it once with python3 -m venv ${join(appDir, ".venv")} && ` +
-        `${join(dirname(python), "pip")} install -r ${join(app.requirements.root, app.requirements.path)}`,
-    );
+  const python = ensurePythonEnv(appDir, join(app.requirements.root, app.requirements.path), inherited);
   const vars = readDotEnv(readFileSync(envFile, "utf8"));
 
   // The staging directory is rebuilt every time; .dev is only synced into, never cleared.

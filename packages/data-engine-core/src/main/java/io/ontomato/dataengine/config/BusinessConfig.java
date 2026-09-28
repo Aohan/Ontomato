@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import io.ontomato.dataengine.dataAdapter.DataAdapterFactory;
+import io.ontomato.dataengine.dataAdapter.DataAdapterConnection;
 
 import org.springframework.beans.BeanUtils;
 
@@ -36,13 +36,8 @@ public class BusinessConfig {
     private String lang;
     
     private String dataAdapter;
-    private MysqlDataAdapterProperties mysqlDataAdapterProperties;
-	private PgsqlDataAdapterProperties pgsqlDataAdapterProperties;
-	private OracleDataAdapterProperties oracleDataAdapterProperties;
-	private SqlServerDataAdapterProperties sqlServerDataAdapterProperties;
-	private Db2DataAdapterProperties db2DataAdapterProperties;
-	private GaussDBDataAdapterProperties gaussDBDataAdapterProperties;
-	private DuckDBDataAdapterProperties duckDBDataAdapterProperties;
+    /** Saved connection per data adapter type. */
+    private Map<String, DataAdapterConnection> dataAdapterConnections = new LinkedHashMap<>();
 
 	@Data
 	public class EmbeddingModelProperties {
@@ -53,53 +48,6 @@ public class BusinessConfig {
 		private Boolean logRequests;
 	    private Boolean logResponses;
 	    private Map<String, String> customHeaders;
-	}
-	
-	@Data
-	public class MysqlDataAdapterProperties {
-		private String mysqlUrl;
-	    private String mysqlUser;
-	    private String mysqlPassword;
-	}
-
-	@Data
-	public class PgsqlDataAdapterProperties {
-		private String pgsqlUrl;
-	    private String pgsqlUser;
-	    private String pgsqlPassword;
-	}
-
-	@Data
-	public class OracleDataAdapterProperties {
-		private String oracleUrl;
-	    private String oracleUser;
-	    private String oraclePassword;
-	}
-
-	@Data
-	public class SqlServerDataAdapterProperties {
-		private String sqlServerUrl;
-	    private String sqlServerUser;
-	    private String sqlServerPassword;
-	}
-
-	@Data
-	public class Db2DataAdapterProperties {
-		private String db2Url;
-	    private String db2User;
-	    private String db2Password;
-	}
-
-	@Data
-	public class GaussDBDataAdapterProperties {
-		private String gaussDBUrl;
-	    private String gaussDBUser;
-	    private String gaussDBPassword;
-	}
-
-	@Data
-	public class DuckDBDataAdapterProperties {
-		private String duckdbUrl;
 	}
 	
 	public static BusinessConfig from(
@@ -156,24 +104,7 @@ public class BusinessConfig {
 			businessConfig.setQuestionSpliterTries(dataRagConfig.getQuestionSpliterTries());
 			businessConfig.setQuestionSpliterTimeout(dataRagConfig.getQuestionSpliterTimeout());
 		    
-			String dataAdapter = dataRagConfig.getDataAdapter();
-			if (dataAdapter == null || "".equals(dataAdapter.trim())) {
-				dataAdapter = DataAdapterFactory.M3;
-			}
-			businessConfig.setDataAdapter(dataAdapter);
-		    
-		    MysqlDataAdapterProperties mysqlDataAdapterProperties = businessConfig.new MysqlDataAdapterProperties();
-		    mysqlDataAdapterProperties.setMysqlUrl(dataRagConfig.getMysqlUrl());
-		    mysqlDataAdapterProperties.setMysqlUser(dataRagConfig.getMysqlUser());
-		    mysqlDataAdapterProperties.setMysqlPassword(dataRagConfig.getMysqlPassword());
-		    businessConfig.setMysqlDataAdapterProperties(mysqlDataAdapterProperties);
-		    
-		    businessConfig.setPgsqlDataAdapterProperties(businessConfig.new PgsqlDataAdapterProperties());
-		    businessConfig.setOracleDataAdapterProperties(businessConfig.new OracleDataAdapterProperties());
-		    businessConfig.setSqlServerDataAdapterProperties(businessConfig.new SqlServerDataAdapterProperties());
-		    businessConfig.setDb2DataAdapterProperties(businessConfig.new Db2DataAdapterProperties());
-		    businessConfig.setGaussDBDataAdapterProperties(businessConfig.new GaussDBDataAdapterProperties());
-		    businessConfig.setDuckDBDataAdapterProperties(businessConfig.new DuckDBDataAdapterProperties());
+			businessConfig.setDataAdapter(dataRagConfig.getDataAdapter());
 		return businessConfig;
     }
 }

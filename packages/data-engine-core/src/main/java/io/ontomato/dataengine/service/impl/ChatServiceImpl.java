@@ -18,6 +18,7 @@ import io.ontomato.dataengine.config.AgentRole;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.logging.DiagnosticEventLogger;
 import io.ontomato.dataengine.dao.*;
@@ -63,6 +64,9 @@ public class ChatServiceImpl implements ChatService {
     
     @Autowired
     DataRagConfig dataRagConfig;
+
+    @Autowired
+    private DataAdapterRegistry dataAdapterRegistry;
     
     @Autowired
 	private BusinessConfigService businessConfigService;
@@ -373,7 +377,7 @@ public class ChatServiceImpl implements ChatService {
 				public void run() {
 					try {
 						String trySessionId = BackendSessionEntrance.derive(sessionId, "try-" + ii);
-						String[] userMessageArray = UserMessageUtil.getQuestionUserMessage(trySessionId, knowledgeDao,bussinessExampleDao, q, classes, subQuery, dataRagConfig, businessConfigService, jsonRule, dslCookerExample, domainId);
+						String[] userMessageArray = UserMessageUtil.getQuestionUserMessage(trySessionId, knowledgeDao,bussinessExampleDao, q, classes, subQuery, dataAdapterRegistry.create(businessConfig, null), businessConfigService, jsonRule, dslCookerExample, domainId);
 						String userMessage = userMessageArray[0];
 						String userMessageWithoutExample = userMessageArray[1];
 						String queryJson = multiThreadAIChatService.chat(
@@ -546,7 +550,7 @@ public class ChatServiceImpl implements ChatService {
         		JSONCheckUtil.Result checkResult = illegalCheckResultMap.get(illegalTrySessionId);
         		String strCheckResult = subQuery.getString("subQuestion") + "\n\n" + abcStep + "\n\nPay special attention to the following points:\n" + checkResult.toIllegalContent();
                 log.warn("[" + originSessionId + "] " + strCheckResult);
-			String[] userMessageRetryArray = UserMessageUtil.getQuestionUserMessage(illegalTrySessionId, knowledgeDao,bussinessExampleDao, strCheckResult, classes, subQuery, dataRagConfig, businessConfigService, jsonRule, dslCookerExample, domainId);
+			String[] userMessageRetryArray = UserMessageUtil.getQuestionUserMessage(illegalTrySessionId, knowledgeDao,bussinessExampleDao, strCheckResult, classes, subQuery, dataAdapterRegistry.create(businessConfig, null), businessConfigService, jsonRule, dslCookerExample, domainId);
     			String userMessageRetry = userMessageRetryArray[0];
     			String userMessageRetryWithoutExample = userMessageRetryArray[1];
     			evaluation.setUserMessage(userMessageRetry);
@@ -921,6 +925,7 @@ public class ChatServiceImpl implements ChatService {
 						abcSubQueryTaskDao,
 						dataRagConfig,
 						businessConfig,
+						dataAdapterRegistry,
 						lang,
 						user.getDomainId()
 				);
@@ -976,7 +981,7 @@ public class ChatServiceImpl implements ChatService {
     public Map<String,Object> getM3Data(String queryJson, UserDataPermission permission, String domainId) {
     	Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
     	BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, queryJson, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), queryJson, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 		return results[1].rawResponse();
     }
     
@@ -1050,7 +1055,7 @@ public class ChatServiceImpl implements ChatService {
     		JSONArray dsls = new JSONArray();
     		dsls.add(dsl);
     		BusinessConfig businessConfig = businessConfigService.get(domainId);
-			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, businessConfig, JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
 			Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
     		JSONObject rowPermissionDataMapJson = JSONObject.parseObject(JSON.toJSONString(rowPermissionDataMap, Feature.WriteMapNullValue));
     		JSONObject rowColPermissionDataMap = DslPermissionUtil.dealDslAnswerWithPermission(rowPermissionDataMapJson, permission, classDefs);

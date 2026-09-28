@@ -1,6 +1,6 @@
 ---
 name: ontomato-ontomap-builder
-description: Build an ontomap for one datasource, import it into Ontomato, and query that data in natural language. Use when connecting MySQL, PostgreSQL, Oracle, SQL Server, DB2, GaussDB, or DuckDB, writing or replacing the ontomap, or asking a natural-language question.
+description: Build an ontomap for one datasource, import it into Ontomato, and query that data in natural language. Use when connecting a database supported by this deployment, writing or replacing the ontomap, or asking a natural-language question.
 ---
 
 # Ontomap builder
@@ -27,18 +27,20 @@ envUrl: http://host:3000
 ## Workflow
 
 1. Fill in `application.yml`.
-2. `node ontomato.mjs use-datasource <type> @payload.json`
-3. Inspect the business tables and rows with your own database tools. This skill does not query that database.
-4. Write the ontomap from that structure.
-5. `node ontomato.mjs set-ontomap @ontomap.json`
-6. `node ontomato.mjs get-ontomap` and compare it with the file you wrote.
-7. `node ontomato.mjs ask "..."` with a few simple questions that touch the main tables and relationships. If an answer is missing or wrong, go back and fill in `desc` and relationships, then set the ontomap again.
+2. `node ontomato.mjs list-datasources` to see which database types this deployment supports and which connection fields each type needs.
+3. `node ontomato.mjs use-datasource <type> @payload.json`
+4. Inspect the business tables and rows with your own database tools. This skill does not query that database.
+5. Write the ontomap from that structure.
+6. `node ontomato.mjs set-ontomap @ontomap.json`
+7. `node ontomato.mjs get-ontomap` and compare it with the file you wrote.
+8. `node ontomato.mjs ask "..."` with a few simple questions that touch the main tables and relationships. If an answer is missing or wrong, go back and fill in `desc` and relationships, then set the ontomap again.
 
 ## Commands
 
 Run `node ontomato.mjs <command>` from this directory, or pass the script path. JSON may be an argument or `@file`.
 
 ```
+node ontomato.mjs list-datasources
 node ontomato.mjs use-datasource <type> '<json>'
 node ontomato.mjs use-datasource <type> @payload.json
 node ontomato.mjs get-ontomap
@@ -48,97 +50,32 @@ node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang zh "共有多少人？"
 ```
 
-`type` is `mysql`, `postgresql`, `oracle`, `sqlserver`, `db2`, `gaussdb`, or `duckdb`.
+`type` is one of the types `list-datasources` prints.
 
 `ask` sends `Accept-Language`. The default is `en`.
 
 A JSON body of `{success, message, data}` with `success: false` is printed and the process exits non-zero. A non-2xx response prints the HTTP status and the response body, then exits non-zero.
 
-## Datasource payloads
+## Connect a datasource
 
-Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in the URL. Passwords below are placeholders.
+1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`. Prints the adapters installed in this deployment. Each entry has `type`, `label`, `sql`, `fields` (the connection fields the type needs) and `examples` (a sample value per field).
+2. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`. The script merges `type` into the JSON and posts it. Send the fields listed in that type's `fields`; usually `url`, `user`, `password`.
 
-### mysql
+Which types are actually available depends on the deployment. `list-datasources` is authoritative.
 
-`POST /api/data-query/businessConfig/useMysqlDataAdapter`
+## Connection notes per database
 
-```json
-{
-  "mysqlUrl": "jdbc:mysql://db.example:3306/my_database?useUnicode=true&characterEncoding=utf8&useSSL=false",
-  "mysqlUser": "app",
-  "mysqlPassword": "change-me"
-}
-```
+Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in the URL.
 
-### postgresql
-
-`POST /api/data-query/businessConfig/usePostgreDataAdapter`
-
-```json
-{
-  "pgsqlUrl": "jdbc:postgresql://db.example:5432/my_database?currentSchema=public",
-  "pgsqlUser": "app",
-  "pgsqlPassword": "change-me"
-}
-```
-
-### oracle
-
-`POST /api/data-query/businessConfig/useOracleDataAdapter`
-
-```json
-{
-  "oracleUrl": "jdbc:oracle:thin:@db.example:1521:orcl",
-  "oracleUser": "app",
-  "oraclePassword": "change-me"
-}
-```
-
-### sqlserver
-
-`POST /api/data-query/businessConfig/useSqlServerDataAdapter`
-
-```json
-{
-  "sqlServerUrl": "jdbc:sqlserver://db.example:1433;databaseName=my_database",
-  "sqlServerUser": "app",
-  "sqlServerPassword": "change-me"
-}
-```
-
-### db2
-
-`POST /api/data-query/businessConfig/useDb2DataAdapter`
-
-```json
-{
-  "db2Url": "jdbc:db2://db.example:50000/my_database",
-  "db2User": "app",
-  "db2Password": "change-me"
-}
-```
-
-### gaussdb
-
-`POST /api/data-query/businessConfig/useGaussDBDataAdapter`
-
-```json
-{
-  "gaussDBUrl": "jdbc:opengauss://db.example:5432/my_database",
-  "gaussDBUser": "app",
-  "gaussDBPassword": "change-me"
-}
-```
-
-### duckdb
-
-`POST /api/data-query/businessConfig/useDuckDBDataAdapter`
-
-```json
-{
-  "duckdbUrl": "jdbc:duckdb:/data/warehouse.duckdb"
-}
-```
+| Type | Notes |
+| --- | --- |
+| mysql | Accepts URL parameters such as `useUnicode=true&characterEncoding=utf8&useSSL=false`, e.g. `jdbc:mysql://db.example:3306/my_database?useUnicode=true&characterEncoding=utf8&useSSL=false`. |
+| postgresql | Select the schema in the URL with `currentSchema`, e.g. `jdbc:postgresql://db.example:5432/my_database?currentSchema=public`. |
+| oracle | Thin style, e.g. `jdbc:oracle:thin:@db.example:1521:orcl`. |
+| sqlserver | Select the database in the URL with `databaseName`, e.g. `jdbc:sqlserver://db.example:1433;databaseName=my_database`. |
+| db2 | e.g. `jdbc:db2://db.example:50000/my_database`. |
+| gaussdb | Scheme `jdbc:opengauss://`, e.g. `jdbc:opengauss://db.example:5432/my_database`. |
+| duckdb | The URL is a file path the backend can access, e.g. `jdbc:duckdb:/data/warehouse.duckdb`; `fields` is `url` only. |
 
 ## Ontomap
 

@@ -49,44 +49,20 @@ export interface EmbeddingModelConfig {
   customHeaders?: Record<string, string> | null;
 }
 
-export interface MysqlAdapterConfig {
-  mysqlUrl: string;
-  mysqlUser: string;
-  mysqlPassword: string;
-}
+/** 数据适配器连接可填的字段；每种适配器实际需要哪些由后端列表的 fields 给出。 */
+export type DataAdapterField = "url" | "user" | "password";
 
-export interface PgsqlAdapterConfig {
-  pgsqlUrl: string;
-  pgsqlUser: string;
-  pgsqlPassword: string;
-}
+/** 某种适配器已保存的连接（业务配置 dataAdapterConnections 的值）。 */
+export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
 
-export interface OracleAdapterConfig {
-  oracleUrl: string;
-  oracleUser: string;
-  oraclePassword: string;
-}
-
-export interface SqlServerAdapterConfig {
-  sqlServerUrl: string;
-  sqlServerUser: string;
-  sqlServerPassword: string;
-}
-
-export interface Db2AdapterConfig {
-  db2Url: string;
-  db2User: string;
-  db2Password: string;
-}
-
-export interface GaussDBAdapterConfig {
-  gaussDBUrl: string;
-  gaussDBUser: string;
-  gaussDBPassword: string;
-}
-
-export interface DuckDBAdapterConfig {
-  duckdbUrl: string;
+/** 本版本已安装的数据适配器（GET /businessConfig/dataAdapters 的一项）。 */
+export interface DataAdapterInfo {
+  type: string;
+  label: string;
+  sql: boolean;
+  fields: DataAdapterField[];
+  /** 输入框示例（只含有示例的字段），由适配器模块声明。 */
+  examples: Partial<Record<DataAdapterField, string>>;
 }
 
 export interface BusinessConfig {
@@ -101,13 +77,7 @@ export interface BusinessConfig {
   questionSpliterTimeout: number;
   lang: string;
   dataAdapter: string;
-  mysqlDataAdapterProperties: MysqlAdapterConfig | null;
-  pgsqlDataAdapterProperties: PgsqlAdapterConfig | null;
-  oracleDataAdapterProperties: OracleAdapterConfig | null;
-  sqlServerDataAdapterProperties: SqlServerAdapterConfig | null;
-  db2DataAdapterProperties: Db2AdapterConfig | null;
-  gaussDBDataAdapterProperties: GaussDBAdapterConfig | null;
-  duckDBDataAdapterProperties: DuckDBAdapterConfig | null;
+  dataAdapterConnections: Record<string, DataAdapterConnection>;
 }
 
 export const agentKeys = [

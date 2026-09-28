@@ -134,17 +134,24 @@ vi.mock("../../../admin", () => ({
             questionSpliterTries: 1,
             questionSpliterTimeout: 300000,
             lang: "zh-CN",
-            dataAdapter: "m3",
-            mysqlDataAdapterProperties: null,
-            pgsqlDataAdapterProperties: null,
-            oracleDataAdapterProperties: null,
-            sqlServerDataAdapterProperties: null,
-            db2DataAdapterProperties: null,
-            gaussDBDataAdapterProperties: null,
+            dataAdapter: "postgresql",
+            dataAdapterConnections: {},
           })
         ),
       };
     }),
+    listDataAdapters: vi.fn(async () => ({
+      success: true,
+      data: [
+        {
+          type: "postgresql",
+          label: "PostgreSQL",
+          sql: true,
+          fields: ["url", "user", "password"],
+          examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
+        },
+      ],
+    })),
     getSystemModelConfig: vi.fn(async () => ({
       success: true,
       data: JSON.parse(JSON.stringify(fixtures.system)),

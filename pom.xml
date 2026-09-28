@@ -18,6 +18,13 @@
 
     <modules>
         <module>packages/data-engine-core</module>
+        <module>packages/data-adapters/postgresql</module>
+        <module>packages/data-adapters/mysql</module>
+        <module>packages/data-adapters/oracle</module>
+        <module>packages/data-adapters/sqlserver</module>
+        <module>packages/data-adapters/db2</module>
+        <module>packages/data-adapters/gaussdb</module>
+        <module>packages/data-adapters/duckdb</module>
         <module>apps/data-engine</module>
     </modules>
 
@@ -104,6 +111,7 @@
                 <artifactId>mssql-jdbc</artifactId>
                 <version>12.8.1.jre11</version>
             </dependency>
+            <!-- Overrides the Spring Boot BOM (12.1.0.0) for the db2 adapter and every app that installs it. -->
             <dependency>
                 <groupId>com.ibm.db2</groupId>
                 <artifactId>jcc</artifactId>

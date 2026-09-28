@@ -43,6 +43,8 @@ function repo(t, appName) {
   writeFileSync(join(dir, "package.json"), '{"name":"fixture","private":true}\n');
   writeFileSync(join(dir, "pnpm-workspace.yaml"), "packages:\n  - 'apps/*'\n");
   writeFileSync(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  writeFileSync(join(dir, "LICENSE"), "fixture license\n");
+  writeFileSync(join(dir, "NOTICE"), "fixture notice\n");
   writeFileSync(
     join(dir, "pom.xml"),
     `<project><properties><revision>${VERSION}</revision></properties></project>\n`,
@@ -257,6 +259,9 @@ test("success packs with snapshot metadata and keeps the runtime lock", async (t
     const buildArgv = calls(docker.state).find((argv) => argv.includes("--load"));
     const workspaceArg = buildArgv.find((arg) => arg.startsWith("WORKSPACE="));
     assert.equal(workspaceArg, `WORKSPACE=${app.workspaceId}`);
+    // The web notices list the selected application's workspace closure.
+    const applicationArg = buildArgv.find((arg) => arg.startsWith("APPLICATION="));
+    assert.equal(applicationArg, `APPLICATION=${root === pub ? "@ontomato" : "@enterprise"}/workbench`);
     const meta = metaArg(buildArgv);
     assert.equal(meta.schema, 3);
     assert.equal(meta.kind, "app");
@@ -400,10 +405,11 @@ test("the app recipe declares its stage arguments and launch permissions", () =>
   const stage = recipe.slice(recipe.indexOf("AS web-builder"));
   assert.match(stage, /\nARG WORKSPACE=/);
   assert.match(stage, /\nARG APP_META_JSON/);
+  assert.match(stage, /\nARG APPLICATION\n/);
   assert.match(recipe, /chmod 0755 \/stage\/launch\.sh/);
   const [builder, final] = recipe.split("FROM scratch AS app");
   const sources = [...builder.matchAll(/^COPY\s+(\S+)/gm)].map((match) => match[1]);
-  assert.deepEqual(sources, ["workspace/", "runtime-contract.json", "inputs.json", "tools/", "launch.sh"]);
+  assert.deepEqual(sources, ["workspace/", "runtime-contract.json", "inputs.json", "tools/", "launch.sh", "LICENSE"]);
   assert.match(final, /COPY --from=web-builder \/stage\/ \//);
 });
 

@@ -2,12 +2,12 @@ package io.ontomato.dataengine.dataAdapter;
 
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
-import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,8 +19,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
-import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.BusinessConfig.GaussDBDataAdapterProperties;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
@@ -28,24 +26,24 @@ import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class GaussDBAdapter implements DataAdapter {
+public class Db2Adapter implements DataAdapter {
 
-	private GaussDBDataAdapterProperties gaussDBDataAdapterProperties;
+	private DataAdapterConnection connection;
 	private Map<String, Object> jsonRule;
 
-	public GaussDBAdapter(GaussDBDataAdapterProperties gaussDBDataAdapterProperties, Map<String, Object> jsonRule) {
-		this.gaussDBDataAdapterProperties = gaussDBDataAdapterProperties;
+	public Db2Adapter(DataAdapterConnection connection, Map<String, Object> jsonRule) {
+		this.connection = connection;
 		this.jsonRule = jsonRule;
 	}
 
 	@Override
 	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
-		log.info("[" + sessionId + "] DSL to query GaussDB: " + queryJson);
+		log.info("[" + sessionId + "] DB2 query DSL: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
-		log.info("[" + sessionId + "] Converted GaussDB sql: " + sql);
-		JSONArray data = executeSql(gaussDBDataAdapterProperties, sql);
+		log.info("[" + sessionId + "] Converted DB2 sql: " + sql);
+		JSONArray data = executeSql(connection, sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -139,7 +137,7 @@ public class GaussDBAdapter implements DataAdapter {
 												+ " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										sqlCond = "\"" + alias + "\".\"" + attr + "\" " + cond.getString("operator")
-												+ " TO_TIMESTAMP(" + cond.getLong("value") + ")";
+												+ " TIMESTAMP('1970-01-01', '00:00:00') + " + cond.getLong("value") + " SECONDS";
 									}
 								} else if ("like".equals(cond.getString("operator"))
 										|| "not like".equals(cond.getString("operator"))) {
@@ -160,7 +158,7 @@ public class GaussDBAdapter implements DataAdapter {
 												+ " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										sqlCond = "\"" + alias + "\".\"" + attr + "\" " + cond.getString("operator")
-												+ " TO_TIMESTAMP(" + cond.getLong("value") + ")";
+												+ " TIMESTAMP('1970-01-01', '00:00:00') + " + cond.getLong("value") + " SECONDS";
 									}
 								} else if ("between".equals(cond.getString("operator"))) {
 									JSONArray value = cond.getJSONArray("value");
@@ -168,9 +166,9 @@ public class GaussDBAdapter implements DataAdapter {
 										sqlCond = "(\"" + alias + "\".\"" + attr + "\" >= " + value.get(0)
 												+ " and \"" + alias + "\".\"" + attr + "\" <= " + value.get(1) + ")";
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
-										sqlCond = "(\"" + alias + "\".\"" + attr + "\" >= TO_TIMESTAMP("
-												+ value.getLong(0) + ") and \"" + alias + "\".\"" + attr
-												+ "\" <= TO_TIMESTAMP(" + value.getLong(1) + "))";
+										sqlCond = "(\"" + alias + "\".\"" + attr + "\" >= TIMESTAMP('1970-01-01', '00:00:00') + "
+												+ value.getLong(0) + " SECONDS and \"" + alias + "\".\"" + attr
+												+ "\" <= TIMESTAMP('1970-01-01', '00:00:00') + " + value.getLong(1) + " SECONDS)";
 									}
 								} else if ("in".equals(cond.getString("operator"))) {
 									JSONArray value = cond.getJSONArray("value");
@@ -191,7 +189,7 @@ public class GaussDBAdapter implements DataAdapter {
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										String in = "";
 										for (int j = 0; j < value.size(); j++) {
-											in += "TO_TIMESTAMP(" + value.getLong(j) + "),";
+											in += "TIMESTAMP('1970-01-01', '00:00:00') + " + value.getLong(j) + " SECONDS,";
 										}
 										in = "(" + in.substring(0, in.length() - 1) + ")";
 										sqlCond = "\"" + alias + "\".\"" + attr + "\" in " + in;
@@ -317,7 +315,7 @@ public class GaussDBAdapter implements DataAdapter {
 			if (steps.size() == 1) {
 				subSelectSql = appendGroupByHaving(firstStep, subSelectSql, null);
 				subSelectSql = appendOrderBy(firstStep, subSelectSql, null);
-				subSelectSql = appendLimit(firstStep, subSelectSql);
+				subSelectSql = appendOffsetFetch(firstStep, subSelectSql);
 				return subSelectSql;
 			} else {
 				JSONObject secondStep = steps.getJSONObject(1);
@@ -355,7 +353,7 @@ public class GaussDBAdapter implements DataAdapter {
 
 				sql = appendGroupByHaving(secondStep, sql, tmpClassAs);
 				sql = appendOrderBy(secondStep, sql, tmpClassAs);
-				sql = appendLimit(secondStep, sql);
+				sql = appendOffsetFetch(secondStep, sql);
 				return sql;
 			}
 		} catch (Exception e) {
@@ -417,7 +415,7 @@ public class GaussDBAdapter implements DataAdapter {
 		return sql;
 	}
 
-	private String appendLimit(JSONObject step, String sql) {
+	private String appendOffsetFetch(JSONObject step, String sql) {
 		if (step.getJSONObject("output").getJSONObject("limit") == null) {
 			return sql;
 		}
@@ -425,8 +423,8 @@ public class GaussDBAdapter implements DataAdapter {
 		if (offset == null) {
 			offset = 0;
 		}
-		sql += "\nlimit " + step.getJSONObject("output").getJSONObject("limit").getInteger("count")
-				+ " offset " + offset;
+		sql += "\noffset " + offset + " rows fetch next "
+				+ step.getJSONObject("output").getJSONObject("limit").getInteger("count") + " rows only";
 		return sql;
 	}
 
@@ -445,8 +443,8 @@ public class GaussDBAdapter implements DataAdapter {
 					select += ", ";
 				}
 			}
-			String sql = "select " + select + " from " + className + " limit 1";
-			JSONArray data = executeSql(gaussDBDataAdapterProperties, sql);
+			String sql = "select " + select + " from " + className + " fetch first 1 rows only";
+			JSONArray data = executeSql(connection, sql);
 			if (data.size() > 0) {
 				JSONObject datum = data.getJSONObject(0);
 				Set<String> keys = datum.keySet();
@@ -469,7 +467,7 @@ public class GaussDBAdapter implements DataAdapter {
 		}
 	}
 
-	private JSONArray executeSql(GaussDBDataAdapterProperties props, String sql) throws Exception {
+	private JSONArray executeSql(DataAdapterConnection props, String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -477,7 +475,10 @@ public class GaussDBAdapter implements DataAdapter {
 		ResultSet rs = null;
 		try {
 			JSONArray rows = new JSONArray();
-			conn = createDataSource(props).getConnection();
+			conn = DriverManager.getConnection(
+					props.getUrl(),
+					props.getUser(),
+					props.getPassword());
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();
@@ -513,18 +514,6 @@ public class GaussDBAdapter implements DataAdapter {
 				try { conn.close(); } catch (Exception e) { log.error(e.getMessage(), e); }
 			}
 		}
-	}
-
-	SimpleDriverDataSource createDataSource(GaussDBDataAdapterProperties props) {
-		String url = props.getGaussDBUrl();
-		if (url != null && url.startsWith("jdbc:postgresql:")) {
-			url = "jdbc:opengauss:" + url.substring("jdbc:postgresql:".length());
-		}
-		return new SimpleDriverDataSource(
-				new org.opengauss.Driver(),
-				url,
-				props.getGaussDBUser(),
-				props.getGaussDBPassword());
 	}
 
 	@Override
@@ -600,8 +589,7 @@ public class GaussDBAdapter implements DataAdapter {
 	}
 
 	@Override
-	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, BusinessConfig businessConfig,
-			VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
+	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
 		// TODO Auto-generated method stub
 		return null;
 	}

@@ -27,6 +27,7 @@ import io.ontomato.dataengine.config.AgentRole;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.BackendSessionEntrance;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.CheckService;
@@ -67,6 +68,9 @@ public class CheckServiceImpl implements CheckService {
 	
 	@Autowired
     DataRagConfig dataRagConfig;
+
+	@Autowired
+	private DataAdapterRegistry dataAdapterRegistry;
 	
 	@Autowired
 	private BusinessConfigService businessConfigService;
@@ -229,7 +233,7 @@ public class CheckServiceImpl implements CheckService {
 				}
 			} catch (Exception e) {}
 			BusinessConfig businessConfig = businessConfigService.get(domainId);
-			String userMessage = UserMessageUtil.getDslDescriberUserMessage(sessionId, inputDslStr, classes, dataRagConfig, businessConfig, jsonRule, lang, langService);
+			String userMessage = UserMessageUtil.getDslDescriberUserMessage(sessionId, inputDslStr, classes, dataAdapterRegistry.create(businessConfig, null), jsonRule, lang, langService);
 			
 			OriginalQuestion originalQuestion = new OriginalQuestion();
 			originalQuestion.setId(sessionId);

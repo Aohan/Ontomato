@@ -13,8 +13,7 @@ import io.ontomato.dataengine.bean.abcHarness.ABCHarnessProgramDescription;
 import io.ontomato.dataengine.bean.function.Function;
 import io.ontomato.dataengine.bean.function.Parameter;
 import io.ontomato.dataengine.bean.metricView.MetricView;
-import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dao.*;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.LangService;
@@ -228,13 +227,12 @@ public class UserMessageUtil {
 
 	public static String[] getQuestionUserMessage(String sessionid, KnowledgeDao knowledgeDao,
 											  BussinessExampleDao bussinessExampleDao,String question,
-											  List<String> classes, JSONObject subQuery, DataRagConfig dataRagConfig, BusinessConfigService businessConfigService,
+											  List<String> classes, JSONObject subQuery, DataAdapter adapter, BusinessConfigService businessConfigService,
 											  Map<String, Object> jsonRule, String example, String domainId) {
         String questionPrompt = FileUtil.getResourceFileLoadAll(DSL_COOKER_PROMPT, "utf-8");
         String questionPromptWithoutExample = questionPrompt + "";
 
-        BusinessConfig businessConfig = businessConfigService.get(domainId);
-        Map<String, String> mapClassDBSchema =DBSchemaUtil.getClassDefWord(jsonRule, classes, dataRagConfig, businessConfig);
+        Map<String, String> mapClassDBSchema =DBSchemaUtil.getClassDefWord(jsonRule, classes, adapter);
 
         //dataset description
         String datasetDesc = mapClassDBSchema.get(DBSchemaUtil.KEY_DATASET_DESC);
@@ -281,10 +279,10 @@ public class UserMessageUtil {
     }
     
     
-    public static String getDslDescriberUserMessage(String sessionid, String dslStr, List<String> classes, DataRagConfig dataRagConfig, BusinessConfig businessConfig, Map<String, Object> jsonRule, String lang, LangService langService) {
+    public static String getDslDescriberUserMessage(String sessionid, String dslStr, List<String> classes, DataAdapter adapter, Map<String, Object> jsonRule, String lang, LangService langService) {
         String questionPrompt = FileUtil.getResourceFileLoadAll(DSL_DESCRIBER_PROMPT, "utf-8");
         
-        Map<String, String> mapClassDBSchema =DBSchemaUtil.getClassDefWord(jsonRule, classes, dataRagConfig, businessConfig);
+        Map<String, String> mapClassDBSchema =DBSchemaUtil.getClassDefWord(jsonRule, classes, adapter);
 
         //dataset description
         String datasetDesc = mapClassDBSchema.get(DBSchemaUtil.KEY_DATASET_DESC);

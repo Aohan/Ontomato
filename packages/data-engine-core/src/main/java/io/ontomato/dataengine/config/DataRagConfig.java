@@ -57,12 +57,6 @@ public class DataRagConfig {
     private Long questionSpliterTimeout = 3 * 60 * 1000L;
 
     private String dataAdapter;
-
-    private String mysqlUrl;
-
-    private String mysqlUser;
-
-    private String mysqlPassword;
     
     private String productionEnvUrl;
     
@@ -92,30 +86,6 @@ public class DataRagConfig {
 
 	public void setProductionEnvPwd(String productionEnvPwd) {
 		this.productionEnvPwd = productionEnvPwd;
-	}
-
-	public String getMysqlUrl() {
-		return mysqlUrl;
-	}
-
-	public void setMysqlUrl(String mysqlUrl) {
-		this.mysqlUrl = mysqlUrl;
-	}
-
-	public String getMysqlUser() {
-		return mysqlUser;
-	}
-
-	public void setMysqlUser(String mysqlUser) {
-		this.mysqlUser = mysqlUser;
-	}
-
-	public String getMysqlPassword() {
-		return mysqlPassword;
-	}
-
-	public void setMysqlPassword(String mysqlPassword) {
-		this.mysqlPassword = mysqlPassword;
 	}
 
 	public String getDataAdapter() {

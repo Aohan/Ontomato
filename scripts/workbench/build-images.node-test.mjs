@@ -33,6 +33,8 @@ function repo(t, appName) {
   writeFileSync(join(dir, "package.json"), '{"name":"fixture","private":true}\n');
   writeFileSync(join(dir, "pnpm-workspace.yaml"), "packages:\n  - 'apps/*'\n");
   writeFileSync(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  writeFileSync(join(dir, "LICENSE"), "fixture license\n");
+  writeFileSync(join(dir, "NOTICE"), "fixture notice\n");
   writeFileSync(
     join(dir, "pom.xml"),
     `<project><properties><revision>${VERSION}</revision></properties></project>\n`,
@@ -259,7 +261,10 @@ test("an early Docker failure writes no lock", async (t) => {
     "tools/workbench/install-runtime.mjs",
     "tools/workbench/runtime-layout.mjs",
     "tools/build-support.mjs",
+    "tools/third_party_notices.py",
     "runtime-requirements.txt",
+    "LICENSE",
+    "NOTICE",
   ])
     assert.equal(existsSync(join(context, rel)), true, rel);
 });

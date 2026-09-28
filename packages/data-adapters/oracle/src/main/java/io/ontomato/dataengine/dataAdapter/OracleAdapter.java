@@ -19,8 +19,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
-import io.ontomato.dataengine.config.BusinessConfig;
-import io.ontomato.dataengine.config.BusinessConfig.OracleDataAdapterProperties;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
@@ -30,11 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class OracleAdapter implements DataAdapter {
 
-	private OracleDataAdapterProperties oracleDataAdapterProperties;
+	private DataAdapterConnection connection;
 	private Map<String, Object> jsonRule;
 
-	public OracleAdapter(OracleDataAdapterProperties oracleDataAdapterProperties, Map<String, Object> jsonRule) {
-		this.oracleDataAdapterProperties = oracleDataAdapterProperties;
+	public OracleAdapter(DataAdapterConnection connection, Map<String, Object> jsonRule) {
+		this.connection = connection;
 		this.jsonRule = jsonRule;
 	}
 
@@ -45,7 +43,7 @@ public class OracleAdapter implements DataAdapter {
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] Converted Oracle sql: " + sql);
-		JSONArray data = executeSql(oracleDataAdapterProperties, sql);
+		JSONArray data = executeSql(connection, sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -446,7 +444,7 @@ public class OracleAdapter implements DataAdapter {
 				}
 			}
 			String sql = "select " + select + " from " + className + " fetch first 1 rows only";
-			JSONArray data = executeSql(oracleDataAdapterProperties, sql);
+			JSONArray data = executeSql(connection, sql);
 			if (data.size() > 0) {
 				JSONObject datum = data.getJSONObject(0);
 				Set<String> keys = datum.keySet();
@@ -469,7 +467,7 @@ public class OracleAdapter implements DataAdapter {
 		}
 	}
 
-	private JSONArray executeSql(OracleDataAdapterProperties oracleDataAdapterProperties, String sql) throws Exception {
+	private JSONArray executeSql(DataAdapterConnection connection, String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -478,9 +476,9 @@ public class OracleAdapter implements DataAdapter {
 		try {
 			JSONArray rows = new JSONArray();
 			conn = DriverManager.getConnection(
-					oracleDataAdapterProperties.getOracleUrl(),
-					oracleDataAdapterProperties.getOracleUser(),
-					oracleDataAdapterProperties.getOraclePassword());
+					connection.getUrl(),
+					connection.getUser(),
+					connection.getPassword());
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();
@@ -591,8 +589,7 @@ public class OracleAdapter implements DataAdapter {
 	}
 
 	@Override
-	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, BusinessConfig businessConfig,
-			VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
+	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
 		// TODO Auto-generated method stub
 		return null;
 	}

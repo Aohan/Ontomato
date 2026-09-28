@@ -5,7 +5,7 @@
 // yaml 由调用方产品根自我声明并按该根解析，工具没有固定依赖位置。
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { accessSync, closeSync, constants, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { get } from "node:http";
 import { createRequire } from "node:module";
 import { connect } from "node:net";
@@ -14,7 +14,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdForeground } from "./dev-command.mjs";
 import { identifyWindows, windowsListeningPids, windowsProcesses, windowsStop } from "./dev-platform-windows.mjs";
-import { pythonExecutable, readDotEnv } from "./data-engine/dev-java.mjs";
+import { ensurePythonEnv, pythonExecutable, readDotEnv } from "./data-engine/dev-java.mjs";
 
 // 共享工具只锚定自己所在仓的公共 core，不按产品身份探测候选路径。
 const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "packages", "data-engine-core");
@@ -67,6 +67,7 @@ export function productContext(rootInput) {
     // venv Python 的位置只有 dev-java.mjs 一份拥有者：Windows 在 Scripts/python.exe。
     venvPython: pythonExecutable(appDir),
     mcpScript: join(CORE_ROOT, "mcp", "mcpserver.py"),
+    requirements: join(CORE_ROOT, "requirements-py310.txt"),
     mcpTemplate: join(CORE_ROOT, "conf-defaults", "mcp-clients.yml"),
     applicationTemplate: join(CORE_ROOT, "conf-defaults", "application.yml"),
     javaEntry: join(appDir, "dev.mjs"),
@@ -416,20 +417,12 @@ async function waitForJava(ctx, port, startedAt) {
 function requireAll(entries) {
   for (const [path, label] of entries) if (!existsSync(path)) throw new Error(`缺少 ${path}（${label}）`);
 }
-function executable(path) {
-  try {
-    accessSync(path, constants.X_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
 async function up(ctx) {
   const dbPort = integerLiteral(process.env.DB_PORT ?? "5432", "DB_PORT");
   const javaPort = resolveJavaPort(ctx);
   const mcpPort = resolveMcpPort(ctx);
   requireAll([[ctx.composeFile, "dev compose"], [ctx.javaEntry, "Java 入口"], [ctx.javaEnvFile, "Java .env"], [ctx.mcpScript, "MCP 脚本"]]);
-  if (!executable(ctx.venvPython)) throw new Error(`缺少可执行文件 ${ctx.venvPython}（MCP venv）`);
+  ensurePythonEnv(ctx.appDir, ctx.requirements);
   requireDocker();
   const pre = identify(ctx);
   if (pre.unattributable.length)

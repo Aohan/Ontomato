@@ -6,6 +6,7 @@
 // No real Maven or product runs.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
@@ -15,6 +16,7 @@ import {
   mavenWrapper,
   mergeEnvironment,
   prependPythonPath,
+  ensurePythonEnv,
   pythonExecutable,
   readDotEnv,
   startDevJava,
@@ -50,9 +52,13 @@ function product(t, { env = "FOO=bar\n", venv = true } = {}) {
   chmodSync(join(root, "fake-mvnw"), 0o755);
   mkdirSync(appDir, { recursive: true });
   if (env !== null) writeFileSync(join(appDir, ".env"), env);
-  // The venv Python is the real interpreter, because dev-java runs the shared sync through it.
+  // The venv Python is the real interpreter, because dev-java runs the shared sync through it; its
+  // recorded requirements hash matches, so no install runs.
   if (venv) {
-    put(appDir, { ".venv/bin/python": '#!/bin/sh\nexec python3 "$@"\n' });
+    put(appDir, {
+      ".venv/bin/python": '#!/bin/sh\nexec python3 "$@"\n',
+      ".venv/requirements.sha256": createHash("sha256").update("numpy==2.2.6\n").digest("hex"),
+    });
     chmodSync(join(appDir, ".venv/bin/python"), 0o755);
   }
   const app = {
@@ -118,10 +124,9 @@ test("a Windows .cmd wrapper receives arguments, cwd and exit code through cmd.e
   assert.deepEqual(JSON.parse(read(record)), { cwd: root, args });
 });
 
-test("missing .env, missing venv python or a bad PROMPT_LANG stop before staging or Maven", posixOnly, (t) => {
+test("missing .env or a bad PROMPT_LANG stop before staging or Maven", posixOnly, (t) => {
   for (const [setup, inherited, message] of [
     [{ env: null }, {}, /Missing .*\.env/],
-    [{ venv: false }, {}, /Missing .*\.venv\/bin\/python: prepare it once/],
     [{}, { PROMPT_LANG: "fr" }, /PROMPT_LANG must be en or zh/],
   ]) {
     const fx = product(t, setup);
@@ -129,6 +134,43 @@ test("missing .env, missing venv python or a bad PROMPT_LANG stop before staging
     assert.equal(existsSync(fx.record), false);
     assert.equal(existsSync(join(fx.root, ".build")), false);
   }
+});
+
+// A host python3 that records its argv and, for -m venv, creates a venv python recording its own.
+function fakeHostPython(t) {
+  const bin = realpathSync(mkdtempSync(join(tmpdir(), "dev-java-bin-")));
+  t.after(() => rmSync(bin, { recursive: true, force: true }));
+  const log = join(bin, "calls");
+  writeFileSync(log, "");
+  const venvPython = `#!/bin/sh\necho "venv $*" >> "${log}"\n`;
+  put(bin, {
+    python3: `#!/bin/sh\necho "host $*" >> "${log}"\nmkdir -p "$3/bin"\nprintf '%s' '${venvPython}' > "$3/bin/python"\nchmod +x "$3/bin/python"\n`,
+  });
+  chmodSync(join(bin, "python3"), 0o755);
+  return { env: { PATH: `${bin}${delimiter}/bin${delimiter}/usr/bin` }, calls: () => read(log).trim().split("\n").filter(Boolean) };
+}
+
+test("the venv is created with the host python3, installed once per requirements content and reused", posixOnly, (t) => {
+  const fx = product(t, { venv: false });
+  const host = fakeHostPython(t);
+  const requirements = join(fx.root, "requirements.txt");
+  const venv = join(fx.appDir, ".venv");
+  assert.equal(ensurePythonEnv(fx.appDir, requirements, host.env), join(venv, "bin/python"));
+  assert.deepEqual(host.calls(), [`host -m venv ${venv}`, `venv -m pip install -r ${requirements}`]);
+  ensurePythonEnv(fx.appDir, requirements, host.env);
+  assert.equal(host.calls().length, 2);
+  writeFileSync(requirements, "numpy==2.3.0\n");
+  ensurePythonEnv(fx.appDir, requirements, host.env);
+  assert.deepEqual(host.calls().slice(2), [`venv -m pip install -r ${requirements}`]);
+});
+
+test("without a host python3 the venv setup stops with the Python requirement", posixOnly, (t) => {
+  const fx = product(t, { venv: false });
+  assert.throws(
+    () => ensurePythonEnv(fx.appDir, join(fx.root, "requirements.txt"), { PATH: "/nonexistent" }),
+    /Creating .* failed.*Python 3\.10\+ is required/,
+  );
+  assert.equal(existsSync(join(fx.appDir, ".venv/requirements.sha256")), false);
 });
 
 test("the wrapper gets the reactor argv, profile, user args, .env over inherited env, venv PATH and its exit code comes back", posixOnly, async (t) => {
