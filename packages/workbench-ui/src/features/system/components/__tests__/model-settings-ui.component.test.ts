@@ -140,7 +140,6 @@ vi.mock("../../../admin", () => ({
             oracleDataAdapterProperties: null,
             sqlServerDataAdapterProperties: null,
             db2DataAdapterProperties: null,
-            dmDataAdapterProperties: null,
             gaussDBDataAdapterProperties: null,
           })
         ),

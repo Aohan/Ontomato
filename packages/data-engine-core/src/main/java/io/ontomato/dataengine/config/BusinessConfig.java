@@ -41,7 +41,6 @@ public class BusinessConfig {
 	private OracleDataAdapterProperties oracleDataAdapterProperties;
 	private SqlServerDataAdapterProperties sqlServerDataAdapterProperties;
 	private Db2DataAdapterProperties db2DataAdapterProperties;
-	private DmDataAdapterProperties dmDataAdapterProperties;
 	private GaussDBDataAdapterProperties gaussDBDataAdapterProperties;
 	private DuckDBDataAdapterProperties duckDBDataAdapterProperties;
 
@@ -89,13 +88,6 @@ public class BusinessConfig {
 		private String db2Url;
 	    private String db2User;
 	    private String db2Password;
-	}
-
-	@Data
-	public class DmDataAdapterProperties {
-		private String dmUrl;
-	    private String dmUser;
-	    private String dmPassword;
 	}
 
 	@Data
@@ -180,7 +172,6 @@ public class BusinessConfig {
 		    businessConfig.setOracleDataAdapterProperties(businessConfig.new OracleDataAdapterProperties());
 		    businessConfig.setSqlServerDataAdapterProperties(businessConfig.new SqlServerDataAdapterProperties());
 		    businessConfig.setDb2DataAdapterProperties(businessConfig.new Db2DataAdapterProperties());
-		    businessConfig.setDmDataAdapterProperties(businessConfig.new DmDataAdapterProperties());
 		    businessConfig.setGaussDBDataAdapterProperties(businessConfig.new GaussDBDataAdapterProperties());
 		    businessConfig.setDuckDBDataAdapterProperties(businessConfig.new DuckDBDataAdapterProperties());
 		return businessConfig;

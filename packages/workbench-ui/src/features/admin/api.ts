@@ -31,7 +31,6 @@ export const adminApi = {
   useSqlServerDataAdapter: (payload: unknown) =>
     apiPost("/businessConfig/useSqlServerDataAdapter", payload),
   useDb2DataAdapter: (payload: unknown) => apiPost("/businessConfig/useDb2DataAdapter", payload),
-  useDmDataAdapter: (payload: unknown) => apiPost("/businessConfig/useDmDataAdapter", payload),
   useGaussDbDataAdapter: (payload: unknown) =>
     apiPost("/businessConfig/useGaussDBDataAdapter", payload),
   useDuckDBDataAdapter: (payload: unknown) =>

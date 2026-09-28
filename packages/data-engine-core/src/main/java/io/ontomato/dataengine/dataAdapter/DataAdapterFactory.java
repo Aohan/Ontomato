@@ -14,7 +14,6 @@ public class DataAdapterFactory {
 	public static final String ORACLE = "oracle";
 	public static final String SQL_SERVER = "sqlserver";
 	public static final String DB2 = "db2";
-	public static final String DM = "dm";
 	public static final String GAUSSDB = "gaussdb";
 	public static final String DUCKDB = "duckdb";
 
@@ -30,8 +29,6 @@ public class DataAdapterFactory {
 			adapter = new SqlServerAdapter(businessConfig.getSqlServerDataAdapterProperties(), jsonRule);
 		} else if (DB2.equals(businessConfig.getDataAdapter())) {
 			adapter = new Db2Adapter(businessConfig.getDb2DataAdapterProperties(), jsonRule);
-		} else if (DM.equals(businessConfig.getDataAdapter())) {
-			adapter = new DmAdapter(businessConfig.getDmDataAdapterProperties(), jsonRule);
 		} else if (GAUSSDB.equals(businessConfig.getDataAdapter())) {
 			adapter = new GaussDBAdapter(businessConfig.getGaussDBDataAdapterProperties(), jsonRule);
 		} else if (DUCKDB.equals(businessConfig.getDataAdapter())) {
@@ -55,8 +52,6 @@ public class DataAdapterFactory {
 			adapter = new SqlServerAdapter(businessConfig.getSqlServerDataAdapterProperties(), null);
 		} else if (DB2.equals(businessConfig.getDataAdapter())) {
 			adapter = new Db2Adapter(businessConfig.getDb2DataAdapterProperties(), null);
-		} else if (DM.equals(businessConfig.getDataAdapter())) {
-			adapter = new DmAdapter(businessConfig.getDmDataAdapterProperties(), null);
 		} else if (GAUSSDB.equals(businessConfig.getDataAdapter())) {
 			adapter = new GaussDBAdapter(businessConfig.getGaussDBDataAdapterProperties(), null);
 		} else if (DUCKDB.equals(businessConfig.getDataAdapter())) {
@@ -79,8 +74,6 @@ public class DataAdapterFactory {
 			adapter = new SqlServerAdapter(businessConfig.getSqlServerDataAdapterProperties(), null);
 		} else if (DB2.equals(businessConfig.getDataAdapter())) {
 			adapter = new Db2Adapter(businessConfig.getDb2DataAdapterProperties(), null);
-		} else if (DM.equals(businessConfig.getDataAdapter())) {
-			adapter = new DmAdapter(businessConfig.getDmDataAdapterProperties(), null);
 		} else if (GAUSSDB.equals(businessConfig.getDataAdapter())) {
 			adapter = new GaussDBAdapter(businessConfig.getGaussDBDataAdapterProperties(), null);
 		} else if (DUCKDB.equals(businessConfig.getDataAdapter())) {

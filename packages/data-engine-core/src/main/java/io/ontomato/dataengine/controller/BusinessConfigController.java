@@ -21,7 +21,6 @@ import io.ontomato.dataengine.config.AgentRole;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.BusinessConfig.Db2DataAdapterProperties;
 import io.ontomato.dataengine.config.BusinessConfig.DuckDBDataAdapterProperties;
-import io.ontomato.dataengine.config.BusinessConfig.DmDataAdapterProperties;
 import io.ontomato.dataengine.config.BusinessConfig.EmbeddingModelProperties;
 import io.ontomato.dataengine.config.BusinessConfig.GaussDBDataAdapterProperties;
 import io.ontomato.dataengine.config.BusinessConfig.MysqlDataAdapterProperties;
@@ -533,35 +532,6 @@ public class BusinessConfigController {
     		db2DataAdapterProperties.setDb2User(db2User);
     		db2DataAdapterProperties.setDb2Password(db2Password);
     		businessConfig.setDataAdapter(DataAdapterFactory.DB2);
-    		businessConfigService.set(businessConfig, user.getDomainId());
-    		ret.put("success", true);
-    	} catch (Exception e) {
-    		log.error(e.getMessage(), e);
-    		ret.put("success", false);
-    		ret.put("message", e.getMessage());
-    	}
-		return ret;
-	}
-	
-	@PostMapping("/businessConfig/useDmDataAdapter")
-    @ResponseBody
-    public JSONObject useDmDataAdapter(@RequestBody JSONObject input) {
-    	JSONObject ret = new JSONObject();
-    	try {
-    		User user = SystemUtils.getCurUser();
-    		String dmUrl = input.getString("dmUrl");
-    		String dmUser = input.getString("dmUser");
-    		String dmPassword = input.getString("dmPassword");
-    		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-    		DmDataAdapterProperties dmDataAdapterProperties = businessConfig.getDmDataAdapterProperties();
-    		if (dmDataAdapterProperties == null) {
-    			dmDataAdapterProperties = businessConfig.new DmDataAdapterProperties();
-    			businessConfig.setDmDataAdapterProperties(dmDataAdapterProperties);
-    		}
-    		dmDataAdapterProperties.setDmUrl(dmUrl);
-    		dmDataAdapterProperties.setDmUser(dmUser);
-    		dmDataAdapterProperties.setDmPassword(dmPassword);
-    		businessConfig.setDataAdapter(DataAdapterFactory.DM);
     		businessConfigService.set(businessConfig, user.getDomainId());
     		ret.put("success", true);
     	} catch (Exception e) {

@@ -11,7 +11,6 @@ const ADAPTERS = {
   oracle: "/businessConfig/useOracleDataAdapter",
   sqlserver: "/businessConfig/useSqlServerDataAdapter",
   db2: "/businessConfig/useDb2DataAdapter",
-  dameng: "/businessConfig/useDmDataAdapter",
   gaussdb: "/businessConfig/useGaussDBDataAdapter",
   duckdb: "/businessConfig/useDuckDBDataAdapter",
 };
@@ -138,7 +137,7 @@ async function ask(cfg, argv) {
 
 function usage() {
   die(`usage:
-  ontomato.mjs use-datasource <mysql|postgresql|oracle|sqlserver|db2|dameng|gaussdb|duckdb> <json|@file>
+  ontomato.mjs use-datasource <mysql|postgresql|oracle|sqlserver|db2|gaussdb|duckdb> <json|@file>
   ontomato.mjs get-ontomap
   ontomato.mjs set-ontomap <json|@file>
   ontomato.mjs ask [--lang <tag>] <question>`);
@@ -151,7 +150,7 @@ async function main() {
   if (!cfg.envUrl) die("envUrl is required in application.yml");
   if (cmd === "use-datasource") {
     const backendPath = ADAPTERS[argv[1]];
-    if (!backendPath) die("type must be mysql, postgresql, oracle, sqlserver, db2, dameng, gaussdb, or duckdb");
+    if (!backendPath) die("type must be mysql, postgresql, oracle, sqlserver, db2, gaussdb, or duckdb");
     if (argv[2] == null) die("use-datasource requires a JSON payload");
     await requestJson(cfg, "POST", backendPath, JSON.parse(readInput(argv[2])));
     console.log("datasource set");

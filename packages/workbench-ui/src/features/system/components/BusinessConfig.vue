@@ -113,7 +113,6 @@ let config = reactive<BusinessConfig>({
   oracleDataAdapterProperties: null,
   sqlServerDataAdapterProperties: null,
   db2DataAdapterProperties: null,
-  dmDataAdapterProperties: null,
   gaussDBDataAdapterProperties: null,
   duckDBDataAdapterProperties: null,
 });
@@ -161,7 +160,6 @@ async function loadConfig() {
       config.oracleDataAdapterProperties = data.oracleDataAdapterProperties || null;
       config.sqlServerDataAdapterProperties = data.sqlServerDataAdapterProperties || null;
       config.db2DataAdapterProperties = data.db2DataAdapterProperties || null;
-      config.dmDataAdapterProperties = data.dmDataAdapterProperties || null;
       config.gaussDBDataAdapterProperties = data.gaussDBDataAdapterProperties || null;
       config.duckDBDataAdapterProperties = data.duckDBDataAdapterProperties || null;
       dataAdapterMode.value = config.dataAdapter;
@@ -440,18 +438,6 @@ async function saveDataAdapter() {
         db2Password: db2.db2Password,
       });
       ElMessage.success(t("admin.switchToDB2"));
-    } else if (dataAdapterMode.value === "dm") {
-      const dm = config.dmDataAdapterProperties || {
-        dmUrl: "",
-        dmUser: "",
-        dmPassword: "",
-      };
-      await adminApi.useDmDataAdapter({
-        dmUrl: dm.dmUrl,
-        dmUser: dm.dmUser,
-        dmPassword: dm.dmPassword,
-      });
-      ElMessage.success(t("admin.switchToDM"));
     } else if (dataAdapterMode.value === "gaussdb") {
       const gaussDB = config.gaussDBDataAdapterProperties || {
         gaussDBUrl: "",
@@ -753,6 +739,7 @@ onMounted(() => {
         <DataAdapterConfigCard
           v-model:config="config"
           v-model:mode="dataAdapterMode"
+          :adapter-modes="adapterModes"
           :extra-adapter="extraAdapter"
           :adapter-display="adapterDisplay"
           :saving="savingAdapter"

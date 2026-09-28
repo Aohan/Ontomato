@@ -79,12 +79,6 @@ export interface Db2AdapterConfig {
   db2Password: string;
 }
 
-export interface DmAdapterConfig {
-  dmUrl: string;
-  dmUser: string;
-  dmPassword: string;
-}
-
 export interface GaussDBAdapterConfig {
   gaussDBUrl: string;
   gaussDBUser: string;
@@ -112,7 +106,6 @@ export interface BusinessConfig {
   oracleDataAdapterProperties: OracleAdapterConfig | null;
   sqlServerDataAdapterProperties: SqlServerAdapterConfig | null;
   db2DataAdapterProperties: Db2AdapterConfig | null;
-  dmDataAdapterProperties: DmAdapterConfig | null;
   gaussDBDataAdapterProperties: GaussDBAdapterConfig | null;
   duckDBDataAdapterProperties: DuckDBAdapterConfig | null;
 }

@@ -4,7 +4,6 @@ import { useI18n } from "vue-i18n";
 import type {
   BusinessConfig,
   Db2AdapterConfig,
-  DmAdapterConfig,
   DuckDBAdapterConfig,
   GaussDBAdapterConfig,
   MysqlAdapterConfig,
@@ -12,13 +11,18 @@ import type {
   PgsqlAdapterConfig,
   SqlServerAdapterConfig,
 } from "../../types";
-import type { BusinessConfigAdapterDisplay, BusinessConfigExtraAdapter } from "../../business-config";
+import type {
+  BusinessConfigAdapterDisplay,
+  BusinessConfigAdapterMode,
+  BusinessConfigExtraAdapter,
+} from "../../business-config";
 
 const { t } = useI18n();
 
 defineProps<{
   saving: boolean;
   disabled: boolean;
+  adapterModes: BusinessConfigAdapterMode[];
   extraAdapter: Pick<BusinessConfigExtraAdapter, "mode" | "labelKey"> | null;
   adapterDisplay: BusinessConfigAdapterDisplay;
 }>();
@@ -29,6 +33,16 @@ const mode = defineModel<string>("mode", { required: true });
 const emit = defineEmits<{
   save: [];
 }>();
+
+const adapterLabelKeys: Record<BusinessConfigAdapterMode, string> = {
+  mysql: "admin.mysqlMode",
+  postgre: "admin.postgreMode",
+  oracle: "admin.oracleMode",
+  sqlserver: "admin.sqlserverMode",
+  db2: "admin.db2Mode",
+  gaussdb: "admin.gaussdbMode",
+  duckdb: "admin.duckdbMode",
+};
 
 function ensureMysqlConfig(): MysqlAdapterConfig {
   if (!config.value.mysqlDataAdapterProperties) {
@@ -73,13 +87,6 @@ function ensureDb2Config(): Db2AdapterConfig {
   return config.value.db2DataAdapterProperties;
 }
 
-function ensureDmConfig(): DmAdapterConfig {
-  if (!config.value.dmDataAdapterProperties) {
-    config.value.dmDataAdapterProperties = { dmUrl: "", dmUser: "", dmPassword: "" };
-  }
-  return config.value.dmDataAdapterProperties;
-}
-
 function ensureGaussDBConfig(): GaussDBAdapterConfig {
   if (!config.value.gaussDBDataAdapterProperties) {
     config.value.gaussDBDataAdapterProperties = {
@@ -116,14 +123,9 @@ function ensureDuckDBConfig(): DuckDBAdapterConfig {
         <el-form-item :label="t('admin.adapterMode')">
           <el-radio-group v-model="mode">
             <el-radio v-if="extraAdapter" :value="extraAdapter.mode">{{ t(extraAdapter.labelKey) }}</el-radio>
-            <el-radio value="mysql">{{ t("admin.mysqlMode") }}</el-radio>
-            <el-radio value="postgre">{{ t("admin.postgreMode") }}</el-radio>
-            <el-radio value="oracle">{{ t("admin.oracleMode") }}</el-radio>
-            <el-radio value="sqlserver">{{ t("admin.sqlserverMode") }}</el-radio>
-            <el-radio value="db2">{{ t("admin.db2Mode") }}</el-radio>
-            <el-radio value="dm">{{ t("admin.dmMode") }}</el-radio>
-            <el-radio value="gaussdb">{{ t("admin.gaussdbMode") }}</el-radio>
-            <el-radio value="duckdb">{{ t("admin.duckdbMode") }}</el-radio>
+            <el-radio v-for="adapterMode in adapterModes" :key="adapterMode" :value="adapterMode">{{
+              t(adapterLabelKeys[adapterMode])
+            }}</el-radio>
           </el-radio-group>
         </el-form-item>
 
@@ -268,33 +270,6 @@ function ensureDuckDBConfig(): DuckDBAdapterConfig {
               <el-form-item :label="t('common.password')">
                 <el-input
                   v-model="ensureDb2Config().db2Password"
-                  type="password"
-                  placeholder="******"
-                  show-password
-                />
-              </el-form-item>
-            </el-col>
-          </el-row>
-        </template>
-
-        <template v-if="mode === 'dm'">
-          <el-row :gutter="24">
-            <el-col :span="adapterDisplay.urlSpan">
-              <el-form-item :label="adapterDisplay.damengLabel">
-                <el-input v-model="ensureDmConfig().dmUrl" placeholder="jdbc:dm://host:port/db" />
-              </el-form-item>
-            </el-col>
-          </el-row>
-          <el-row :gutter="24">
-            <el-col :span="adapterDisplay.credentialSpan">
-              <el-form-item :label="t('common.username')">
-                <el-input v-model="ensureDmConfig().dmUser" placeholder="SYSDBA" />
-              </el-form-item>
-            </el-col>
-            <el-col :span="adapterDisplay.credentialSpan">
-              <el-form-item :label="t('common.password')">
-                <el-input
-                  v-model="ensureDmConfig().dmPassword"
                   type="password"
                   placeholder="******"
                   show-password

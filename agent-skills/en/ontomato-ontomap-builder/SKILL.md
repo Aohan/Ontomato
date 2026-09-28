@@ -1,6 +1,6 @@
 ---
 name: ontomato-ontomap-builder
-description: Build an ontomap for one datasource, import it into Ontomato, and query that data in natural language. Use when connecting MySQL, PostgreSQL, Oracle, SQL Server, DB2, Dameng, GaussDB, or DuckDB, writing or replacing the ontomap, or asking a natural-language question.
+description: Build an ontomap for one datasource, import it into Ontomato, and query that data in natural language. Use when connecting MySQL, PostgreSQL, Oracle, SQL Server, DB2, GaussDB, or DuckDB, writing or replacing the ontomap, or asking a natural-language question.
 ---
 
 # Ontomap builder
@@ -48,7 +48,7 @@ node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang zh "共有多少人？"
 ```
 
-`type` is `mysql`, `postgresql`, `oracle`, `sqlserver`, `db2`, `dameng`, `gaussdb`, or `duckdb`.
+`type` is `mysql`, `postgresql`, `oracle`, `sqlserver`, `db2`, `gaussdb`, or `duckdb`.
 
 `ask` sends `Accept-Language`. The default is `en`.
 
@@ -115,18 +115,6 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
   "db2Url": "jdbc:db2://db.example:50000/my_database",
   "db2User": "app",
   "db2Password": "change-me"
-}
-```
-
-### dameng
-
-`POST /api/data-query/businessConfig/useDmDataAdapter`
-
-```json
-{
-  "dmUrl": "jdbc:dm://db.example:5236/my_database",
-  "dmUser": "app",
-  "dmPassword": "change-me"
 }
 ```
 

@@ -163,7 +163,6 @@ const SQL_ADAPTERS = [
   "sql_server",
   "sql-server",
   "db2",
-  "dm",
   "gaussdb",
   "gauss",
   "gauss_db",

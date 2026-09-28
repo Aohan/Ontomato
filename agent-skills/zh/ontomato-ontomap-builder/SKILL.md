@@ -1,6 +1,6 @@
 ---
 name: ontomato-ontomap-builder
-description: 为一个数据源建立 ontomap（语义层定义），导入 Ontomato，并用自然语言查询数据。在接入 MySQL、PostgreSQL、Oracle、SQL Server、DB2、达梦、GaussDB 或 DuckDB、编写或替换 ontomap、或用自然语言提问时使用。
+description: 为一个数据源建立 ontomap（语义层定义），导入 Ontomato，并用自然语言查询数据。在接入 MySQL、PostgreSQL、Oracle、SQL Server、DB2、GaussDB 或 DuckDB、编写或替换 ontomap、或用自然语言提问时使用。
 ---
 
 # ontomap（语义层定义）
@@ -48,7 +48,7 @@ node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang zh "共有多少人？"
 ```
 
-`type` 为 `mysql`、`postgresql`、`oracle`、`sqlserver`、`db2`、`dameng`、`gaussdb` 或 `duckdb`。
+`type` 为 `mysql`、`postgresql`、`oracle`、`sqlserver`、`db2`、`gaussdb` 或 `duckdb`。
 
 `ask` 会发送 `Accept-Language`。默认是 `en`。要中文回答时传入 `--lang zh`。
 
@@ -115,18 +115,6 @@ JDBC URL 不要带 `serverTimezone=Asia/Shanghai` 这类地区化参数。下面
   "db2Url": "jdbc:db2://db.example:50000/my_database",
   "db2User": "app",
   "db2Password": "change-me"
-}
-```
-
-### dameng
-
-`POST /api/data-query/businessConfig/useDmDataAdapter`
-
-```json
-{
-  "dmUrl": "jdbc:dm://db.example:5236/my_database",
-  "dmUser": "app",
-  "dmPassword": "change-me"
 }
 ```
 
