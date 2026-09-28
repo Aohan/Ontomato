@@ -1,7 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test } from "node:test";
 import {
   assertImagePlatform,
@@ -9,36 +6,17 @@ import {
   bundleVersion,
   imageFileName,
   renderEnvExample,
-  templateEntries,
+  TEMPLATE_ENTRIES,
 } from "./deploy-bundle.mjs";
 
-function temporary(fn) {
-  const dir = mkdtempSync(join(tmpdir(), "deploy-bundle-"));
-  try {
-    fn(dir);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
-test("the pack carries the deploy template and no onsite state", () =>
-  temporary((dir) => {
-    for (const entry of ["docker-compose.yml", "initdb.sql", "README.md"])
-      writeFileSync(join(dir, entry), "");
-    mkdirSync(join(dir, "assemble/data-engine"), { recursive: true });
-    writeFileSync(join(dir, "assemble/data-engine/Dockerfile.assemble"), "");
-    mkdirSync(join(dir, "backend_data"));
-    mkdirSync(join(dir, "frontend_data"));
-    writeFileSync(join(dir, ".env"), "");
-    assert.deepEqual(templateEntries(dir), [
-      "docker-compose.yml",
-      "initdb.sql",
-      "README.md",
-      "assemble",
-    ]);
-    rmSync(join(dir, "initdb.sql"));
-    assert.throws(() => templateEntries(dir), /missing a pack template entry/);
-  }));
+test("the pack carries the deploy template and no onsite state", () => {
+  assert.deepEqual(TEMPLATE_ENTRIES, [
+    "docker-compose.yml",
+    "initdb.sql",
+    "README.md",
+    "assemble",
+  ]);
+});
 
 test("only the ARCH line changes in .env.example", () => {
   assert.equal(

@@ -1,45 +1,15 @@
 // Offline deployment pack: one tar.gz holding the deploy template, the assembly
 // recipes and one gzip archive per already imported image of one architecture.
 // Node built-ins and the Docker CLI only; no host shell.
-import { cpSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execute, exportImage, inspectImage } from "./build-support.mjs";
+import { execute, exportImage, inspectImage, parseOptions } from "./build-support.mjs";
 
 // Only the deploy template goes into the pack. .env, backend_data and
 // frontend_data are onsite state and are never packed.
-const TEMPLATE_ENTRIES = ["docker-compose.yml", "initdb.sql", "README.md", "assemble"];
+export const TEMPLATE_ENTRIES = ["docker-compose.yml", "initdb.sql", "README.md", "assemble"];
 const FLAGS = { "--arch": "value", "--deploy-dir": "value", "--name": "value", "--image": "list" };
-
-export function parseBundleArgs(args) {
-  const options = { "--image": [] };
-  for (let i = 0; i < args.length; i += 1) {
-    const name = args[i];
-    if (!Object.hasOwn(FLAGS, name))
-      throw new Error(`Unknown argument: ${name}`);
-    if (i + 1 >= args.length || args[i + 1].startsWith("--"))
-      throw new Error(`Missing value for ${name}`);
-    const value = args[++i];
-    if (FLAGS[name] === "list") options[name].push(value);
-    else options[name] = value;
-  }
-  if (!["amd64", "arm64"].includes(options["--arch"]))
-    throw new Error("Required --arch amd64|arm64; Make is the only source of ARCH.");
-  if (!options["--deploy-dir"]) throw new Error("Required --deploy-dir <deploy directory>");
-  if (!options["--name"]) throw new Error("Required --name <product name>");
-  if (options["--image"].length === 0)
-    throw new Error("Required at least one --image <reference>");
-  return options;
-}
-
-export function templateEntries(deployDir) {
-  return TEMPLATE_ENTRIES.map((entry) => {
-    const path = join(deployDir, entry);
-    if (!existsSync(path))
-      throw new Error(`Deploy directory is missing a pack template entry: ${path}`);
-    return entry;
-  });
-}
 
 // The pack is the only place that rewrites a template file, and only this line.
 export function renderEnvExample(text, arch) {
@@ -95,7 +65,11 @@ export function imageFileName(ref) {
 }
 
 async function main() {
-  const options = parseBundleArgs(process.argv.slice(2));
+  const options = parseOptions(process.argv.slice(2), FLAGS);
+  if (!options["--deploy-dir"]) throw new Error("Required --deploy-dir <deploy directory>");
+  if (!options["--name"]) throw new Error("Required --name <product name>");
+  if ((options["--image"] || []).length === 0)
+    throw new Error("Required at least one --image <reference>");
   const arch = options["--arch"];
   const deployDir = resolve(options["--deploy-dir"]);
   const images = options["--image"].map((ref) => ({
@@ -118,7 +92,7 @@ async function main() {
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging, { recursive: true });
   // realpathSync dereferences the deploy/assemble symlink: the pack holds files.
-  for (const entry of templateEntries(deployDir))
+  for (const entry of TEMPLATE_ENTRIES)
     cpSync(realpathSync(join(deployDir, entry)), join(staging, entry), { recursive: true });
   writeFileSync(
     join(staging, ".env.example"),

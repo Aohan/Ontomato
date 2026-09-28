@@ -180,6 +180,7 @@ test("architecture is mandatory and flags remain literal argv", () => {
     "--arch": "value",
     "--prompt-lang": "value",
     "--pack-app": "boolean",
+    "--pack": "list",
   };
   assert.deepEqual(
     parseOptions(["--arch", "amd64", "--prompt-lang", "en", "--pack-app"], spec),
@@ -188,6 +189,10 @@ test("architecture is mandatory and flags remain literal argv", () => {
       "--prompt-lang": "en",
       "--pack-app": true,
     },
+  );
+  assert.deepEqual(
+    parseOptions(["--arch", "arm64", "--pack", "a", "--pack", "b"], spec),
+    { "--arch": "arm64", "--pack": ["a", "b"] },
   );
   for (const args of [[], ["--arch"], ["--arch", "windows"], ["--bogus"]])
     assert.throws(() => parseOptions(args, spec));

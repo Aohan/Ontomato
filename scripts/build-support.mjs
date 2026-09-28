@@ -281,7 +281,10 @@ export function parseOptions(args, allowedFlags) {
     else {
       if (i + 1 >= args.length || args[i + 1].startsWith("--"))
         throw new Error(`Missing value for ${name}`);
-      options[name] = args[++i];
+      const value = args[++i];
+      if (allowedFlags[name] === "list")
+        options[name] = [...(options[name] || []), value];
+      else options[name] = value;
     }
   }
   if (!["amd64", "arm64"].includes(options["--arch"]))
