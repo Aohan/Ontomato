@@ -86,6 +86,7 @@ export async function buildManagerImage(app, args) {
     ...(process.env.NODE_BUILDER_IMAGE
       ? ["--build-arg", `NODE_BUILDER_IMAGE=${process.env.NODE_BUILDER_IMAGE}`]
       : []),
+    ...(process.env.PNPM_VERSION ? ["--build-arg", `PNPM_VERSION=${process.env.PNPM_VERSION}`] : []),
     "--load",
     "--build-arg",
     `WORKSPACE=${record.workspaceId}`,

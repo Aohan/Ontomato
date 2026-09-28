@@ -24,7 +24,7 @@ Ontomato 的公共产品源码仓，包含工作台、数据引擎与本体管�
 
 `pack-app` 只复用 Node 与 Java 已经导入的匹配 runtime，不重建 runtime；Manager 仍打独立镜像，没有 manager runtime。分服务目标（`workbench-runtime-pack`、`workbench-app-pack`、`pack-data-engine`、`pack-data-engine-app`、`pack-ontology-manager` 及其架构变体）仍可单独调用。
 
-宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。`JDK_IMAGE`、`JRE_IMAGE`、`PYTHON_RUNTIME_IMAGE` 只在环境变量有值时传给构建，用来覆盖 Dockerfile 里的镜像源；脚本不保存第二套默认镜像。这 5 个应用制品不含 PostgreSQL 与部署离线 bundle：PostgreSQL 由部署流程另行提供，离线 bundle 尚未在本仓落地；当前也没有私有 Linux 实物或完整 CI 的验收结论，Windows 实机上的整栈运行同样尚未验证。Windows 打包不在本次范围内，镜像与离线大小包继续使用现有受验构建环境。
+宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。`JDK_IMAGE`、`JRE_IMAGE`、`PYTHON_RUNTIME_IMAGE` 只在环境变量有值时传给构建，用来覆盖 Dockerfile 里的镜像源；`PNPM_VERSION` 同理，覆盖 Node 镜像构建里安装的 pnpm 版本（Dockerfile 默认 9.15.9，其他版本的镜像构建尚未验证）；脚本不保存第二套默认镜像。这 5 个应用制品不含 PostgreSQL 与部署离线 bundle：PostgreSQL 由部署流程另行提供，离线 bundle 尚未在本仓落地；当前也没有私有 Linux 实物或完整 CI 的验收结论，Windows 实机上的整栈运行同样尚未验证。Windows 打包不在本次范围内，镜像与离线大小包继续使用现有受验构建环境。
 
 ## 本机开发（Node + 主网页 + Manager）
 
@@ -35,7 +35,7 @@ Ontomato 的公共产品源码仓，包含工作台、数据引擎与本体管�
 - `pnpm dev:web`：主网页 Vite 开发服务（端口 5173，`/api` 与 `/config.js` 代理到 3000）；
 - `pnpm dev:ontology-manager`：本体管理器 Vite 开发服务（端口 5174，`/api/data-query` 代理到 `DATARAG_ORIGIN`）。
 
-本仓 `package.json` 的 `packageManager` 固定 `pnpm@9.15.9`，`pnpm dev` 中 concurrently 的子命令通过 PATH 上的 `pnpm` 执行，所以仅用 `corepack pnpm ...` 不能保证 PATH 缺少 `pnpm` 或被其它版本覆盖时仍可用。使用 Corepack 时先执行 `corepack enable pnpm`，在产品根确认 `pnpm --version` 为 `9.15.9`，再执行 `pnpm install --frozen-lockfile`，之后用 `pnpm dev`。依赖一律写精确版本，不用 `^`、`~` 范围；根 `.npmrc` 设了 `save-exact=true`，`pnpm add` 会自动写精确版本。
+需要 Node 20+、pnpm 9+。执行 `pnpm install` 后用 `pnpm dev`。依赖一律写精确版本，不用 `^`、`~` 范围；根 `.npmrc` 设了 `save-exact=true`，`pnpm add` 会自动写精确版本。
 
 Node 服务读取产品根 `.env`（进程环境优先），运行数据写在产品根 `data/`。本体管理器的 `DATARAG_ORIGIN` 在公共版没有默认值，未配置时启动报错，需在 `.env` 或环境变量中给出 DataRAG 根地址。Java 数据引擎、PostgreSQL 和 Python MCP 需要另行准备；本入口只有上述三个进程，不是全栈启动。
 

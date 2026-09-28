@@ -20,7 +20,8 @@ FROM --platform=$BUILDPLATFORM ${NODE_BUILDER_IMAGE} AS web-builder
 ARG WORKSPACE
 ARG APPLICATION
 
-RUN npm install -g pnpm@9.15.9
+ARG PNPM_VERSION=9.15.9
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 COPY workspace/ /build/workspace/
 WORKDIR /build/workspace/${WORKSPACE}

@@ -25,7 +25,8 @@ FROM --platform=$BUILDPLATFORM ${NODE_BUILDER_IMAGE} AS web-builder
 ARG WORKSPACE=ontomato
 ARG APP_META_JSON
 
-RUN npm install -g pnpm@9.15.9
+ARG PNPM_VERSION=9.15.9
+RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /build
 COPY workspace/ /build/workspace/

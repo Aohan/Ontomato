@@ -22,7 +22,8 @@ ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
 # npm, pnpm, corepack and the C++ headers under /usr/local/include stay out.
 FROM ${NODE_RUNTIME_IMAGE} AS installer
 
-RUN npm install -g pnpm@9.15.9
+ARG PNPM_VERSION=9.15.9
+RUN npm install -g pnpm@${PNPM_VERSION}
 # Playwright's browsers come from apt in the runtime stage (verified in N1).
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 

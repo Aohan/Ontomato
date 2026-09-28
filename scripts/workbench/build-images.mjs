@@ -70,6 +70,7 @@ const BUILD_ARG_NAMES = [
   "PIP_INDEX_URL",
   "DEBIAN_MIRROR",
   "DEBIAN_SECURITY_MIRROR",
+  "PNPM_VERSION",
 ];
 
 function baseBuild(arch) {

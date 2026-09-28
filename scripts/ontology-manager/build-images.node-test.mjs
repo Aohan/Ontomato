@@ -246,13 +246,14 @@ test("help returns early; the architecture and flags come only from Make", async
   await assert.rejects(() => buildManagerImage({}, ["--arch", "arm64", "--pack-app"]), /Unknown argument/);
 });
 
-test("the recipe pins the workbench Node builder, pnpm 9.15.9 on the build platform and the same Nginx version tag upstream", () => {
+test("the recipe pins the workbench Node builder, a default pnpm version on the build platform and the same Nginx version tag upstream", () => {
   const recipe = readFileSync(join(REPO, RECIPE, "Dockerfile"), "utf8");
   const workbench = readFileSync(join(REPO, "docker/workbench/Dockerfile.app"), "utf8");
   const pinned = /^ARG NODE_BUILDER_IMAGE=(\S+@sha256:[a-f0-9]{64})$/m;
   assert.equal(recipe.match(pinned)[1], workbench.match(pinned)[1]);
   assert.match(recipe, /^FROM --platform=\$BUILDPLATFORM \$\{NODE_BUILDER_IMAGE\} AS web-builder$/m);
-  assert.match(recipe, /^RUN npm install -g pnpm@9\.15\.9$/m);
+  assert.match(recipe, /^ARG PNPM_VERSION=\d+\.\d+\.\d+$/m);
+  assert.match(recipe, /^RUN npm install -g pnpm@\$\{PNPM_VERSION\}$/m);
   assert.match(recipe, /^FROM docker\.io\/library\/nginx:1\.27-alpine@sha256:[a-f0-9]{64}$/m);
   assert.doesNotMatch(recipe, /corepack|--prod\b|--filter-prod/);
 });
