@@ -13,24 +13,20 @@ const logger = createLogger("chart-renderer");
 const CHART_VIEWPORT_WIDTH = 1000;
 const CHART_VIEWPORT_HEIGHT = 500;
 
-let chartRuntimeScriptsPromise: Promise<[string, string]> | null = null;
+let chartRuntimeScriptPromise: Promise<string> | null = null;
 
-async function getChartRuntimeScripts() {
-  if (!chartRuntimeScriptsPromise) {
-    const echartAssetsRoot = echartDir();
-    chartRuntimeScriptsPromise = Promise.all([
-      readFile(path.join(echartAssetsRoot, "echarts.min.js"), "utf-8"),
-      readFile(path.join(echartAssetsRoot, "china.js"), "utf-8"),
-    ]);
+async function getChartRuntimeScript() {
+  if (!chartRuntimeScriptPromise) {
+    chartRuntimeScriptPromise = readFile(path.join(echartDir(), "echarts.min.js"), "utf-8");
   }
-  return chartRuntimeScriptsPromise;
+  return chartRuntimeScriptPromise;
 }
 
 function escapeInlineScript(value: string) {
   return String(value || "").replace(/<\/script/gi, "<\\/script");
 }
 
-function inlineChartRuntime(html: string, echartsScript: string, chinaScript: string) {
+function inlineChartRuntime(html: string, echartsScript: string) {
   let normalizedHtml = String(html || "").trim();
   const inlineScriptTag = `<script>${escapeInlineScript(echartsScript)}</script>`;
 
@@ -49,10 +45,7 @@ function inlineChartRuntime(html: string, echartsScript: string, chinaScript: st
     }
   }
 
-  return normalizedHtml.replace(
-    /<script\b[^>]*src=["'][^"']*china\.js["'][^>]*>\s*<\/script>/i,
-    `<script>${escapeInlineScript(chinaScript)}</script>`
-  );
+  return normalizedHtml;
 }
 
 function ensureChartDocument(html: string) {
@@ -85,7 +78,7 @@ export async function renderChartHtmlToDataUrl(
   timeoutMs: number = 30_000
 ): Promise<string> {
   const browser = await getBrowser();
-  const [echartsScript, chinaScript] = await getChartRuntimeScripts();
+  const echartsScript = await getChartRuntimeScript();
 
   const chartPage = await browser.newPage({
     viewport: { width: CHART_VIEWPORT_WIDTH, height: CHART_VIEWPORT_HEIGHT },
@@ -93,7 +86,7 @@ export async function renderChartHtmlToDataUrl(
   });
 
   try {
-    const content = ensureChartDocument(inlineChartRuntime(html, echartsScript, chinaScript));
+    const content = ensureChartDocument(inlineChartRuntime(html, echartsScript));
     await chartPage.setContent(content, {
       waitUntil: "load",
       timeout: timeoutMs,

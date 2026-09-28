@@ -1099,8 +1099,7 @@ export default {
     "rippleScatter": "Nuage ondulatoire",
     "lines": "Lignes",
     "pictorialBar": "Barres pictographiques",
-    "groupedBar": "Barres groupées",
-    "chinaMap": "Carte Chine"
+    "groupedBar": "Barres groupées"
   },
   "autotest": {
     "correct": "Correct",

@@ -256,7 +256,6 @@ export const zhCN = {
   "viz.analyzingDataStructure": "正在分析数据结构",
   "viz.dataAnalysisComplete": "数据分析完成",
   "viz.chart": "图表",
-  "viz.map": "地图",
   "viz.chartGenerationComplete": "图表生成完成",
   "viz.visualizationComplete": "可视化完成",
   "viz.generatedViz": (params?: Record<string, any>) =>

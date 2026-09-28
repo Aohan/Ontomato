@@ -217,7 +217,6 @@ export const ar = {
   "viz.analyzingDataStructure": "جارٍ تحليل هيكل البيانات",
   "viz.dataAnalysisComplete": "اكتمل تحليل البيانات",
   "viz.chart": "رسم بياني",
-  "viz.map": "خريطة",
   "viz.chartGenerationComplete": "اكتمل إنشاء الرسم البياني",
   "viz.visualizationComplete": "اكتمل التمثيل المرئي",
   "viz.generatedViz": (params?: Record<string, any>) =>

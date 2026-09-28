@@ -217,7 +217,6 @@ export const ja = {
   "viz.analyzingDataStructure": "データ構造を分析中",
   "viz.dataAnalysisComplete": "データ分析完了",
   "viz.chart": "チャート",
-  "viz.map": "マップ",
   "viz.chartGenerationComplete": "チャート生成完了",
   "viz.visualizationComplete": "可視化完了",
   "viz.generatedViz": (params?: Record<string, any>) =>

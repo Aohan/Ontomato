@@ -1100,8 +1100,7 @@ export default {
     "rippleScatter": "涟漪散点图",
     "lines": "线图",
     "pictorialBar": "象形柱图",
-    "groupedBar": "分组柱状图",
-    "chinaMap": "中国地图"
+    "groupedBar": "分组柱状图"
   },
   "autotest": {
     "correct": "正确",

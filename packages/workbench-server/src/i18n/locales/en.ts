@@ -279,7 +279,6 @@ export const en = {
   "viz.analyzingDataStructure": "Analyzing data structure",
   "viz.dataAnalysisComplete": "Data analysis complete",
   "viz.chart": "Chart",
-  "viz.map": "Map",
   "viz.chartGenerationComplete": "Chart generation complete",
   "viz.visualizationComplete": "Visualization complete",
   "viz.generatedViz": (params?: Record<string, any>) =>

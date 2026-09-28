@@ -1099,8 +1099,7 @@ export default {
     "rippleScatter": "Dispersione a onde",
     "lines": "Linee",
     "pictorialBar": "Barre pittografiche",
-    "groupedBar": "Barre raggruppate",
-    "chinaMap": "Mappa Cina"
+    "groupedBar": "Barre raggruppate"
   },
   "autotest": {
     "correct": "Corretto",

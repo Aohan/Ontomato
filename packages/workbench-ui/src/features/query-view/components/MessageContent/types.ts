@@ -16,8 +16,7 @@ export type ChartType =
   | "effect-scatter"
   | "lines"
   | "pictorial-bar"
-  | "grouped-bar"
-  | "china";
+  | "grouped-bar";
 
 export interface TableData {
   id: number;
@@ -165,5 +164,4 @@ export const chartTypeNames: Record<string, string> = {
   lines: t("chart.lines"),
   "pictorial-bar": t("chart.pictorialBar"),
   "grouped-bar": t("chart.groupedBar"),
-  china: t("chart.chinaMap"),
 };

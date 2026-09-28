@@ -1099,8 +1099,7 @@ export default {
     "rippleScatter": "漣漪散佈圖",
     "lines": "線圖",
     "pictorialBar": "象形長條圖",
-    "groupedBar": "分組長條圖",
-    "chinaMap": "中國地圖"
+    "groupedBar": "分組長條圖"
   },
   "autotest": {
     "correct": "正確",

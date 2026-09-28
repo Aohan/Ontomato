@@ -38,7 +38,7 @@ describe("open-source runtime default resources", () => {
     fs.mkdirSync(data("knowledge"), { recursive: true });
     fs.mkdirSync(data("echart"), { recursive: true });
     fs.writeFileSync(data("knowledge", "site-note.md"), "# Site note\n");
-    fs.writeFileSync(data("echart", "china.js"), "stale");
+    fs.writeFileSync(data("echart", "echarts.min.js"), "stale");
 
     await syncRuntimeDefaultResources();
 
@@ -46,8 +46,8 @@ describe("open-source runtime default resources", () => {
     expect(readKnowledgeMarkdown("index.md").content).toBe(
       fs.readFileSync(path.join(workbenchServerResourceRoot, "data", "knowledge", "index.md"), "utf8")
     );
-    expect(fs.readFileSync(data("echart", "china.js"))).toEqual(
-      fs.readFileSync(path.join(workbenchServerResourceRoot, "data", "echart", "china.js"))
+    expect(fs.readFileSync(data("echart", "echarts.min.js"))).toEqual(
+      fs.readFileSync(path.join(workbenchServerResourceRoot, "data", "echart", "echarts.min.js"))
     );
     expect(loadSkills(resolveSkillDir()).map((skill) => skill.name)).toContain(
       "query-flow-diagnosis"

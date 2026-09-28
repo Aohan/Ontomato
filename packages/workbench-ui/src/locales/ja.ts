@@ -1099,8 +1099,7 @@ export default {
     "rippleScatter": "波及散布図",
     "lines": "線グラフ",
     "pictorialBar": "ピクトグラム棒グラフ",
-    "groupedBar": "グループ棒グラフ",
-    "chinaMap": "中国地図"
+    "groupedBar": "グループ棒グラフ"
   },
   "autotest": {
     "correct": "正解",

@@ -285,7 +285,6 @@ export const it = {
   "viz.analyzingDataStructure": "Analisi struttura dati",
   "viz.dataAnalysisComplete": "Analisi dati completata",
   "viz.chart": "Grafico",
-  "viz.map": "Mappa",
   "viz.chartGenerationComplete": "Generazione grafico completata",
   "viz.visualizationComplete": "Visualizzazione completata",
   "viz.generatedViz": (params?: Record<string, any>) =>

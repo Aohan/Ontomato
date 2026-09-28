@@ -1100,8 +1100,7 @@ export default {
     "rippleScatter": "Ripple Scatter Chart",
     "lines": "Lines Chart",
     "pictorialBar": "Pictorial Bar Chart",
-    "groupedBar": "Grouped Bar Chart",
-    "chinaMap": "China Map"
+    "groupedBar": "Grouped Bar Chart"
   },
   "autotest": {
     "correct": "Correct",

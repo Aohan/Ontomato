@@ -4,7 +4,6 @@ const SKILL_RESOURCE_URL = /(["'])(\/api\/skills\/resources\/[^"'<>\s]+)\1/g;
 const PUBLIC_ECHART_RESOURCES: Record<string, string> = {
   "/api/skills/resources/executable/visualization/echarts/scripts/echarts.min.js":
     "/api/echart/echarts.min.js",
-  "/api/skills/resources/executable/visualization/echarts/scripts/china.js": "/api/echart/china.js",
 };
 
 export function withSkillResourceCredentials(html: string): string {

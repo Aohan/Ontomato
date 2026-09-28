@@ -256,7 +256,6 @@ export const zhTW = {
   "viz.analyzingDataStructure": "正在分析數據結構",
   "viz.dataAnalysisComplete": "數據分析完成",
   "viz.chart": "圖錶",
-  "viz.map": "地圖",
   "viz.chartGenerationComplete": "圖錶生成完成",
   "viz.visualizationComplete": "可視優化完成",
   "viz.generatedViz": (params?: Record<string, any>) =>

@@ -299,7 +299,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
           t("viz.dataAnalysisComplete")
         );
         const generating = t("viz.generating", {
-          type: plan.chartType === "china" ? t("viz.map") : t("viz.chart"),
+          type: t("viz.chart"),
         });
         visThinking = activateVisStep(visThinking, "render", generating);
         sendVisThinkingState(visThinking, sendEvent);
@@ -336,7 +336,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
     visThinking = markVisStepDone(
       visThinking,
       "render",
-      tApp("queryFixed.88", { v0: (chartType === "china" ? t("viz.map") : chartType), v1: (title) }),
+      tApp("queryFixed.88", { v0: (chartType), v1: (title) }),
       t("viz.chartGenerationComplete")
     );
     visThinking = {
@@ -345,7 +345,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
       headline: t("viz.visualizationComplete"),
       abc: visThinking.abc ? { ...visThinking.abc, status: "success" } : undefined,
       tailLines: [
-        t("viz.generatedViz", { type: chartType === "china" ? t("viz.map") : chartType, title }),
+        t("viz.generatedViz", { type: chartType, title }),
       ],
     };
     sendVisThinkingState(visThinking, sendEvent);

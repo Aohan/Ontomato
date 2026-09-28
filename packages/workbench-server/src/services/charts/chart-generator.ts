@@ -62,7 +62,6 @@ function hasValidFields(plan: ChartPlan, data: ChartDatasetCandidate["data"]): b
     "funnel",
     "treemap",
     "sunburst",
-    "china",
   ].includes(plan.chartType);
   if (requiresAxes && (!plan.xField || !plan.yField)) return false;
   if (

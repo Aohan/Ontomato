@@ -1099,8 +1099,7 @@ export default {
     "rippleScatter": "Wellen-Streuung",
     "lines": "Linien",
     "pictorialBar": "Bildbalken",
-    "groupedBar": "Gruppierte Balken",
-    "chinaMap": "China-Karte"
+    "groupedBar": "Gruppierte Balken"
   },
   "autotest": {
     "correct": "Korrekt",

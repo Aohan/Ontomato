@@ -1099,8 +1099,7 @@ export default {
     "rippleScatter": "رسم مبعثر متموج",
     "lines": "رسم خطي",
     "pictorialBar": "رسم شريطي تصويري",
-    "groupedBar": "رسم شريطي مجمع",
-    "chinaMap": "خريطة الصين"
+    "groupedBar": "رسم شريطي مجمع"
   },
   "autotest": {
     "correct": "صحيح",

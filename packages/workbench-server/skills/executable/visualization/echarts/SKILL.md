@@ -1,6 +1,6 @@
 ---
 name: echarts
-description: Self-contained ECharts chart rendering, supporting bar charts, line charts, pie charts, maps, hierarchical charts, advanced charts, and the full series of chart types. Automatically completes data analysis and chart configuration selection internally.
+description: Self-contained ECharts chart rendering, supporting bar charts, line charts, pie charts, hierarchical charts, advanced charts, and the full series of chart types. Automatically completes data analysis and chart configuration selection internally.
 type: executable
 category: visualization
 title: ECharts chart rendering
@@ -20,7 +20,6 @@ supportedChartTypes:
   - sankey
   - treemap
   - sunburst
-  - china
   - gauge
 timeout: 15000
 outputType: html
@@ -77,11 +76,6 @@ Recognizing data field types is the basis for choosing xField and yField.
 - Field value formats: YYYY-MM-DD, YYYY-MM, MM, Nth quarter
 - Examples: hire date, statistics month, year
 
-#### Province Field Characteristics
-
-- Field names containing: province, region, province/city, province, region, city
-- Field values are province names or abbreviations: Beijing, Guangdong, Zhejiang, Shenzhen, etc.
-
 ### 2. Chart Type Selection
 
 Select the chart type based on data characteristics and user intent:
@@ -92,7 +86,6 @@ Select the chart type based on data characteristics and user intent:
 | Trend analysis   | one time field + one numeric field         | line/area        | line/area chart, showing change trend |
 | Proportion analysis   | one categorical field + one numeric field, categories ≤8 | pie              | pie chart, showing proportion distribution          |
 | Proportion analysis   | one categorical field + one numeric field, categories >8 | bar              | bar chart is clearer when categories are too many    |
-| Geographic distribution   | one province field + one numeric field         | china            | China map, showing regional distribution      |
 | Multi-dimension comparison | multiple numeric fields                        | radar            | radar chart, multi-dimension comparison          |
 | Process conversion   | process stage data                        | funnel           | funnel chart, showing conversion rate          |
 | Flow relation   | source/target/value fields            | sankey           | sankey chart, showing flow            |
@@ -104,7 +97,6 @@ Select the chart type based on data characteristics and user intent:
 
 - Comparison analysis: select a categorical field (such as unit, category, name)
 - Trend analysis: select a time field (such as date, month, year)
-- Geographic distribution: select a province field
 - Proportion analysis: select a categorical field
 - **Must use field names that actually exist in the data; do not guess or use generic names**
 
@@ -122,7 +114,6 @@ Select the chart type based on data characteristics and user intent:
 | Numeric field | headcount, amount, quantity, proportion, percentage, rate, value, count, amount, value, rate, sum, avg, total, GDP, revenue, expenditure |
 | Categorical field | unit, name, category, type, department, college, region, province, city, name, category, type, dept, region, product, project |
 | Time field | date, time, year, month, day, quarter, week, date, time, year, month, quarter, statistics month, year                   |
-| Province field | province, region, province/city, province, region, city, region name                                                   |
 | Hierarchical field | name, label, category, stage, children (tree/hierarchical data)                                              |
 | Flow field | source, target, value, nodes, links (sankey chart data)                                                    |
 
@@ -165,13 +156,6 @@ Select the chart type based on data characteristics and user intent:
 - The complete content still shows in the tooltip
 
 ### 5. Special Chart Data Formats
-
-#### China map (china)
-
-- Built-in map scope: only China's **province-level** administrative region map, not including city, district/county, street, township, park, or community boundaries.
-- xField: must select a province field, and all field values used for drawing must be recognizable province-level administrative region names (supports abbreviations like "Beijing", full names like "Beijing Municipality", "Shandong" or "Shandong Province").
-- yField: numeric field
-- Cannot be used for district, county, or other drilled-down administrative data.
 
 #### Radar chart (radar)
 
@@ -278,22 +262,6 @@ Recommended configuration:
   "xField": "product category",
   "yField": "proportion",
   "title": "Product Category Proportion Distribution"
-}
-```
-
-#### Example 4: geographic distribution
-
-User question: GDP distribution across provinces
-Data: [{province: "Guangdong", GDP: 12000}, {province: "Jiangsu", GDP: 10000}, ...]
-
-Recommended configuration:
-
-```json
-{
-  "chartType": "china",
-  "xField": "province",
-  "yField": "GDP",
-  "title": "GDP Distribution Across Provinces"
 }
 ```
 

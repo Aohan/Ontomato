@@ -1,75 +1,3 @@
-const PROVINCE_NAME_MAP = {
-  Beijing: "Beijing",
-  "Beijing Municipality": "Beijing",
-  Shanghai: "Shanghai",
-  "Shanghai Municipality": "Shanghai",
-  Tianjin: "Tianjin",
-  "Tianjin Municipality": "Tianjin",
-  Chongqing: "Chongqing",
-  "Chongqing Municipality": "Chongqing",
-  Hebei: "Hebei",
-  "Hebei Province": "Hebei",
-  Shanxi: "Shanxi",
-  "Shanxi Province": "Shanxi",
-  Liaoning: "Liaoning",
-  "Liaoning Province": "Liaoning",
-  Jilin: "Jilin",
-  "Jilin Province": "Jilin",
-  Heilongjiang: "Heilongjiang",
-  "Heilongjiang Province": "Heilongjiang",
-  Jiangsu: "Jiangsu",
-  "Jiangsu Province": "Jiangsu",
-  Zhejiang: "Zhejiang",
-  "Zhejiang Province": "Zhejiang",
-  Anhui: "Anhui",
-  "Anhui Province": "Anhui",
-  Fujian: "Fujian",
-  "Fujian Province": "Fujian",
-  Jiangxi: "Jiangxi",
-  "Jiangxi Province": "Jiangxi",
-  Shandong: "Shandong",
-  "Shandong Province": "Shandong",
-  Henan: "Henan",
-  "Henan Province": "Henan",
-  Hubei: "Hubei",
-  "Hubei Province": "Hubei",
-  Hunan: "Hunan",
-  "Hunan Province": "Hunan",
-  Guangdong: "Guangdong",
-  "Guangdong Province": "Guangdong",
-  Guangxi: "Guangxi",
-  "Guangxi Zhuang Autonomous Region": "Guangxi",
-  Hainan: "Hainan",
-  "Hainan Province": "Hainan",
-  Sichuan: "Sichuan",
-  "Sichuan Province": "Sichuan",
-  Guizhou: "Guizhou",
-  "Guizhou Province": "Guizhou",
-  Yunnan: "Yunnan",
-  "Yunnan Province": "Yunnan",
-  Tibet: "Tibet",
-  "Tibet Autonomous Region": "Tibet",
-  Shaanxi: "Shaanxi",
-  "Shaanxi Province": "Shaanxi",
-  Gansu: "Gansu",
-  "Gansu Province": "Gansu",
-  Qinghai: "Qinghai",
-  "Qinghai Province": "Qinghai",
-  Ningxia: "Ningxia",
-  "Ningxia Hui Autonomous Region": "Ningxia",
-  Xinjiang: "Xinjiang",
-  "Xinjiang Uygur Autonomous Region": "Xinjiang",
-  "Inner Mongolia": "Inner Mongolia",
-  "Inner Mongolia Autonomous Region": "Inner Mongolia",
-  "Hong Kong": "Hong Kong",
-  "Hong Kong Special Administrative Region": "Hong Kong",
-  Macau: "Macau",
-  "Macau Special Administrative Region": "Macau",
-  Taiwan: "Taiwan",
-  "Taiwan Province": "Taiwan",
-  Shenzhen: "Guangdong",
-};
-
 const LIGHT_THEME = {
   // bgColor: "#ffffff",
 
@@ -99,10 +27,6 @@ const LIGHT_THEME = {
   ],
 
   visualMapColor: ["#E8F5FF", "#7FD3FF", "#36CFC9", "#5B3FFF", "#7C66FF", "#4328D9"],
-
-  areaColor: "#B7A7FF",
-
-  emphasisColor: "#7C66FF",
 };
 
 const DARK_THEME = {
@@ -134,10 +58,6 @@ const DARK_THEME = {
   ],
 
   visualMapColor: ["#1A2D3D", "#2D6B8C", "#36CFC9", "#7C66FF", "#A48CFF", "#D9D0FF"],
-
-  areaColor: "#1A1D24",
-
-  emphasisColor: "#A48CFF",
 };
 
 function wrapLabel(text, maxCharsPerLine = 6, maxLines = 2) {
@@ -306,10 +226,6 @@ function normalizeTimeText(value) {
   if (typeof value !== "string") return value;
   const simplified = simplifyTimeLabel(value);
   return simplified || value;
-}
-
-function normalizeProvinceName(name) {
-  return PROVINCE_NAME_MAP[name] || name;
 }
 
 function generateBasicChartOption(chartType, title, xField, yField, seriesField, data, theme) {
@@ -991,55 +907,6 @@ function generateFunnelOption(data, title, theme, xField, yField) {
   };
 }
 
-function generateChinaMapOption(data, xField, yField, title, theme) {
-  const normalizedData = data.map((item) => ({
-    name: normalizeProvinceName(item[xField] ?? ""),
-    value: item[yField] ?? 0,
-  }));
-  const values = normalizedData.map((d) => d.value);
-  const minValue = Math.min(...values);
-  const maxValue = Math.max(...values);
-  return {
-    backgroundColor: theme.bgColor,
-    title: {
-      text: title,
-      left: "center",
-      top: 10,
-      textStyle: { color: theme.textColor, fontSize: 16 },
-    },
-    tooltip: {
-      trigger: "item",
-      backgroundColor: theme.tooltipBg,
-      borderColor: theme.tooltipBorder,
-      textStyle: { color: theme.tooltipText },
-      formatter: (params) =>
-        params.value ? params.name + "<br/>" + params.value : params.name + "<br/>No data",
-    },
-    visualMap: {
-      min: minValue,
-      max: maxValue,
-      left: "left",
-      top: "bottom",
-      text: ["High", "Low"],
-      textStyle: { color: theme.textColorRegular },
-      inRange: { color: theme.visualMapColor },
-      calculable: true,
-    },
-    geo: {
-      map: "china",
-      roam: true,
-      zoom: 1.2,
-      label: { show: false, color: theme.textColorRegular },
-      emphasis: {
-        label: { show: true, color: theme.textColor },
-        itemStyle: { areaColor: theme.emphasisColor },
-      },
-      itemStyle: { areaColor: theme.areaColor, borderColor: theme.borderColor, borderWidth: 1 },
-    },
-    series: [{ name: title || "Data", type: "map", geoIndex: 0, data: normalizedData }],
-  };
-}
-
 function buildTreeData(data, theme, xField = "name", yField = "value") {
   if (Array.isArray(data.children)) {
     return data.children.map((child, i) => ({
@@ -1311,7 +1178,6 @@ function renderEcharts(data, config, theme) {
     gauge: () => generateGaugeOption(data, title, theme),
     heatmap: () => generateHeatmapOption(data, title, theme, xField, yField),
     funnel: () => generateFunnelOption(data, title, theme, xField, yField),
-    china: () => generateChinaMapOption(data, xField, yField, title, theme),
     treemap: () => generateTreemapOption(data, title, theme, xField, yField),
     sunburst: () => generateSunburstOption(data, title, theme, xField, yField),
     sankey: () => generateSankeyOption(data, title, theme),
@@ -1321,17 +1187,15 @@ function renderEcharts(data, config, theme) {
   return renderer();
 }
 
-function generateHTML(lightOption, darkOption, chartType) {
+function generateHTML(lightOption, darkOption) {
   const lightOptionJson = JSON.stringify(lightOption, null, 2);
   const darkOptionJson = JSON.stringify(darkOption, null, 2);
-  const mapScript = chartType === "china" ? '<script src="/api/echart/china.js"></script>' : "";
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script src="/api/echart/echarts.min.js"></script>
-  ${mapScript}
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     :root { --bg-color: color-mix(in srgb, #FFFFFF 30%, #F4F7FE 70%); --text-color: #303133; --border-color: #DCDFE6; }
@@ -1590,7 +1454,7 @@ export async function execute(input) {
 
   const lightOption = renderEcharts(processedData, config, LIGHT_THEME);
   const darkOption = renderEcharts(processedData, config, DARK_THEME);
-  const html = generateHTML(lightOption, darkOption, chartType);
+  const html = generateHTML(lightOption, darkOption);
 
   console.log(`[echarts] chartType=${chartType}, x=${xField}, y=${yField}, title=${title}`);
 
