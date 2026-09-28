@@ -332,9 +332,6 @@ watch(isDark, () => {
                 }}
               </p>
             </el-form-item>
-            <el-form-item :label="t('common.sort')" required>
-              <el-input-number v-model="form.sortOrder" :min="0" :step="1" />
-            </el-form-item>
             <el-form-item :label="t('admin.relatedClasses')">
               <el-select
                 v-model="form.classNames"
@@ -592,6 +589,7 @@ watch(isDark, () => {
   color: var(--el-text-color-secondary);
   line-height: 1.5;
   margin: 6px 0 0;
+  flex-basis: 100%;
 }
 
 .section-title {

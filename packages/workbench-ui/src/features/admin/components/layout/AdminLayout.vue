@@ -84,6 +84,25 @@ const activeMenu = computed(() => {
   if (route.path.startsWith("/admin/intelligence-assets/")) {
     return "/admin/intelligence-assets/metric-views";
   }
+  if (route.path === "/admin/hot-data") {
+    return "/admin/analysis";
+  }
+  if (route.path === "/admin/skills/analysis" || route.path === "/admin/skills/visualization") {
+    return "/admin/skills";
+  }
+  if (
+    route.path === "/admin/audit-log" ||
+    route.path === "/admin/feedback-records" ||
+    route.path === "/admin/system-monitor"
+  ) {
+    return "/admin/operations";
+  }
+  if (route.path === "/admin/knowledge" || route.path === "/admin/examples") {
+    return "/admin/skills";
+  }
+  if (route.path.startsWith("/admin/knowledge-governance")) {
+    return "/admin/skills";
+  }
   return route.path;
 });
 

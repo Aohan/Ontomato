@@ -388,9 +388,20 @@ export default {
     "table": "Table",
     "codeEditorPlaceholder": "Write your code here"
   },
-  "nav": {
-    "dataEngine": "Data Engine",
-    "systemManagement": "System Management",
+   "nav": {
+     "dataEngine": "Data Engine",
+     "dataAssets": "Data Assets",
+     "ontologyAssets": "Ontology & Assets",
+     "intelligenceOps": "Intelligence Ops",
+     "agentCapabilities": "Agent Capabilities",
+     "appAndCapabilities": "Apps & Capabilities",
+     "analysisApplications": "Analysis Applications",
+     "platformManagement": "Platform Management",
+     "knowledgeAndExamples": "Knowledge & Examples",
+     "skillLibrary": "Skill Library",
+     "skillAndKnowledge": "Skills & Knowledge",
+     "operationsCenter": "Operations Center",
+     "systemManagement": "System Management",
     "ontologyManager": "Ontology Manager",
     "intelligenceEngine": "Intelligence Engine",
     "appManagement": "App Management",

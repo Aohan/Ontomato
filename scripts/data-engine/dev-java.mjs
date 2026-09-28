@@ -143,6 +143,10 @@ export function startDevJava({ app, appDir, wrapper, profiles }, userArgs, inher
 
   const env = mergeEnvironment(inherited, vars);
   prependPythonPath(env, dirname(python));
+  // 某些 VPN（如 aTrustAgent）会给系统开 SOCKS/HTTP 代理，JVM 读到后会劫持本机 localhost 连接，
+  // 导致连不上本机 PostgreSQL。这里显式关闭 JVM 代理（置后，确保覆盖系统检测到的代理）。
+  const disableProxy = "-DsocksProxyHost= -Dhttp.proxyHost= -Dhttps.proxyHost=";
+  env.JAVA_TOOL_OPTIONS = env.JAVA_TOOL_OPTIONS ? `${env.JAVA_TOOL_OPTIONS} ${disableProxy}` : disableProxy;
   const args = ["-B", "-ntp", "-DskipTests", "-pl", relative(app.repoRoot, appDir), "-am",
     ...profiles.map((profile) => `-P${profile}`), "spring-boot:run", ...userArgs];
   const invocation = mavenInvocation(wrapper, args);

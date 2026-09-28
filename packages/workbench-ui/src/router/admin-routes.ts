@@ -12,7 +12,7 @@ export function managerViewQuery(query: Record<string, unknown>): Record<string,
   return picked;
 }
 
-const managerMeta = { group: "data-engine", permission: "ontology-modeling" };
+const managerMeta = { group: "data-assets", permission: "ontology-modeling" };
 
 /*
  * 已迁入的 /admin 子路由记录。应用按原顺序显式排列（企业页插在公共页之间），不做注册或排序框架。
@@ -49,9 +49,8 @@ export const adminRoutes = {
   },
   hotData: {
     path: "hot-data",
-    name: "HotReport",
-    component: () => import("../features/admin/components/hot-report/HotReportManager.vue"),
-    meta: { group: "intelligence-engine", permission: "hot-data" },
+    redirect: "/admin/analysis?section=reports",
+    meta: { group: "app-capabilities", permission: "hot-data" },
   },
   metricViews: {
     path: "metric-views",
@@ -63,20 +62,18 @@ export const adminRoutes = {
     path: "knowledge-governance/:sessionId?",
     name: "KnowledgeGovernance",
     component: () => import("../features/knowledge-governance/GovernancePage.vue"),
-    meta: { group: "intelligence-engine", permission: "business-knowledge" },
+    meta: { group: "app-capabilities", permission: "business-knowledge" },
   },
   // 版本原值（KnowledgeManagerProps）由应用在路由记录上以 props 传入。
   knowledge: {
     path: "knowledge",
-    name: "Knowledge",
-    component: () => import("../features/admin/components/intelligence-engine/KnowledgeManager.vue"),
-    meta: { group: "intelligence-engine", permission: "business-knowledge" },
+    redirect: "/admin/skills?tab=knowledge",
+    meta: { group: "app-capabilities", permission: "business-knowledge" },
   },
   examples: {
     path: "examples",
-    name: "Examples",
-    component: () => import("../features/admin/components/intelligence-engine/ExamplesManager.vue"),
-    meta: { group: "intelligence-engine", permission: "query-examples" },
+    redirect: "/admin/skills?tab=knowledge&section=examples",
+    meta: { group: "app-capabilities", permission: "query-examples" },
   },
   actionManagement: {
     path: "action-management",
@@ -91,50 +88,57 @@ export const adminRoutes = {
   analysis: {
     path: "analysis",
     name: "Analysis",
-    component: () => import("../features/admin/components/AnalysisAgentManager.vue"),
-    meta: { group: "application", permission: "analysis-agent" },
+    component: () => import("../features/admin/components/ApplicationManagement.vue"),
+    meta: { group: "app-capabilities", permission: "analysis-agent" },
   },
   mcpService: {
     path: "mcp-service",
     name: "McpService",
     component: () => import("../features/mcp/components/McpManager.vue"),
-    meta: { group: "application", permission: "mcp-service" },
+    meta: { group: "app-capabilities", permission: "mcp-service" },
+  },
+  skills: {
+    path: "skills",
+    name: "SkillLibrary",
+    component: () => import("../features/skills/components/SkillLibrary.vue"),
+    meta: { group: "app-capabilities", permission: "skill-management" },
   },
   skillsAnalysis: {
     path: "skills/analysis",
-    name: "SkillsAnalysis",
-    component: () => import("../features/skills/components/SkillManager.vue"),
-    meta: { group: "skills", category: "analysis", permission: "analytical-skills" },
+    redirect: "/admin/skills?tab=analysis",
+    meta: { group: "app-capabilities", category: "analysis", permission: "analytical-skills" },
   },
   skillsVisualization: {
     path: "skills/visualization",
-    name: "SkillsVisualization",
-    component: () => import("../features/skills/components/SkillManager.vue"),
-    meta: { group: "skills", category: "visualization", permission: "visualization-skills" },
+    redirect: "/admin/skills?tab=visualization",
+    meta: { group: "app-capabilities", category: "visualization", permission: "visualization-skills" },
   },
   // 版本原值（BusinessConfigProps）由应用在路由记录上以 props 传入。
   businessConfig: {
     path: "system-config",
     name: "BusinessConfig",
     component: () => import("../features/system/components/BusinessConfig.vue"),
-    meta: { group: "platform-governance", permission: "system-config" },
+    meta: { group: "platform-management", permission: "system-config" },
+  },
+  operations: {
+    path: "operations",
+    name: "OperationsGovernance",
+    component: () => import("../features/admin/components/platform-operations/OperationsGovernance.vue"),
+    meta: { group: "platform-management", permission: "system-management" },
   },
   auditLog: {
     path: "audit-log",
-    name: "AuditLog",
-    component: () => import("../views/admin/AuditLogManager.vue"),
-    meta: { group: "platform-governance", permission: "audit-logs" },
+    redirect: "/admin/operations?section=audit",
+    meta: { group: "platform-management", permission: "audit-logs" },
   },
   feedbackRecords: {
     path: "feedback-records",
-    name: "FeedbackRecords",
-    component: () => import("../features/admin/components/platform-operations/FeedbackRecords.vue"),
-    meta: { group: "platform-governance", permission: "audit-logs" },
+    redirect: "/admin/operations?section=feedback",
+    meta: { group: "platform-management", permission: "audit-logs" },
   },
   systemMonitor: {
     path: "system-monitor",
-    name: "SystemMonitor",
-    component: () => import("../features/admin/components/platform-operations/SystemMonitor.vue"),
-    meta: { group: "platform-governance", permission: "system-monitoring" },
+    redirect: "/admin/operations?section=monitor",
+    meta: { group: "platform-management", permission: "system-monitoring" },
   },
 } satisfies Record<string, RouteRecordRaw>;

@@ -1,21 +1,13 @@
 import type { Component } from "vue";
 import {
-  BarChart3,
   Blocks,
-  BookOpen,
-  Bot,
-  Brain,
-  Cpu,
-  Flame,
-  List,
-  MessageSquareText,
+  Database,
   Monitor,
   Network,
   Orbit,
-  PieChart,
   Puzzle,
   ScrollText,
-  Settings,
+  ServerCog,
 } from "lucide-vue-next";
 
 /** 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。 */
@@ -69,33 +61,21 @@ export interface AdminLayoutConfig {
 
 /** 已迁入的公共页签与菜单项；应用按原顺序显式列出所用的项。 */
 export const adminGroups = {
-  dataEngine: {
-    key: "data-engine",
-    titleKey: "nav.dataEngine",
+  dataAssets: {
+    key: "data-assets",
+    titleKey: "nav.dataAssets",
     permission: "intelligence-engine",
-    icon: Cpu,
+    icon: Database,
   },
-  intelligenceEngine: {
-    key: "intelligence-engine",
-    titleKey: "nav.intelligenceEngine",
-    permission: "smart-engine",
-    icon: Brain,
-  },
-  application: {
-    key: "application",
-    titleKey: "nav.appManagement",
+  appCapabilities: {
+    key: "app-capabilities",
+    titleKey: "nav.appAndCapabilities",
     permission: "application-management",
     icon: Blocks,
   },
-  skills: {
-    key: "skills",
-    titleKey: "nav.skillManagement",
-    permission: "skill-management",
-    icon: Puzzle,
-  },
-  platformGovernance: {
-    key: "platform-governance",
-    titleKey: "nav.systemManagement",
+  platformManagement: {
+    key: "platform-management",
+    titleKey: "nav.platformManagement",
     permission: "system-management",
     icon: Monitor,
   },
@@ -105,85 +85,43 @@ export const adminMenuItems = {
   ontologyManager: {
     permission: "ontology-modeling",
     path: "/admin/ontology-manager",
-    titleKey: "nav.ontologyManager",
+    titleKey: "nav.ontologyAssets",
     icon: Orbit,
-    groupKey: "data-engine",
-  },
-  hotData: {
-    permission: "hot-data",
-    path: "/admin/hot-data",
-    titleKey: "nav.hotReportManagement",
-    icon: Flame,
-    groupKey: "intelligence-engine",
-  },
-  knowledge: {
-    permission: "business-knowledge",
-    path: "/admin/knowledge",
-    titleKey: "nav.businessKnowledge",
-    icon: BookOpen,
-    groupKey: "intelligence-engine",
-  },
-  examples: {
-    permission: "query-examples",
-    path: "/admin/examples",
-    titleKey: "nav.queryExamples",
-    icon: List,
-    groupKey: "intelligence-engine",
+    groupKey: "data-assets",
   },
   analysis: {
     permission: "analysis-agent",
     path: "/admin/analysis",
-    titleKey: "analysis.agent",
-    icon: Bot,
-    groupKey: "application",
+    titleKey: "nav.analysisApplications",
+    icon: Blocks,
+    groupKey: "app-capabilities",
   },
   mcpService: {
     permission: "mcp-service",
     path: "/admin/mcp-service",
     titleKey: "nav.mcpService",
     icon: Network,
-    groupKey: "application",
+    groupKey: "app-capabilities",
   },
-  analysisSkills: {
-    permission: "analytical-skills",
-    path: "/admin/skills/analysis",
-    titleKey: "admin.analysisSkills",
-    icon: BarChart3,
-    groupKey: "skills",
-  },
-  visualizationSkills: {
-    permission: "visualization-skills",
-    path: "/admin/skills/visualization",
-    titleKey: "admin.visualizationSkills",
-    icon: PieChart,
-    groupKey: "skills",
+  skills: {
+    permission: "skill-management",
+    path: "/admin/skills",
+    titleKey: "nav.skillAndKnowledge",
+    icon: Puzzle,
+    groupKey: "app-capabilities",
   },
   businessConfig: {
     permission: "system-config",
     path: "/admin/system-config",
     titleKey: "nav.systemConfig",
-    icon: Settings,
-    groupKey: "platform-governance",
+    icon: ServerCog,
+    groupKey: "platform-management",
   },
-  auditLog: {
-    permission: "audit-logs",
-    path: "/admin/audit-log",
-    titleKey: "nav.auditLogs",
+  operations: {
+    permission: "system-management",
+    path: "/admin/operations",
+    titleKey: "nav.operationsCenter",
     icon: ScrollText,
-    groupKey: "platform-governance",
-  },
-  feedbackRecords: {
-    permission: "audit-logs",
-    path: "/admin/feedback-records",
-    titleKey: "nav.feedbackRecords",
-    icon: MessageSquareText,
-    groupKey: "platform-governance",
-  },
-  systemMonitor: {
-    permission: "system-monitoring",
-    path: "/admin/system-monitor",
-    titleKey: "nav.systemMonitoring",
-    icon: Monitor,
-    groupKey: "platform-governance",
+    groupKey: "platform-management",
   },
 } satisfies Record<string, AdminMenuItem>;

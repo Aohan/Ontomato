@@ -29,7 +29,13 @@ const showDebugDialog = ref(false);
 const debuggingSkill = ref<SkillInfo | null>(null);
 const importLoading = ref(false);
 
+const props = defineProps<{
+  category?: "analysis" | "visualization";
+}>();
+
 const currentCategory = computed<"analysis" | "visualization">(() => {
+  if (props.category) return props.category;
+  if (route.query.category === "visualization") return "visualization";
   return route.meta?.category === "visualization" ? "visualization" : "analysis";
 });
 
@@ -241,7 +247,7 @@ async function handleImport(uploadFile: UploadFile) {
 }
 
 watch(
-  () => route.meta?.category,
+  () => [props.category, route.meta?.category, route.query.category],
   () => {
     searchQuery.value = "";
   }
