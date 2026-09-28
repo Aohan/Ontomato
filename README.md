@@ -46,7 +46,7 @@ described in the comments of `.env.example`.
 | `POSTGRES_PASSWORD` | letters, digits, `.`, `_` and `-` only |
 | `BACKEND_LLM_BASE_URL`, `BACKEND_LLM_API_KEY`, `BACKEND_LLM_MODEL` | the chat model |
 | `BACKEND_EMBEDDING_BASE_URL`, `BACKEND_EMBEDDING_API_KEY`, `BACKEND_EMBEDDING_MODEL`, `BACKEND_EMBEDDING_DIMENSIONS` | the embedding model; the dimensions must match the model's output |
-| `ONTOLOGY_MANAGER_URL` | the Ontology Manager address as the browser reaches it, such as `http://<host>:3005` |
+| `PUBLIC_HOST` | the address the browser uses to reach this server, an IP or a hostname |
 
 When `docker compose ps` shows every service healthy, these ports are open:
 

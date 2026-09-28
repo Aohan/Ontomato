@@ -35,7 +35,7 @@ docker compose up -d
 | `POSTGRES_PASSWORD` | 只用字母、数字、`.`、`_`、`-` |
 | `BACKEND_LLM_BASE_URL`、`BACKEND_LLM_API_KEY`、`BACKEND_LLM_MODEL` | 对话模型 |
 | `BACKEND_EMBEDDING_BASE_URL`、`BACKEND_EMBEDDING_API_KEY`、`BACKEND_EMBEDDING_MODEL`、`BACKEND_EMBEDDING_DIMENSIONS` | 向量模型；维度必须和模型输出一致 |
-| `ONTOLOGY_MANAGER_URL` | 浏览器访问本体管理器用的地址，例如 `http://<host>:3005` |
+| `PUBLIC_HOST` | 浏览器访问这台服务器用的地址，填 IP 或域名 |
 
 `docker compose ps` 显示所有服务都 healthy 后，以下端口可用：
 

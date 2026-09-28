@@ -3,47 +3,51 @@
 Offline Compose for PostgreSQL, DataRAG, the Node app, and the ontology manager.
 Requires Docker Engine 26+ and the Docker Compose plugin.
 
-Application images are planned for Docker.io; registry names and tags are not
-configured yet. This Compose currently expects preloaded image tags. Prepare
-`node-app-runtime:deploy-<ARCH>`, `ontomato-app:deploy`,
-`datarag-opensource-runtime:deploy-<ARCH>`, `datarag-opensource-app:deploy`,
-`ontomato-ontology-manager:deploy-<ARCH>`, and `pgvector/pgvector:pg18` for one
-architecture before the first start. `ARCH` is `amd64` or `arm64` and every image
-must match it; `pgvector/pgvector:pg18` has no architecture suffix.
-
-There is no single product pack yet. Each service is built from the repository
-root by its own Make target, which writes a gzip archive under `.build/pack/`
-for `docker load -i` on the deployment host:
-
-| Images | Command |
-|---|---|
-| `node-app-runtime:deploy-<ARCH>` | `make workbench-runtime-pack ARCH=<ARCH>` |
-| `ontomato-app:deploy` | `make workbench-app-pack ARCH=<ARCH>` (consumes the locked, loaded runtime) |
-| `datarag-opensource-runtime:deploy-<ARCH>`, `datarag-opensource-app:deploy` | `make pack ARCH=<ARCH>` (`make pack-app` rebuilds only the app) |
-| `ontomato-ontology-manager:deploy-<ARCH>` | `make pack-ontology-manager ARCH=<ARCH>` |
-
-Copy `.env.example` to `.env`, set `ARCH`, `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-the `BACKEND_LLM_*` and `BACKEND_EMBEDDING_*` values and the browser URLs, then:
+## Build the offline pack
 
 ```bash
-docker compose up -d
+make bundle ARCH=arm64   # or amd64
 ```
 
-`POSTGRES_USER` and `POSTGRES_PASSWORD` are copied into the Node `DATABASE_URL`
-without percent-encoding, so use letters, digits, `.`, `_`, and `-` only.
-`ONTOLOGY_MANAGER_URL` is opened by the browser, so use the host address rather
-than a container DNS name and keep it aligned with `ONTOLOGY_MANAGER_PORT`
-(default 3005); the Node app is on `PORT` (default 3000). DataRAG and
-Postgres are also published on the host, at `DATARAG_PORT` (default 18087) and
-`POSTGRES_PORT` (default 5432).
+The pack is written to `.build/bundle/<product>-<version>-<time>-<arch>.tar.gz`.
+It holds this directory's `docker-compose.yml`, `.env.example`, `initdb.sql` and
+`README.md`, the assembly recipes under `assemble/`, and one `images/*.tar.gz` per
+image. The images of that architecture must already be built or imported on this
+host: the pack is built from those local images, not from the source tree, and it
+takes the version from the app images.
 
-`frontend_data` is mounted at `/app/data`, `backend_data` at `/deploy`, and
-Postgres persists in a new volume at `/var/lib/postgresql`; on first init the SQL
-creates the `ontomato` and `datarag` databases. The stack does not attach an
-existing database or migrate old data.
+## Deploy on site
 
-The assembly recipes `docker/workbench/Dockerfile.assemble` and
-`docker/data-engine/Dockerfile.assemble` copy a loaded app image into a loaded
-runtime image and run the runtime's own pairing check for `ARCH`; optional pins
-are `ONTOMATO_RUNTIME_IMAGE`, `ONTOMATO_APP_IMAGE`, `DATARAG_RUNTIME_IMAGE`, and
-`DATARAG_APP_IMAGE`.
+1. Copy the unpacked pack directory to the server.
+2. Import the images:
+
+   ```bash
+   for f in images/*.tar.gz; do docker load -i "$f"; done
+   ```
+
+3. `cp .env.example .env`, then fill in group 1: `POSTGRES_PASSWORD` and
+   `PUBLIC_HOST` (the address the browser uses, an IP or a hostname).
+4. `docker compose up -d`.
+
+The app and backend images are assembled offline at `up` (`pull_policy: build`):
+each recipe copies a loaded app image into its loaded runtime image. To update only
+the application, import the new app package and run `docker compose up -d` again;
+the runtime stays loaded.
+
+## Moving to Docker.io
+
+`docker-compose.yml` keeps `ONTOMATO_RUNTIME_IMAGE` / `ONTOMATO_APP_IMAGE` and
+`DATARAG_RUNTIME_IMAGE` / `DATARAG_APP_IMAGE` as build-argument overrides. Pointing
+those four at registry references is the change that moves assembly off the local
+image store; they are intentionally absent from `.env.example`.
+
+## Databases and ports
+
+PostgreSQL is published on `127.0.0.1` only (`POSTGRES_PORT`, default 5432). The Node
+app is on `PORT` (default 3000), the ontology manager on `ONTOLOGY_MANAGER_PORT`
+(default 3005), DataRAG on `DATARAG_PORT` (default 18087). The database accounts and
+names are fixed in `docker-compose.yml`: user and database `ontomato` for the Node
+app, database `datarag` for DataRAG. `frontend_data` is mounted at `/app/data` and
+`backend_data` at `/deploy`; on first init `initdb.sql` creates the `ontomato` and
+`datarag` databases. The stack does not attach an existing database or migrate old
+data.
