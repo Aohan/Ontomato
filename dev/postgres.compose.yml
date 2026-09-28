@@ -1,4 +1,4 @@
-# 本机开发用 PostgreSQL。只由产品根 dev.sh 以显式 -p/-f 调用；账号密码仅本机示例。
+# 本机开发用 PostgreSQL。只由产品根 `pnpm dev:up` 的整栈工具以显式 -p/-f 调用；账号密码仅本机示例。
 services:
   postgres:
     image: pgvector/pgvector:pg18

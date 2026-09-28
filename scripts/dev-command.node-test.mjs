@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { once } from "node:events";
+import { EventEmitter, once } from "node:events";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { configuration, start } from "./dev-command.mjs";
+import { configuration, holdForeground, start } from "./dev-command.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ENTRY = fileURLToPath(import.meta.url).replace(/\.node-test\.mjs$/, ".mjs");
@@ -34,17 +34,25 @@ test("a product default fills DATARAG_ORIGIN and never overrides an explicit val
   assert.deepEqual(inherited, {});
 });
 
-test("server and manager keep their own cwd, tool and arguments", () => {
+test("server, web and manager keep their own cwd and pass this checkout's absolute entry", () => {
   const server = configuration("server", { root: ROOT, dataragOrigin: "http://localhost:18087" }, {});
   assert.equal(server.tool, "tsx");
-  assert.deepEqual(server.args, ["watch", "src/index.ts"]);
+  assert.deepEqual(server.args, ["watch", join(ROOT, "apps/workbench/src/index.ts")]);
   assert.equal(server.cwd, join(ROOT, "apps/workbench"));
   assert.equal(server.env.NODE_ENV, "development");
   assert.equal(server.env.DATARAG_ORIGIN, undefined);
 
+  const web = configuration("web", { root: ROOT, dataragOrigin: "http://localhost:18087" }, {});
+  assert.equal(web.tool, "vite");
+  assert.deepEqual(web.args, ["--config", join(ROOT, "apps/workbench/web/vite.config.ts")]);
+  assert.equal(web.cwd, join(ROOT, "apps/workbench"));
+  // 独立 dev:web 与旧入口一样不设置 NODE_ENV；组合 dev 仍由父进程统一设置。
+  assert.equal(web.env.NODE_ENV, undefined);
+  assert.equal(web.env.DATARAG_ORIGIN, undefined);
+
   const manager = configuration("manager", { root: ROOT }, {});
   assert.equal(manager.tool, "vite");
-  assert.deepEqual(manager.args, ["--port", "5174"]);
+  assert.deepEqual(manager.args, [join(ROOT, "apps/ontology-manager"), "--port", "5174"]);
   assert.equal(manager.cwd, join(ROOT, "apps/ontology-manager"));
   assert.equal(manager.env.DATARAG_ORIGIN, undefined);
 });
@@ -54,6 +62,20 @@ test("an unknown mode is rejected", () => {
     () => configuration("unknown", { root: ROOT }, {}),
     /Unknown development command: unknown/
   );
+});
+
+test("holdForeground forwards on Unix and only holds on Windows, then releases its listeners", () => {
+  const child = new EventEmitter();
+  const signals = [];
+  child.kill = (signal) => signals.push(signal);
+  const before = process.listeners("SIGINT");
+  const release = holdForeground(child);
+  const added = process.listeners("SIGINT").filter((listener) => !before.includes(listener));
+  assert.equal(added.length, 1);
+  added[0](); // 直接调用注册的监听，避免真的向前台进程或测试进程发信号。
+  assert.deepEqual(signals, process.platform === "win32" ? [] : ["SIGINT"]);
+  release();
+  assert.deepEqual(process.listeners("SIGINT"), before);
 });
 
 test("the real entry exits non-zero on an unknown mode", () => {
@@ -89,7 +111,7 @@ test("start resolves the CLI from the mode cwd, forwards arguments and the exit 
       delete process.env.DEV_COMMAND_RECORD;
     }
     const written = JSON.parse(readFileSync(record, "utf8"));
-    assert.deepEqual(written.argv, ["watch", "src/index.ts", "--probe"]);
+    assert.deepEqual(written.argv, ["watch", join(dir, "apps/workbench/src/index.ts"), "--probe"]);
     assert.equal(realpathSync(written.cwd), realpathSync(join(dir, "apps/workbench")));
     assert.equal(written.nodeEnv, "development");
     assert.equal(process.exitCode, 7);

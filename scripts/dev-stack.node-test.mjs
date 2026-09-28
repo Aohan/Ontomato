@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { spawn, spawnSync } from "node:child_process";
+import { once } from "node:events";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { devNull, tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { applicationServerPort, classify, composeProject, hasArg, identify, localMcpPort, parseProcessTable,
+import { applicationServerPort, classify, composeArgs, composeProject, hasArg, identify, localMcpPort, parseProcessTable,
   productContext, resolveJavaPort, yamlFor } from "./dev-stack.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -13,6 +14,11 @@ const CORE = join(REPO, "packages", "data-engine-core");
 const REAL_MCP = readFileSync(join(CORE, "conf-defaults", "mcp-clients.yml"), "utf8");
 const REAL_APP = readFileSync(join(CORE, "conf-defaults", "application.yml"), "utf8");
 const LSTART = "Sat Sep 27 15:19:06 2026";
+// sandbox 用可执行 symlink 把 fake ps/lsof/docker/kill 放进 PATH，且 fake 是带 shebang 的脚本；
+// 二者都只在 POSIX 成立（Windows 建 symlink 需要特权，CreateProcess 也不认 shebang），
+// 所以依赖 sandbox 的用例在 Windows 明确 skip，由 Windows-only 用例覆盖同一边界。
+const POSIX_ONLY = process.platform === "win32" ? "fake ps/lsof/docker/kill 与可执行 symlink 仅 POSIX" : false;
+const posixTest = (name, fn) => test(name, { skip: POSIX_ONLY }, fn);
 
 // Fake external tools: dispatch on the invoked name, state from FAKE_SCENARIO, record argv.
 const FAKE = `#!/usr/bin/env node
@@ -142,7 +148,7 @@ test("yaml resolves from the calling product root, not the shared tool location"
     rmSync(dir, { recursive: true, force: true });
   }
 });
-test("Java port prefers the field .env over the inherited environment", () => {
+posixTest("Java port prefers the field .env over the inherited environment", () => {
   const sb = sandbox(() => ({}), productFiles(18087));
   try {
     const ctx = productContext(sb.root);
@@ -155,7 +161,7 @@ test("Java port prefers the field .env over the inherited environment", () => {
     cleanup(sb);
   }
 });
-test("Java port falls back to the field application.yml literal and rejects expressions", () => {
+posixTest("Java port falls back to the field application.yml literal and rejects expressions", () => {
   const sb = sandbox(() => ({}), productFiles(18087));
   try {
     const ctx = productContext(sb.root);
@@ -184,14 +190,23 @@ test("classify keeps Maven, RAGMain, MCP and helper inside exact path and cwd bo
   assert.equal(classify("java -cp x io.ontomato.dataengine.RAGMain", ctx.devRoot, ctx), undefined);
   assert.equal(classify(`${ctx.javaEntry} script.ts`, ctx.devRoot, ctx), undefined);
 });
+test("Unix Java recognition keeps flattened paths containing spaces intact", () => {
+  const root = "/workspace/My Product/ontomato";
+  const ctx = { root, devRoot: `${root}/apps/data-engine/.dev` };
+  assert.equal(classify(`java -cp ${ctx.devRoot}/conf:/deps/My Library/x.jar io.ontomato.dataengine.RAGMain`, ctx.devRoot, ctx), "ragmain");
+  assert.equal(classify(`java -Dmaven.multiModuleProjectDirectory=${root} -classpath /deps/My Library/boot.jar org.codehaus.plexus.classworlds.launcher.Launcher spring-boot:run`, root, ctx), "maven");
+});
 test("classify only accepts the real N10 dev commands as frontend roots", () => {
   const ctx = productContext(REPO);
   assert.equal(classify("node scripts/dev-command.mjs dev", ctx.root, ctx), "frontend-root");
   assert.equal(classify("node /w/corepack/pnpm.js dev", ctx.root, ctx), "frontend-root");
   assert.equal(classify("node .../concurrently/dist/bin/concurrently.js pnpm:dev:server pnpm:dev:web pnpm:dev:ontology-manager", ctx.root, ctx), "frontend-root");
   assert.equal(classify("node .../tsx/dist/cli.mjs watch src/index.ts", join(ctx.root, "apps/workbench"), ctx), "frontend-root");
+  // tsx watch 启动的实际工作进程（--require/--import 形式，脚本用绝对入口）。
+  assert.equal(classify(`node --require /x/node_modules/tsx/dist/preflight.cjs --import file:///x/node_modules/tsx/dist/loader.mjs ${join(ctx.root, "apps/workbench/src/index.ts")}`, join(ctx.root, "apps/workbench"), ctx), "frontend-root");
   assert.equal(classify("node .../vite/bin/vite.js --port 5174", join(ctx.root, "apps/ontology-manager"), ctx), "frontend-root");
   assert.equal(classify("node scripts/dev-command.mjs manager", ctx.root, ctx), "frontend-root");
+  assert.equal(classify("node scripts/dev-command.mjs web", ctx.root, ctx), "frontend-root");
   assert.equal(classify("node .../vitest/vitest.mjs run", ctx.root, ctx), undefined);
   assert.equal(classify("node .../vite-node/dist/cli.mjs x.ts", ctx.root, ctx), undefined);
   assert.equal(classify("node .../tsx/dist/cli.mjs script.ts", ctx.root, ctx), undefined);
@@ -199,11 +214,19 @@ test("classify only accepts the real N10 dev commands as frontend roots", () => 
   assert.equal(classify("node .../vite/bin/vite.js --port 5174", tmpdir(), ctx), undefined);
   assert.equal(classify("node .../scripts/dev-stack.mjs /w up", ctx.root, ctx), "self");
 });
+test("classify accepts the absolute manager root that dev-command now passes", () => {
+  const ctx = productContext(REPO), manager = join(ctx.root, "apps/ontology-manager");
+  assert.equal(classify(`node .../vite/bin/vite.js ${manager} --port 5174`, manager, ctx), "frontend-root");
+  assert.equal(classify(`node .../vite/bin/vite.js ${manager} --port 5175`, manager, ctx), undefined);
+  assert.equal(classify(`node .../vite/bin/vite.js ${tmpdir()}/apps/ontology-manager --port 5174`, manager, ctx), undefined);
+  assert.equal(classify(`node .../vite/bin/vite.js --port 5174`, manager, ctx), "frontend-root");
+  assert.equal(classify(`node .../vite/bin/vite.js ${manager}`, manager, ctx), undefined);
+});
 test("parseProcessTable reads pid, ppid and lstart from one row", () => {
   const rows = parseProcessTable(`  123     1 ${LSTART} node /w/dev.mjs -o\n`);
   assert.deepEqual(rows, [{ pid: 123, ppid: 1, lstart: LSTART, command: "node /w/dev.mjs -o" }]);
 });
-test("identify finds an orphaned frontend root and all of its descendants", () => {
+posixTest("identify finds an orphaned frontend root and all of its descendants", () => {
   const sb = sandbox((root) => ({
     ps: [
       { pid: 501, ppid: 1, lstart: LSTART, command: `node ${root}/node_modules/.pnpm/concurrently@9.2.1/node_modules/concurrently/dist/bin/concurrently.js pnpm:dev:server pnpm:dev:web pnpm:dev:ontology-manager` },
@@ -221,7 +244,7 @@ test("identify finds an orphaned frontend root and all of its descendants", () =
     cleanup(sb);
   }
 });
-test("identify reports live candidates whose cwd cannot be read instead of dropping them", () => {
+posixTest("identify reports live candidates whose cwd cannot be read instead of dropping them", () => {
   const sb = sandbox((root) => ({
     ps: [{ pid: 601, ppid: 1, lstart: LSTART, command: `${root}/apps/data-engine/.venv/bin/python ${CORE}/mcp/mcpserver.py --port 18500` }],
     cwd: {},
@@ -234,7 +257,7 @@ test("identify reports live candidates whose cwd cannot be read instead of dropp
     cleanup(sb);
   }
 });
-test("identify never attributes vitest, arbitrary tsx or foreign-root processes", () => {
+posixTest("identify never attributes vitest, arbitrary tsx or foreign-root processes", () => {
   const sb = sandbox((root) => ({
     ps: [
       { pid: 701, ppid: 1, lstart: LSTART, command: `node ${root}/node_modules/.pnpm/vitest@1.6.0/node_modules/vitest/vitest.mjs run` },
@@ -250,7 +273,7 @@ test("identify never attributes vitest, arbitrary tsx or foreign-root processes"
     cleanup(sb);
   }
 });
-test("up fails fast when Docker is unavailable and never calls compose", () => {
+posixTest("up fails fast when Docker is unavailable and never calls compose", () => {
   const sb = sandbox(() => ({ dockerInfo: 1 }), productFiles(18087));
   try {
     const result = cli(sb, "up");
@@ -261,7 +284,7 @@ test("up fails fast when Docker is unavailable and never calls compose", () => {
     cleanup(sb);
   }
 });
-test("up checks required local files before touching Docker", () => {
+posixTest("up checks required local files before touching Docker", () => {
   const files = productFiles(18087);
   delete files["apps/data-engine/.env"];
   const sb = sandbox(() => ({}), files);
@@ -274,7 +297,7 @@ test("up checks required local files before touching Docker", () => {
     cleanup(sb);
   }
 });
-test("up rejects an existing same-project resource owned by another root", () => {
+posixTest("up rejects an existing same-project resource owned by another root", () => {
   const sb = sandbox(() => ({ dockerInfo: 0, labelContainers: "/some/other/checkout\n" }), productFiles(18087));
   try {
     const result = cli(sb, "up");
@@ -285,7 +308,7 @@ test("up rejects an existing same-project resource owned by another root", () =>
     cleanup(sb);
   }
 });
-test("a failing PG step stops up before MCP is started", () => {
+posixTest("a failing PG step stops up before MCP is started", () => {
   const sb = sandbox(() => ({ dockerInfo: 0, composePs: "[]", composeUp: 1 }), productFiles(18087));
   try {
     const result = cli(sb, "up");
@@ -295,7 +318,7 @@ test("a failing PG step stops up before MCP is started", () => {
     cleanup(sb);
   }
 });
-test("down stops compose without -v and never removes volumes", () => {
+posixTest("down stops compose without -v and never removes volumes", () => {
   const sb = sandbox(() => ({ dockerInfo: 0, composeDown: 0 }), productFiles(18087));
   try {
     const result = cli(sb, "down");
@@ -308,7 +331,11 @@ test("down stops compose without -v and never removes volumes", () => {
     cleanup(sb);
   }
 });
-test("down skips the PG step on a foreign label and reports it", () => {
+test("compose ignores the ambient env file through the platform null device", () => {
+  const args = composeArgs(productContext(REPO), ["down"]);
+  assert.equal(args[args.indexOf("--env-file") + 1], devNull);
+});
+posixTest("down skips the PG step on a foreign label and reports it", () => {
   const sb = sandbox(() => ({ dockerInfo: 0, labelVolumes: "/some/other/checkout\n" }), productFiles(18087));
   try {
     const result = cli(sb, "down");
@@ -319,7 +346,7 @@ test("down skips the PG step on a foreign label and reports it", () => {
     cleanup(sb);
   }
 });
-test("status reports a foreign Java port but claims no owned role", () => {
+posixTest("status reports a foreign Java port but claims no owned role", () => {
   const sb = sandbox(() => ({ dockerInfo: 0, composePs: "[]", listeners: { 18087: [4242] } }), productFiles(18087));
   try {
     const result = cli(sb, "status");
@@ -330,7 +357,7 @@ test("status reports a foreign Java port but claims no owned role", () => {
     cleanup(sb);
   }
 });
-test("up rejects a project resource with no root label and reports docker query errors", () => {
+posixTest("up rejects a project resource with no root label and reports docker query errors", () => {
   const bare = sandbox(() => ({ dockerInfo: 0, labelVolumes: "\n" }), productFiles(18087));
   const broken = sandbox(() => ({ dockerInfo: 0, labelRc: 1 }), productFiles(18087));
   try {
@@ -342,7 +369,7 @@ test("up rejects a project resource with no root label and reports docker query 
     rmSync(bare.dir, { recursive: true, force: true }); rmSync(broken.dir, { recursive: true, force: true });
   }
 });
-test("down re-verifies identity and reports a failed KILL as non-zero", () => {
+posixTest("down re-verifies identity and reports a failed KILL as non-zero", () => {
   const sb = sandbox((root) => ({ dockerInfo: 0, killRc: 1, cwd: { 900: root }, ps: [{ pid: 900, ppid: 1, lstart: LSTART, command: `node ${root}/node_modules/.pnpm/concurrently@9.2.1/node_modules/concurrently/dist/bin/concurrently.js pnpm:dev:server pnpm:dev:web pnpm:dev:ontology-manager` }] }), productFiles(18087));
   try {
     const result = cli(sb, "down");
@@ -363,7 +390,7 @@ test("inspection strings and other dev tools in this checkout are never owned", 
   assert.equal(classify("node /tools/vite/bin/vite.js --config other.ts", web, ctx), undefined);
   assert.equal(classify("node /tools/vite/bin/vite.js", ctx.root, ctx), undefined);
 });
-test("foreign frontend or Java listeners abort before starting PG", () => {
+posixTest("foreign frontend or Java listeners abort before starting PG", () => {
   for (const port of [3000, 18087]) {
     const sb = sandbox((root) => ({ listeners: { [port]: [4242] },
       ps: [{pid: 901, ppid: 1, lstart: LSTART, command: `node ${root}/apps/data-engine/dev.mjs`}],
@@ -375,7 +402,7 @@ test("foreign frontend or Java listeners abort before starting PG", () => {
     } finally { cleanup(sb); }
   }
 });
-test("down reports an unresolved live candidate and still stops its own PG", () => {
+posixTest("down reports an unresolved live candidate and still stops its own PG", () => {
   const sb = sandbox((root) => ({ ps: [{pid: 902, ppid: 1, lstart: LSTART,
     command: `node ${root}/apps/data-engine/dev.mjs`}], cwd: {} }), productFiles(18087));
   try {
@@ -383,4 +410,63 @@ test("down reports an unresolved live candidate and still stops its own PG", () 
     assert.match(r.stderr, /无法确认候选/); assert.ok(r.calls.some((c) => c.includes(" down")));
     assert.equal(r.calls.some((c) => c.startsWith("kill ")), false);
   } finally { cleanup(sb); }
+});
+function waitFor(predicate, timeout = 5000) {
+  return new Promise((done, reject) => {
+    const deadline = Date.now() + timeout;
+    const timer = setInterval(() => {
+      if (predicate()) { clearInterval(timer); done(); }
+      else if (Date.now() > deadline) { clearInterval(timer); reject(new Error("等待超时")); }
+    }, 50);
+  });
+}
+// 纯文件用例，不依赖 sandbox 的 fake PATH / 可执行 symlink，因此在 Windows 也能跑。
+test("logs prints the last lines and follows appends, truncation and replacement", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "dev-stack-logs-"));
+  const root = join(dir, "product");
+  const log = join(root, "apps/data-engine/.dev/logs/dev-backend.log");
+  mkdirSync(dirname(log), { recursive: true });
+  const numbered = (prefix, count) =>
+    Array.from({ length: count }, (_, index) => `${prefix}-${String(index + 1).padStart(2, "0")}`).join("\n") + "\n";
+  writeFileSync(log, numbered("first", 15));
+  const child = spawn(process.execPath, [join(REPO, "scripts", "dev-stack.mjs"), root, "logs"], {
+    cwd: root, env: process.env, stdio: ["ignore", "pipe", "ignore"],
+  });
+  const chunks = [];
+  child.stdout.on("data", (chunk) => chunks.push(chunk));
+  const seen = () => Buffer.concat(chunks).toString();
+  try {
+    await waitFor(() => seen().includes("first-15"));
+    assert.doesNotMatch(seen(), /first-05/); // 只保留最后 10 行
+    assert.match(seen(), /first-06/);
+
+    appendFileSync(log, "appended-01\n");
+    await waitFor(() => seen().includes("appended-01"));
+
+    writeFileSync(log, "in-place-truncate\n"); // 同一文件原地截断，size < offset
+    await waitFor(() => seen().includes("in-place-truncate"));
+
+    // 同尺寸路径替换：新文件与当前一样大，必须靠文件身份而不是 size 判断，不能漏掉开头。
+    const sameSize = join(dir, "same-size.log");
+    writeFileSync(sameSize, "same-size-replace\n");
+    assert.equal(Buffer.byteLength("same-size-replace\n"), Buffer.byteLength("in-place-truncate\n"));
+    renameSync(sameSize, log);
+    await waitFor(() => seen().includes("same-size-replace"));
+
+    // 更大文件的路径替换同样要从新内容开头读。
+    const larger = join(dir, "larger.log");
+    writeFileSync(larger, "larger-replacement-01\nsecond-line\n");
+    renameSync(larger, log);
+    await waitFor(() => seen().includes("larger-replacement-01"));
+
+    // ENOENT 期间等待新文件：删除后经过至少一个 poll 周期再重建。
+    rmSync(log);
+    await new Promise((done) => setTimeout(done, 1200));
+    writeFileSync(log, "recreated-01\n");
+    await waitFor(() => seen().includes("recreated-01"));
+  } finally {
+    child.kill();
+    await once(child, "close");
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

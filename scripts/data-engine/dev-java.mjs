@@ -6,6 +6,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { delimiter, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { holdForeground } from "../dev-command.mjs";
 import { stageResources } from "./build-images.mjs";
 
 const SYNC = join(dirname(fileURLToPath(import.meta.url)), "sync-product-files.py");
@@ -153,8 +154,8 @@ export function startDevJava({ app, appDir, wrapper, profiles }, userArgs, inher
   });
 }
 
-// Foreground CLI: extra Maven arguments pass through unchanged; SIGINT/SIGTERM go to the wrapper and
-// its exit code becomes ours (the same rule as scripts/dev-command.mjs).
+// Foreground CLI: extra Maven arguments and the wrapper's exit result pass through unchanged.
+// Foreground signal handling shares the platform rule with the other development commands.
 export function runDevJava(options) {
   let child;
   try {
@@ -164,17 +165,13 @@ export function runDevJava(options) {
     process.exitCode = 1;
     return;
   }
-  const interrupt = () => child.kill("SIGINT"),
-    terminate = () => child.kill("SIGTERM");
-  process.once("SIGINT", interrupt);
-  process.once("SIGTERM", terminate);
+  const release = holdForeground(child);
   child.once("error", (error) => {
     console.error(`[dev-java] ${error.message}`);
     process.exitCode = 1;
   });
   child.once("close", (code, signal) => {
-    process.removeListener("SIGINT", interrupt);
-    process.removeListener("SIGTERM", terminate);
+    release();
     process.exitCode = code ?? (signal === "SIGINT" ? 130 : 1);
   });
 }

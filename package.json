@@ -6,8 +6,12 @@
   "scripts": {
     "dev": "node scripts/dev-command.mjs dev",
     "dev:server": "node scripts/dev-command.mjs server",
-    "dev:web": "pnpm --dir apps/workbench dev:web",
+    "dev:web": "node scripts/dev-command.mjs web",
     "dev:ontology-manager": "node scripts/dev-command.mjs manager",
+    "dev:up": "node scripts/dev-stack.mjs . up",
+    "dev:down": "node scripts/dev-stack.mjs . down",
+    "dev:status": "node scripts/dev-stack.mjs . status",
+    "dev:logs": "node scripts/dev-stack.mjs . logs",
     "typecheck:workbench": "pnpm --filter @ontomato/contracts --filter @ontomato/workbench-server --filter @ontomato/workbench typecheck",
     "test:workbench": "pnpm --filter @ontomato/workbench-server --filter @ontomato/workbench test",
     "lint:workbench": "eslint packages/contracts packages/workbench-server apps/workbench"

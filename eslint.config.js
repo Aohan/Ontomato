@@ -80,6 +80,8 @@ export default [
       "scripts/product-targets.node-test.mjs",
       "scripts/dev-stack.mjs",
       "scripts/dev-stack.node-test.mjs",
+      "scripts/dev-platform-windows.mjs",
+      "scripts/dev-platform-windows.node-test.mjs",
       "apps/data-engine/dev.mjs",
       "scripts/data-engine/dev-java.mjs",
       "scripts/data-engine/dev-java.node-test.mjs",

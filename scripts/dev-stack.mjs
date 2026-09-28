@@ -1,19 +1,24 @@
 // 产品根整栈开发入口：PG → 本机 Python MCP → Java 就绪 → 前台 Node 三进程。
-// 只依赖 Node 20 内建与 docker/ps/lsof/kill/tail；产品差异全部来自各产品自己的
-// dev/postgres.compose.yml、apps/data-engine/.env 与 .dev/conf，本工具不认识 edition。
+// 只依赖 Node 20 内建、docker，以及各平台的进程/监听查询（Unix 用 ps/lsof/kill，Windows 用
+// 内置 PowerShell/CIM）；产品差异全部来自各产品自己的 dev/postgres.compose.yml、
+// apps/data-engine/.env 与 .dev/conf，本工具不认识 edition。
 // yaml 由调用方产品根自我声明并按该根解析，工具没有固定依赖位置。
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { accessSync, closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
+import { accessSync, closeSync, constants, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
 import { get } from "node:http";
 import { createRequire } from "node:module";
 import { connect } from "node:net";
+import { devNull } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readDotEnv } from "./data-engine/dev-java.mjs";
+import { holdForeground } from "./dev-command.mjs";
+import { identifyWindows, windowsListeningPids, windowsProcesses, windowsStop } from "./dev-platform-windows.mjs";
+import { pythonExecutable, readDotEnv } from "./data-engine/dev-java.mjs";
 
 // 共享工具只锚定自己所在仓的公共 core，不按产品身份探测候选路径。
 const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "packages", "data-engine-core");
+const WINDOWS = process.platform === "win32";
 const PRODUCT_COMMANDS = ["up", "down", "status", "logs"];
 const TERM_WAIT_MS = 10_000;
 const MCP_WAIT_MS = 30_000;
@@ -59,11 +64,13 @@ export function productContext(rootInput) {
     appDir,
     devRoot,
     coreRoot: CORE_ROOT,
-    venvPython: join(appDir, ".venv", "bin", "python"),
+    // venv Python 的位置只有 dev-java.mjs 一份拥有者：Windows 在 Scripts/python.exe。
+    venvPython: pythonExecutable(appDir),
     mcpScript: join(CORE_ROOT, "mcp", "mcpserver.py"),
     mcpTemplate: join(CORE_ROOT, "conf-defaults", "mcp-clients.yml"),
     applicationTemplate: join(CORE_ROOT, "conf-defaults", "application.yml"),
     javaEntry: join(appDir, "dev.mjs"),
+    devCommand: join(root, "scripts", "dev-command.mjs"),
     javaEnvFile: join(appDir, ".env"),
     composeFile: join(root, "dev", "postgres.compose.yml"),
     backendLog: join(devRoot, "logs", "dev-backend.log"),
@@ -154,6 +161,8 @@ function moduleArgs(args, suffix) {
 export function classify(command, cwd, ctx) {
   const node = executableArgs(command, "node");
   const java = executableArgs(command, "java");
+  // Unix ps flattens argv without quoting. Keep the existing cwd/full-path checks;
+  // splitting on spaces would break Java classpaths in checkouts with spaces.
   if (node !== undefined && moduleArgs(node, "/scripts/dev-stack.mjs") !== undefined) return "self";
   if (cwd === ctx.devRoot) {
     const python = afterScript(command, ctx.venvPython);
@@ -168,7 +177,7 @@ export function classify(command, cwd, ctx) {
     if (node !== undefined) {
       for (const script of ["scripts/dev-command.mjs", join(ctx.root, "scripts/dev-command.mjs")]) {
         const args = afterScript(node, script);
-        if (args !== undefined && /^(dev|server|manager)(?:\s|$)/.test(args)) return "frontend-root";
+        if (args !== undefined && /^(dev|server|web|manager)(?:\s|$)/.test(args)) return "frontend-root";
       }
       const concurrent = moduleArgs(node, "/concurrently/dist/bin/concurrently.js");
       if (concurrent !== undefined && ["server", "web", "ontology-manager"].every((mode) => hasArg(concurrent, `pnpm:dev:${mode}`))) return "frontend-root";
@@ -188,7 +197,9 @@ export function classify(command, cwd, ctx) {
     if (vite !== undefined && ["web/vite.config.ts", join(workbench, "web/vite.config.ts")].some((config) => afterScript(vite, `--config ${config}`) !== undefined)) return "frontend-root";
   }
   const vite = moduleArgs(node, "/vite/bin/vite.js");
-  if (cwd === manager && vite !== undefined && afterScript(vite, "--port 5174") !== undefined) return "frontend-root";
+  // 现行 dev-command manager 传本检出绝对 root；也保留旧 apps/ontology-manager 脚本的相对形式。
+  if (cwd === manager && vite !== undefined &&
+      (afterScript(vite, "--port 5174") !== undefined || afterScript(vite, `${manager} --port 5174`) !== undefined)) return "frontend-root";
   return undefined;
 }
 function psSnapshot() {
@@ -215,7 +226,7 @@ function isAlive(pid) {
   throw new Error("ps 无法确认进程是否退出");
 }
 // 一次 ps 快照（含 lstart）+ 对候选批量取 cwd；返回本检出自有的全部角色与前端后代。
-export function identify(ctx) {
+function identifyUnix(ctx) {
   const rows = psSnapshot();
   const byPid = new Map(rows.map((row) => [row.pid, row]));
   const cwdsToCheck = [ctx.root, ctx.devRoot, join(ctx.root, "apps/workbench"), join(ctx.root, "apps/ontology-manager")];
@@ -251,7 +262,12 @@ export function identify(ctx) {
   for (const entry of group) if (entry.cwd === undefined && isAlive(entry.pid)) unattributable.push(entry);
   return { group, unattributable, byPid };
 }
+// 平台只影响进程/监听查询：Unix 用 ps+lsof，Windows 用 CIM 并按绝对 argv 绑定。编排共用一份。
+export function identify(ctx) {
+  return WINDOWS ? identifyWindows(windowsProcesses(), ctx) : identifyUnix(ctx);
+}
 function listeningPids(port) {
+  if (WINDOWS) return windowsListeningPids(port);
   const result = run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"]);
   if (result.error || ![0, 1].includes(result.status) || result.stderr.trim()) throw new Error("lsof 无法可靠读取端口");
   return result.stdout.trim().split("\n").filter(Boolean).map(Number);
@@ -272,7 +288,7 @@ function composeEnv(ctx, dbPort) {
   return env;
 }
 export function composeArgs(ctx, rest) {
-  return ["compose", "--project-directory", dirname(ctx.composeFile), "--env-file", "/dev/null", "-p", ctx.project, "-f", ctx.composeFile, ...rest];
+  return ["compose", "--project-directory", dirname(ctx.composeFile), "--env-file", devNull, "-p", ctx.project, "-f", ctx.composeFile, ...rest];
 }
 function compose(ctx, dbPort, rest) {
   return run("docker", composeArgs(ctx, rest), { env: composeEnv(ctx, dbPort) });
@@ -316,7 +332,7 @@ async function spawnDetached(command, args, cwd, env, log) {
   mkdirSync(dirname(log), { recursive: true });
   const fd = openSync(log, "a");
   try {
-    const child = spawn(command, args, { cwd, env, detached: true, stdio: ["ignore", fd, fd] });
+    const child = spawn(command, args, { cwd, env, detached: true, windowsHide: true, stdio: ["ignore", fd, fd] });
     await new Promise((done, reject) => { child.once("spawn", done); child.once("error", reject); });
     child.unref(); // detached isolates terminal signals; unref lets the foreground CLI exit.
     return child;
@@ -413,7 +429,7 @@ async function up(ctx) {
   requireDocker();
   const pre = identify(ctx);
   if (pre.unattributable.length)
-    throw new Error(`无法确认 ${pre.unattributable.length} 个候选进程的 cwd（仍存活），拒绝继续: ${pre.unattributable.map((row) => row.pid).join(", ")}`);
+    throw new Error(`无法确认 ${pre.unattributable.length} 个本检出候选进程的归属（仍存活），拒绝继续: ${pre.unattributable.map((row) => row.pid).join(", ")}`);
   assertNoForeignProject(ctx);
   const frontend = pre.group.filter((entry) => FRONTEND_ROLES.includes(entry.role));
   if (frontend.length) throw new Error(`本检出的前端已在运行: ${frontend.map((entry) => entry.pid).join(", ")}`);
@@ -462,26 +478,51 @@ async function up(ctx) {
   if (snapshot.group.some((entry) => FRONTEND_ROLES.includes(entry.role))) throw new Error("本检出的前端已在运行");
   for (const [port, label] of [[3000, "Node"], [5173, "主网页"], [5174, "Manager"]]) assertNoForeign(port, { group: [] }, label);
   process.stdout.write(`[dev] 启动 Node 三进程（前台；Ctrl-C 只停本组，down 停整栈）\n`);
-  const child = spawn("pnpm", ["dev"], { cwd: ctx.root, env: { ...process.env, PORT: "3000" }, stdio: "inherit", shell: false });
-  const interrupt = () => child.kill("SIGINT");
-  const terminate = () => child.kill("SIGTERM");
-  process.once("SIGINT", interrupt);
-  process.once("SIGTERM", terminate);
+  // 直接以本检出 scripts/dev-command.mjs 为前台入口：不经过 pnpm.cmd，Windows 也没有 shell 解析问题。
+  const child = spawn(process.execPath, [ctx.devCommand, "dev"], { cwd: ctx.root, env: { ...process.env, PORT: "3000" }, stdio: "inherit", shell: false });
+  const release = holdForeground(child);
   child.once("error", (error) => {
     process.stderr.write(`[dev] 前端启动失败: ${error.message}\n`);
     process.exitCode = 1;
   });
   await new Promise((done) =>
     child.once("close", (code, signal) => {
-      process.removeListener("SIGINT", interrupt);
-      process.removeListener("SIGTERM", terminate);
+      release();
       process.exitCode = code ?? (signal === "SIGINT" ? 130 : 1);
       done();
     }),
   );
 }
+// Windows 没有可转发的优雅信号：同一 PowerShell 调用里对每个已确认 PID 先取并保留 Process 句柄，
+// 再按 CreationDate 区分“已退出/已被复用”（可安全跳过）与“同一实例身份不可确认/停止失败”（必须报失败），
+// 通过才 Kill 同一句柄。停止后重查本组，仍有本组进程在运行就失败，不因等待超时或漏快照而宣称成功。
+async function stopGroupWindows(ctx, roles, label, notes, failures) {
+  const before = identify(ctx);
+  if (before.unattributable.length) failures.push(`无法确认候选进程归属: ${before.unattributable.map((row) => row.pid).join(", ")}`);
+  const owned = before.group.filter((entry) => roles.includes(entry.role));
+  if (!owned.length) {
+    notes.push(`${label} 未在运行`);
+    return;
+  }
+  let result;
+  try {
+    result = windowsStop(owned);
+  } catch (error) {
+    failures.push(`${label} 停止失败: ${error.message}`);
+    return;
+  }
+  for (const pid of result.stopped) notes.push(`${label} pid ${pid} 已停止`);
+  for (const pid of result.exited) notes.push(`${label} pid ${pid} 已先退出，未处理替代进程`);
+  for (const pid of result.reused) notes.push(`${label} pid ${pid} 已被复用，未处理替代进程`);
+  for (const pid of result.failed) failures.push(`${label} pid ${pid} 身份无法确认或停止失败`);
+  const after = identify(ctx);
+  if (after.unattributable.length) failures.push(`停止后仍有无法确认归属的本组候选: ${after.unattributable.map((row) => row.pid).join(", ")}`);
+  const residual = after.group.filter((entry) => roles.includes(entry.role));
+  if (residual.length) failures.push(`${label} 停止后仍有本组进程在运行: ${residual.map((entry) => entry.pid).join(", ")}`);
+}
 // 先 TERM；10 秒后仅对身份未变的存活者 KILL，并核实真的退出。
 async function stopGroup(ctx, roles, label, notes, failures) {
+  if (WINDOWS) return stopGroupWindows(ctx, roles, label, notes, failures);
   const initial = identify(ctx);
   if (initial.unattributable.length) failures.push(`无法确认候选进程归属: ${initial.unattributable.map((row) => row.pid).join(", ")}`);
   const owned = initial.group.filter((entry) => roles.includes(entry.role) && entry.cwd !== undefined);
@@ -571,18 +612,82 @@ function status(ctx) {
   for (const [port, label] of ports)
     if (foreignListeners(port, snapshot.group).length) process.stdout.write(`[dev] ${label} 端口 ${port} 被外部进程占用\n`);
 }
+const LOG_TAIL_LINES = 10;
+const LOG_READ_BYTES = 64 * 1024;
+// 文件身份带创建时间：同路径被重建且 inode 恰好复用时仍能判成新文件，避免 size>=offset 时漏开头。
+const fileIdentity = (stats) => `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`;
+// 单次最多读 LOG_READ_BYTES，短读只输出 bytesRead 字节，不带 NUL。
+function readAt(handle, offset, size) {
+  const buffer = Buffer.alloc(Math.min(LOG_READ_BYTES, size - offset));
+  const bytesRead = readSync(handle, buffer, 0, buffer.length, offset);
+  return buffer.subarray(0, bytesRead);
+}
+// 用 Node 文件 API 替代 tail(1)：先输出最后 10 行，再按增长追加；按文件身份识别轮转/替换，
+// 原地截断从 0 重读；单次缓冲有界；ENOENT 视为轮转中并等新文件，其它错误明确失败并清定时器/监听。
 function logs(ctx) {
-  if (!existsSync(ctx.backendLog)) throw new Error(`日志不存在: ${ctx.backendLog}`);
-  const child = spawn("tail", ["-f", ctx.backendLog], { stdio: "inherit" });
-  child.once("error", (error) => {
-    process.stderr.write(`[dev] tail 启动失败: ${error.message}\n`);
+  const path = ctx.backendLog;
+  if (!existsSync(path)) throw new Error(`日志不存在: ${path}`);
+  const initial = statSync(path);
+  let handle = openSync(path, "r");
+  let identity = fileIdentity(initial);
+  let offset = initial.size;
+  const start = Math.max(0, initial.size - LOG_READ_BYTES);
+  const lines = readAt(handle, start, initial.size).toString("utf8").split("\n");
+  if (start > 0) lines.shift();
+  if (lines[lines.length - 1] === "") lines.pop();
+  if (lines.length) process.stdout.write(lines.slice(-LOG_TAIL_LINES).join("\n") + "\n");
+
+  let timer;
+  const stop = () => {
+    clearInterval(timer);
+    if (handle !== undefined) { closeSync(handle); handle = undefined; }
+    process.removeListener("SIGINT", stop).removeListener("SIGTERM", stop);
+  };
+  const fail = (error) => {
+    stop();
+    process.stderr.write(`[dev] 日志跟随失败: ${error.message}\n`);
     process.exitCode = 1;
-  });
-  child.once("close", (code) => (process.exitCode = code ?? 1));
+  };
+  const drain = (from) => {
+    let at = from;
+    const size = fstatSync(handle).size;
+    for (;;) {
+      if (at >= size) return at;
+      const chunk = readAt(handle, at, size);
+      if (chunk.length === 0) return at;
+      process.stdout.write(chunk);
+      at += chunk.length;
+    }
+  };
+  timer = setInterval(() => {
+    let current;
+    try {
+      current = statSync(path);
+    } catch (error) {
+      if (error.code === "ENOENT") return; // 轮转中：等新文件出现
+      fail(error);
+      return;
+    }
+    try {
+      if (handle === undefined || fileIdentity(current) !== identity) {
+        if (handle !== undefined) closeSync(handle);
+        handle = undefined; // 先作废旧 fd，openSync 失败时 stop 不会重复 close
+        handle = openSync(path, "r");
+        identity = fileIdentity(fstatSync(handle));
+        offset = 0; // 路径上是新文件：从新内容开头读，不按旧 offset 跳过
+      }
+      if (fstatSync(handle).size < offset) offset = 0; // 原地截断
+      offset = drain(offset);
+    } catch (error) {
+      if (error.code === "ENOENT") return; // Replacement vanished between stat and open; retry next poll.
+      fail(error);
+    }
+  }, 500);
+  process.once("SIGINT", stop).once("SIGTERM", stop);
 }
 export async function main(argv = process.argv.slice(2)) {
   const [rootInput, command = "up"] = argv;
-  if (!rootInput || !PRODUCT_COMMANDS.includes(command)) throw new Error("用法: dev.sh [up|down|status|logs]");
+  if (!rootInput || !PRODUCT_COMMANDS.includes(command)) throw new Error("用法: scripts/dev-stack.mjs <产品根> [up|down|status|logs]");
   const ctx = productContext(rootInput);
   if (command === "up") await up(ctx);
   else if (command === "down") await down(ctx);
