@@ -44,14 +44,14 @@ Node 服务读取产品根 `.env`（进程环境优先），运行数据写在�
 `node apps/data-engine/dev.mjs [额外 Maven 参数]`：在本仓 reactor 根前台执行本平台的官方 Maven wrapper（POSIX 为 `./mvnw`，Windows 为 `mvnw.cmd`）`-B -ntp -DskipTests -pl apps/data-engine -am spring-boot:run`，运行的是当前工作区源码，不需要 `mvn install`。额外参数原样透传给 Maven（例如 `-o`）。
 
 - 启动脚本自动按构建入口的资源与语言准备 `apps/data-engine/.dev`（`conf`、`skills`、`logs`、`python`，JVM 工作目录，`conf` 在 classpath 最前）。同步规则与容器相同：同名覆盖、新增补齐、多余保留，`application.yml` 与 `mcp-clients.yml` 只在缺失时复制。提示词语言默认 `en`，可用 `PROMPT_LANG=zh|en` 指定。
-- 需要先自行准备 `apps/data-engine/.env`（Java 的 `POSTGRE_*`、`BACKEND_*` 等，按宿主口径填写；逐行 `KEY=value` 字面读取，覆盖继承的同名环境变量）和 `apps/data-engine/.venv`。POSIX：`python3 -m venv apps/data-engine/.venv && apps/data-engine/.venv/bin/pip install -r packages/data-engine-core/requirements-py310.txt`；Windows PowerShell：`py -3 -m venv apps\data-engine\.venv` 后 `apps\data-engine\.venv\Scripts\python.exe -m pip install -r packages\data-engine-core\requirements-py310.txt`。缺少任一项时在启动 Maven 前报错。
+- 需要先自行准备 `apps/data-engine/.env`（Java 的 `POSTGRE_*`、`BACKEND_*` 等，按宿主口径填写；逐行 `KEY=value` 字面读取，覆盖继承的同名环境变量），缺少时在启动 Maven 前报错。Python 虚拟环境 `apps/data-engine/.venv` 不用手动准备：启动时没有就用本机 `python3`（Windows 为 `py -3`，需 Python 3.10+）自动创建并安装 `packages/data-engine-core/requirements-py310.txt`，这份清单变化时自动重装，否则直接复用。
 - 本入口只启动 JVM：PostgreSQL 和 Python MCP（`mcp-clients.yml` 默认 `127.0.0.1:18500`）需另行就绪，不是全栈启动。前台信号与整栈入口同规则：Unix 把 SIGINT/SIGTERM 转发给 Maven wrapper；Windows 下 Node 的 `kill` 是强制终止，改为等待同一控制台的子进程自行收敛。Windows 实机尚未验证，不作已通过结论。
 
 ## 统一整栈开发入口
 
 `pnpm dev:up` / `pnpm dev:down` / `pnpm dev:status` / `pnpm dev:logs` 按 PG → 本机 Python MCP → Java 就绪 → 前台 Node 三进程的顺序启动整栈；MCP 与 Java 是独立后台进程组，日志分别追加到 `apps/data-engine/.dev/logs/dev-mcp.log` 与 `dev-backend.log`。入口只用 Node 与系统自带工具（Windows 走内置 PowerShell/CIM，不需要 Bash、tail 或额外依赖），在 PowerShell 里可直接执行。
 
-- `dev:up`：先校验端口、`apps/data-engine/.env`、`.venv` 与 `dev/postgres.compose.yml`，再启动 Compose。前台只有 Node 三进程（显式 `PORT=3000`），Ctrl-C 只停本组；PG/MCP/Java 已就绪时复用本检出，端口被其它进程占用时报错退出，不停止他人。
+- `dev:up`：先校验端口、`apps/data-engine/.env` 与 `dev/postgres.compose.yml`，按需准备 Python 虚拟环境，再启动 Compose。前台只有 Node 三进程（显式 `PORT=3000`），Ctrl-C 只停本组；PG/MCP/Java 已就绪时复用本检出，端口被其它进程占用时报错退出，不停止他人。
 - `dev:down`：按本检出的实际命令与入口识别并停止前端（含父进程退出后残留的 concurrently/tsx/Vite 子树）、Java 入口与残留 Maven/RAGMain、MCP，停止前再次确认同一 PID 的启动身份；最后 `docker compose down` 不带 `-v`，卷保留。
 - `dev:status` 只报本检出归属与外部端口占用提示，`dev:logs` 跟随 `dev-backend.log` 末尾。Docker 未运行时提示启动 Docker Desktop 或 dockerd 后退出，不自动打开 GUI。
 
@@ -59,6 +59,6 @@ Windows 与 POSIX 共用同一份 Node 编排。两版新的 `pnpm dev:*` 入口
 
 检出身份：Compose 项目名与卷名由产品根 realpath 派生（`<basename>-dev-<hash8>`），服务和卷带 `dev.stack.root`、`dev.stack.product` 标签；不同 worktree 即使 basename 相同也使用不同项目与卷。迁移目录后旧卷可用 `docker volume ls --filter label=dev.stack.product=<名>` 追溯；已有卷不自动迁移、补库或删除，建库 SQL 只在空卷首次初始化时执行。
 
-准备本机配置（都只 `cp` 示例）：根 `.env`、`apps/data-engine/.env`、`apps/data-engine/.venv`（命令见上一节），以及需要时按同步后的 `apps/data-engine/.dev/conf/mcp-clients.yml` 创建的本机 MCP 条目——必须是唯一的 `http://127.0.0.1:<port>/sse`，允许同时保留远程条目。
+准备本机配置（都只 `cp` 示例）：根 `.env`、`apps/data-engine/.env`，以及需要时按同步后的 `apps/data-engine/.dev/conf/mcp-clients.yml` 创建的本机 MCP 条目——必须是唯一的 `http://127.0.0.1:<port>/sse`，允许同时保留远程条目。
 
 端口：Node 3000、主网页 5173、Manager 5174 固定；PG 用 `DB_PORT`（默认 5432）、Java 用 `apps/data-engine/.env` 的 `SERVER_PORT`（默认 18087）、MCP 用 `mcp-clients.yml` 的本机端口（模板 18500）。端口被其它进程占用时 `up` 报错退出，不停止他人进程。两个产品根各自只需在自己的根执行一次安装，企业组合根的一次 `pnpm install` 即包含相邻公共仓。
