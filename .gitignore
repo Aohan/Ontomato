@@ -14,3 +14,6 @@ __pycache__/
 # Java 数据引擎本机开发：运行数据根与 MCP/技能 Python 环境（apps/data-engine/.env 由上面的 .env 规则忽略）
 apps/data-engine/.dev/
 apps/data-engine/.venv/
+packages/data-engine-core/.classpath
+packages/data-engine-core/.project
+packages/data-engine-core/.settings/
