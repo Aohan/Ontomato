@@ -1,7 +1,9 @@
 # DataRAG large runtime image: glibc base + JRE21 + Python 3.10 + third-party dependencies and platform native libraries.
 # Carries only runtime inputs. Application jars, default configuration, skills and license material stay out of this image.
 # The product entry assembles the context: lib/, mcp/mcpserver.py, requirements-py310.txt, runtime-arch.txt,
-# and bin/ containing the shared entrypoint/contract helpers and the explicitly selected product checker.
+# and bin/ containing the shared entrypoint/contract helpers and the explicitly selected product checker;
+# for the third-party notices under /licenses also maven-licenses.json (from the Maven export),
+# tools/third_party_notices.py and the public repository's LICENSE and NOTICE.
 ARG PYTHON_RUNTIME_IMAGE=docker.1ms.run/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
 ARG JRE_IMAGE=docker.1ms.run/library/eclipse-temurin:21-jre-jammy@sha256:61d6c7b34d36aee3f45d043101259f97f3c6d428dc2a6f75513789983c5e254f
 ARG PIP_INDEX_URL=https://pypi.org/simple
@@ -34,6 +36,19 @@ COPY lib/ /opt/datarag/lib/
 COPY bin/ /opt/datarag/bin/
 COPY runtime-arch.txt /opt/datarag/runtime-arch
 COPY requirements-py310.txt /opt/datarag/requirements.txt
+# Third-party notices of what this image installs, under /licenses, outside the runtime contract
+# inputs: every file under lib/ joined with the export's Maven license records (lib/ itself stays
+# byte-identical to the export), and the distributions pip left installed. The system section
+# names where the base images keep their own.
+COPY LICENSE NOTICE /licenses/
+RUN --mount=type=bind,source=maven-licenses.json,target=/tmp/maven-licenses.json \
+    --mount=type=bind,source=tools/third_party_notices.py,target=/tmp/third_party_notices.py \
+    python /tmp/third_party_notices.py /licenses/THIRD_PARTY_NOTICES.txt --python --jars /opt/datarag/lib /tmp/maven-licenses.json <<'EOF'
+Debian packages of the python:3.10-slim-bookworm base: /usr/share/doc/<package>/copyright
+Python 3.10 interpreter and standard library: /usr/local/lib/python3.10/LICENSE.txt
+Eclipse Temurin 21 JRE (copied alone from the eclipse-temurin JRE image): /opt/java/openjdk/NOTICE
+and /opt/java/openjdk/legal/
+EOF
 RUN chmod 0755 /opt/datarag/bin/container-entrypoint.sh \
  && case "$PAIR_CONTRACT" in \
       /*) ;; \

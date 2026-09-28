@@ -73,6 +73,9 @@ function fixture(t) {
       "scripts/pnpm-workspace-context.mjs",
       "scripts/ontology-manager/build-images.mjs",
       "apps/ontology-manager/build.mjs",
+      "LICENSE",
+      "NOTICE",
+      "scripts/third_party_notices.py",
     ].map((rel) => [rel, readFileSync(join(REPO, rel))]),
   );
   repository(publicRoot, {
@@ -308,6 +311,16 @@ test("the public entry builds ontomato-ontology-manager from its two owners and 
       listing.files.find((file) => file.path === name).sha256,
       sha256(readFileSync(join(REPO, RECIPE, name))),
       name,
+    );
+  for (const [source, path] of [
+    ["LICENSE", "LICENSE"],
+    ["NOTICE", "NOTICE"],
+    ["scripts/third_party_notices.py", "tools/third_party_notices.py"],
+  ])
+    assert.equal(
+      listing.files.find((file) => file.path === path).sha256,
+      sha256(readFileSync(join(REPO, source))),
+      path,
     );
   assertRecipeMatches(build, listing);
 

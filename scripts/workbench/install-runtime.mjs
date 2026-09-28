@@ -28,6 +28,9 @@ const STORE = join(RUNTIME, "node_modules/.pnpm");
 const PACKAGES = "/tmp/packages.json";
 const SNAPSHOT_PATHS = "/tmp/snapshot-paths.json";
 const TOOL_LINKS = "/tmp/tool-links/node_modules";
+// pnpm's license report of this installation, read by the runtime stage's
+// third-party notice generator; it never enters the runtime tree.
+const NPM_LICENSES = "/tmp/npm-licenses.json";
 const SERVER = "@ontomato/workbench-server";
 
 function inside(root, path) {
@@ -127,6 +130,19 @@ function main() {
   // Fail closed: a stale shim must never leave the installer stage. The
   // version is printed into the build log as evidence.
   execute(join(STORE, "node_modules/.bin/esbuild"), ["--version"]);
+  // Same selection as the install. pnpm reports package paths under its
+  // default virtual store unless it is given the one this install used.
+  writeFileSync(
+    NPM_LICENSES,
+    output("pnpm", [
+      ...selection,
+      "licenses",
+      "list",
+      "--prod",
+      "--json",
+      `--config.virtual-store-dir=${STORE}`,
+    ]),
+  );
   const members = projects(root, ["-r", "list", "--depth", "-1", "--json"]);
   const selected = projects(root, [...selection, "list", "--depth", "-1", "--json"]);
   const manifests = Object.fromEntries(members.map((member) => [member.path, member.manifest]));

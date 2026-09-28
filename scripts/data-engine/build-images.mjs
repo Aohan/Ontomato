@@ -39,10 +39,14 @@ export const JAVA_FLAGS = {
   "--pack-runtime": "boolean",
   "--pack-app": "boolean",
 };
-const RECIPE_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../../docker/data-engine",
-);
+// This shared builder lives in the public repository, whose own license files
+// every image ships, for either edition.
+const PUBLIC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+const RECIPE_DIR = join(PUBLIC_ROOT, "docker/data-engine");
+function copyLicenses(destination) {
+  for (const name of ["LICENSE", "NOTICE"])
+    copyFrom(PUBLIC_ROOT, name, join(destination, name));
+}
 
 export function selectPromptLanguage(root, lang) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -207,6 +211,9 @@ function stageRuntime(app, arch, exported) {
   copyFrom(app.requirements.root, app.requirements.path, join(context, "requirements-py310.txt"));
   copyFrom(app.mcp.root, app.mcp.path, join(context, "mcp/mcpserver.py"));
   cpSync(join(exported, "runtime-lib"), join(context, "lib"), { recursive: true });
+  cpSync(join(exported, "maven-licenses.json"), join(context, "maven-licenses.json"));
+  copyFrom(PUBLIC_ROOT, "scripts/third_party_notices.py", join(context, "tools/third_party_notices.py"));
+  copyLicenses(context);
   for (const [root, source, dest] of app.bin) copyFrom(root, source, join(context, dest));
   writeFileSync(join(context, "runtime-arch.txt"), arch);
   return context;
@@ -284,6 +291,8 @@ function stageApp(app, arch, exported, lang) {
   });
   copyFrom(app.requirements.root, app.requirements.path, join(context, "requirements-py310.txt"));
   stageResources(app, context, lang);
+  // The payload is only the product's own jars and resources: no third-party notices.
+  copyLicenses(join(context, "payload", "licenses"));
   for (const [name, content] of Object.entries(app.payloadFiles))
     writeFileSync(join(context, "payload", name), content);
   return context;

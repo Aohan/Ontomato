@@ -13,6 +13,7 @@
 #                           from the already imported runtime image
 #   tools/                  the installer/contract scripts this stage needs
 #   launch.sh               the single app launcher owned by this recipe
+#   LICENSE, NOTICE         the public repository's own license files
 ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:20.3.0@sha256:fc738db1cbb81214be1719436605e9d7d84746e5eaf0629762aeba114aa0c28d
 ARG WORKSPACE=ontomato
 ARG APP_META_JSON
@@ -23,6 +24,7 @@ ARG APP_META_JSON
 FROM --platform=$BUILDPLATFORM ${NODE_BUILDER_IMAGE} AS web-builder
 
 ARG WORKSPACE=ontomato
+ARG APPLICATION
 ARG APP_META_JSON
 
 ARG PNPM_VERSION=9.15.9
@@ -43,6 +45,18 @@ RUN node /tmp/tools/workbench/stage-app.mjs
 RUN cp /tmp/launch.sh /stage/launch.sh \
  && chmod 0755 /stage/launch.sh \
  && mkdir -p /stage/data
+# Third-party notices of the web bundle (bundling drops the packages' license
+# comments), from pnpm's report of the application's workspace closure. Dev
+# dependencies are included: the application declares its web packages as
+# devDependencies, and listing more than the bundle uses is accepted where
+# listing less is not. Everything else under /app comes from the runtime.
+COPY LICENSE NOTICE /stage/licenses/
+RUN pnpm --filter "${APPLICATION}..." licenses list --json > /tmp/npm-licenses.json
+RUN python3 /tmp/tools/third_party_notices.py /stage/licenses/THIRD_PARTY_NOTICES.txt --npm /tmp/npm-licenses.json <<'EOF'
+None in this image: it holds only application files and the bundled web
+assets. Node.js, Python, the system packages and the server's production
+dependencies come from the paired runtime image; see /licenses there.
+EOF
 
 FROM scratch AS app
 
