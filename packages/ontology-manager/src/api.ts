@@ -410,6 +410,23 @@ export function createManagerClient(
     return send("/businessConfig/dataAdapters", { method: "GET" });
   }
 
+  /** 业务知识（DataRAG /admin/getBussinessKnowledge 等），供本体管理器内嵌的业务知识页使用。 */
+  function listKnowledge() {
+    return post("/admin/getBussinessKnowledge", {});
+  }
+
+  function addKnowledge(payload: Record<string, unknown>) {
+    return post("/admin/addBussinessKnowledge", payload);
+  }
+
+  function editKnowledge(payload: Record<string, unknown>) {
+    return post("/admin/editBussinessKnowledge", payload);
+  }
+
+  function deleteKnowledge(knowledgeID: string) {
+    return post("/admin/delBussinessKnowledge", { knowledgeID });
+  }
+
   return {
     dispose: () => {
       disposed = true;
@@ -430,5 +447,9 @@ export function createManagerClient(
     loadSmartAssets,
     getBusinessConfig,
     listDataAdapters,
+    listKnowledge,
+    addKnowledge,
+    editKnowledge,
+    deleteKnowledge,
   };
 }

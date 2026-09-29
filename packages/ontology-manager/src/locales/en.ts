@@ -140,5 +140,6 @@ export default {
     relationTypes: "Relation Types",
     scheduledWriteTasks: "Scheduled Write Tasks",
     visualModeling: "Visual Modeling",
+    businessKnowledge: "Business Knowledge",
   },
 };

@@ -110,7 +110,7 @@ defineExpose({ markSaved });
           :disabled="!!props.loadError || props.loading"
           @click="emit('save')"
         >
-          {{ t("common.saveConfig") }}
+          {{ t("common.save") }}
         </el-button>
       </el-form-item>
     </div>

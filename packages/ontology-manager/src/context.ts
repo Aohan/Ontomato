@@ -32,6 +32,8 @@ export interface ManagerPresentation {
   readonly dataBrowserDescription: (objectLabel: string | undefined) => string;
   /** 组件容器不超过 700px 时对话框改为窄屏布局。 */
   readonly compactDialogs: boolean;
+  /** 是否显示工作区顶部品牌栏；嵌入宿主时置 false 隐藏（缺省显示）。 */
+  readonly showWorkspaceHeader?: boolean;
 }
 
 /** 宿主传入的全部上下文；组件不读取宿主存储、document 主题类或全局路由。 */

@@ -43,6 +43,12 @@ export function startManagerShell(profile: ManagerShellProfile) {
   const { apiBase, initialRoute } = readRuntimeConfig();
   const { view, replaceView } = syncView(initialRoute);
 
+  // 嵌入宿主时隐藏顶部品牌栏：宿主已提供“Ontology Manager”页签与返回，Manager 不再重复展示。
+  const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
+  const presentation: ManagerPresentation = embedded
+    ? { ...profile.presentation, showWorkspaceHeader: false }
+    : profile.presentation;
+
   // 401 认证失效：清除本标签页凭据并停止请求；402 License 失败保留凭据，错误由组件显示。
   function onAuthFailure(status: ManagerAuthFailureStatus) {
     if (status !== 401) return;
@@ -61,7 +67,7 @@ export function startManagerShell(profile: ManagerShellProfile) {
             theme: theme.value,
             view: view.value,
             dataFallbacks: profile.dataFallbacks,
-            presentation: profile.presentation,
+            presentation,
             "onUpdate:view": replaceView,
             onAuthFailure,
           })

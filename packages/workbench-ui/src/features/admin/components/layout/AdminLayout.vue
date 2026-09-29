@@ -80,6 +80,9 @@ const currentGroupItems = computed(() => {
   return group?.items || [];
 });
 
+// 仅首页型页签（有 homePath 且无菜单项）不显示左侧栏，内容直接占满。
+const showAside = computed(() => currentGroupItems.value.length > 0);
+
 const activeMenu = computed(() => {
   if (route.path.startsWith("/admin/intelligence-assets/")) {
     return "/admin/intelligence-assets/metric-views";
@@ -90,18 +93,8 @@ const activeMenu = computed(() => {
   if (route.path === "/admin/skills/analysis" || route.path === "/admin/skills/visualization") {
     return "/admin/skills";
   }
-  if (
-    route.path === "/admin/audit-log" ||
-    route.path === "/admin/feedback-records" ||
-    route.path === "/admin/system-monitor"
-  ) {
-    return "/admin/operations";
-  }
-  if (route.path === "/admin/knowledge" || route.path === "/admin/examples") {
-    return "/admin/skills";
-  }
   if (route.path.startsWith("/admin/knowledge-governance")) {
-    return "/admin/skills";
+    return "/admin/analysis";
   }
   return route.path;
 });
@@ -141,11 +134,12 @@ watch(
 function handleGroupSelect(key: string) {
   activeGroup.value = key;
   const group = navGroups.value.find((g) => g.key === key);
-  if (group && group.items && group.items.length > 0) {
-    const currentPathInGroup = group.items.some((item) => item.path === route.path);
-    if (!currentPathInGroup) {
-      router.push(group.items[0].path);
-    }
+  if (!group) return;
+  const targetPath = group.homePath || group.items[0]?.path;
+  if (!targetPath) return;
+  const pathsInGroup = [group.homePath, ...group.items.map((item) => item.path)].filter(Boolean);
+  if (!pathsInGroup.includes(route.path)) {
+    router.push(targetPath);
   }
 }
 
@@ -289,7 +283,7 @@ function openObserve() {
         </div>
       </header>
       <div class="admin-body">
-        <aside :class="['admin-aside', { collapsed }]">
+        <aside v-if="showAside" :class="['admin-aside', { collapsed }]">
           <div class="aside-header">
             <el-button
               class="collapse-btn"
