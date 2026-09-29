@@ -107,11 +107,9 @@ function writeLock(dir, arm64Fp = fingerprint(CONTRACT)) {
 
 // Fixture Docker for the app command. Every invocation is recorded; an
 // unknown subcommand fails instead of silently succeeding. FAKE_MODE selects
-// ok | no-image | bad-fp | fail-build | fail-inspect. FAKE_COMMIT_REPO commits
-// once there during the app build (a source moving mid-build).
+// ok | no-image | bad-fp | fail-build | fail-inspect.
 const FAKE = `#!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 function canonical(value) {
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
@@ -133,7 +131,6 @@ if (args[0] === "version") {
   process.stdout.write(JSON.stringify(contract));
 } else if (args[0] === "buildx") {
   if (mode === "fail-build") process.exit(1);
-  if (process.env.FAKE_COMMIT_REPO) execFileSync("git", ["-C", process.env.FAKE_COMMIT_REPO, "-c", "user.name=fake", "-c", "user.email=fake@example.invalid", "commit", "-q", "--allow-empty", "-m", "moved"]);
 } else if (args[0] === "image") {
   if (mode === "no-image") { process.stderr.write("Error: No such image\\n"); process.exit(1); }
   const tag = args[args.length - 1];
@@ -166,13 +163,12 @@ function fakeDocker(t, root) {
 async function withDocker(env, fn) {
   const savedPath = process.env.PATH;
   const saved = {};
-  for (const key of ["FAKE_DIR", "FAKE_MODE", "FAKE_CONTRACT", "FAKE_COMMIT_REPO"])
+  for (const key of ["FAKE_DIR", "FAKE_MODE", "FAKE_CONTRACT"])
     saved[key] = process.env[key];
   process.env.PATH = `${env.bin}${delimiter}${savedPath}`;
   process.env.FAKE_DIR = env.state;
   process.env.FAKE_MODE = env.mode;
   process.env.FAKE_CONTRACT = JSON.stringify(CONTRACT);
-  if (env.commitRepo) process.env.FAKE_COMMIT_REPO = env.commitRepo;
   try {
     await fn();
   } finally {
@@ -244,13 +240,12 @@ test("a late build failure writes no lock and no pack", async (t) => {
   assert.equal(existsSync(join(root, ".build/pack")), false);
 });
 
-test("success packs with snapshot metadata and keeps the runtime lock", async (t) => {
+test("success packs and keeps the runtime lock, writing only the pairing metadata", async (t) => {
   const pub = repo(t, "@ontomato/workbench");
   const ent = repo(t, "@enterprise/workbench");
   for (const [root, app] of [[pub, descriptor(pub)], [ent, descriptor(pub, ent)]]) {
     writeLock(root);
     const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
-    const start = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     const docker = fakeDocker(t, root);
     await withDocker({ ...docker, mode: "ok" }, async () => {
       await buildWorkbenchApp(app, ["app", "--arch", "arm64", "--pack-app"]);
@@ -265,33 +260,22 @@ test("success packs with snapshot metadata and keeps the runtime lock", async (t
     const applicationArg = buildArgv.find((arg) => arg.startsWith("APPLICATION="));
     assert.equal(applicationArg, `APPLICATION=${root === pub ? "@ontomato" : "@enterprise"}/workbench`);
     const meta = metaArg(buildArgv);
+    assert.deepEqual(Object.keys(meta).sort(), [
+      "arch",
+      "family",
+      "kind",
+      "platform",
+      "runtimeCompatFingerprint",
+      "schema",
+    ]);
     assert.equal(meta.schema, 3);
     assert.equal(meta.kind, "app");
-    assert.equal(meta.version, VERSION);
-    assert.equal(meta.revision, start);
     assert.equal(meta.platform, "linux/arm64");
-    assert.equal(meta.stamp.startsWith(`${VERSION}-`), true);
-    assert.equal(meta.sources.length, app.sources.length);
+    assert.equal(meta.runtimeCompatFingerprint, fingerprint(CONTRACT));
     const argv = calls(docker.state);
     assert.equal(argv.filter((call) => call[0] === "buildx").length, 1);
     assert.equal(argv.some((call) => call.includes("--target")), false);
   }
-});
-
-test("a source moving during the app build fails before the runtime alias or pack", async (t) => {
-  const root = repo(t, "@ontomato/workbench");
-  writeLock(root);
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
-  const docker = fakeDocker(t, root);
-  await withDocker({ ...docker, mode: "ok", commitRepo: root }, async () => {
-    await assert.rejects(
-      () => buildWorkbenchApp(descriptor(root), ["app", "--arch", "arm64", "--pack-app"]),
-      /source ontomato changed during the build/,
-    );
-  });
-  assert.equal(calls(docker.state).some((call) => call[0] === "tag"), false);
-  assert.equal(existsSync(join(root, ".build/pack")), false);
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
 });
 
 test("the public entry names the ontomato product and the node-app-runtime alias", async () => {
@@ -373,7 +357,7 @@ test("workspace copies reuse the collector listing and live source bytes", (t) =
   for (const rel of ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "apps/workbench/package.json", "packages/lib/package.json"])
     assert.equal(readFileSync(at(rel), "utf8"), captured(rel));
   // Owned sources follow the live tree (the record only scopes them); the
-  // metadata scoping above plus the HEAD recheck are the consistency guards.
+  // metadata scoping above is the consistency guard.
   assert.equal(readFileSync(at("packages/lib/src/index.ts"), "utf8"), "changed\n");
   const cases = [
     ["apps/workbench/src/index.ts", true],

@@ -13,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { test } from "node:test";
-import { combineIdentity, fingerprint, sourceIdentity } from "../build-support.mjs";
+import { buildStamp, fingerprint, sampleSources } from "../build-support.mjs";
 import { buildWorkbenchApp } from "./build-images.mjs";
 
 const VERSION = "9.9.9-test";
@@ -72,13 +72,6 @@ function head(dir) {
   return execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 }
 
-function identities(pub, ent) {
-  return [
-    { id: "ontomato", root: pub, identity: sourceIdentity(VERSION, pub, LOCK_EXCLUDE) },
-    { id: "enterprise", root: ent, identity: sourceIdentity(VERSION, ent, LOCK_EXCLUDE) },
-  ];
-}
-
 function descriptor(root, component = "ontomato", runtimeImageName = "node-app-runtime") {
   return {
     repoRoot: root,
@@ -115,11 +108,9 @@ function writeLock(dir, arm64) {
 
 // Minimal fixture Docker, not a generic mock: it only speaks this builder's
 // calls. Succeeds through the runtime build; FAKE_MODE selects the late stage
-// that fails (ok | bad-family | bad-readback). FAKE_COMMIT=1 commits once in
-// FAKE_REPO to simulate a source moving mid-build.
+// that fails (ok | bad-family | bad-readback).
 const FAKE = `#!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const args = process.argv.slice(2);
@@ -143,7 +134,6 @@ if (args[0] === "version") {
   const target = args[args.indexOf("--target") + 1];
   if (target === "runtime") {
     appendFileSync(dir + "/args.jsonl", JSON.stringify(args) + "\\n");
-    if (process.env.FAKE_COMMIT === "1") execFileSync("git", ["-C", process.env.FAKE_REPO, "-c", "user.name=fake", "-c", "user.email=f@x", "commit", "--allow-empty", "-m", "mid-build"], { stdio: "pipe" });
     const labels = {};
     for (let i = 0; i < args.length; i++) {
       if (args[i] === "--label") {
@@ -178,13 +168,10 @@ function fakeDocker(t, root) {
 async function withDocker(env, fn) {
   const savedPath = process.env.PATH;
   const saved = {};
-  for (const key of ["FAKE_DIR", "FAKE_MODE", "FAKE_COMMIT", "FAKE_REPO"])
-    saved[key] = process.env[key];
+  for (const key of ["FAKE_DIR", "FAKE_MODE"]) saved[key] = process.env[key];
   process.env.PATH = `${env.bin}${delimiter}${savedPath}`;
   process.env.FAKE_DIR = env.state;
   if (env.mode) process.env.FAKE_MODE = env.mode;
-  if (env.commit) process.env.FAKE_COMMIT = "1";
-  if (env.repo) process.env.FAKE_REPO = env.repo;
   try {
     await fn();
   } finally {
@@ -196,10 +183,9 @@ async function withDocker(env, fn) {
   }
 }
 
-function runDir(root) {
-  const runs = readdirSync(join(root, ".build/contexts/workbench/arm64"));
-  assert.equal(runs.length, 1);
-  return join(root, ".build/contexts/workbench/arm64", runs[0]);
+// The builder's contexts are fixed per command; no per-run directory remains.
+function contextDir(root, part) {
+  return join(root, ".build/contexts/workbench/arm64", part);
 }
 
 function runtimeMeta(state) {
@@ -235,24 +221,20 @@ test("the architecture comes only from Make", async () => {
   );
 });
 
-test("the top revision is this version's repo and any dirty source dirties it", (t) => {
+test("the stamp takes this version's app repo and any dirty source dirties it", (t) => {
   const pub = repo(t, "@ontomato/workbench");
   const ent = repo(t, "@enterprise/workbench");
-  const clean = identities(pub, ent);
-  assert.equal(combineIdentity(VERSION, ent, clean).dirty, false);
+  const app = enterpriseDescriptor(pub, ent);
+  const stamp = () => buildStamp(VERSION, ent, sampleSources(app));
+  assert.match(stamp(), new RegExp(`^${VERSION}-\\d{8}-\\d{6}-g${head(ent).slice(0, 12)}$`));
+  // The builder's own lock is excluded from its source and never dirties it.
   writeFileSync(join(ent, LOCK_EXCLUDE), '{"schema":3}\n');
-  const withLock = identities(pub, ent);
-  assert.equal(combineIdentity(VERSION, ent, withLock).dirty, false);
+  assert.doesNotMatch(stamp(), /-dirty$/);
+  // A dirty public source dirties the whole stamp, not just its own source.
   writeFileSync(join(pub, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n# dirty\n");
-  const dirty = combineIdentity(VERSION, ent, identities(pub, ent));
-  assert.equal(dirty.dirty, true);
-  assert.equal(dirty.revision, sourceIdentity(VERSION, ent, LOCK_EXCLUDE).revision);
-  assert.deepEqual(
-    dirty.sources.map((source) => [source.id, source.dirty]),
-    [["ontomato", true], ["enterprise", false]],
-  );
+  assert.match(stamp(), new RegExp(`^${VERSION}-\\d{8}-\\d{6}-g${head(ent).slice(0, 12)}-dirty$`));
   assert.throws(
-    () => combineIdentity(VERSION, join(pub, "missing"), clean),
+    () => buildStamp(VERSION, join(pub, "missing"), sampleSources(app)),
     /not a build source/,
   );
 });
@@ -268,13 +250,13 @@ test("an early Docker failure writes no lock", async (t) => {
   try {
     await assert.rejects(
       () => buildWorkbenchApp(descriptor(root), ["runtime", "--arch", "arm64"]),
-      /docker version.*failed/,
+      /docker buildx build failed/,
     );
   } finally {
     process.env.PATH = prior;
   }
   assert.equal(existsSync(join(root, LOCK_EXCLUDE)), false);
-  const context = runDir(root);
+  const context = contextDir(root, "runtime");
   for (const rel of [
     "sources/ontomato/package.json",
     "inputs.json",
@@ -304,17 +286,15 @@ test("a wrong-family image fails and leaves the prior lock untouched", async (t)
   assert.equal(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"), before);
 });
 
-test("success saves the fingerprint for this arch only, with snapshot metadata", async (t) => {
+test("success saves the fingerprint for this arch only, with pairing metadata", async (t) => {
   const pub = repo(t, "@ontomato/workbench");
   const ent = repo(t, "@enterprise/workbench");
-  writeFileSync(join(pub, "pnpm-lock.yaml"), readFileSync(join(pub, "pnpm-lock.yaml"), "utf8") + "# dirty\n");
   writeLock(ent, OLD_ARM64_FP);
-  const start = { ontomato: head(pub), enterprise: head(ent) };
   const docker = fakeDocker(t, ent);
   await withDocker({ ...docker, mode: "ok" }, async () => {
     await buildWorkbenchApp(enterpriseDescriptor(pub, ent), ["runtime", "--arch", "arm64"]);
   });
-  const context = runDir(ent);
+  const context = contextDir(ent, "runtime");
   const lock = JSON.parse(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"));
   const expected = lock.runtimes["linux/arm64"];
   assert.ok(/^[a-f0-9]{64}$/.test(expected));
@@ -322,15 +302,18 @@ test("success saves the fingerprint for this arch only, with snapshot metadata",
   const record = JSON.parse(readFileSync(join(context, "inputs.json"), "utf8"));
   assert.equal(record.application, "@enterprise/workbench");
   const meta = runtimeMeta(docker.state);
+  assert.deepEqual(Object.keys(meta).sort(), [
+    "arch",
+    "family",
+    "kind",
+    "platform",
+    "runtimeCompatFingerprint",
+    "schema",
+  ]);
   assert.equal(meta.schema, 3);
   assert.equal(meta.kind, "runtime");
-  assert.equal(meta.version, VERSION);
-  assert.equal(meta.revision, start.enterprise);
-  assert.equal(meta.dirty, true);
-  assert.deepEqual(
-    meta.sources.map((source) => [source.id, source.revision, source.dirty]),
-    [["ontomato", start.ontomato, true], ["enterprise", start.enterprise, false]],
-  );
+  assert.equal(meta.platform, "linux/arm64");
+  assert.equal(meta.runtimeCompatFingerprint, expected);
   const build = readFileSync(join(docker.state, "args.jsonl"), "utf8").trim().split("\n").map(JSON.parse).find((argv) => argv.includes("runtime"));
   const tags = build.filter((arg, i) => build[i - 1] === "-t");
   assert.deepEqual(tags, [`node-app-runtime:compat-${expected.slice(0, 16)}-arm64`, "data-agent-runtime:deploy-arm64"]);
@@ -344,25 +327,4 @@ test("the runtime package is named after the product's runtime image name", asyn
   });
   const fp = JSON.parse(readFileSync(join(root, LOCK_EXCLUDE), "utf8")).runtimes["linux/arm64"];
   assert.deepEqual(readdirSync(join(root, ".build/pack")), [`node-app-runtime-compat-${fp.slice(0, 16)}-arm64.tar.gz`]);
-});
-
-test("a source moving mid-build fails without relabeling or writing a lock", async (t) => {
-  const pub = repo(t, "@ontomato/workbench");
-  const ent = repo(t, "@enterprise/workbench");
-  writeLock(ent, OLD_ARM64_FP);
-  const before = readFileSync(join(ent, LOCK_EXCLUDE), "utf8");
-  const oldHead = head(ent);
-  const docker = fakeDocker(t, ent);
-  await withDocker({ ...docker, mode: "ok", commit: true, repo: ent }, async () => {
-    await assert.rejects(
-      () => buildWorkbenchApp(enterpriseDescriptor(pub, ent), ["runtime", "--arch", "arm64"]),
-      /changed during the build/,
-    );
-  });
-  assert.notEqual(head(ent), oldHead);
-  assert.equal(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"), before);
-  // The metadata already handed to the runtime build still carries the start
-  // snapshot; it was not relabeled with the new HEAD.
-  const meta = runtimeMeta(docker.state);
-  assert.equal(meta.sources.find((source) => source.id === "enterprise").revision, oldHead);
 });
