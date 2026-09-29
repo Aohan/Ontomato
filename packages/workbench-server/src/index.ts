@@ -9,7 +9,6 @@ export { installContentLayout, type ContentLayout, type ResourceCopy } from "./c
 export {
   installRuntimeDefaults,
   type RuntimeDefaults,
-  type DefaultModelConnection,
 } from "./runtime/defaults";
 export {
   configureI18n,
