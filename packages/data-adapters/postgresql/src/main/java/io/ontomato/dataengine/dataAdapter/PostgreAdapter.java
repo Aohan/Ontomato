@@ -670,6 +670,8 @@ public class PostgreAdapter implements DataAdapter {
 								ty = "date";
 							} else if ("timestamp".equals(type)) {
 								ty = "timestamp";
+							} else if ("vector".equals(type)) {
+								ty = "text";
 							}
 							fields.add(name + " " + ty);
 						}
@@ -692,7 +694,8 @@ public class PostgreAdapter implements DataAdapter {
 	
 	private boolean isSupportedType(String type) {
 		return "varchar".equals(type) || "text".equals(type) || "int".equals(type) || "long".equals(type)
-				|| "double".equals(type) || "date".equals(type) || "timestamp".equals(type);
+				|| "double".equals(type) || "date".equals(type) || "timestamp".equals(type)
+				|| "vector".equals(type);
 	}
 
 	@Override
@@ -914,8 +917,10 @@ public class PostgreAdapter implements DataAdapter {
 	
 	private String toSqlValue(String type, Object value, SimpleDateFormat ymd, SimpleDateFormat ymdhms) throws Exception {
 		String valueSql = "";
-		if ("varchar".equals(type) || "text".equals(type)) {
-    		valueSql = "'" + ((String)value).replace("'", "''") + "'";
+		if ("varchar".equals(type) || "text".equals(type) || "vector".equals(type)) {
+			String strValue = "vector".equals(type) && value != null && !(value instanceof String)
+					? JSON.toJSONString(value) : (String)value;
+            valueSql = "'" + strValue.replace("'", "''") + "'";
 		} else if ("int".equals(type) || "long".equals(type) || "double".equals(type)) {
 			valueSql = value + "";
 		} else if ("date".equals(type)) {
@@ -992,8 +997,8 @@ public class PostgreAdapter implements DataAdapter {
 		Map<String, Object> relDef = (Map<String, Object>)relationship_rule.get(relationName);
 		
 		if (relDef != null && sourceClassDef != null && targetClassDef != null && relDef.get("fromclass").equals(sourceClassName) && relDef.get("toclass").equals(targetClassName)) {
-			String sourcePk = getPrimaryKey(sourceClassDef);
-			String targetPk = getPrimaryKey(targetClassDef);
+			String sourcePk = DslUtil.getPrimaryKey(sourceClassDef);
+			String targetPk = DslUtil.getPrimaryKey(targetClassDef);
 			String sourceInnerField = (String)relDef.get("fromField");
 			String targetInnerField = (String)relDef.get("toField");
 			
@@ -1034,24 +1039,6 @@ public class PostgreAdapter implements DataAdapter {
 		}
 	}
 	
-	private String getPrimaryKey(Map<String, Object> classDef) {
-		String pk = "";
-		if (classDef.get("attrs") != null) {
-			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>)classDef.get("attrs");
-			for (Map<String, Object> attrDef : attrDefs) {
-				if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
-					String type = (String) attrDef.get("type");
-					if (isSupportedType(type)) {
-						if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
-							pk = (String)attrDef.get("name");
-						}
-					}
-				}
-			}
-		}
-		return pk;
-	}
-
 	@Override
 	public void deleteEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
 			String targetClassName, String targetObjId) throws Exception {
@@ -1072,8 +1059,8 @@ public class PostgreAdapter implements DataAdapter {
 		Map<String, Object> relDef = (Map<String, Object>)relationship_rule.get(relationName);
 		
 		if (relDef != null && sourceClassDef != null && targetClassDef != null && relDef.get("fromclass").equals(sourceClassName) && relDef.get("toclass").equals(targetClassName)) {
-			String sourcePk = getPrimaryKey(sourceClassDef);
-			String targetPk = getPrimaryKey(targetClassDef);
+			String sourcePk = DslUtil.getPrimaryKey(sourceClassDef);
+			String targetPk = DslUtil.getPrimaryKey(targetClassDef);
 			String sourceInnerField = (String)relDef.get("fromField");
 			String targetInnerField = (String)relDef.get("toField");
 			
@@ -1156,6 +1143,16 @@ public class PostgreAdapter implements DataAdapter {
 		}
 	}
 	
+	@Override
+	public JSONArray queryVectorAttr(Map<String, Object> classDef, String attrName, String objectId) throws Exception {
+		String fullClassName = (String) classDef.get("className");
+		String pk = DslUtil.getPrimaryKey(classDef);
+		String sql = "select " + attrName + " from " + fullClassName + " where " + pk + " = '" + objectId.replace("'", "''") + "'";
+		JSONArray rows = querySql(connection, sql);
+		Object value = (rows != null && rows.size() > 0) ? rows.getJSONObject(0).get(attrName) : null;
+		return DslUtil.parseVectorAttr(value);
+	}
+
 	@Override
 	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
 		boolean inSandbox = inSandbox(sandboxId);

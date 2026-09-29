@@ -25,6 +25,7 @@ import io.ontomato.dataengine.logging.AgentCallContext;
 import io.ontomato.dataengine.service.AgentWorkspaceService;
 import io.ontomato.dataengine.service.SandboxService;
 import io.ontomato.dataengine.service.WriteFunctionOperationService;
+import io.ontomato.dataengine.util.DslUtil;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -69,14 +70,11 @@ public class SandboxSkillTools {
 				Map<String, Object> classDef = classDefMap.get(className);
 				if (classDef != null) {
 					Set<String> attrNameSet = new HashSet<String>();
-					String pk = "id";
+					String pk = DslUtil.getPrimaryKey(classDef);
 					List<Map<String, Object>> attrDefs = (List<Map<String, Object>>)classDef.get("attrs");
 					for (Map<String, Object> attrDef : attrDefs) {
 						if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
 							attrNameSet.add((String)attrDef.get("name"));
-							if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
-								pk = (String)attrDef.get("name");
-							}
 						}
 					}
 					Set<String> ids = new HashSet<String>();

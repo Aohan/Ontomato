@@ -33,6 +33,7 @@ import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.sys.bean.permission.FieldPermission;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslPermissionUtil;
+import io.ontomato.dataengine.util.DslUtil;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import cn.hutool.core.lang.UUID;
@@ -488,9 +489,9 @@ public class DataServiceImpl implements DataService {
 						&& targetClassDef.get("inStarChart") != null && targetClassDef.get("inStarChart") instanceof Boolean && (Boolean)targetClassDef.get("inStarChart")) {
 					String fromClass = (String)sourceClassDef.get("className");
 					String toClass = (String)targetClassDef.get("className");
-					String fromPk = getPrimaryKey(sourceClassDef);
+					String fromPk = DslUtil.getPrimaryKey(sourceClassDef);
 					String fromName = getNameField(sourceClassDef);
-					String toPk = getPrimaryKey(targetClassDef);
+					String toPk = DslUtil.getPrimaryKey(targetClassDef);
 					String toName = getNameField(targetClassDef);
 					
 					JSONObject dsl = new JSONObject();
@@ -615,21 +616,6 @@ public class DataServiceImpl implements DataService {
 		log.info("cutWholeDataBySql end...");
 		
 		return buildStarChartData(nodeMap, sourceTargetsMap, targetSourcesMap, roots);
-	}
-	
-	private String getPrimaryKey(Map<String, Object> classDef) {
-		String pk = "id";
-		if (classDef.get("attrs") != null) {
-			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>)classDef.get("attrs");
-			for (Map<String, Object> attrDef : attrDefs) {
-				if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
-					if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
-						pk = (String)attrDef.get("name");
-					}
-				}
-			}
-		}
-		return pk;
 	}
 	
 	private String getNameField(Map<String, Object> classDef) {
@@ -800,7 +786,7 @@ public class DataServiceImpl implements DataService {
 				}
 			}
 			
-			String pkField = adapter.useM3() ? "id" : getPrimaryKey(classDef);
+			String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
 			String pkValue = node.getString("id");
 			if (!adapter.useM3()) {
 				pkValue = pkValue.substring(node.getString("class").length() + 1);

@@ -938,7 +938,7 @@ public class DslUtil {
 		return JSONArray.toJSONString(dsls, Feature.WriteMapNullValue);
 	}
 	
-	public static Object[] splitToVector(String dslStr, List<Map<String, Object>> classDefs, VectorResourceDao vectorResourceDao, String domainId) {
+	public static Object[] splitToVector(String dslStr, List<Map<String, Object>> classDefs, VectorResourceDao vectorResourceDao, String domainId, boolean useM3) {
 		JSONArray dsls = JSON.parseArray(dslStr);
 		Map<String, Map<String, Object>> classDefMap = new HashMap<String, Map<String, Object>>();
 		for (Map<String, Object> classDef : classDefs) {
@@ -1082,7 +1082,7 @@ public class DslUtil {
 						objIds.add("not found");
 					}
 					JSONObject idInArray = new JSONObject();
-					idInArray.put("field", "id");
+					idInArray.put("field", useM3 ? "id" : getPrimaryKey(classDefMap.get(className)));
 					idInArray.put("operator", "in");
 					idInArray.put("value", objIds);
 					
@@ -1114,7 +1114,59 @@ public class DslUtil {
 			return null;
 		}
 	}
-	
+
+	/**
+	 * Resolve the primary-key field name of a class definition.
+	 *
+	 * <p>M3 objects always use the implicit {@code id} field; relational adapters use the attribute marked
+	 * {@code primaryKey=true}. When no attribute is marked, this falls back to {@code "id"} so that the result
+	 * stays identical to the historical hard-coded {@code "id"} for classes without an explicit primary key.</p>
+	 */
+	public static String getPrimaryKey(Map<String, Object> classDef) {
+		String pk = "id";
+		if (classDef != null && classDef.get("attrs") != null) {
+			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>)classDef.get("attrs");
+			for (Map<String, Object> attrDef : attrDefs) {
+				if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
+					if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
+						pk = (String)attrDef.get("name");
+					}
+				}
+			}
+		}
+		return pk;
+	}
+
+	/**
+	 * Parse a vector attribute value into a JSON array.
+	 *
+	 * <p>A vector attribute is stored as a text column holding the JSON array string
+	 * {@code [{"path":"...","text":"..."},...]}. Accepts a {@link JSONArray}, a JSON array
+	 * string, or {@code null}; anything else (or an unparseable string) yields an empty array.</p>
+	 */
+	public static JSONArray parseVectorAttr(Object value) {
+		JSONArray result = new JSONArray();
+		if (value == null) {
+			return result;
+		}
+		if (value instanceof JSONArray) {
+			return (JSONArray) value;
+		}
+		if (value instanceof String) {
+			String s = ((String) value).trim();
+			if (s.isEmpty()) {
+				return result;
+			}
+			try {
+				JSONArray parsed = JSON.parseArray(s);
+				return parsed == null ? result : parsed;
+			} catch (Exception e) {
+				return result;
+			}
+		}
+		return result;
+	}
+
 	public static boolean isSupportM3ModeV1(JSONObject dsl, List<Map<String, Object>> classDefs) {
 		boolean fourBasic = false;
 		Map<String, DslConsanguinity> consanguinityMap = findConsanguinityFromDsl(dsl, classDefs);

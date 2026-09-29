@@ -3,6 +3,8 @@ package io.ontomato.dataengine.dao;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -198,6 +200,30 @@ public class VectorResourceDao extends BaseDao {
 
 	public File getFile(String indexName, String fileName) {
 		return new File("conf/" + dirName + "/" + indexName + "/" + fileName);
+	}
+
+	/**
+	 * Delete one vector resource of this domain's class attribute: its vector table record and its file.
+	 *
+	 * <p>The class, attribute and path come from the API caller. The index directory must be a direct child of
+	 * the vector resource root and the path a direct file of that directory, recorded for the object;
+	 * anything else is rejected before any record or file is touched.</p>
+	 *
+	 * @param path the stored relative path ({@code indexName/id.suffix}), matching {@link VectorResource#getPath()}
+	 */
+	public void delete(String className, String attrName, String objectId, String path, String domainId) {
+		String indexName = this.generateIndexName(className, attrName, domainId);
+		Path root = Paths.get("conf", dirName).toAbsolutePath();
+		Path indexDir = root.resolve(indexName).normalize();
+		Path file = root.resolve(path).normalize();
+		if (!root.equals(indexDir.getParent()) || !indexDir.equals(file.getParent())) {
+			throw new IllegalArgumentException("Vector resource path does not belong to " + indexName + ": " + path);
+		}
+		int deleted = jdbcTemplate.update("DELETE FROM " + quotedTable(indexName) + " WHERE object_id = ? AND path = ?", objectId, path);
+		if (deleted == 0) {
+			throw new IllegalArgumentException("Vector resource not found for object " + objectId + ": " + path);
+		}
+		file.toFile().delete();
 	}
 
 	public void rebuildIndex(String className, String attrName, String domainId) {
