@@ -9,7 +9,7 @@ import { buildDimensionTree, dimensionStageStates } from "../dimension-view";
 it("keeps the complete plan and the common query display fact, including failed and missing evidence", () => {
   const execution = {
     dataCount: 0,
-    error: "无法查询",
+    error: "cannot query",
     abcCodes: ["code"],
     qcState: { status: "completed" as const, steps: [] },
   };
@@ -17,7 +17,7 @@ it("keeps the complete plan and the common query display fact, including failed 
     plan(),
     evidence({
       questions: [
-        { questionId: "q1", question: "销量", status: "failed", error: "无法查询", execution },
+        { questionId: "q1", question: "sales", status: "failed", error: "cannot query", execution },
       ],
     }),
   ]);
@@ -61,8 +61,8 @@ it("interleaved chapter activity cannot complete collection, and cancellation ma
     }
   );
   data.sections = [
-    { sectionId: "d1", markdown: "正文", order: 0, revision: 1, status: "success" },
-    { sectionId: "summary", markdown: "未写完的总结", order: 1, revision: 2, status: "failed" },
+    { sectionId: "d1", markdown: "body", order: 0, revision: 1, status: "success" },
+    { sectionId: "summary", markdown: "unfinished summary", order: 1, revision: 2, status: "failed" },
   ];
   expect(dimensionStageStates(data)).toEqual(["done", "done", "done", "stopped"]);
   data.activities.find((a) => a.kind === "skill")!.status = "cancelled";

@@ -3,9 +3,10 @@ import type { RouteRecordRaw } from "vue-router";
 const placeholder = () => import("../views/observe/ObservePlaceholder.vue");
 
 /*
- * /observe 根与 11 个子路由（1 个重定向、10 个叶）。应用各自组装根：企业根带原 requiresAuth/requiresPermission/observer
- * 并换成私有外壳；开源根没有 meta。meta 只保留有消费者的 group（ObserveLayout 与 session-context 读取）；原 title 无读取者。
- * 可观测性、自动测试与 DSL 分组由 ObserveLayout 内联渲染，路由只承载分组识别与直达 URL（中性占位组件）。
+ * The /observe root and its 11 child routes (1 redirect, 10 leaves). Each app assembles its own root: an app may add
+ * auth/permission meta and its own shell; the open-source root has no meta. meta keeps only group, which has consumers
+ * (ObserveLayout and session-context); the original title had no reader. The observability, auto-test and DSL groups are
+ * rendered inline by ObserveLayout; routes only carry group identification and direct URLs (neutral placeholder components).
  */
 export const observeRoutes = {
   root: {

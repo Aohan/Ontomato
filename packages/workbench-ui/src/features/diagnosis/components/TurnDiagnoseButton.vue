@@ -21,7 +21,7 @@ const props = defineProps<{ turn: TurnIdentity }>();
 const router = useRouter();
 const { t } = useI18n();
 const access = inject(turnDiagnosisAccessKey);
-// 应用装配缺失是接线错误：不默认放行，也不默认隐藏。
+// A missing app assembly is a wiring error: neither allow nor hide by default.
 if (!access) throw new Error("Turn diagnosis access is not provided");
 
 const turnKey = computed(() =>

@@ -46,7 +46,8 @@ test("server, web and manager keep their own cwd and pass this checkout's absolu
   assert.equal(web.tool, "vite");
   assert.deepEqual(web.args, ["--config", join(ROOT, "apps/workbench/web/vite.config.ts")]);
   assert.equal(web.cwd, join(ROOT, "apps/workbench"));
-  // 独立 dev:web 与旧入口一样不设置 NODE_ENV；组合 dev 仍由父进程统一设置。
+  // A standalone dev:web sets no NODE_ENV, as the old entry point did; the combined dev
+  // still has the parent set it for all of them.
   assert.equal(web.env.NODE_ENV, undefined);
   assert.equal(web.env.DATARAG_ORIGIN, undefined);
 
@@ -72,7 +73,7 @@ test("holdForeground forwards on Unix and only holds on Windows, then releases i
   const release = holdForeground(child);
   const added = process.listeners("SIGINT").filter((listener) => !before.includes(listener));
   assert.equal(added.length, 1);
-  added[0](); // 直接调用注册的监听，避免真的向前台进程或测试进程发信号。
+  added[0](); // Call the registered listener directly so no signal is really sent to the foreground or test process.
   assert.deepEqual(signals, process.platform === "win32" ? [] : ["SIGINT"]);
   release();
   assert.deepEqual(process.listeners("SIGINT"), before);

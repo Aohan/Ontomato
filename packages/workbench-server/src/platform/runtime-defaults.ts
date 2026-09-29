@@ -12,8 +12,8 @@ function isCustomPath(sourceRoot: string, sourcePath: string): boolean {
 }
 
 /**
- * 把应用装配的只读默认资源同步进持久运行数据目录：覆盖同路径默认文件、补充新文件，
- * 跳过来源中的 custom，不删除目标里的额外文件。
+ * Syncs the app-assembled read-only default resources into the persistent runtime data directory: overwrites same-path default files and adds new ones,
+ * skips custom entries in the source, and never deletes extra files in the target.
  */
 export async function syncRuntimeDefaultResources(): Promise<void> {
   const runtimeRoot = runtimeDataDir();

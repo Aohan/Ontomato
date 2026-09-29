@@ -34,7 +34,7 @@ function previewLogText(value: string | undefined, maxLength = 200): string | un
 }
 
 /**
- * 直接执行 DSL 查询（不经过 ABC 拆解），用于热报告匹配路径
+ * Executes a DSL query directly (without ABC decomposition), for the hot-report matching path
  */
 export async function executeDslDirectly(params: {
   dsl: any;
@@ -126,7 +126,7 @@ export async function executeDslDirectly(params: {
   }
 }
 
-/** 单个问数问题的分支执行结果 = 执行事实 + 业务执行状态。 */
+/** Branch execution result of one query question = execution facts + business execution state. */
 export interface SubQuestionBranchResult extends AnalysisQueryFact {
   status: "completed" | "failed";
   error?: string;
@@ -140,7 +140,7 @@ function applyBaseQueryOutput(target: SubQuestionBranchResult, output: BaseQuery
   target.fullContent = output.content;
   target.markdownTable = output.content;
   target.dataCount = datasets.reduce((sum, dataset) => sum + (dataset.data?.length || 0), 0);
-  // 深度分析只启用 abc 分支，胜出输出带的就是这个分支的后端会话。
+  // Deep analysis enables only the abc branch, so the winning output already carries that branch's backend session.
   target.backendSessions = output.sessionId
     ? [{ branch: "abc", sessionId: output.sessionId, nodeId: output.backendNodeId }]
     : undefined;
@@ -158,8 +158,8 @@ function collectThinkingCards(thinkingState: QueryThinkingState | undefined): Th
 }
 
 /**
- * 一次问数问题的取证产出：执行事实，外加本次执行产生的待结算迟到事实。
- * 本工具不推送迟到事实、不自行起后台读取、不决定运行收口——只把它交回调用方登记。
+ * Evidence output of one query question: execution facts plus the pending late facts this execution produced.
+ * This tool never pushes late facts, never starts background reads, and never decides run finalization — it only hands them back to the caller to register.
  */
 export interface SubQuestionExecution {
   result: SubQuestionBranchResult;
@@ -181,9 +181,9 @@ export async function executeSubQuestionWithBranches(
 
   const baseResult: SubQuestionBranchResult = { status: "failed" };
 
-  // 质检由查询后端在 ABC 路径上自动产生；能否取到只由本次执行的事实决定，
-  // 触发判断留在工具内，调用方不复制这个条件。质检要的会话号取自执行输出，
-  // 不从执行事实的会话列表推断（问数后端会话的定位与取消·C8）。
+  // The quality check is produced automatically by the query backend on the ABC path; whether one can be fetched depends only on the facts of this execution.
+  // The trigger decision stays inside the tool so callers never duplicate that condition. The session number the quality check needs comes from the execution output,
+  // never inferred from the execution facts' session list (backend session locating and cancellation · C8).
   const handOff = (result: SubQuestionBranchResult, sessionId?: string): SubQuestionExecution =>
     runIdentity && result.winner === "abc" && sessionId
       ? {

@@ -8,18 +8,18 @@ import { finalizeSnapshotOnStop } from "../snapshot-helpers";
 import type { ResponseSnapshot } from "../../types/chat";
 
 /**
- * 用户停止回合时，进行中的思考必须收口为终态。
- * 执行展示视图读的是执行事实上的思考状态，因此归一必须落到那一份上——
- * 只归一快照的扁平副本会让面板停在"运行中"一直转。
+ * When the user stops a turn, in-progress thinking must settle into a final state.
+ * The execution view reads the thinking state on the execution facts, so normalization must land on that copy;
+ * normalizing only the snapshot's flat copy would leave the panel spinning in "running".
  */
 const RUNNING = {
-  summary: "查询中",
+  summary: "querying",
   status: "running" as const,
   branches: [{ key: "abc", label: "ABC", status: "running" as const, logs: [] }],
 };
 
-describe("停止回合的思考状态归一", () => {
-  it("落到视图实际读取的那一份执行事实上", () => {
+describe("thinking state normalization when a turn is stopped", () => {
+  it("lands on the execution facts the view actually reads", () => {
     const snapshot = {
       mode: "standard",
       status: "streaming",
@@ -35,7 +35,7 @@ describe("停止回合的思考状态归一", () => {
     expect(stopped.execution?.thinkingState?.branches?.[0].status).toBe("cancelled");
   });
 
-  it("没有执行事实时不凭空造一份", () => {
+  it("does not invent execution facts when there are none", () => {
     const snapshot = {
       mode: "standard",
       status: "streaming",

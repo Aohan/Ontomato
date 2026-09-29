@@ -221,7 +221,7 @@ function createAnalysisAgentMcpServer(req: Request) {
           token: identity.token,
         });
 
-        // 关闭报告交付的智能体按常规会话受理首轮；其余提交即返回，运行与终态由编排器负责。
+        // An agent with report delivery off accepts its first turn like a regular session; other submissions return immediately, with the run and terminal state owned by the orchestrator.
         if (agent.reportDeliverableEnabled === false) {
           const requestSeq = await startConversationTurn(
             task.id,
@@ -238,7 +238,7 @@ function createAnalysisAgentMcpServer(req: Request) {
           });
         }
 
-        // 报告任务按一次运行受理；受理失败说明同一任务已在运行。
+        // A report task is accepted as one run; an acceptance failure means the same task is already running.
         const runTask = await taskService.tryStartTask(task.id, identity.domainId);
         if (!runTask) {
           return textJson({ success: false, error: "Analysis task is already running" });
@@ -264,7 +264,7 @@ function createAnalysisAgentMcpServer(req: Request) {
   return server;
 }
 
-/** 管理页目录直接投影实际 MCP 注册使用的 Zod 定义，不再维护 JSON Schema 手抄本。 */
+/** The admin page catalog projects the Zod definitions actually used for MCP registration; no hand-copied JSON Schema is maintained anymore. */
 export async function getAnalysisAgentMcpToolCatalog() {
   const server = createAnalysisAgentMcpServer(catalogRequest());
   const client = new Client({ name: "analysis-agent-catalog", version: "1.0.0" });

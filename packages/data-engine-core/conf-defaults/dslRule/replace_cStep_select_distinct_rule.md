@@ -1,1 +1,1 @@
-distinct值为true表示对字段去重(**而且distinct只能作用在临时表的output中**)
+A distinct value of true indicates deduplication of the field (**and distinct can only act in the output of a temporary table**)

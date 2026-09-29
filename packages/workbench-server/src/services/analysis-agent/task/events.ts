@@ -22,7 +22,7 @@ export function buildAnalysisTaskTerminalEvent(input: {
   resultReport?: string;
   finalAnswer?: string;
   error?: string;
-  /** 该终态所属的受理回合；携带它，按回合过滤的订阅者才收得到本次终态。 */
+  /** The acceptance turn this terminal state belongs to; subscribers filtering by turn receive this terminal state only through it. */
   requestSeq?: number;
 }): AnalysisTaskLifecycleEvent & AnalysisTurnScope {
   const timestamp = Date.now();

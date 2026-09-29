@@ -11,7 +11,7 @@ function sectionMarkdown(section: AnalysisSection): string {
     : section.markdown;
 }
 
-/** 邮件、PDF、MCP 从同一组有序节和已有图表取得交付内容。 */
+/** Email, PDF, and MCP all take their deliverable content from the same ordered sections and existing charts. */
 export function buildDeepAnalysisTaskResult(artifacts?: DeepAnalysisTaskPayload): {
   resultSummary: string;
   resultReport: string;

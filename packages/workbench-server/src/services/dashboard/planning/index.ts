@@ -25,7 +25,7 @@ import type {
 export { applyDataPlan };
 
 export function createDashboardPlanningChain() {
-  // 步骤1：数据集配置构建
+  // Step 1: dataset configuration build
   const datasetProfileBuilder = RunnableLambda.from(
     async (input: Partial<DashboardPlanningChainInput> & { datasets: DatasetInput[] }) => {
       const datasets = Array.isArray(input?.datasets) ? input.datasets : [];
@@ -39,7 +39,7 @@ export function createDashboardPlanningChain() {
     }
   ).withConfig({ runName: "dashboard_profile" });
 
-  // 步骤2：结构规划
+  // Step 2: structure planning
   const structurePlanner = RunnableLambda.from(
     async (input: {
       mode: "dashboard" | "append";
@@ -60,7 +60,7 @@ export function createDashboardPlanningChain() {
     }
   ).withConfig({ runName: "dashboard_structure_plan" });
 
-  // 步骤3：图表卡片字段映射
+  // Step 3: chart card field mapping
   const attachFieldsToPlanned = RunnableLambda.from(
     async (
       input:
@@ -84,7 +84,7 @@ export function createDashboardPlanningChain() {
     }
   ).withConfig({ runName: "dashboard_attach_fields" });
 
-  // 步骤4：指标规格最终化
+  // Step 4: metric spec finalization
   const finalizeOutput = RunnableLambda.from(
     async (
       input:

@@ -9,14 +9,14 @@ function launch(search: string, hash = "") {
   return sessionCredential(null);
 }
 
-describe("启动凭据与标签页会话", () => {
+describe("launch credential and tab session", () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
     MAIN_TOKEN_KEYS.forEach((key) => localStorage.setItem(key, `main-${key}`));
   });
 
-  it("tk 写入会话，只移除 tk/apiKey，其余 query 与 hash 保留", () => {
+  it("tk is written to the session; only tk/apiKey are removed and the rest of the query and hash stay", () => {
     expect(launch("?view=assets&tk=t1&theme=dark", "#/objects/A?from=object")).toEqual({
       type: "token",
       token: "t1",
@@ -25,29 +25,29 @@ describe("启动凭据与标签页会话", () => {
     expect(window.location.hash).toBe("#/objects/A?from=object");
   });
 
-  it("仅 apiKey 写入会话", () => {
+  it("an apiKey alone is written to the session", () => {
     expect(launch("?apiKey=k1")).toEqual({ type: "apiKey", apiKey: "k1" });
     expect(window.location.search).toBe("");
   });
 
-  it("tk 与 apiKey 同时给出取 tk，不保留 apiKey", () => {
+  it("with both tk and apiKey, tk wins and apiKey is not kept", () => {
     expect(launch("?tk=t1&apiKey=k1")).toEqual({ type: "token", token: "t1" });
     expect(sessionStorage.length).toBe(1);
   });
 
-  it("先 token 后仅 apiKey 启动：新 key 替换旧 token", () => {
+  it("a token launch followed by an apiKey-only launch: the new key replaces the old token", () => {
     launch("?tk=t1");
     expect(launch("?apiKey=k2")).toEqual({ type: "apiKey", apiKey: "k2" });
     expect(sessionStorage.getItem("ontology_manager_token")).toBeNull();
   });
 
-  it("先 apiKey 后 tk 启动：新 token 替换旧 key", () => {
+  it("an apiKey launch followed by a tk launch: the new token replaces the old key", () => {
     launch("?apiKey=k1");
     expect(launch("?tk=t2")).toEqual({ type: "token", token: "t2" });
     expect(sessionStorage.getItem("ontology_manager_api_key")).toBeNull();
   });
 
-  it("参数出现但值为空：显式清除会话，并移除空参数", () => {
+  it("parameters present but empty: explicitly clears the session and removes the empty parameters", () => {
     launch("?tk=t1");
     expect(launch("?tk=&apiKey=&view=assets")).toBeNull();
     expect(sessionStorage.length).toBe(0);
@@ -56,20 +56,20 @@ describe("启动凭据与标签页会话", () => {
     expect(launch("?apiKey")).toBeNull();
   });
 
-  it("完全无参数（刷新）沿用本标签页会话，地址不改写", () => {
+  it("no parameters at all (reload) keeps this tab's session and leaves the URL unchanged", () => {
     launch("?tk=t1");
     expect(launch("?view=assets", "#/data")).toEqual({ type: "token", token: "t1" });
     expect(window.location.search).toBe("?view=assets");
   });
 
-  it("没有会话凭据时返回应用给定的默认值", () => {
+  it("returns the app-supplied default when there is no session credential", () => {
     window.history.replaceState({}, "", "/manager/");
     consumeLaunchCredential();
     expect(sessionCredential({ type: "anonymous" })).toEqual({ type: "anonymous" });
     expect(sessionCredential(null)).toBeNull();
   });
 
-  it("清除只删两个会话键", () => {
+  it("clearing removes only the two session keys", () => {
     launch("?tk=t1");
     sessionStorage.setItem("other", "x");
     clearSessionCredential();
@@ -77,7 +77,7 @@ describe("启动凭据与标签页会话", () => {
     expect(sessionStorage.length).toBe(1);
   });
 
-  it("不读、不写、不删主系统长期 token", () => {
+  it("never reads, writes or removes the main system's long-lived token", () => {
     expect(launch("")).toBeNull();
     launch("?tk=t1");
     launch("?tk=");

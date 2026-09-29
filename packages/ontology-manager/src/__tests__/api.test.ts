@@ -5,6 +5,7 @@ import {
   type ManagerCredential,
   type ManagerRequestContext,
 } from "../api";
+import { englishMessages } from "../i18n";
 
 interface RecordedRequest {
   url: string;
@@ -38,15 +39,16 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** 企业固定源 c0287200 ontology-manager/src/api.ts:118、:322 的原值。 */
-const enterpriseFallbacks = { noBusinessDescription: "未填写业务说明", unnamedAsset: "未命名资产" };
+/** Host-supplied data defaults that differ from the open-source values, so the tests can tell which one was used. */
+const hostFallbacks = { noBusinessDescription: "Host: no description", unnamedAsset: "Host: unnamed asset" };
 
 function setup(credential: ManagerCredential | null) {
   const context: { -readonly [K in keyof ManagerRequestContext]: ManagerRequestContext[K] } = {
     apiBase: "/custom/manager-api",
     credential,
     locale: "en",
-    dataFallbacks: enterpriseFallbacks,
+    messages: englishMessages,
+    dataFallbacks: hostFallbacks,
   };
   const failures: ManagerAuthFailureStatus[] = [];
   const client = createManagerClient(context, (status) => failures.push(status));
@@ -59,8 +61,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-describe("凭据与请求头", () => {
-  it("token 只发 tk，路径使用宿主 apiBase", async () => {
+describe("credentials and request headers", () => {
+  it("a token sends only tk and paths use the host apiBase", async () => {
     const { client } = setup({ type: "token", token: "t-1" });
     await client.loadOntology();
 
@@ -74,7 +76,7 @@ describe("凭据与请求头", () => {
     });
   });
 
-  it("API Key 只发 x-api-key", async () => {
+  it("an API key sends only x-api-key", async () => {
     const { client } = setup({ type: "apiKey", apiKey: "k-1" });
     await client.loadSmartAssets("metrics");
 
@@ -83,7 +85,7 @@ describe("凭据与请求头", () => {
     expect(requests[0].headers).not.toHaveProperty("tk");
   });
 
-  it("明确匿名不带任何凭据头", async () => {
+  it("explicit anonymous sends no credential headers", async () => {
     const { client } = setup({ type: "anonymous" });
     await client.loadOntology();
 
@@ -91,14 +93,14 @@ describe("凭据与请求头", () => {
     expect(requests[0].headers).not.toHaveProperty("x-api-key");
   });
 
-  it("凭据缺失或清除时不发请求，也不退回匿名", async () => {
+  it("a missing or cleared credential sends no request and does not fall back to anonymous", async () => {
     const { client } = setup(null);
 
     await expect(client.loadOntology()).rejects.toThrow();
     expect(requests).toHaveLength(0);
   });
 
-  it("替换凭据与语言后，后续请求立即使用新值", async () => {
+  it("after replacing the credential and locale, later requests use the new values immediately", async () => {
     const { context, client } = setup({ type: "token", token: "t-1" });
     await client.loadOntology();
     context.credential = { type: "apiKey", apiKey: "k-2" };
@@ -118,8 +120,8 @@ describe("凭据与请求头", () => {
   });
 });
 
-describe("旧响应与认证失败", () => {
-  it("dispose 后不再发请求，在途响应也不交付（工作区卸载后的旧后续）", async () => {
+describe("stale responses and authentication failures", () => {
+  it("after dispose no request is sent and in-flight responses are not delivered (stale follow-ups after the workspace unmounts)", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { client } = setup({ type: "token", token: "t" });
@@ -135,7 +137,7 @@ describe("旧响应与认证失败", () => {
     expect(requests.length).toBe(before);
   });
 
-  it("请求期间凭据变化则丢弃响应，不交付数据", async () => {
+  it("a credential change during the request drops the response without delivering data", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client } = setup({ type: "token", token: "old" });
@@ -146,7 +148,7 @@ describe("旧响应与认证失败", () => {
     await expect(result).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("请求期间凭据被清除也丢弃响应", async () => {
+  it("clearing the credential during the request also drops the response", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client } = setup({ type: "apiKey", apiKey: "k" });
@@ -157,7 +159,7 @@ describe("旧响应与认证失败", () => {
     await expect(result).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("旧凭据的 401 不通知宿主，避免误伤新会话", async () => {
+  it("a 401 for the old credential does not notify the host, so the new session is not affected", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client, failures } = setup({ type: "token", token: "old" });
@@ -169,7 +171,7 @@ describe("旧响应与认证失败", () => {
     expect(failures).toEqual([]);
   });
 
-  it("凭据不变但 apiBase 变化时丢弃旧来源的成功响应", async () => {
+  it("with the same credential but a new apiBase, a successful response from the old source is dropped", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client } = setup({ type: "anonymous" });
@@ -180,7 +182,7 @@ describe("旧响应与认证失败", () => {
     await expect(result).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("凭据不变但 apiBase 变化时旧来源的 401 不通知新宿主", async () => {
+  it("with the same credential but a new apiBase, a 401 from the old source does not notify the new host", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client, failures } = setup({ type: "anonymous" });
@@ -192,8 +194,8 @@ describe("旧响应与认证失败", () => {
     expect(failures).toEqual([]);
   });
 
-  // 原主系统（c0287200 web/src/utils/api.ts）每次请求取当前语言作请求头，只按凭据核对结果；语言变化不作废同一身份的结果。
-  it("响应返回前只切换语言：同一身份的结果照常交付，下一次请求带新语言", async () => {
+  // The original main system (c0287200 web/src/utils/api.ts) sent the current locale on every request and checked results by credential only; a locale change does not invalidate results for the same identity.
+  it("switching only the locale before the response arrives: the same identity's result is delivered and the next request carries the new locale", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client } = setup({ type: "token", token: "t" });
@@ -207,7 +209,7 @@ describe("旧响应与认证失败", () => {
     expect(requests.map((r) => r.headers["Accept-Language"])).toEqual(["en", "zh-CN"]);
   });
 
-  it("读取 JSON 期间只切换语言也照常交付；语言与凭据同时变化仍丢弃", async () => {
+  it("switching only the locale while reading JSON still delivers; changing locale and credential together still drops", async () => {
     let finishBody!: (body: unknown) => void;
     let bodyRequested!: () => void;
     const reading = () => new Promise<void>((resolve) => (bodyRequested = resolve));
@@ -238,7 +240,7 @@ describe("旧响应与认证失败", () => {
     await expect(dropped).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("读取 JSON 期间上下文变化也不交付数据", async () => {
+  it("a context change while reading JSON also withholds the data", async () => {
     let finishBody!: (body: unknown) => void;
     let bodyRequested!: () => void;
     const reading = new Promise<void>((resolve) => (bodyRequested = resolve));
@@ -257,7 +259,7 @@ describe("旧响应与认证失败", () => {
     await expect(result).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("同值凭据对象重建不算上下文变化", async () => {
+  it("recreating a credential object with the same value is not a context change", async () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client } = setup({ type: "token", token: "same" });
@@ -268,7 +270,7 @@ describe("旧响应与认证失败", () => {
     await expect(result).resolves.toEqual({ rows: [{ id: 1 }], total: 3 });
   });
 
-  it.each([401, 402] as const)("%i 只通知宿主，不改动传入的凭据", async (status) => {
+  it.each([401, 402] as const)("%i only notifies the host and leaves the supplied credential unchanged", async (status) => {
     respond = async () => json({}, status);
     const { context, client, failures } = setup({ type: "token", token: "t" });
 
@@ -277,7 +279,7 @@ describe("旧响应与认证失败", () => {
     expect(context.credential).toEqual({ type: "token", token: "t" });
   });
 
-  it("其他错误状态不通知宿主", async () => {
+  it("other error statuses do not notify the host", async () => {
     respond = async () => json({}, 500);
     const { client, failures } = setup({ type: "token", token: "t" });
 
@@ -285,16 +287,16 @@ describe("旧响应与认证失败", () => {
     expect(failures).toEqual([]);
   });
 
-  it("业务失败按 message/error 抛出", async () => {
-    respond = async () => json({ success: false, error: "类不存在" });
+  it("business failures throw message/error", async () => {
+    respond = async () => json({ success: false, error: "Class does not exist" });
     const { client } = setup({ type: "token", token: "t" });
 
-    await expect(client.deleteOntologyObject("X")).rejects.toThrow("类不存在");
+    await expect(client.deleteOntologyObject("X")).rejects.toThrow("Class does not exist");
   });
 });
 
-describe("数据浏览与可视化建模所需的请求", () => {
-  it("业务配置用 GET 读取，不带请求体", async () => {
+describe("requests used by data browsing and visual modeling", () => {
+  it("business config is read with GET and no body", async () => {
     respond = async () => json({ success: true, data: { dataAdapter: "postgres" } });
     const { client } = setup({ type: "apiKey", apiKey: "k" });
 
@@ -310,7 +312,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
     expect(requests[0].headers["x-api-key"]).toBe("k");
   });
 
-  it("分页数据仅在有关键词时提交 search", async () => {
+  it("paged data submits search only when a keyword is given", async () => {
     const { client } = setup({ type: "token", token: "t" });
     await client.loadObjectData("Order", 2, 50, "abc");
     await client.loadObjectData("Order", 1, 25);
@@ -321,12 +323,12 @@ describe("数据浏览与可视化建模所需的请求", () => {
     ]);
   });
 
-  it("建模新建类与关系保留原请求体字段", async () => {
+  it("creating classes and relations in modeling keeps the original request body fields", async () => {
     const { client } = setup({ type: "token", token: "t" });
     await client.createOntologyObject({
       className: "Order",
       primaryKeyName: "order_no",
-      showName: "订单",
+      showName: "Sales Order",
       classDesc: "d",
       classToCard: false,
       instanceToCard: false,
@@ -355,7 +357,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
         {
           className: "Order",
           primaryKeyName: "order_no",
-          showName: "订单",
+          showName: "Sales Order",
           classDesc: "d",
           classToCard: false,
           instanceToCard: false,
@@ -380,7 +382,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
     ]);
   });
 
-  it("元数据的对象形式关系与字符串布尔按原规则解析", async () => {
+  it("object-form relations and string booleans in metadata are parsed by the original rules", async () => {
     respond = async () =>
       json({
         success: true,
@@ -394,7 +396,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
           relationship_rule: { has: { fromclass: "Order", toclass: "Item" } },
         },
       });
-    // 界面语言为 en 时，兜底仍取宿主装配的企业原值。
+    // The fallback comes from the host-supplied value, not from the UI locale.
     const { client } = setup({ type: "token", token: "t" });
 
     await expect(client.loadOntology()).resolves.toEqual({
@@ -402,7 +404,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
         {
           className: "Order",
           showName: "Order",
-          classDesc: "未填写业务说明",
+          classDesc: "Host: no description",
           attrs: [
             {
               name: "id",
@@ -422,7 +424,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
     });
   });
 
-  it("两个数据默认值取宿主装配值：空说明与非字符串名称兜底，空字符串名称保留，与界面语言无关", async () => {
+  it("both data defaults come from the host: empty descriptions and non-string names fall back, empty-string names are kept, independent of the UI locale", async () => {
     respond = async (url) =>
       url.endsWith("/admin/getMetas")
         ? json({ success: true, data: { classDef: [{ className: "A", classDesc: "" }] } })

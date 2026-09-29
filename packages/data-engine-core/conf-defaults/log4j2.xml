@@ -143,23 +143,6 @@
       </DefaultRolloverStrategy>
     </RollingFile>
 
-    <RollingFile name="license-log" fileName="${FILE_PATH}/license.log" filePattern="${FILE_PATH}/license-%d{yyyy-MM-dd}_%i.log.gz">
-      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
-      <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
-      <PatternLayout pattern="${LOG_PATTERN}"/>
-      <Policies>
-        <!--The interval attribute specifies how often to roll; the default is 1 hour-->
-        <TimeBasedTriggeringPolicy interval="1"/>
-        <SizeBasedTriggeringPolicy size="10MB"/>
-      </Policies>
-      <DefaultRolloverStrategy max="15">
-        <Delete basePath="${FILE_PATH}">
-          <IfFileName glob="license-*.log.gz">
-            <IfAccumulatedFileCount exceeds="15"/>
-          </IfFileName>
-        </Delete>
-      </DefaultRolloverStrategy>
-    </RollingFile>
 
     <RollingFile name="agent-llm-log" fileName="${FILE_PATH}/agent-llm.jsonl" filePattern="${FILE_PATH}/agent-llm-%d{yyyy-MM-dd}_%i.jsonl.gz">
       <PatternLayout pattern="%m%n"/>

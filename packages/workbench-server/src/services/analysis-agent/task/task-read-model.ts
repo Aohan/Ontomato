@@ -20,7 +20,7 @@ export function toClientTask(task: AnalysisTask): AnalysisTaskDetail {
   return { ...clientTask, ...analysisPayload };
 }
 
-/** 底座出口视图之上只叠加分析业务拥有的探测正文策略。 */
+/** On top of the base exit view, only the probing-body policy owned by the analysis business is layered. */
 export function toSubagentAuditEgress(audit: AnalysisLoopSubagentAudit): LoopSubagentTrace {
   return {
     ...audit,
@@ -59,8 +59,8 @@ export async function buildTaskProvenance(task: AnalysisTask) {
 }
 
 /**
- * 给活动里的问数问题补查询执行事实：按**本回合自己的**线程、受理序号与问题稳定身份读 query_runs。
- * 报告快照与常规会话回合共用这一条读取规则；缺记录时保持问题原有事实，不造 DSL、数据或成功结论。
+ * Fills in query execution facts for the questions in an activity: reads query_runs by **this turn's own** thread, acceptance sequence, and question stable identity.
+ * Report snapshots and regular-session turns share this one read rule; when a record is missing the question keeps its existing facts — no DSL, data, or success conclusion is ever invented.
  */
 export async function attachQuestionExecution(
   activities: AnalysisActivity[],

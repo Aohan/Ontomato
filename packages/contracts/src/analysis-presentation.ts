@@ -5,7 +5,7 @@ export type AnalysisActivityStatus = "running" | "completed" | "failed" | "cance
 
 export interface AnalysisRunState {
   status: AnalysisActivityStatus;
-  /** 单调版本；迟到状态不能覆盖较新的事实。 */
+  /** Monotonic revision; late-arriving states must not overwrite newer facts. */
   revision: number;
   progress: { done: number; total?: number; label: string };
   error?: string;
@@ -23,7 +23,7 @@ export interface AnalysisEvidenceQuestion {
 
 export interface AnalysisActivity {
   activityId: string;
-  /** 受理序号决定展示顺序，更新不改变顺序。 */
+  /** Acceptance sequence determines display order; updates never change it. */
   seq: number;
   revision: number;
   kind:
@@ -37,7 +37,7 @@ export interface AnalysisActivity {
     | "dispatch"
     | "probe"
     | "external_tool";
-  /** 取消收口由服务端把尚未结束的活动和问题置为 cancelled。 */
+  /** Cancellation is finalized by the server setting still-unfinished activities and questions to cancelled. */
   status: AnalysisActivityStatus;
   startedAt: number;
   finishedAt?: number;
@@ -74,17 +74,17 @@ export interface AnalysisActivity {
 export interface AnalysisSection {
   sectionId: string;
   title?: string;
-  /** 标题 Markdown 层级，交付端不猜测节的业务身份。 */
+  /** Heading Markdown level; delivery ends never guess a section's business identity. */
   titleLevel?: number;
   order: number;
   markdown: string;
-  /** 草稿没有终态；失败保留正文和错误。 */
+  /** Drafts have no terminal state; failures keep the body and the error. */
   status?: "success" | "failed";
   error?: string;
   revision: number;
 }
 
-/** 两种执行形态的事件累积、持久化和页面恢复共用这一形状。 */
+/** Both execution forms share this shape for event accumulation, persistence, and page recovery. */
 export interface DeepAnalysisTaskPayload {
   executionMode: "dimension" | "loop";
   runState: AnalysisRunState;

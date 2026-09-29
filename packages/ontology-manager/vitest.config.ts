@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: "node",
-    // 只有组件用例跑在 DOM 里。
+    // Only component tests run in the DOM.
     environmentMatchGlobs: [["**/*.component.test.ts", "happy-dom"]],
     include: ["src/**/__tests__/**/*.test.ts"],
   },

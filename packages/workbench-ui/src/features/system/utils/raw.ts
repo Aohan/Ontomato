@@ -1,9 +1,8 @@
 import { toRaw } from "vue";
 
 /**
- * 只对固定形状的外层解一层代理：读的是代理自身的保留位，
- * 不触碰用户数据。返回后 custom 等不透明字段必须原样引用，
- * 不再对它们使用 Vue 的代理识别或解包函数。
+ * Unwraps one proxy layer of a fixed-shape outer object only: it reads the proxy's own reserved slot and never touches
+ * user data. Afterwards opaque fields such as custom must be referenced as-is, without Vue's proxy detection or unwrap helpers.
  */
 export function plainOuter<T extends object>(value: T): T {
   return { ...(toRaw(value) as T) };

@@ -1,8 +1,9 @@
 import type { ManagerPresentation } from "@ontomato/ontology-manager";
 
 /**
- * 开源 Manager 的展示原值（b6437c86），由 profile 交给组件。主题变量是两版取值不同的品牌与中性色
- * （原 web/src/styles/theme.css 与 Element Plus 变量按 Manager 主题规则求出的浅色/暗色有效值），其余为组件专用属性。
+ * Open-source Manager presentation values (b6437c86), handed to the component by the profile. The theme variables are the
+ * product-specific brand and neutral colours (effective light/dark values of the original web/src/styles/theme.css and the
+ * Element Plus variables under the Manager theme rules); the rest are component-specific properties.
  */
 export const ossPresentation: ManagerPresentation = {
   themeProperties: {
@@ -122,4 +123,5 @@ export const ossPresentation: ManagerPresentation = {
   maxFitZoom: 1,
   dataBrowserDescription: () => "Browse and inspect data records for the current object type.",
   compactDialogs: true,
+  businessKnowledge: true,
 };

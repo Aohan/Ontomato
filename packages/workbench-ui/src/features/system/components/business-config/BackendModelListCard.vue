@@ -40,13 +40,13 @@ watch(
   },
   { immediate: true }
 );
-// 原条目的完整快照（含隐藏连接字段与未上控件的参数），编辑时展开回写，保证往返保真。
+// Complete snapshot of the original entry (including hidden connection fields and parameters without controls), spread back when editing to keep round trips lossless.
 let editingBaseline: BackendModelConfig | null = null;
-// 自定义对象不进 reactive：Vue 深层代理会吞掉保留键，用浅引用 holding 原始对象。
+// Custom objects stay out of reactive: Vue's deep proxy would swallow reserved keys, so a shallow ref holds the raw object.
 const customParams = shallowRef<JsonObject>({});
 
 function updateCustomParameters(value: JsonObject) {
-  // 显式写入 ref，避免模板将含 __v_isRef 的普通 JSON 当成新的 ref 绑定。
+  // Write the ref explicitly so the template does not treat plain JSON containing __v_isRef as a new ref binding.
   customParams.value = value;
 }
 
@@ -67,7 +67,7 @@ function emptyDraft(): Omit<BackendModelConfig, "customRequestParameters"> {
 }
 
 const draft = reactive(emptyDraft());
-// 密钥行按位置渲染；删除后递增使剩余行的密码输入重建，显示状态回到默认隐藏。
+// Key rows render by position; incrementing after a delete rebuilds the remaining password inputs so their visibility resets to hidden.
 const keyRowsVersion = ref(0);
 
 function removeKey(index: number) {
@@ -77,7 +77,7 @@ function removeKey(index: number) {
 
 const isNew = computed(() => editingIndex.value < 0);
 const dialogTitle = computed(() => (isNew.value ? t("admin.addModel") : t("admin.editModel")));
-// ID、显示名与连接三项（地址、至少一条非空 Key、API 模型标识）必填，与服务端保存规则一致。
+// ID, display name and the three connection fields (URL, at least one non-empty key, API model id) are required, matching the server's save rules.
 const draftComplete = computed(
   () =>
     [draft.name, draft.displayName, draft.baseUrl, draft.modelName].every(
@@ -100,7 +100,7 @@ function openEditDialog(index: number) {
   const entry = models.value[index];
   if (!entry) return;
   editingIndex.value = index;
-  // 只对外层解代理；custom 是不透明 JSON，原样引用，编辑器整件替换、不就地改。
+  // Unwrap only the outer proxy; custom is opaque JSON referenced as-is, and the editor replaces it whole instead of mutating it.
   const raw = plainOuter<BackendModelConfig>(entry);
   editingBaseline = raw;
   Object.assign(draft, {
@@ -125,11 +125,11 @@ function confirmDialog() {
   if (!draftComplete.value) return;
   const staged: BackendModelConfig = {
     ...editingBaseline,
-    // 配置 ID 是角色引用的身份，已有条目不可改；显示名可随时改，不影响引用。
+    // The config ID is the identity roles refer to, so existing entries cannot change it; the display name can change at any time without affecting references.
     name: draft.name.trim(),
     displayName: draft.displayName.trim(),
     baseUrl: draft.baseUrl,
-    // 密钥是原值普通数组：删除即删项，保存与测试都按草稿原样提交。
+    // Keys are a plain array of original values: deleting removes the item, and save and test both submit the draft as-is.
     apiKeys: [...draft.apiKeys],
     modelName: draft.modelName,
     timeout: draft.timeout,

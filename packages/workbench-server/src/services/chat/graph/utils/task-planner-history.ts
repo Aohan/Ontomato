@@ -85,8 +85,8 @@ function snapshotMarkdown(
     sections.push(tApp("queryFixed.124", { v0: (truncateText(snapshot.analysisText, 1800)) }));
   }
 
-  // 质检只有一条通道：它是执行事实的字段，由调用方从查询运行事实取来传入，
-  // 不再从页面快照读——快照已不保存它。
+  // The quality check has exactly one channel: it is a field of the execution facts, fetched by the caller from the query run facts and passed in,
+  // no longer read from the page snapshot — the snapshot no longer stores it.
   const quality =
     text(qualityCheck?.content) || text((qualityCheck?.state as any)?.result?.conclusion);
   if (quality) {
@@ -158,7 +158,7 @@ export function collectTaskPlannerHistoryRequestSeqs(input: {
     .slice(-MAX_TASK_PLANNER_HISTORY_TURNS);
 }
 
-/** 质检的展示形态，由调用方从查询运行事实取来；快照不再保存它。 */
+/** Display form of the quality check, fetched by the caller from the query run facts; the snapshot no longer stores it. */
 export type QualityCheckView = { state?: unknown; content?: string };
 
 export function buildTaskPlannerHistoryContext(input: {

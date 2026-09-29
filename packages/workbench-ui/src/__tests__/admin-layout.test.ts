@@ -19,7 +19,11 @@ async function mountLayout(config: AdminLayoutConfig, path: string, switchEnable
     save: null,
     messages: {
       en: {
-        nav: { dataEngine: "Data Engine", systemManagement: "System", ontologyManager: "Manager", auditLogs: "Audit" },
+        nav: {
+          ontologyManager: "Ontology Manager",
+          systemManagement: "System Management",
+          auditLogs: "Audit Logs",
+        },
         admin: { loadingMenuPermission: "Loading", noAvailableMenuPermission: "No access" },
         common: { dataGovernance: "Data Governance" },
         user: { logout: "Logout" },
@@ -35,8 +39,8 @@ async function mountLayout(config: AdminLayoutConfig, path: string, switchEnable
         component: AdminLayout,
         props: config,
         children: [
-          { path: "ontology-manager", component: page, meta: { group: "data-engine" } },
-          { path: "audit-log", component: page, meta: { group: "platform-governance" } },
+          { path: "ontology-manager", component: page, meta: { group: "data-assets" } },
+          { path: "audit-log", component: page, meta: { group: "platform-management" } },
         ],
       },
     ],
@@ -54,50 +58,51 @@ async function mountLayout(config: AdminLayoutConfig, path: string, switchEnable
 
 const base: AdminLayoutConfig = {
   access: { ready: true, can: () => true },
-  groups: [adminGroups.dataEngine, adminGroups.platformGovernance],
-  items: [adminMenuItems.ontologyManager, adminMenuItems.auditLog],
+  groups: [adminGroups.dataAssets, adminGroups.platformManagement],
+  items: [adminMenuItems.auditLog],
   actionTabs: [],
   account: null,
   navigationHidden: false,
 };
 
-describe("共享管理布局", () => {
-  it("开源装配：全部页签、当前路由所在组的菜单、观测入口；无账号、无语言切换", async () => {
+describe("shared admin layout", () => {
+  it("open-source assembly: all tabs, the current route group's menu and the observe entry; no account and no language switch", async () => {
     const { el, tabs, menu } = await mountLayout(base, "/admin/audit-log");
-    expect(tabs()).toEqual(["Data Engine", "System"]);
-    expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("System");
-    expect(menu()).toEqual(["Audit"]);
+    expect(tabs()).toEqual(["Ontology Manager", "System Management"]);
+    expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("System Management");
+    expect(menu()).toEqual(["Audit Logs"]);
     expect(el.querySelector(".icon-btn")).not.toBeNull();
     expect(el.querySelector(".user-name")).toBeNull();
     expect(el.querySelector(".lang-switch-wrapper")).toBeNull();
   });
 
-  it("按权限过滤页签与菜单；无观测权限不显示观测入口；语言切换按应用开关", async () => {
-    const granted = new Set(["ontology-modeling"]);
+  it("a home-style tab (Ontology Manager) hides the sidebar; hides the observe entry without that permission; the language switch follows the app setting", async () => {
+    const granted = new Set(["intelligence-engine"]);
     const { el, tabs, menu } = await mountLayout(
       { ...base, access: { ready: true, can: (p) => granted.has(p) } },
       "/admin/ontology-manager",
       true
     );
-    expect(tabs()).toEqual(["Data Engine"]);
-    expect(menu()).toEqual(["Manager"]);
+    expect(tabs()).toEqual(["Ontology Manager"]);
+    expect(menu()).toEqual([]);
+    expect(el.querySelector(".admin-aside")).toBeNull();
     expect(el.querySelector(".icon-btn")).toBeNull();
     expect(el.querySelector(".lang-switch-wrapper")).not.toBeNull();
   });
 
-  it("权限未加载显示加载中，就绪后定位到当前路由所在组；全无权限显示空态", async () => {
+  it("shows loading until permissions load, then selects the current route's group; shows the empty state without any permission", async () => {
     const access = reactive({ ready: false, can: () => true });
     const { el } = await mountLayout({ ...base, access }, "/admin/audit-log");
     expect(el.querySelector(".permission-loading")?.textContent).toContain("Loading");
     access.ready = true;
     await nextTick();
-    expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("System");
+    expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("System Management");
 
     const none = await mountLayout({ ...base, access: { ready: true, can: () => false } }, "/admin/audit-log");
     expect(none.el.querySelector(".permission-empty")?.textContent).toContain("No access");
   });
 
-  it("动作页签排在分组前、只执行动作不成为当前页签；账号显示与退出", async () => {
+  it("action tabs come before groups and only run their action without becoming current; account display and logout", async () => {
     const select = vi.fn();
     const logout = vi.fn();
     const { el, tabs } = await mountLayout(
@@ -108,17 +113,17 @@ describe("共享管理布局", () => {
       },
       "/admin/ontology-manager"
     );
-    expect(tabs()).toEqual(["Data Governance", "Data Engine", "System"]);
+    expect(tabs()).toEqual(["Data Governance", "Ontology Manager", "System Management"]);
     (el.querySelector(".header-tabs .tab-item") as HTMLElement).click();
     await nextTick();
     expect(select).toHaveBeenCalledOnce();
-    expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("Data Engine");
+    expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("Ontology Manager");
     expect(el.querySelector(".user-name")?.textContent).toBe("alice");
     (el.querySelector(".logout-btn") as HTMLElement).click();
     expect(logout).toHaveBeenCalledOnce();
   });
 
-  it("导航隐藏（企业授权受限）：只有返回、标题、主题与账号，页面照常渲染", async () => {
+  it("hidden navigation (restricted licensing): only back, title, theme and account, and the page still renders", async () => {
     const { el } = await mountLayout(
       { ...base, navigationHidden: true, account: { userName: "alice", logout: () => {} } },
       "/admin/audit-log"

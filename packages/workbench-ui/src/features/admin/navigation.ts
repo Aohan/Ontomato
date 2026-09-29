@@ -1,21 +1,25 @@
 import type { Component } from "vue";
 import {
+  Activity,
   Blocks,
+  Cpu,
   Database,
+  MessageSquare,
   Monitor,
   Network,
-  Orbit,
   Puzzle,
   ScrollText,
   ServerCog,
 } from "lucide-vue-next";
 
-/** 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。 */
+/** Top tabs of the admin console. permission is a public capability id: apps with permissions filter by it; open source runs no permission logic. */
 export interface AdminGroup {
   key: string;
   titleKey: string;
   permission: string;
   icon: Component;
+  /** Default landing path when the tab is selected (e.g. the Ontology Manager shows its iframe directly without a sidebar menu item). */
+  homePath?: string;
 }
 
 export interface AdminMenuItem {
@@ -26,7 +30,7 @@ export interface AdminMenuItem {
   groupKey: string;
 }
 
-/** 只执行动作、不含菜单项的页签（企业“数据治理”跳转）。排在分组页签之前。 */
+/** Tabs that only run an action and have no menu items (e.g. a "data governance" jump). Placed before the grouped tabs. */
 export interface AdminActionTab {
   key: string;
   titleKey: string;
@@ -34,21 +38,21 @@ export interface AdminActionTab {
   select(): void;
 }
 
-/** 应用的访问判定：ready 为权限已加载；开源恒就绪、恒可访问。 */
+/** The app's access check: ready means permissions are loaded; open source is always ready and always allowed. */
 export interface AdminAccess {
   readonly ready: boolean;
   can(permission: string): boolean;
 }
 
-/** 已登录账号的头部显示与退出（企业）；开源无账号。 */
+/** Header display and logout for the signed-in account; open source has no account. */
 export interface AdminAccount {
   readonly userName: string;
   logout(): void;
 }
 
 /**
- * 管理布局的装配输入。navigationHidden 为企业授权受限时的精简布局：
- * 只保留返回、标题、主题与账号，不显示页签、侧栏与加载/无权限状态。
+ * Assembly input of the admin layout. navigationHidden is the reduced layout used when licensing is restricted:
+ * only back, title, theme and account remain; tabs, sidebar and loading/no-permission states are hidden.
  */
 export interface AdminLayoutConfig {
   access: AdminAccess;
@@ -59,40 +63,34 @@ export interface AdminLayoutConfig {
   navigationHidden: boolean;
 }
 
-/** 已迁入的公共页签与菜单项；应用按原顺序显式列出所用的项。 */
+/** Shared tabs and menu items; each app lists the ones it uses explicitly in the original order. */
 export const adminGroups = {
   dataAssets: {
     key: "data-assets",
-    titleKey: "nav.dataAssets",
+    titleKey: "nav.ontologyManager",
     permission: "intelligence-engine",
     icon: Database,
+    homePath: "/admin/ontology-manager",
   },
   appCapabilities: {
     key: "app-capabilities",
-    titleKey: "nav.appAndCapabilities",
+    titleKey: "nav.agentsAndSkills",
     permission: "application-management",
     icon: Blocks,
   },
   platformManagement: {
     key: "platform-management",
-    titleKey: "nav.platformManagement",
+    titleKey: "nav.systemManagement",
     permission: "system-management",
     icon: Monitor,
   },
 } satisfies Record<string, AdminGroup>;
 
 export const adminMenuItems = {
-  ontologyManager: {
-    permission: "ontology-modeling",
-    path: "/admin/ontology-manager",
-    titleKey: "nav.ontologyAssets",
-    icon: Orbit,
-    groupKey: "data-assets",
-  },
   analysis: {
     permission: "analysis-agent",
     path: "/admin/analysis",
-    titleKey: "nav.analysisApplications",
+    titleKey: "nav.analysisAgents",
     icon: Blocks,
     groupKey: "app-capabilities",
   },
@@ -106,22 +104,43 @@ export const adminMenuItems = {
   skills: {
     permission: "skill-management",
     path: "/admin/skills",
-    titleKey: "nav.skillAndKnowledge",
+    titleKey: "nav.skills",
     icon: Puzzle,
     groupKey: "app-capabilities",
   },
-  businessConfig: {
+  modelConfig: {
+    permission: "system-config",
+    path: "/admin/model-config",
+    titleKey: "nav.modelConfig",
+    icon: Cpu,
+    groupKey: "platform-management",
+  },
+  systemConfig: {
     permission: "system-config",
     path: "/admin/system-config",
     titleKey: "nav.systemConfig",
     icon: ServerCog,
     groupKey: "platform-management",
   },
-  operations: {
-    permission: "system-management",
-    path: "/admin/operations",
-    titleKey: "nav.operationsCenter",
+  auditLog: {
+    permission: "audit-logs",
+    path: "/admin/audit-log",
+    titleKey: "nav.auditLogs",
     icon: ScrollText,
+    groupKey: "platform-management",
+  },
+  feedbackRecords: {
+    permission: "audit-logs",
+    path: "/admin/feedback-records",
+    titleKey: "nav.feedbackRecords",
+    icon: MessageSquare,
+    groupKey: "platform-management",
+  },
+  systemMonitor: {
+    permission: "system-monitoring",
+    path: "/admin/system-monitor",
+    titleKey: "nav.systemMonitoring",
+    icon: Activity,
     groupKey: "platform-management",
   },
 } satisfies Record<string, AdminMenuItem>;

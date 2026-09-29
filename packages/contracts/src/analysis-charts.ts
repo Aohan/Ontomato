@@ -20,11 +20,11 @@ export interface AnalysisChartResult extends AnalysisChartPlan {
   html: string;
   skillId: string;
   dataCount: number;
-  /** 报告中的图表占位标识 */
+  /** Chart placeholder identifier in the report */
   marker?: string;
-  /** 来源追踪 */
+  /** Source tracing */
   provenance?: ProvenanceInfo;
-  /** 证据摘要 */
+  /** Evidence summary */
   evidenceSummary?: string;
 }
 
@@ -47,17 +47,17 @@ export type ChartSortBy = "xField" | "yField" | "none";
 export type ChartCategoryValue = string | number;
 
 /**
- * 来源追踪元数据
+ * Source tracing metadata
  */
 export interface ProvenanceInfo {
-  /** 来源子问题 ID 列表 */
+  /** Source sub-question ID list */
   sourceQuestionIds: string[];
-  /** 来源图表 ID 列表 */
+  /** Source chart ID list */
   sourceChartIds?: string[];
-  /** 来源数据集引用 */
+  /** Source dataset references */
   sourceDatasetRefs?: string[];
-  /** 生成时间戳 */
+  /** Generation timestamp */
   generatedAt?: number;
-  /** 生成器类型 */
+  /** Generator type */
   generator: "llm" | "skill" | "system";
 }

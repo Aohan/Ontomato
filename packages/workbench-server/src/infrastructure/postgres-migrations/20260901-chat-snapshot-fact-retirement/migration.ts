@@ -5,7 +5,7 @@ import type { QueryableClient } from "../helpers.js";
 export const CHAT_SNAPSHOT_FACT_RETIREMENT_VERSION = "20260901_chat_snapshot_fact_retirement_v1";
 export const CHAT_SNAPSHOT_FACT_RETIREMENT_NAME = "chat snapshots contain turn products only";
 
-// 只处理历史 writer 实际落盘的字段；`execution` 一直是 API 读模型，由写入白名单阻断。
+// Only fields the historical writer actually persisted are handled; `execution` was always an API read model, blocked by the write allowlist.
 const LEGACY_SNAPSHOT_FIELDS = [
   "thinkingSummary",
   "thinkingSteps",
@@ -343,7 +343,7 @@ function unresolvedQueryFacts(facts: QueryFactBackfill, existing?: ExistingQuery
   });
 }
 
-/** 外层编排负责事务、版本记录与 advisory lock；I/O 错误必须继续抛出。 */
+/** The outer orchestration owns the transaction, version recording, and advisory lock; I/O errors must keep throwing. */
 export async function migrateChatSnapshotFactRetirement(
   client: QueryableClient
 ): Promise<ChatSnapshotFactRetirementResult> {

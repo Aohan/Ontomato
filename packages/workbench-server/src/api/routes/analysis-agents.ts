@@ -23,6 +23,7 @@ import {
 } from "../../services/analysis-agent/config/agent-types";
 import { InvalidAgentSkillSelectionError } from "../../services/analysis-agent/config/agent-service";
 import { getAnalysisDimensionService } from "../../services/analysis-agent/config/dimension-service";
+import { listAgentHotReports } from "../../services/analysis-agent/hot-card/analysis-report-hot-cards";
 
 import { asyncHandler } from "../utils/http";
 import { HttpError } from "../../utils/errors";
@@ -56,7 +57,7 @@ function sendRunNotFound(res: Response) {
 
 /**
  * GET /api/analysis-agents
- * 获取所有分析智能体列表
+ * Lists all analysis agents
  */
 router.get(
   "/",
@@ -69,7 +70,7 @@ router.get(
 
 /**
  * GET /api/analysis-agents/enabled
- * 获取已启用的分析智能体列表
+ * Lists enabled analysis agents
  */
 router.get(
   "/enabled",
@@ -82,7 +83,7 @@ router.get(
 
 /**
  * GET /api/analysis-agents/:id
- * 获取单个分析智能体详情
+ * Gets one analysis agent's details
  */
 router.get(
   "/:id",
@@ -100,7 +101,7 @@ router.get(
 
 /**
  * POST /api/analysis-agents
- * 创建分析智能体
+ * Creates an analysis agent
  */
 router.post(
   "/",
@@ -117,6 +118,7 @@ router.post(
         executionMode,
         loopPrompt,
         reportDeliverableEnabled,
+        hotReportEnabled,
         summaryPosition,
         analysisDimensionPrompt,
         summarizerPrompt,
@@ -152,13 +154,16 @@ router.post(
       if (reportDeliverableEnabled !== undefined && typeof reportDeliverableEnabled !== "boolean") {
         throw new HttpError(400, "reportDeliverableEnabled must be a boolean");
       }
+      if (hotReportEnabled !== undefined && typeof hotReportEnabled !== "boolean") {
+        throw new HttpError(400, "hotReportEnabled must be a boolean");
+      }
       if (summaryPosition !== undefined && !isAnalysisReportSummaryPosition(summaryPosition)) {
         throw new HttpError(
           400,
           `summaryPosition must be one of: ${ANALYSIS_REPORT_SUMMARY_POSITIONS.join(", ")}`
         );
       }
-      // 关闭报告交付只能选循环：常规会话按循环形态逐轮执行。
+      // With report delivery off only the loop form can be selected: regular sessions execute turn by turn in loop form.
       if (reportDeliverableEnabled === false && resolvedExecutionMode !== "loop") {
         throw new HttpError(400, "Normal Harness requires loop execution");
       }
@@ -179,6 +184,7 @@ router.post(
           executionMode: resolvedExecutionMode,
           loopPrompt: loopPrompt || "",
           reportDeliverableEnabled: reportDeliverableEnabled ?? true,
+          hotReportEnabled: hotReportEnabled ?? true,
           summaryPosition,
           analysisDimensionPrompt: analysisDimensionPrompt || "",
           summarizerPrompt,
@@ -207,19 +213,22 @@ router.post(
 
 /**
  * PUT /api/analysis-agents/:id
- * 更新分析智能体
+ * Updates an analysis agent
  */
 router.put(
   "/:id",
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const { executionMode, reportDeliverableEnabled, summaryPosition, enabledMcpServiceNames } =
+      const { executionMode, reportDeliverableEnabled, hotReportEnabled, summaryPosition, enabledMcpServiceNames } =
         req.body ?? {};
       if (executionMode !== undefined && !isAnalysisAgentExecutionMode(executionMode)) {
         throw new HttpError(400, INVALID_EXECUTION_MODE_ERROR);
       }
       if (reportDeliverableEnabled !== undefined && typeof reportDeliverableEnabled !== "boolean") {
         throw new HttpError(400, "reportDeliverableEnabled must be a boolean");
+      }
+      if (hotReportEnabled !== undefined && typeof hotReportEnabled !== "boolean") {
+        throw new HttpError(400, "hotReportEnabled must be a boolean");
       }
       if (summaryPosition !== undefined && !isAnalysisReportSummaryPosition(summaryPosition)) {
         throw new HttpError(
@@ -243,7 +252,7 @@ router.put(
       if (!existing) {
         throw new HttpError(404, t("api.analysisAgentNotFound"));
       }
-      // 关闭报告交付只能选循环：按本次更新后的有效配置判定。
+      // With report delivery off only the loop form can be selected: decided by the effective configuration after this update.
       if (
         (reportDeliverableEnabled ?? existing.reportDeliverableEnabled) === false &&
         (executionMode ?? existing.executionMode) !== "loop"
@@ -273,7 +282,7 @@ router.put(
 
 /**
  * DELETE /api/analysis-agents/:id
- * 删除分析智能体
+ * Deletes an analysis agent
  */
 router.delete(
   "/:id",
@@ -295,8 +304,25 @@ router.delete(
 // ==================== Dimension CRUD ====================
 
 /**
+ * GET /api/analysis-agents/:agentId/hot-reports
+ * Lists the agent's hot report cards (published and disabled) so the agent edit dialog can enable/disable them
+ */
+router.get(
+  "/:agentId/hot-reports",
+  asyncHandler(async (req: Request, res: Response) => {
+    const service = await getAnalysisAgentService();
+    const domainId = (req as AuthenticatedRequest).domainId;
+    if (!(await service.getAgent(req.params.agentId, domainId))) {
+      throw new HttpError(404, t("api.analysisAgentNotFound"));
+    }
+    const cards = await listAgentHotReports({ agentId: req.params.agentId, domainId });
+    res.json({ success: true, data: cards });
+  })
+);
+
+/**
  * GET /api/analysis-agents/:agentId/dimensions
- * 获取分析智能体的维度列表
+ * Lists an analysis agent's dimensions
  */
 router.get(
   "/:agentId/dimensions",
@@ -316,7 +342,7 @@ router.get(
 
 /**
  * GET /api/analysis-agents/:agentId/dimensions/enabled
- * 获取已启用的维度列表
+ * Lists enabled dimensions
  */
 router.get(
   "/:agentId/dimensions/enabled",
@@ -336,7 +362,7 @@ router.get(
 
 /**
  * POST /api/analysis-agents/:agentId/dimensions
- * 创建维度
+ * Creates a dimension
  */
 router.post(
   "/:agentId/dimensions",
@@ -365,7 +391,7 @@ router.post(
       );
     }
 
-    // 验证维度配置
+    // Validate the dimension configuration
     const validation = getAnalysisDimensionService().validateDimension({
       id: "temp",
       agentId: req.params.agentId,
@@ -417,7 +443,7 @@ router.post(
 
 /**
  * PUT /api/dimensions/:id
- * 更新维度
+ * Updates a dimension
  */
 router.put(
   "/dimensions/:id",
@@ -438,7 +464,7 @@ router.put(
 
 /**
  * DELETE /api/dimensions/:id
- * 删除维度
+ * Deletes a dimension
  */
 router.delete(
   "/dimensions/:id",
@@ -522,7 +548,7 @@ router.get(
 
 /**
  * GET /api/chat/deep-analysis
- * SSE 流式深度分析接口
+ * SSE streaming deep-analysis endpoint
  */
 router.get(
   "/chat/deep-analysis",
@@ -564,7 +590,7 @@ router.get(
       hasToken: !!token,
     });
 
-    // 命中同 runId 的 run（运行中或已完成保留中），或线程当前活跃 run → 回放而非重跑
+    // A run matching the same runId (running, or completed and retained), or the thread's current active run → replay instead of re-running
     const existingRun =
       runStreamStore.getRun(runId) ||
       runStreamStore.getActiveRunByKey(deepAnalysisRunKey(threadId));
@@ -597,8 +623,8 @@ router.get(
       if (error instanceof HttpError) throw error;
       throw new HttpError(500, tApp("analysis.task.deepCreateFailed"));
     }
-    // 关闭报告交付的智能体按常规会话受理本轮；报告任务按一次运行受理。
-    // 两种受理都在启动前完成，运行中的同一任务不能并发受理。
+    // An agent with report delivery off accepts this turn like a regular session; a report task is accepted as one run.
+    // Both acceptances complete before startup, and a running task can never be accepted concurrently.
     const claimedTurn =
       agent.reportDeliverableEnabled === false
         ? await taskService.claimConversationTurn(task.id, message)
@@ -630,7 +656,7 @@ router.get(
       timestamp: Date.now(),
     } satisfies AnalysisRunEvent);
 
-    // 执行事件统一走任务通道；页面流从通道订阅后并入本次 run，run 协议事件仍由本路由发出。
+    // Execution events all travel over the task channel; the page stream subscribes to the channel and merges into this run, while run protocol events are still emitted by this route.
     const stopSubscription = taskEventBus.subscribe(task.id, (event) => {
       const { _seq, ...payload } = event;
       void _seq;
@@ -704,7 +730,7 @@ router.get(
 
 /**
  * GET /api/chat/follow-up
- * SSE 流式追问接口：复用已有分析结果作为上下文，不重新执行完整分析流程
+ * SSE streaming follow-up endpoint: reuses existing analysis results as context instead of re-running the full analysis flow
  */
 router.get(
   "/chat/follow-up",
@@ -736,7 +762,7 @@ router.get(
       messageLength: message.length,
     });
 
-    // 命中同 runId 的 run（运行中或已完成保留中），或线程当前活跃 run → 回放而非重跑
+    // A run matching the same runId (running, or completed and retained), or the thread's current active run → replay instead of re-running
     const existingRun =
       runStreamStore.getRun(runId) || runStreamStore.getActiveRunByKey(followUpRunKey(threadId));
     if (existingRun) {

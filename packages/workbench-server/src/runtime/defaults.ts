@@ -1,20 +1,20 @@
 import type { Locale } from "../i18n/index";
 
-/** 新域默认模型只从部署环境取连接信息；两版读取的环境变量名与优先级不同，由应用给出。 */
+/** A new domain's default model takes connection info only from the deployment environment; the env var names and priority differ per edition and are supplied by the app. */
 export interface DefaultModelConnection {
   baseUrl: string;
   apiKey: string;
   modelName: string;
 }
 
-/** 两版各自的历史运行默认值，由应用在启动前安装；公共包不内置任何一版的值。 */
+/** Each edition's historical runtime defaults, installed by the app before startup; the shared package embeds neither edition's values. */
 export interface RuntimeDefaults {
   postgresFallback: string;
   systemMcpUrlFallback: string;
   defaultModelConnection(): DefaultModelConnection;
-  /** 诊断时后端配置未给出数据适配器的理解方式。 */
+  /** How to interpret things when the backend config gives no data adapter during diagnosis. */
   defaultDataAdapter: "m3" | "sql";
-  /** 请求未显式给 locale 时的历史缺省：企业 zh-CN、OSS en。 */
+  /** Historical fallback when the request gives no explicit locale: enterprise zh-CN, OSS en. */
   requestLocaleFallback: Locale;
 }
 

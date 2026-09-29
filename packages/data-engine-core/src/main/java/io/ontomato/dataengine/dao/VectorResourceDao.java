@@ -89,9 +89,6 @@ public class VectorResourceDao extends BaseDao {
 
 			String brief = vectorResource.getContent();
 			String replaceBrief = this.replace(brief);
-			for (String forbid : new String[] { "题材", "类型", "感觉", "风格" }) {
-				replaceBrief.replace(forbid, "");
-			}
 			float[] embededVector = this.briefToVector(replaceBrief, domainId);
 			vectorResource.setContent(replaceBrief);
 			PGvector pgVector = new PGvector(embededVector);

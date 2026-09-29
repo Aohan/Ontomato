@@ -79,7 +79,7 @@ export interface QcResultState {
 }
 
 export interface QcState {
-  /** unsettled：超过有界时限仍未结算，既不是完成也不是失败 */
+  /** unsettled: still unresolved past the bounded time limit; neither completed nor failed */
   status: "running" | "completed" | "failed" | "unsettled";
   steps: QcStepState[];
   result?: QcResultState;

@@ -2,7 +2,8 @@ packages:
   - "packages/*"
   - "apps/*"
 
-# esbuild 的安装脚本：pnpm 9 默认执行；pnpm 10 起要显式允许（10 读 onlyBuiltDependencies，11 起读 allowBuilds）。
+# esbuild's install script: pnpm 9 runs it by default; from pnpm 10 it must be allowed
+# explicitly (10 reads onlyBuiltDependencies, 11 and later read allowBuilds).
 onlyBuiltDependencies:
   - esbuild
 allowBuilds:

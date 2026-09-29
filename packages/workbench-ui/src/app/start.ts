@@ -18,20 +18,21 @@ export interface WorkbenchWebOptions {
   auth: WorkbenchAuthHost;
   errorPunctuation: ErrorPunctuation;
   ontologyManagerEntry: OntologyManagerEntryConfig;
-  /** 工作台静态内容（原匹配规则、原句与配色，模块级代码在调用时读取）。 */
+  /** Static workbench content (original matching rules, sentences and colours; module-level code reads it at call time). */
   content: WorkbenchContent;
-  /** 聊天回合诊断入口的可见性（组件经 inject 读取）。 */
+  /** Visibility of the chat turn diagnosis entry (components read it via inject). */
   turnDiagnosis: TurnDiagnosisAccess;
   routes: RouteRecordRaw[];
-  /** 企业的导航守卫；Pinia 实例显式传入，守卫里的 store 不依赖挂载时机。 */
+  /** App navigation guards; the Pinia instance is passed explicitly so stores in guards do not depend on mount timing. */
   installGuards?: (router: Router, pinia: Pinia) => void;
-  /** 挂载前的应用级启动（企业会话监视，原在 App setup 中启动一次）。 */
+  /** App-level startup before mounting (e.g. a session watcher, originally started once in App setup). */
   beforeMount?: () => void;
 }
 
 /**
- * 网页启动的唯一顺序：宿主/标点/入口配置/工作台内容与语言先装配（模块级代码在调用时读取），
- * 再建 Pinia、router 并装应用守卫，最后装入 app 并挂载；router 的首次导航发生在 Pinia 已装入之后。
+ * The single web startup order: install the host, punctuation, entry config, workbench content and language first
+ * (module-level code reads them at call time), then create Pinia and the router and install app guards, and finally
+ * install everything into the app and mount; the router's first navigation happens after Pinia is installed.
  */
 export function startWorkbenchWeb(options: WorkbenchWebOptions): void {
   installAuthHost(options.auth);

@@ -21,7 +21,7 @@ const leafValue = computed(() =>
   "field" in props.node ? formatConditionValue(props.node.value) : ""
 );
 
-/* 只有一个子条件的分组不显示 AND / OR 标签，直接渲染那个子条件。 */
+/* A group with a single child condition shows no AND / OR tag and renders that child directly. */
 const singleChild = computed(() => {
   if (!isLogic(props.node)) return null;
   const and = props.node.and ?? [];

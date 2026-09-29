@@ -7,11 +7,17 @@ import { SkillCategory, SkillType } from "./constants";
 
 export const SkillTypeSchema = z.enum([SkillType.EXECUTABLE, SkillType.KNOWLEDGE]);
 export const SkillCategorySchema = z.enum([SkillCategory.ANALYSIS, SkillCategory.VISUALIZATION]);
+// The pattern message is resolved at parse time, never at module load: importing
+// this module before i18n configuration must not evaluate app text.
 export const SkillIdSchema = z
   .string()
   .trim()
   .min(1)
-  .regex(/^[a-z0-9-]+$/, tApp("skills.manifest.idPattern"));
+  .superRefine((value, ctx) => {
+    if (!/^[a-z0-9-]+$/.test(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: tApp("skills.manifest.idPattern") });
+    }
+  });
 
 export function getSkillCombinationError(
   type: z.infer<typeof SkillTypeSchema>,
@@ -38,7 +44,11 @@ export function normalizeSkillPackagePath(value: string): string | null {
 
 const commonFrontmatterFields = {
   name: SkillIdSchema,
-  description: z.string().trim().min(1, tApp("skills.manifest.manifestDescEmpty")),
+  description: z.string().trim().superRefine((value, ctx) => {
+    if (value.length < 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: tApp("skills.manifest.manifestDescEmpty") });
+    }
+  }),
   category: SkillCategorySchema,
   title: z.string().optional(),
   tags: z.array(z.string()).default([]),
@@ -62,13 +72,18 @@ export const SkillManifestSchema = z
           z
             .string()
             .trim()
-            .refine(
-              (value) => normalizeSkillPackagePath(value) !== null,
-              tApp("skills.manifest.entriesRelative")
-            )
+            .superRefine((value, ctx) => {
+              if (normalizeSkillPackagePath(value) === null) {
+                ctx.addIssue({ code: z.ZodIssueCode.custom, message: tApp("skills.manifest.entriesRelative") });
+              }
+            })
             .transform((value) => normalizeSkillPackagePath(value)!)
         )
-        .min(1, tApp("skills.manifest.entriesRequired")),
+        .superRefine((entries, ctx) => {
+          if (entries.length < 1) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: tApp("skills.manifest.entriesRequired") });
+          }
+        }),
     }),
     z.object({
       ...commonFrontmatterFields,

@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp, h, nextTick, reactive, type App } from "vue";
 import OntologyManager from "../OntologyManager.vue";
 import type { ManagerHostContext, ManagerPresentation } from "../context";
+import { englishMessages, type ManagerMessages } from "../i18n";
+import de from "element-plus/es/locale/lang/de";
 import { graphHandlers, graphRecord } from "./graph-double";
 
-// 只替身图谱库内部；根组件、页面、请求客户端与 fetch 调用都是真实代码。
+// Only the graph library internals are doubled; the root component, pages, request client and fetch calls are real code.
 vi.mock("@antv/g6", async () => ({ Graph: (await import("./graph-double")).GraphDouble }));
 vi.mock("@antv/x6", async () => ({
   Graph: (await import("./graph-double")).GraphDouble,
@@ -21,7 +23,7 @@ interface Recorded {
 
 let requests: Recorded[];
 let mountedApps: App[];
-/** 按路径后缀挂起的响应：测试决定何时、以什么内容返回。 */
+/** Responses held by path suffix: the test decides when and with what they return. */
 let held: Map<string, { resolve: (response: Response) => void }[]>;
 let holdPaths: Set<string>;
 let statusFor: (path: string) => number;
@@ -29,6 +31,7 @@ let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
 let dataAdapter: string;
 let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
+let knowledge: Record<string, unknown>[];
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -56,6 +59,7 @@ function respond(url: string): Response {
   if (path === "/businessConfig/getConfig") return json({ success: true, data: { dataAdapter } });
   if (path === "/businessConfig/dataAdapters") return json({ success: true, data: dataAdapters });
   if (path === "/function/queryList") return json({ success: true, data: functions });
+  if (path === "/admin/getBussinessKnowledge") return json({ success: true, data: knowledge });
   if (path.endsWith("/queryList")) return json({ success: true, data: [] });
   return json({ success: true, data: {} });
 }
@@ -72,6 +76,7 @@ beforeEach(() => {
   statusFor = () => 200;
   metasFor = () => metas(["Order", "Item"]);
   functions = [];
+  knowledge = [];
   dataAdapter = "mysql";
   dataAdapters = [
     { type: "m3", label: "M3", sql: false, fields: [] },
@@ -112,7 +117,7 @@ async function settle() {
   }
 }
 
-/** 最小宿主：持有上下文，按 v-model 语义写回 view，记录认证失败通知。 */
+/** Minimal host: holds the context, writes view back with v-model semantics and records auth-failure notifications. */
 function mountHost(initial: ManagerHostContext) {
   const host = reactive({ ...initial });
   const views: string[] = [];
@@ -135,10 +140,27 @@ function mountHost(initial: ManagerHostContext) {
   return { host, views, failures, root: () => element.querySelector(".ontology-manager")! };
 }
 
-/** 企业固定源 c0287200 ontology-manager/src/api.ts:118、:322 的原值。 */
-const enterpriseFallbacks = { noBusinessDescription: "未填写业务说明", unnamedAsset: "未命名资产" };
+/** Host-supplied data defaults that differ from the open-source values, so the tests can tell which one was used. */
+const hostFallbacks = { noBusinessDescription: "Host: no description", unnamedAsset: "Host: unnamed asset" };
 
-/** 测试用展示值：只用于辨认组件取值来自宿主，不是任一产品的原值（两版原值由应用 presentation 与证据审计核对）。 */
+/** A pseudo-locale for switching tests: the English messages with a marker plus a real widget locale, standing in for any host translation. */
+function markedMessages(marker: string, element: ManagerMessages["element"]): ManagerMessages {
+  const mark = (table: Readonly<Record<string, string>>) =>
+    Object.fromEntries(Object.entries(table).map(([key, value]) => [key, `${marker}${value}`]));
+  return {
+    ontology: mark(englishMessages.ontology),
+    shared: Object.fromEntries(
+      Object.entries(englishMessages.shared).map(([group, table]) => [group, mark(table)])
+    ),
+    element,
+  } as ManagerMessages;
+}
+
+/** The host switches locale and messages together. */
+const english = { locale: "en", messages: englishMessages };
+const german = { locale: "de", messages: markedMessages("[de] ", de) };
+
+/** Test presentation values: only used to recognise that the component reads them from the host; they are not either product's values (those are checked by the app presentation and evidence audit). */
 const presentation: ManagerPresentation = {
   themeProperties: {
     light: { "--el-color-primary": "#101010", "--manager-relation-icon-color": "#202020" },
@@ -149,15 +171,16 @@ const presentation: ManagerPresentation = {
   maxFitZoom: null,
   dataBrowserDescription: (objectLabel) => `description of ${objectLabel}`,
   compactDialogs: false,
+  businessKnowledge: true,
 };
 
 const base: ManagerHostContext = {
   apiBase: "/tenant-a/api",
   credential: { type: "apiKey", apiKey: "key-a" },
-  locale: "en",
+  ...english,
   theme: "light",
   view: "/playground",
-  dataFallbacks: enterpriseFallbacks,
+  dataFallbacks: hostFallbacks,
   presentation,
 };
 
@@ -168,12 +191,12 @@ function clickButton(text: string) {
   const button = [...document.querySelectorAll("button")].find(
     (item) => item.textContent?.trim() === text || item.querySelector("span")?.textContent === text
   );
-  if (!button) throw new Error(`找不到按钮：${text}`);
+  if (!button) throw new Error(`Button not found: ${text}`);
   button.click();
 }
 
-describe("OntologyManager 根组件与真实页面", () => {
-  it("非默认 API 入口与 APIKey：图谱、目录计数的真实请求都发往宿主入口并带 x-api-key", async () => {
+describe("OntologyManager root component with real pages", () => {
+  it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
     mountHost(base);
     await settle();
 
@@ -194,7 +217,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     }
   });
 
-  it("view 定位数据浏览；内部导航经 update:view 交还宿主，未知路径按原规则回到图谱", async () => {
+  it("view locates data browsing; internal navigation goes back to the host through update:view, unknown paths return to the graph by the original rule", async () => {
     const { host, views } = mountHost({ ...base, view: "/data/Item" });
     await settle();
 
@@ -212,7 +235,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(views.at(-1)).toBe("/playground");
   });
 
-  it("theme 只驱动组件根，不读取也不修改宿主 html.dark", async () => {
+  it("theme only drives the component root and neither reads nor changes the host html.dark", async () => {
     const { host, root } = mountHost({ ...base, theme: "dark" });
     await settle();
     expect(root().classList.contains("is-dark")).toBe(true);
@@ -225,18 +248,19 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(true);
   });
 
-  it("locale 驱动组件词条、Element Plus 语种与 Accept-Language", async () => {
-    const { host, root } = mountHost({ ...base, locale: "zh-CN", view: "/data/Order" });
+  it("host resources drive the component text and Element Plus widgets; locale drives lang and Accept-Language", async () => {
+    const { host, root } = mountHost({ ...base, ...german, view: "/data/Order" });
     await settle();
-    expect(root().getAttribute("lang")).toBe("zh-CN");
-    expect(root().textContent).toContain("数据浏览");
-    expect(root().querySelector(".el-pagination__total")?.textContent).toContain("共");
-    expect(requests.every((request) => request.headers["Accept-Language"] === "zh-CN")).toBe(true);
+    expect(root().getAttribute("lang")).toBe("de");
+    expect(root().textContent).toContain("[de] Data Browser");
+    expect(root().querySelector(".el-pagination__total")?.textContent).toContain("Gesamt");
+    expect(requests.every((request) => request.headers["Accept-Language"] === "de")).toBe(true);
 
     requests = [];
-    host.locale = "en";
+    Object.assign(host, english);
     await settle();
     expect(root().textContent).toContain("Data Browser");
+    expect(root().textContent).not.toContain("[de] ");
     expect(root().querySelector(".el-pagination__total")?.textContent).toContain("Total");
     expect(requests).toEqual([]);
 
@@ -246,7 +270,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(requests.every((request) => request.headers["Accept-Language"] === "en")).toBe(true);
   });
 
-  it("缺少凭据时不渲染工作区也不发请求；宿主给出 token 后按新凭据加载", async () => {
+  it("without a credential the workspace is not rendered and no request is sent; once the host supplies a token it loads with it", async () => {
     const { host, root } = mountHost({ ...base, credential: null });
     await settle();
     expect(requests).toEqual([]);
@@ -261,7 +285,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     }
   });
 
-  it("宿主切换 API 入口与凭据后，旧入口的在途响应不进入新宿主的页面", async () => {
+  it("after the host switches API entry and credential, in-flight responses from the old entry do not reach the new host's pages", async () => {
     holdPaths.add("/admin/getMetas");
     metasFor = (url) => metas(url.startsWith("/tenant-a/") ? ["Stale"] : ["Fresh"]);
     const { host, root } = mountHost({ ...base, view: "/data" });
@@ -290,7 +314,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(root().textContent).not.toContain("Stale");
   });
 
-  it("401/402 只通知宿主；402 后凭据保留，后续请求仍带原凭据", async () => {
+  it("401/402 only notify the host; after 402 the credential is kept and later requests still carry it", async () => {
     statusFor = (path) =>
       path === "/action/queryList" ? 402 : path === "/function/queryList" ? 401 : 200;
     const { host, failures } = mountHost(base);
@@ -306,7 +330,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(requests.every((request) => request.headers["x-api-key"] === "key-a")).toBe(true);
   });
 
-  it("可视化建模：按 view 聚焦对象，逐字段编辑保持原先后顺序，返回交还宿主", async () => {
+  it("visual modeling: focuses the object from view, field-by-field edits keep the original order, and back returns to the host", async () => {
     const { views } = mountHost({
       ...base,
       view: "/visual-modeling?focus=object&id=Order&back=playground",
@@ -350,7 +374,7 @@ describe("OntologyManager 根组件与真实页面", () => {
   it.each([
     ["mysql", true],
     ["m3", false],
-  ])("可视化建模：当前适配器 %s 按后端列表的 sql 标记决定关系是否填关联字段", async (current, sql) => {
+  ])("visual modeling: with current adapter %s, the backend list's sql flag decides whether relations take join fields", async (current, sql) => {
     dataAdapter = current;
     mountHost({ ...base, view: "/visual-modeling?focus=object&id=Order&back=playground" });
     await settle();
@@ -361,7 +385,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(openDialog("Rel Desc").textContent?.includes("Src Field")).toBe(sql);
   });
 
-  it("仅 locale/theme 变化时打开的编辑对话框与输入保留，不重新加载", async () => {
+  it("when only locale/theme change, the open edit dialog and its input are kept without reloading", async () => {
     const { host } = mountHost({
       ...base,
       view: "/visual-modeling?focus=object&id=Order&back=playground",
@@ -376,24 +400,24 @@ describe("OntologyManager 根组件与真实页面", () => {
     await settle();
 
     requests = [];
-    host.locale = "zh-CN";
+    Object.assign(host, german);
     host.theme = "dark";
     await settle();
-    const after = openDialog("更新");
+    const after = openDialog("[de] Update");
     expect(after).toBe(dialog);
     expect([...after.querySelectorAll("input")][1].value).toBe("Unsaved name");
     expect(paths()).not.toContain("/admin/getMetas");
   });
 
-  // 嵌入场景：iframe 以启动语言加载，宿主随后发来当前语言；同一身份的首批数据须照常呈现（原主系统只按凭据核对结果）。
+  // Embedded case: the iframe loads with the startup locale and the host then sends its current locale; the first data for the same identity must still render (the original main system checked results by credential only).
   it.each([
-    ["数据浏览", "/data/Order"],
-    ["可视化建模", "/visual-modeling?focus=object&id=Order&back=playground"],
-  ])("%s：首批 getMetas 在途时宿主切换语言，数据照常呈现，之后的请求带新语言", async (_name, view) => {
+    ["data browsing", "/data/Order"],
+    ["visual modeling", "/visual-modeling?focus=object&id=Order&back=playground"],
+  ])("%s: the host switches locale while the first getMetas is in flight; data still renders and later requests carry the new locale", async (_name, view) => {
     holdPaths.add("/admin/getMetas");
     const { host, root } = mountHost({ ...base, view });
     await settle();
-    host.locale = "zh-CN";
+    Object.assign(host, german);
     await settle();
     holdPaths.clear();
     held.get("/admin/getMetas")!.forEach((waiting) => waiting.resolve(new Response()));
@@ -403,12 +427,12 @@ describe("OntologyManager 根组件与真实页面", () => {
     if (view.startsWith("/data/")) {
       const page = requests.find((request) => request.url.endsWith("/data/getWholeClassDataByPage"));
       expect(page?.body).toMatchObject({ classname: "Order" });
-      expect(page?.headers["Accept-Language"]).toBe("zh-CN");
+      expect(page?.headers["Accept-Language"]).toBe("de");
       expect(root().textContent).toContain("row-1");
     } else {
       expect(root().querySelector(".visual-modeling .el-tag")?.textContent).toContain("Order-label");
     }
-    // 切换语言不触发重新加载：元数据只有切换前以 en 发出的那一批。
+    // Switching locale does not reload: the only metadata batch is the one sent in en before the switch.
     const metaRequests = requests.filter((request) => request.url.endsWith("/admin/getMetas"));
     expect(metaRequests.every((request) => request.headers["Accept-Language"] === "en")).toBe(true);
 
@@ -416,10 +440,10 @@ describe("OntologyManager 根组件与真实页面", () => {
     host.view = "/objects";
     await settle();
     expect(requests.length).toBeGreaterThan(0);
-    expect(requests.every((request) => request.headers["Accept-Language"] === "zh-CN")).toBe(true);
+    expect(requests.every((request) => request.headers["Accept-Language"] === "de")).toBe(true);
   });
 
-  it("多步保存进行中只切换语言：后续步骤照常发送一次，不重发已发出的请求", async () => {
+  it("switching only the locale during a multi-step save: later steps are sent once and sent requests are not repeated", async () => {
     const { host } = mountHost({
       ...base,
       view: "/visual-modeling?focus=object&id=Order&back=playground",
@@ -440,7 +464,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     requests = [];
     clickButton("Update");
     await settle();
-    host.locale = "zh-CN";
+    Object.assign(host, german);
     await settle();
     holdPaths.clear();
     held.get("/admin/editClassShowName")!.forEach((waiting) => waiting.resolve(new Response()));
@@ -450,10 +474,10 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(paths().filter((path) => path === "/admin/editClassShowName")).toHaveLength(1);
     expect(paths().filter((path) => path === "/admin/editClassDesc")).toHaveLength(1);
     expect(requests[0].headers["Accept-Language"]).toBe("en");
-    expect(requests[1].headers["Accept-Language"]).toBe("zh-CN");
+    expect(requests[1].headers["Accept-Language"]).toBe("de");
   });
 
-  it("确认删除期间宿主切换 API 入口与凭据：旧确认随旧工作区结束，不向任何来源发删除", async () => {
+  it("the host switches API entry and credential during delete confirmation: the old confirmation ends with the old workspace and no delete is sent anywhere", async () => {
     const { host } = mountHost({ ...base, view: "/objects/Order" });
     await settle();
     clickButton("Delete");
@@ -467,7 +491,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(paths()).not.toContain("/admin/delClass");
   });
 
-  it("多步删除进行中切换凭据：旧工作区后续步骤不再发送", async () => {
+  it("switching the credential during a multi-step delete: the old workspace sends no further steps", async () => {
     const { host } = mountHost({
       ...base,
       view: "/visual-modeling?focus=object&id=Order&back=playground",
@@ -487,11 +511,11 @@ describe("OntologyManager 根组件与真实页面", () => {
     await settle();
     expect(paths().filter((path) => path === "/admin/delRelationship")).toHaveLength(1);
     expect(paths()).not.toContain("/admin/delClass");
-    // 旧后续的失败提示不显示，也不会落到 body 下。
+    // The stale follow-up's failure message is not shown and does not land under body.
     expect(document.querySelector(".el-message")).toBeNull();
   });
 
-  it("凭据 A→B→A 期间多步删除：已卸载的旧工作区不再交付响应或发送后续", async () => {
+  it("multi-step delete across credential A→B→A: the unmounted old workspace neither delivers responses nor sends follow-ups", async () => {
     const { host } = mountHost({
       ...base,
       view: "/visual-modeling?focus=object&id=Order&back=playground",
@@ -513,7 +537,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(paths()).not.toContain("/admin/delClass");
   });
 
-  it("同页两个实例：主题、弹层容器、消息与确认互不影响", async () => {
+  it("two instances on one page: theme, popper container, messages and confirmations stay independent", async () => {
     statusFor = (path) => (path === "/data/getWholeClassDataByPage" ? 500 : 200);
     const a = mountHost({ ...base, theme: "dark", view: "/data/Order" });
     const b = mountHost({ ...base, apiBase: "/tenant-b/api", view: "/objects/Order" });
@@ -521,13 +545,13 @@ describe("OntologyManager 根组件与真实页面", () => {
 
     expect(a.root().classList.contains("is-dark")).toBe(true);
     expect(b.root().classList.contains("is-dark")).toBe(false);
-    // 下拉弹层与错误消息都在 A 自己的根内，不在 body 下另建容器。
+    // A's dropdown popper and error message live inside A's own root; no extra container is created under body.
     expect(a.root().querySelector(".el-select__popper")).not.toBeNull();
     expect(a.root().querySelector(".el-message--error")).not.toBeNull();
     expect(b.root().querySelector(".el-message")).toBeNull();
     expect(document.body.querySelector(":scope > [id*='popper-container']")).toBeNull();
 
-    // B 打开确认后，A 换凭据只重建 A，B 的确认仍在。
+    // After B opens a confirmation, changing A's credential rebuilds only A and B's confirmation stays.
     [...b.root().querySelectorAll("button")]
       .find((item) => item.textContent?.trim() === "Delete")!
       .click();
@@ -538,7 +562,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(b.root().querySelector(".manager-confirm")).not.toBeNull();
   });
 
-  it("宿主展示值绑在各自真实根元素上：按 theme 整组切换，窄屏对话框开关只作用于本实例", async () => {
+  it("host presentation values bind to each real root element: switched as a group by theme, with the narrow-dialog switch affecting only its own instance", async () => {
     const compact: ManagerPresentation = {
       ...presentation,
       themeProperties: {
@@ -567,7 +591,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(requests).toEqual([]);
   });
 
-  it("图谱与建模的节点色板、边标签片段和适配上限取宿主值", async () => {
+  it("graph and modeling take the node palette, edge label fragment and fit limit from the host", async () => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       width: 800,
       height: 600,
@@ -587,7 +611,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(graph.edge.style).toMatchObject({ labelPlacement: "center", labelAutoRotate: false });
     expect(graphRecord.zoomTo).toEqual([[1, false]]);
 
-    // 不设上限、空片段：不改缩放，边样式没有这两项。
+    // No limit and an empty fragment: zoom is untouched and the edge style has neither entry.
     mountedApps.forEach((app) => app.unmount());
     graphRecord.options = [];
     graphRecord.zoomTo = [];
@@ -597,7 +621,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelPlacement");
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelAutoRotate");
 
-    // 可视化建模按同一色板、同一类名取同一颜色。
+    // Visual modeling picks the same colour from the same palette for the same class name.
     const byClass = Object.fromEntries(
       graphRecord.options[0].data.nodes.map((node: any) => [node.id, node.data.color])
     );
@@ -610,13 +634,13 @@ describe("OntologyManager 根组件与真实页面", () => {
     expect(fills).toEqual(byClass);
   });
 
-  it("数据浏览页头说明由宿主函数按当前对象显示名给出", async () => {
+  it("the data browser header description comes from the host function with the current object's display name", async () => {
     const { root } = mountHost({ ...base, view: "/data/Order" });
     await settle();
     expect(root().textContent).toContain("description of Order-label");
   });
 
-  it("说明兜底取宿主装配值预填表单，切换 locale/theme 不变，修改后随原字段提交", async () => {
+  it("the description fallback pre-fills the form with the host value, is unchanged by locale/theme switches, and is submitted in the original field after editing", async () => {
     metasFor = () => ({
       success: true,
       data: { classDef: [{ className: "Order", showName: "Order", classDesc: "", attrs: [] }] },
@@ -624,16 +648,16 @@ describe("OntologyManager 根组件与真实页面", () => {
     const { host, root } = mountHost({ ...base, view: "/objects/Order" });
     await settle();
     const textarea = () => root().querySelector<HTMLTextAreaElement>("textarea")!;
-    expect(textarea().value).toBe("未填写业务说明");
+    expect(textarea().value).toBe("Host: no description");
 
-    host.locale = "zh-CN";
+    Object.assign(host, german);
     host.theme = "dark";
     await settle();
-    host.locale = "en";
+    Object.assign(host, english);
     await settle();
-    expect(textarea().value).toBe("未填写业务说明");
+    expect(textarea().value).toBe("Host: no description");
 
-    textarea().value = "未填写业务说明（补充）";
+    textarea().value = "Host: no description (amended)";
     textarea().dispatchEvent(new Event("input"));
     await settle();
     requests = [];
@@ -641,11 +665,11 @@ describe("OntologyManager 根组件与真实页面", () => {
     await settle();
     expect(requests.find((r) => r.url.endsWith("/admin/editClassDesc"))?.body).toEqual({
       className: "Order",
-      desc: "未填写业务说明（补充）",
+      desc: "Host: no description (amended)",
     });
   });
 
-  it("无名称函数取宿主装配名，切换 locale/theme 后仍随定时任务保存载荷提交", async () => {
+  it("an unnamed function takes the host-supplied name, which is still submitted with the scheduled task payload after locale/theme switches", async () => {
     functions = [{ id: "fn-1", operation: "OPERATION_WRITE" }];
     const { host, root } = mountHost({ ...base, view: "/assets/tasks/new" });
     await settle();
@@ -657,32 +681,32 @@ describe("OntologyManager 根组件与真实页面", () => {
     cron.value = "0 0 * * * ?";
     cron.dispatchEvent(new Event("input"));
     const option = [...root().querySelectorAll<HTMLElement>(".el-select-dropdown__item")].find(
-      (item) => item.textContent?.trim() === "未命名资产"
+      (item) => item.textContent?.trim() === "Host: unnamed asset"
     )!;
     option.click();
     await settle();
 
-    host.locale = "zh-CN";
+    Object.assign(host, german);
     host.theme = "dark";
     await settle();
     requests = [];
-    clickButton("保存");
+    clickButton("[de] Save");
     await settle();
     const saved = requests.find((r) => r.url.endsWith("/writeTask/save"))?.body;
-    // 线上 JSON：未定义字段不出现，name 为宿主装配的企业原值。
+    // Wire JSON: undefined fields are absent and name is the host-supplied value.
     expect(saved?.function).toStrictEqual({
       id: "fn-1",
       operation: "OPERATION_WRITE",
-      name: "未命名资产",
+      name: "Host: unnamed asset",
       description: null,
     });
   });
 
   it.each([
-    ["对象模型目录", "/objects", "New Object Type", ".object-create-dialog", "Create"],
-    ["可视化建模", "/visual-modeling", "Add Class", ".el-dialog", "Add"],
-  ])("%s新建类：缺主键不提交；带主键提交后显示后端保存的主键", async (_name, view, open, selector, submit) => {
-    // 新建后重新读取的元数据才含新类与其主键：页面必须显示后端保存结果，而不是本地拼装的空属性。
+    ["object model catalog", "/objects", "New Object Type", ".object-create-dialog", "Create"],
+    ["visual modeling", "/visual-modeling", "Add Class", ".el-dialog", "Add"],
+  ])("%s creating a class: without a primary key nothing is submitted; after submitting with one, the primary key saved by the backend is shown", async (_name, view, open, selector, submit) => {
+    // Only the metadata re-read after creation contains the new class and its primary key: the page must show the backend's saved result, not locally assembled empty attributes.
     metasFor = () => {
       const saved = metas(["Order", "Item"]);
       if (requests.some((request) => request.url.endsWith("/admin/addClass"))) {
@@ -739,7 +763,7 @@ describe("OntologyManager 根组件与真实页面", () => {
     }
   });
 
-  it("编辑对话框挂在本实例根内的弹层容器，打开关闭都不改 body", async () => {
+  it("edit dialogs mount in the popper container inside this instance's root; opening and closing leave body unchanged", async () => {
     const { root } = mountHost({ ...base, view: "/objects/Order" });
     await settle();
     const bodyBefore = [
@@ -767,15 +791,107 @@ describe("OntologyManager 根组件与真实页面", () => {
   });
 });
 
+describe("Manager business knowledge page", () => {
+  const refundRule = {
+    knowledgeID: "k-1",
+    knowledgeTitle: "Refund rule",
+    knowledgeText: "Refunds within 7 days",
+    knowledgeTags: ["policy"],
+    status: 1,
+  };
+  beforeEach(() => {
+    knowledge = [refundRule];
+  });
+
+  const buttonIn = (root: Element, text: string) =>
+    [...root.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent?.trim() === text
+    )!;
+
+  it("lists knowledge and adds an entry through the edit dialog inside the instance", async () => {
+    const { root } = mountHost({ ...base, view: "/knowledge" });
+    await settle();
+    expect(paths()).toContain("/admin/getBussinessKnowledge");
+    expect(root().textContent).toContain("Refund rule");
+
+    buttonIn(root(), "Add Knowledge").click();
+    await settle();
+    const dialog = openDialog("Edit Knowledge");
+    expect(root().contains(dialog)).toBe(true);
+    const title = dialog.querySelector("input")!;
+    title.value = "Shipping rule";
+    title.dispatchEvent(new Event("input"));
+    await settle();
+
+    requests = [];
+    buttonIn(dialog, "Save").click();
+    await settle();
+    expect(requests.find((r) => r.url.endsWith("/admin/addBussinessKnowledge"))?.body).toEqual({
+      knowledgeID: "",
+      knowledgeTitle: "Shipping rule",
+      knowledgeText: "",
+      knowledgeTags: [],
+      status: 1,
+    });
+    expect(root().querySelector(".el-message--success")).not.toBeNull();
+    expect(document.body.querySelector(":scope > .el-message")).toBeNull();
+  });
+
+  it("deletes after a confirmation shown in its own instance; messages do not reach another instance or body", async () => {
+    const a = mountHost({ ...base, view: "/knowledge" });
+    const b = mountHost({ ...base, apiBase: "/tenant-b/api", view: "/objects/Order" });
+    await settle();
+
+    buttonIn(a.root(), "Delete").click();
+    await settle();
+    expect(a.root().querySelector(".manager-confirm")).not.toBeNull();
+    expect(b.root().querySelector(".manager-confirm")).toBeNull();
+
+    buttonIn(a.root(), "OK").click();
+    await settle();
+    const deleted = requests.find((r) => r.url.endsWith("/admin/delBussinessKnowledge"));
+    expect(deleted?.url.startsWith("/tenant-a/api/")).toBe(true);
+    expect(deleted?.body).toEqual({ knowledgeID: "k-1" });
+    expect(a.root().querySelector(".el-message--success")).not.toBeNull();
+    expect(b.root().querySelector(".el-message")).toBeNull();
+    expect(document.body.querySelector(":scope > .el-message, :scope > .el-overlay")).toBeNull();
+  });
+
+  it("switching the credential while a delete confirmation is open cancels it and sends no delete", async () => {
+    const { host } = mountHost({ ...base, view: "/knowledge" });
+    await settle();
+    clickButton("Delete");
+    await settle();
+    expect(confirmDialog()).not.toBeNull();
+
+    host.credential = { type: "token", token: "tok-b" };
+    await settle();
+    expect(confirmDialog()).toBeNull();
+    expect(paths()).not.toContain("/admin/delBussinessKnowledge");
+  });
+
+  it("a host without the knowledge page shows no entry and the view falls back to the graph", async () => {
+    const { root, views } = mountHost({
+      ...base,
+      presentation: { ...presentation, businessKnowledge: false },
+      view: "/knowledge",
+    });
+    await settle();
+    expect(views.at(-1)).toBe("/playground");
+    expect(root().textContent).not.toContain("Business Knowledge");
+    expect(paths()).not.toContain("/admin/getBussinessKnowledge");
+  });
+});
+
 function openDialog(buttonText: string) {
   const dialog = [...document.querySelectorAll(".el-dialog")].find((item) =>
     item.textContent?.includes(buttonText)
   );
-  if (!dialog) throw new Error(`找不到对话框：${buttonText}`);
+  if (!dialog) throw new Error(`Dialog not found: ${buttonText}`);
   return dialog;
 }
 
-/** 当前显示中的确认框；关闭后 EP 保留隐藏的遮罩，工作区卸载后则整个移除。 */
+/** The confirmation currently shown; after closing, EP keeps a hidden overlay, which is removed entirely once the workspace unmounts. */
 function confirmDialog() {
   const overlay = document.querySelector(".manager-confirm")?.closest<HTMLElement>(".el-overlay");
   return overlay && overlay.style.display !== "none" ? overlay : null;

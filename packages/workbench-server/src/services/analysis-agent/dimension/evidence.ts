@@ -1,6 +1,6 @@
 /**
- * 维度形态的证据组装：把子问题查询结果整理成报告与图表消费的证据，
- * 并把计划中的子问题与查询结果合并成可持久化的维度结果。
+ * Evidence assembly of the dimension form: organizes sub-question query results into evidence for reports and charts,
+ * and merges planned sub-questions with query results into persistable dimension results.
  */
 
 import { t } from "../../../i18n";
@@ -181,7 +181,7 @@ export function mergePlannedSubQuestionsWithResults(
   );
 }
 
-/** 一个维度的全部子问题结果 → 报告与图表消费的证据条目。 */
+/** All sub-question results of one dimension → evidence entries for reports and charts. */
 export function buildDimensionEvidence(results: DimensionQueryResult[]): AnalysisEvidence[] {
   return results.flatMap((result): AnalysisEvidence[] => {
     if (result.status !== "completed") {
@@ -247,7 +247,7 @@ export function buildDimensionEvidence(results: DimensionQueryResult[]): Analysi
   });
 }
 
-/** 分析技能的输入数据集：同一维度所有子问题展开后的原始值数据集。 */
+/** Input dataset of analysis skills: the raw-value dataset of every sub-question in the same dimension, expanded. */
 export function buildSkillDatasets(results: DimensionQueryResult[]) {
   return results.flatMap((result) =>
     expandQueryResultDatasetEntries({

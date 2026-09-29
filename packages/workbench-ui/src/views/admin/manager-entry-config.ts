@@ -1,6 +1,7 @@
 /**
- * Manager 入口的应用静态差异：与本产品 Manager 外壳约定的消息名，以及原入口的固定文字（两版原值不同，未进词条）。
- * localeMessage 为 null 表示本产品的 Manager 不跟随主系统语言：既不发语言消息，也不在地址里带 locale（开源原样）。
+ * Static app differences of the Manager entry: the message types agreed with this product's Manager shell, and the
+ * original entry's fixed text (values differ per edition and are not messages). A null localeMessage means this product's
+ * Manager does not follow the main system's locale: no locale message is sent and no locale is put in the URL (as in open source).
  */
 export interface OntologyManagerEntryConfig {
   themeMessage: string;

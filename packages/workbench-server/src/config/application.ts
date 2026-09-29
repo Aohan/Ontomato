@@ -1,8 +1,8 @@
 import { environment } from "./environment";
 
 /**
- * 归一化 API base 前缀：补前导 `/`、去尾 `/`；留空则回退 `/api`。
- * 同域名多实例部署时设如 `/api-itsm`，由 nginx 重写回后端的 `/api/`。
+ * Normalized API base prefix: adds the leading `/`, strips the trailing `/`; empty falls back to `/api`.
+ * For same-domain multi-instance deployments set e.g. `/api-itsm`, rewritten back to the backend's `/api/` by nginx.
  */
 function normalizeApiBase(raw?: string): string {
   const trimmed = (raw || "").trim();

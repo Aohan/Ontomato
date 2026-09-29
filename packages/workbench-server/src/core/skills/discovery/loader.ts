@@ -7,7 +7,7 @@ import { tApp } from "../../../i18n";
 
 const logger = createLogger("loader");
 
-/** 包内文件读取与执行共用真实路径边界，符号链接不能越过已授权技能包。 */
+/** File reads and execution inside a package share the real-path boundary; symbolic links must not escape the authorized skill package. */
 export async function resolveSkillPackageFile(
   skill: SkillMeta,
   requestedPath: string

@@ -79,8 +79,8 @@ function mapQueryRun(run: QueryRun) {
   return {
     stage: run.sourceStage || run.sourceKind,
     status: run.status,
-    // 展示投影：从结构化列组装，供管理页阅读；不是第二个事实通道。
-    // 两项都没有时不返回空壳，否则页面会渲染一个内容为空的结果块。
+    // Display projection: assembled from structured columns for the admin page to read; never a second facts channel.
+    // When neither item exists, no empty shell is returned — the page would otherwise render a result block with empty content.
     result: buildResultProjection(run),
     thinkingSummary: run.thinkingSummary,
     thinkingState: run.thinkingState,

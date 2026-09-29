@@ -199,8 +199,8 @@ export async function* streamQuestionSplit(
       throw new Error(event.error);
     }
 
-    // 首帧即上报：后端新建会话的流首帧为 {sessionId, nodeId}，收到即交出，
-    // 调用方（abc 分支）据此立即上报位置，不用等拆分结果。首帧只交一次。
+    // Report on the first frame: the first frame of the backend's new-session stream is {sessionId, nodeId};
+    // hand it over on receipt so the caller (the abc branch) can report the location immediately without waiting for the split result. The first frame is handed over only once.
     const location = extractBackendLocation(event);
     if (!locationReported && location?.sessionId) {
       sessionId = location.sessionId;
@@ -241,7 +241,7 @@ export async function* streamQuestionSplit(
     }
   }
 
-  // "没拿到会话号就报错"只在这里保证：流结束时没有会话号即抛错，调用方不再各自检查。
+  // "Throw when no session number was obtained" is guaranteed only here: it throws when the stream ends without one, so callers stop re-checking.
   if (!sessionId) {
     throw new Error(tApp("queryFixed.218"));
   }
@@ -255,7 +255,7 @@ export async function* streamQuestionSplit(
 
   options?.onProgress?.(t("query.progress.splitDone", { n: allSubQuestions.length }), "split_done");
 
-  // 如果还没 yield 过汇总信息，现在 yield
+  // If the summary information has not been yielded yet, yield it now
   if (allSubQuestions.length > 0) {
     yield { sessionId, backendNodeId, subQueries: allSubQuestions };
   }

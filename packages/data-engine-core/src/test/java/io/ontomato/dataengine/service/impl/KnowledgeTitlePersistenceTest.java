@@ -45,15 +45,15 @@ class KnowledgeTitlePersistenceTest {
 
     @Test
     void blankTitlePersistsTheEnterprisePrefixAndGeneratesAnId() {
-        Inserted inserted = insert("业务知识", "", null, "text");
+        Inserted inserted = insert("Business knowledge ", "", null, "text");
         assertTrue(inserted.id.startsWith("knowledge_"));
-        assertEquals("业务知识" + inserted.id, inserted.title);
+        assertEquals("Business knowledge " + inserted.id, inserted.title);
         assertEquals("add: " + inserted.title, inserted.audit.getDescription());
     }
 
     @Test
     void suppliedTitleIsStoredUnchanged() {
-        Inserted inserted = insert("业务知识", "  Named  ", "  id-2  ", "kept");
+        Inserted inserted = insert("Business knowledge ", "  Named  ", "  id-2  ", "kept");
         assertEquals("id-2", inserted.id);
         assertEquals("  Named  ", inserted.title);
         assertEquals("kept", inserted.text);

@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-// 技能脚本随公共服务包的 skills/ 资源发布，不在包导出面；按包根定位后直接加载原脚本。
+// The skill script ships with the shared service package's skills/ resources, outside the package export surface; located from the package root and loaded directly.
 const serverRoot = dirname(dirname(createRequire(import.meta.url).resolve("@ontomato/workbench-server")));
 const { execute } = await import(
   pathToFileURL(join(serverRoot, "skills/executable/visualization/echarts/scripts/index.mjs")).href

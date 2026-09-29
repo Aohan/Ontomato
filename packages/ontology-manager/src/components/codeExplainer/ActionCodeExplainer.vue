@@ -17,8 +17,8 @@ import { useOntologyText } from "../../context";
 hljs.registerLanguage("python", python);
 
 /*
- * 解读视图容器：只经 props 接收已保存代码与已规范化的段树，
- * 不调用接口、不读全局状态。持有“当前激活的段”，拥有双向定位滚动。
+ * Explanation view container: receives the saved code and the normalized segment tree only through props,
+ * calls no API and reads no global state. It holds the "active segment" and owns two-way scroll positioning.
  */
 const props = defineProps<{ code: string; segments: CodeSegment[] }>();
 
@@ -28,7 +28,7 @@ const codePanelRef = ref<HTMLElement | null>(null);
 const segPanelRef = ref<HTMLElement | null>(null);
 const activeId = ref("");
 
-// 加载后默认激活第一段；记录重新加载后同样回到第一段。
+// After loading, the first segment is active by default; reloading the record returns to the first segment too.
 watch(
   () => props.segments,
   (segments) => {
@@ -38,7 +38,7 @@ watch(
 );
 
 const lines = computed(() => props.code.split("\n"));
-// highlight.js 会先转义源码文本，产出里只有它自己的 span 标记，可直接 v-html。
+// highlight.js escapes the source text first and its output contains only its own span markup, so it can be used with v-html directly.
 const highlighted = computed(() =>
   lines.value.map(
     (line) => hljs.highlight(line, { language: "python", ignoreIllegals: true }).value
@@ -84,7 +84,7 @@ function onSelect(seg: CodeSegment) {
 }
 
 function onLineClick(lineNo: number) {
-  // 该行不属于任何段则无反应。
+  // Nothing happens if the line belongs to no segment.
   const found = findInnermostSegment(flat.value, lineNo);
   if (!found) return;
   activeId.value = found.id;
@@ -262,8 +262,8 @@ function kindLabelOf(kind: SegmentKind): string {
   background: var(--kind-color);
 }
 .ce-code-body {
-  /* 单列网格：auto 轨道以最长行为下限、面板更宽时拉伸填满，所有行因此同宽，
-     激活行的背景与左边条能铺满整个横向滚动范围，而不是只到自身内容宽度。 */
+  /* Single-column grid: the auto track is at least as wide as the longest line and stretches when the panel is wider, so
+     all lines share one width and the active line's background and left bar span the whole horizontal scroll range, not just its content. */
   display: grid;
   grid-template-columns: auto;
   align-content: start;
@@ -285,7 +285,7 @@ function kindLabelOf(kind: SegmentKind): string {
 .ce-line.is-active {
   background: var(--el-color-primary-light-9);
 }
-/* 行号固定在左侧：长行横向滚动时仍能看到行号。它盖住行首，所以底色与激活左边条由它自己画。 */
+/* Line numbers stick to the left so they stay visible while long lines scroll horizontally. They cover the line start, so they draw their own background and active left bar. */
 .ce-line-num {
   position: sticky;
   left: 0;
@@ -311,7 +311,7 @@ function kindLabelOf(kind: SegmentKind): string {
   color: var(--el-text-color-primary);
   white-space: pre;
 }
-/* v-html 内容不带 scoped 属性，用 :deep() 把 hljs 类映射到已有的 token 变量。 */
+/* v-html content has no scoped attribute, so :deep() maps the hljs classes to the existing token variables. */
 .ce-line-content :deep(.hljs-comment) {
   color: var(--ce-tok-comment);
 }

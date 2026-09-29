@@ -3,7 +3,6 @@ import { computed, onMounted, provide, ref } from "vue";
 import { ElConfigProvider, ID_INJECTION_KEY, useGetDerivedNamespace } from "element-plus";
 import { hostSource, type ManagerAuthFailureStatus } from "./api";
 import type { ManagerHostContext } from "./context";
-import { elementLocale } from "./i18n";
 import { nextElementIdPrefix } from "./instance-id";
 import ManagerWorkspace from "./ManagerWorkspace.vue";
 import "./theme.css";
@@ -16,28 +15,28 @@ const emit = defineEmits<{
 }>();
 
 /*
- * 每个实例一个 Element Plus id 前缀：下拉、选择、提示等弹层按前缀查找 popper 容器，
- * 这里把容器放在本实例根内，弹层因此继承本实例的主题变量，也随本实例卸载。
+ * One Element Plus id prefix per instance: dropdowns, selects, tooltips and other poppers find their popper container by prefix,
+ * so the container sits inside this instance's root; poppers inherit this instance's theme variables and unmount with it.
  */
 const idPrefix = nextElementIdPrefix();
 provide(ID_INJECTION_KEY, { prefix: idPrefix, current: 0 });
 const namespace = useGetDerivedNamespace();
 const popperContainerId = computed(() => `${namespace.value}-popper-container-${idPrefix}`);
 
-// 弹层在挂载时按 id 查找容器；容器进入文档后再渲染工作区，EP 才不会另在 body 下创建。
+// Poppers look up their container by id when mounted; render the workspace only after the container is in the document so EP does not create another one under body.
 const rootMounted = ref(false);
 onMounted(() => (rootMounted.value = true));
 
 /*
- * API 入口或凭据变化：换了数据来源或用户，工作区重建，旧数据、旧弹层与旧请求后续随旧实例结束。
- * 仅 locale/theme 变化不重建，打开的编辑保持；在途请求照常交付，之后的请求带新语言。
+ * An API entry or credential change means a different data source or user: the workspace is rebuilt, and old data, poppers and request follow-ups end with the old instance.
+ * Locale/theme-only changes do not rebuild, so open edits stay; in-flight requests are delivered as usual and later requests carry the new locale.
  */
 const workspaceKey = computed(() => hostSource(props));
 </script>
 
 <template>
-  <el-config-provider :locale="elementLocale(locale)">
-    <!-- 宿主给的两版原值绑在真实根元素上（ElConfigProvider 不渲染元素），本实例内的 EP 派生变量与弹层随之求值。 -->
+  <el-config-provider :locale="messages.element">
+    <!-- Host-supplied presentation values bind to the real root element (ElConfigProvider renders no element), so EP derived variables and poppers in this instance evaluate against them. -->
     <div
       :class="[
         'ontology-manager',
@@ -62,9 +61,9 @@ const workspaceKey = computed(() => hostSource(props));
 <style scoped>
 .ontology-manager {
   height: 100%;
-  /* 本实例的遮罩、对话框与消息以组件根为定位容器，不覆盖宿主页面或同页另一个实例。 */
+  /* This instance's overlays, dialogs and messages are positioned within the component root and do not cover the host page or another instance on the same page. */
   contain: layout;
-  /* 断点与 cqw/cqh 上限按宿主给的组件尺寸计算，而不是按视口；因此宿主须给组件一个有确定尺寸的容器。 */
+  /* Breakpoints and cqw/cqh limits use the component size given by the host, not the viewport, so the host must give the component a container with a definite size. */
   container: ontology-manager / size;
 }
 </style>

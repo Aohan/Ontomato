@@ -34,7 +34,7 @@ import { clamp, parseGridColumns } from "./utils/dashboardHelper";
 import { useI18n } from "vue-i18n";
 import { workbenchContent } from "../../../content";
 
-/** 加载遮罩底色按应用原值（企业默认、开源透明）。 */
+/** Loading mask background follows the app's original value (open source: transparent). */
 const transparentLoading = workbenchContent().dashboard.loadingMask === "transparent";
 
 const { t } = useI18n();

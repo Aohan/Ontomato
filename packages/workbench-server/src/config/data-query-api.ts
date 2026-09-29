@@ -69,7 +69,7 @@ export function buildHeaders(
     headers["tk"] = token;
   }
 
-  //前端主动传入的apiKey，和用户关联
+  // apiKey actively passed in by the frontend, associated with the user
   if (apiKey) {
     headers["X-API-Key"] = apiKey;
   }

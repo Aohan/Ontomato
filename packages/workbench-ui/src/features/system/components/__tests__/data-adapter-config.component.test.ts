@@ -8,7 +8,7 @@ import { adminApi } from "../../../admin";
 import { workbenchI18n } from "../../../../i18n";
 import { businessConfig } from "../../../../../../../apps/workbench/web/src/business-config";
 
-/** 两版后端 GET /businessConfig/dataAdapters 的返回：开源只装 postgresql，企业装 9 个（按 label 排序）。 */
+/** Two backend GET /businessConfig/dataAdapters responses: the open-source edition installs only postgresql; a larger edition installs 9 (sorted by label). */
 const openSourceAdapters: DataAdapterInfo[] = [
   {
     type: "postgresql",
@@ -142,8 +142,8 @@ const formLabels = (card: Card) =>
 const placeholders = (card: Card) =>
   card.findAll("input.el-input__inner").map((input) => input.attributes("placeholder"));
 
-describe("数据适配器卡片按后端列表渲染", () => {
-  it("开源版列表只有 postgresql：只显示这一项，选中当前类型并回填已保存连接", async () => {
+describe("the data adapter card renders from the backend list", () => {
+  it("the open-source list has only postgresql: shows just that item, selects the current type and fills in the saved connection", async () => {
     const card = await mountCard(openSourceAdapters, "postgresql", {
       postgresql: { url: "jdbc:postgresql://db/app", user: "pg", password: "secret" },
     });
@@ -157,13 +157,13 @@ describe("数据适配器卡片按后端列表渲染", () => {
     ).toEqual(["jdbc:postgresql://db/app", "pg", "secret"]);
   });
 
-  it("企业版列表：显示全部 9 项，显示名取后端 label", async () => {
+  it("a 9-adapter list: shows all 9 items with display names from the backend label", async () => {
     const card = await mountCard(enterpriseAdapters, "m3");
 
     expect(radioLabels(card)).toEqual(enterpriseAdapters.map(({ label }) => label));
   });
 
-  it("M3 这类无字段类型不显示连接表单，保存只提交 type", async () => {
+  it("a type without fields such as M3 shows no connection form and saves only type", async () => {
     const card = await mountCard(enterpriseAdapters, "m3");
 
     expect(formLabels(card)).toEqual([t("admin.adapterMode")]);
@@ -174,7 +174,7 @@ describe("数据适配器卡片按后端列表渲染", () => {
     expect(vi.mocked(adminApi.useDataAdapter)).toHaveBeenCalledTimes(1);
   });
 
-  it("DuckDB 只有 url：表单只显示连接地址并以模块示例作占位，保存只提交该类型的字段", async () => {
+  it("DuckDB has only url: the form shows only the URL with the module example as placeholder and saves only that type's fields", async () => {
     const card = await mountCard(enterpriseAdapters, "m3", {
       mysql: { url: "jdbc:mysql://other", user: "root", password: "x" },
     });
@@ -194,7 +194,7 @@ describe("数据适配器卡片按后端列表渲染", () => {
     expect(backend.used).toEqual([{ type: "duckdb", url: "jdbc:duckdb:/data/a.duckdb" }]);
   });
 
-  it("切换到带三项字段的类型：url、user 以模块示例作占位，保存该类型的 url、user、password", async () => {
+  it("switching to a type with three fields: url and user use the module examples as placeholders and that type's url, user and password are saved", async () => {
     const card = await mountCard(enterpriseAdapters, "m3", {
       mysql: { url: "jdbc:mysql://db/app", user: "root", password: "pw" },
     });

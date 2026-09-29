@@ -3,15 +3,31 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { installContentLayout } from "../../../content/layout";
-import { configureI18n, setLocale } from "../../../i18n";
+import { configureI18n, setLocale, type TranslationMessages } from "../../../i18n";
 import { appTextEn } from "../../../i18n/app-text-en";
 import { en, enLocaleMeta } from "../../../i18n/locales/en";
-import { zhCN, zhCNLocaleMeta } from "../../../i18n/locales/zh-CN";
 import type { SkillMeta } from "../../../core/skills/types";
 import { SkillCategory, SkillType } from "../../../core/skills/constants";
 
 const previousApp = process.env.APP_DEFAULT_LOCALE;
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "p3-t3-en-"));
+
+/**
+ * Probe pack for a non-English request locale: every key resolves to a marker,
+ * so if fixed app text is ever read with the request locale instead of the
+ * app-text locale, the assertions below hit the marker instead of passing
+ * through the en fallback. Keeps this test independent of any shipped
+ * non-English locale pack.
+ */
+const zhCnProbeMessages = new Proxy(
+  {},
+  { get: (_target, key) => `[zh-CN] ${String(key)}` }
+) as TranslationMessages;
+const zhCnProbeMeta = {
+  languageName: "[zh-CN] language name",
+  outputInstruction: "[zh-CN] output instruction",
+  conclusionPrefix: "[zh-CN] conclusion prefix",
+};
 
 const SKILL_DESCRIPTION =
   "Read the SKILL.md instruction body of a currently available analysis skill, without returning frontmatter. Both knowledge skills and executable skills should read the instructions before use.";
@@ -62,8 +78,8 @@ describe("analysis fixed English text", () => {
       packs: {
         en: { messages: { ...en, ...appTextEn }, ...enLocaleMeta },
         "zh-CN": {
-          messages: { ...zhCN, "analysis.loop.skills.355": "不应出现" },
-          ...zhCNLocaleMeta,
+          messages: zhCnProbeMessages,
+          ...zhCnProbeMeta,
         },
       },
     });
@@ -122,10 +138,10 @@ describe("analysis fixed English text", () => {
     );
     await expect(chart.supervisorTools[0].execute("call-2", {})).rejects.toThrow(CHART_ERROR);
 
-    expect(report.dimensionSectionTitle({ dimensionName: "区域", dimensionValue: "华东" })).toBe("区域: 华东");
+    expect(report.dimensionSectionTitle({ dimensionName: "Région", dimensionValue: "Est" })).toBe("Région: Est");
     expect(() =>
       plan.assertPlannedDimensionIds(
-        [{ dimensionId: "", dimensionName: "区域", dimensionValue: "华东", subQuestions: [] }],
+        [{ dimensionId: "", dimensionName: "Région", dimensionValue: "Est", subQuestions: [] }],
         "thread-1",
         1
       )

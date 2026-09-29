@@ -230,8 +230,8 @@ function formatConfig(
 }
 
 /**
- * Factory for the `view_app_config` tool. Reads datarag's running config via
- * `/businessConfig/getConfigAndDesc` (same endpoint/method as
+ * Factory for the `view_app_config` tool. Reads the data engine's running
+ * config via `/businessConfig/getConfigAndDesc` (same endpoint/method as
  * `backend-config-fetcher.fetchBackendConfig`), masks sensitive fields, includes
  * the backend-provided `desc` explanation when present, and optionally narrows
  * to a single top-level section. tk is read from the per-session holder at

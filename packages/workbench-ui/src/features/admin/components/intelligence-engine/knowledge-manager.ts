@@ -1,4 +1,4 @@
-/** 业务知识实体（原 KnowledgeManager.vue 内的接口，移出不改）。 */
+/** Business knowledge entity (the interface originally in KnowledgeManager.vue, moved unchanged). */
 export interface Knowledge {
   knowledgeID: string;
   knowledgeTitle: string;
@@ -8,14 +8,14 @@ export interface Knowledge {
   status: number;
 }
 
-/** 业务知识列表的本版原值：两个应用在各自路由记录上以 props 传入。 */
+/** Edition-specific values of the business knowledge list: each app passes them as props on its route record. */
 export interface KnowledgeManagerProps {
-  /** 列表响应归一化：两版各自的原表达式（对缺 data、非对象等异常输入的处理原本不同）。 */
+  /** List response normalization: each edition's original expression (they originally differed on abnormal input such as a missing data field or a non-object). */
   normalizeResponse: (res: any) => Knowledge[];
-  /** 标签选项的实际提交与落盘值；选项显示仍走 knowledge.general/business/tech 词条。 */
+  /** The submitted and stored values of the tag options; the option labels still use the knowledge.general/business/tech messages. */
   tagValues: { general: string; business: string; tech: string };
-  /** 未加载且无数据时隐藏表格/卡片并显示空态（开源原有；企业原仍显示空的表格或卡片容器）。 */
+  /** When not loaded and empty, hide the table/cards and show the empty state (otherwise the empty table or card container stays visible). */
   showEmptyState: boolean;
-  /** 批量删除部分失败提示末尾的计数原文。 */
+  /** Original count text at the end of the partial batch-delete failure message. */
   batchDeleteFailureSuffix: (failed: number, total: number) => string;
 }

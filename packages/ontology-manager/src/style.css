@@ -1,6 +1,7 @@
 /*
- * Manager 自身的全局规则（原 ontology-manager/src/style.css），限定在组件根内；:where() 不增加特异度，
- * 与原全局规则的覆盖关系一致。html/body/#app 尺寸与页面底色属于独立外壳；token 与主题见 theme.css。
+ * The Manager's own global rules (originally ontology-manager/src/style.css), scoped to the component root; :where() adds no
+ * specificity, so overrides behave like the original global rules. html/body/#app sizing and page background belong to the
+ * standalone shell; tokens and theme live in theme.css.
  */
 :where(.ontology-manager) button,
 :where(.ontology-manager) input,
@@ -77,7 +78,7 @@
   margin: 6cqh auto !important;
 }
 
-/* 确认框沿用自身 width（原消息框上限 420），不套用上面表单对话框宽度；容器 max-width 与开源窄屏规则照旧。 */
+/* Confirmations keep their own width (the original message box limit of 420) instead of the form dialog width above; the container max-width and the narrow-screen rules still apply. */
 .ontology-manager-shell .el-dialog.manager-confirm {
   width: var(--el-dialog-width);
 }
@@ -113,10 +114,11 @@
 }
 
 /*
- * 开源原窄屏对话框布局（开源原 web style.css 的 max-width: 700px 规则，企业原版没有），由宿主
- * presentation.compactDialogs 打开。断点与视口单位换成本实例容器；原 env(safe-area-inset-*) 属于视口，这里只保留其 12px 下限。
- * 与上面 640 规则同时命中时保持原层叠：宽度、圆角、标题与各段 padding 以本段的 !important 为准；
- * max-width、margin 与正文 max-height 仍取上面的规则（原先两份样式同时生效时也是如此）。
+ * Narrow-screen dialog layout (the original web style.css max-width: 700px rule), enabled by the host's
+ * presentation.compactDialogs. Breakpoints and viewport units use this instance's container; the original
+ * env(safe-area-inset-*) belongs to the viewport, so only its 12px minimum is kept here. When the 640 rule above also
+ * matches, the original cascade holds: width, radius, title and section padding follow this block's !important, while
+ * max-width, margin and body max-height still come from the rule above (as when both stylesheets applied originally).
  */
 @container ontology-manager (max-width: 700px) {
   .ontology-manager.is-compact-dialogs .el-overlay-dialog {
@@ -149,7 +151,7 @@
     padding: 12px 16px !important;
   }
 
-  /* 原 .el-message-box 的窄屏宽度：本实例的确认框是 el-dialog（manager-confirm）。 */
+  /* Narrow width of the original .el-message-box: this instance's confirmation is an el-dialog (manager-confirm). */
   .ontology-manager.is-compact-dialogs .el-dialog.manager-confirm {
     width: calc(100cqw - 24px) !important;
     max-width: 420px;

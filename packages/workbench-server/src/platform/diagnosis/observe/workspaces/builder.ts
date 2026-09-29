@@ -2,8 +2,8 @@ import type { WorkspaceManifest, WorkspaceSource } from "@ontomato/contracts/obs
 /**
  * Turn workspace creation and building.
  *
- * 所有 Turn 走同一条构建路径。一次运行是否由子 Turn 组成，由拥有该运行的业务域
- * 回答；构建能力只接收子 Turn 列表，不认识维度，也不认识轨迹。
+ * All turns take the same build path. Whether one run consists of sub-turns is answered by the business domain owning the run;
+ * the build capability only receives the sub-turn list, knowing nothing about dimensions or trajectories.
  */
 
 import { createLogger } from "../../../../logging/logger";

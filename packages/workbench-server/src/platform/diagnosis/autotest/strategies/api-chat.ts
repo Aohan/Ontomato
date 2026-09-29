@@ -146,7 +146,7 @@ export async function executeApiChat(options: ApiChatOptions): Promise<Execution
             const frontendEvent = convertEventForFrontend(event);
             if (!frontendEvent) return;
 
-            // Report stage-level node switches (e.g. 查询数据/分析数据/生成图表).
+            // Reports stage-level node switches (e.g. query data / analyze data / generate charts).
             // Never report token/analysis_token -- only stage events.
             if (frontendEvent.type === "chain_start" && typeof frontendEvent.name === "string") {
               reportStep(frontendEvent.name);

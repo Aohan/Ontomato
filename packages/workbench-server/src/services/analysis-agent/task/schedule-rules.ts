@@ -1,9 +1,9 @@
 /**
- * 定时规则存储与服务。
+ * Schedule rule storage and service.
  *
- * 规则只保存"什么时候替用户重新问一次"这件事：智能体、提问、表达式、通知配置与
- * 下次触发时刻。规则不承载报告结果——到点由调度器认领规则并新建一次性报告任务，
- * 报告只写在任务行上。认领即推进 `next_run_at`，多实例下同一槽位只会有一个赢家。
+ * A rule stores only "when to re-ask on the user's behalf": the agent, the question, the expression, notification settings, and
+ * the next trigger time. Rules never carry report results — at trigger time the scheduler claims the rule and creates a one-shot report
+ * task, and the report is written only onto the task row. Claiming advances `next_run_at`, so with multiple instances one slot has exactly one winner.
  */
 
 import pg from "pg";
@@ -30,7 +30,7 @@ export interface AnalysisScheduleRule {
   notifyEmail?: string;
   notifyOnComplete: boolean;
   token?: string;
-  /** 上一次触发失败的原因；成功认领时清空 */
+  /** Why the last trigger failed; cleared on a successful claim */
   lastError?: string;
   lastRunAt?: number;
   nextRunAt?: number;
@@ -105,8 +105,8 @@ function mapRuleRow(row: AnalysisScheduleRuleRow): AnalysisScheduleRule {
 }
 
 /**
- * 规则在既有任务列表接口里的读模型：定时入口的对外形状不变，
- * 规则以"待触发的定时任务"出现在同一个列表里。
+ * The rule's read model inside the existing task list endpoints: the schedule entry's external shape is unchanged,
+ * and rules appear in the same list as "scheduled tasks pending trigger".
  */
 export function toScheduleRuleTask(rule: AnalysisScheduleRule): AnalysisTask {
   return {
@@ -132,7 +132,7 @@ export function toScheduleRuleTask(rule: AnalysisScheduleRule): AnalysisTask {
   };
 }
 
-/** 规则表按任务列表列序投影，供任务列表读模型与报告任务行合并分页。 */
+/** Projects the rule table in task-list column order so the task-list read model can merge and paginate with report task rows. */
 export function scheduleRuleTaskFeedSql(): string {
   return tApp("analysis.task.schedule-rules.407", { qualifiedTable: qualifiedTable("analysis_schedule_rules") });
 }
@@ -185,7 +185,7 @@ export class AnalysisScheduleRuleService {
     return result.rows[0] ? mapRuleRow(result.rows[0]) : null;
   }
 
-  /** 表达式随本次更新给出时重算下次触发时刻；停用的规则不再排期。 */
+  /** Recomputes the next trigger time when the expression comes with this update; disabled rules are never scheduled again. */
   async update(
     id: string,
     domainId: string,
@@ -256,8 +256,8 @@ export class AnalysisScheduleRuleService {
   }
 
   /**
-   * 认领一次触发：只有仍停在 `expectedNextRunAt` 的规则会被推进，
-   * 推进本身即是并发保护，也保证触发失败不会每 tick 重试。
+   * Claims one trigger: only a rule still sitting at `expectedNextRunAt` is advanced.
+   * The advance itself is the concurrency guard and also ensures a failed trigger is not retried every tick.
    */
   async claim(
     id: string,

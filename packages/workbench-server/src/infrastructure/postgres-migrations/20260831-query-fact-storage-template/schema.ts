@@ -2,10 +2,10 @@ import { qualifiedTable } from "../../postgres.js";
 import type { QueryableClient } from "../helpers.js";
 
 /**
- * 查询事实唯一存储模板：此前只能塞进混装 JSON 列的事实获得自己的结构化列。
- * 与其他 schema 步骤一致采用幂等 DDL：空库一次到位，存量库按缺列收敛。
- * 混装列 `result_payload` 仍由 business-storage-v1 建表创建——更早版本的存量搬运要写它；
- * 同目录迁移在搬运完成后 DROP 该列，两种库的终态一致。
+ * Single storage template for query facts: facts that previously could only be crammed into the mixed JSON column get their own structured columns.
+ * Like the other schema steps it uses idempotent DDL: an empty database gets everything in one pass, existing databases converge by missing columns.
+ * The mixed column `result_payload` is still created by business-storage-v1's table creation — legacy carries from earlier versions must write it;
+ * the migration in this directory DROPs the column after carrying completes, leaving both database kinds at the same end state.
  */
 export async function ensureQueryFactStorageTemplate(client: QueryableClient): Promise<void> {
   for (const column of [

@@ -130,7 +130,7 @@ function buildHistoryReadSnapshot(input: {
         ? ("failed" as const)
         : ("completed" as const),
     source: "history" as const,
-    // 持久化快照是渲染的权威来源，正文为空也照用；消息内容只给没有快照的旧轮次兜底。
+    // The persisted snapshot is the rendering authority and is used even with an empty body; message content only backfills old turns without a snapshot.
     primaryText: persisted
       ? String(persisted.primaryText ?? "")
       : fallbackContent || queryRun?.fullContent || "",
@@ -199,7 +199,7 @@ export async function getThreadMessagesPayload(
     const requestEvents = eventsByRequest.get(requestSeq) || [];
     const requestQueryRuns = queryRunsByRequest.get(requestSeq) || [];
     const primaryQueryRun = getPrimaryQueryRun(requestQueryRuns);
-    // 预计算分支已退役：它胜出的旧回答与过程不再出现，用户问题照常保留。
+    // The pre-computed branch is retired: old answers and processes it won no longer appear, while user questions are kept as usual.
     if (isWonByRetiredBranch(primaryQueryRun)) continue;
     const snapshotRow = snapshotsByRequest.get(requestSeq);
     const snapshot = snapshotRow?.snapshot;

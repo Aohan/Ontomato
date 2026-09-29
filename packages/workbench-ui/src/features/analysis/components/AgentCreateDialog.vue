@@ -7,8 +7,9 @@ import type {
 
 import { ref, computed, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { BarChart3, Cog, Settings } from "lucide-vue-next";
-import { analysisAgentApi } from "../api";
+import { BarChart3, Cog, Flame, Settings } from "lucide-vue-next";
+import { analysisAgentApi, analysisReportApi } from "../api";
+import type { AnalysisReportHotCardSummary } from "@ontomato/contracts/analysis-report";
 import type { AnalysisSkill } from "../../skills/api";
 import { listMcpServiceNames } from "../../mcp/api";
 import { queryViewApi } from "../../query-view";
@@ -33,8 +34,8 @@ const props = defineProps<{
   visible: boolean;
   editingAgent: AnalysisAgent | null;
   /**
-   * 开源布局传入的原展示：必填星号在右、MCP 下拉宽度随输入框、表单标签换行。
-   * 企业布局不传：两个 Element Plus 属性保持原先省略，标签保持原不换行。
+   * Original display passed by the open-source layout: required asterisk on the right, MCP dropdown as wide as the input,
+   * wrapping form labels. Layouts that omit it keep both Element Plus attributes unset and labels unwrapped.
    */
   requireAsteriskPosition?: "left" | "right";
   fitInputWidth?: boolean;
@@ -67,6 +68,39 @@ const classesLoading = ref(false);
 const externalMcpServiceNames = ref<string[]>([]);
 const mcpServicesLoading = ref(false);
 const mcpServicesLoadFailed = ref(false);
+const hotReports = ref<AnalysisReportHotCardSummary[]>([]);
+const hotReportsLoading = ref(false);
+const hotReportsLoadFailed = ref(false);
+const hotReportsSaving = ref<Set<string>>(new Set());
+async function loadHotReports(agentId: string) {
+  hotReportsLoading.value = true;
+  hotReportsLoadFailed.value = false;
+  try {
+    hotReports.value = await analysisAgentApi.listHotReports(agentId);
+  } catch {
+    hotReportsLoadFailed.value = true;
+    hotReports.value = [];
+  } finally {
+    hotReportsLoading.value = false;
+  }
+}
+
+async function toggleHotReport(card: AnalysisReportHotCardSummary, enabled: boolean) {
+  hotReportsSaving.value.add(card.id);
+  try {
+    await analysisReportApi.updateCardStatus(card.id, enabled ? "PUBLISHED" : "UNUSED");
+    card.status = enabled ? "PUBLISHED" : "UNUSED";
+  } catch {
+    ElMessage.error(t("admin.hotReportToggleFailed"));
+  } finally {
+    hotReportsSaving.value.delete(card.id);
+  }
+}
+
+function onHotReportToggle(card: AnalysisReportHotCardSummary, val: string | number | boolean) {
+  void toggleHotReport(card, Boolean(val));
+}
+
 async function loadExternalMcpServices() {
   mcpServicesLoading.value = true;
   mcpServicesLoadFailed.value = false;
@@ -127,6 +161,7 @@ const form = ref({
   executionMode: "loop" as AnalysisAgentExecutionMode,
   loopPrompt: "",
   reportDeliverableEnabled: true,
+  hotReportEnabled: true,
   summaryPosition: "bottom" as AnalysisReportSummaryPosition,
   enabledMcpServiceNames: [] as string[],
   analysisDimensionPrompt: "",
@@ -168,6 +203,7 @@ function fillFormFromAgent(agent: AnalysisAgent) {
     executionMode: agent.executionMode === "loop" ? "loop" : "dimension",
     loopPrompt: agent.loopPrompt || "",
     reportDeliverableEnabled: agent.reportDeliverableEnabled !== false,
+    hotReportEnabled: agent.hotReportEnabled !== false,
     summaryPosition: agent.summaryPosition === "top" ? "top" : "bottom",
     enabledMcpServiceNames: agent.enabledMcpServiceNames || [],
     analysisDimensionPrompt: agent.analysisDimensionPrompt || "",
@@ -190,6 +226,7 @@ function resetForm() {
     executionMode: "loop",
     loopPrompt: "",
     reportDeliverableEnabled: true,
+    hotReportEnabled: true,
     summaryPosition: "bottom",
     enabledMcpServiceNames: [],
     analysisDimensionPrompt: "",
@@ -250,6 +287,9 @@ watch(
       loadExternalMcpServices();
       if (props.editingAgent) {
         fillFormFromAgent(props.editingAgent);
+        if (props.editingAgent.id) {
+          loadHotReports(props.editingAgent.id);
+        }
       } else {
         resetForm();
       }
@@ -505,6 +545,47 @@ watch(isDark, () => {
 
         <div class="skills-group">
           <div class="skills-group-header">
+            <el-icon><Flame /></el-icon>
+            <span>{{ t("admin.hotReport") }}</span>
+          </div>
+          <div class="hot-report-toggle">
+            <el-switch
+              v-model="form.hotReportEnabled"
+              :aria-label="t('admin.hotReportEnabled')"
+            />
+            <span class="hot-report-toggle-label">{{ t("admin.hotReportEnabled") }}</span>
+          </div>
+          <p class="skill-hint">{{ t("admin.hotReportEnabledHint") }}</p>
+
+          <template v-if="isEditing">
+            <div v-loading="hotReportsLoading" class="hot-report-list">
+              <p v-if="hotReportsLoadFailed" class="skill-hint" role="alert">
+                {{ t("admin.hotReportLoadFailed") }}
+              </p>
+              <template v-else-if="hotReports.length === 0">
+                <p class="skill-hint">{{ t("admin.noHotReports") }}</p>
+              </template>
+              <template v-else>
+                <div
+                  v-for="card in hotReports"
+                  :key="card.id"
+                  class="hot-report-item"
+                >
+                  <div class="hot-report-question">{{ card.question }}</div>
+                  <el-switch
+                    :model-value="card.status === 'PUBLISHED'"
+                    :loading="hotReportsSaving.has(card.id)"
+                    :disabled="hotReportsSaving.has(card.id)"
+                    @change="onHotReportToggle(card, $event)"
+                  />
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <div class="skills-group">
+          <div class="skills-group-header">
             <el-icon><Cog /></el-icon>
             <span>{{ t("admin.externalMcpServices") }}</span>
           </div>
@@ -578,6 +659,48 @@ watch(isDark, () => {
   font-size: 13px;
   color: var(--el-text-color-secondary);
   margin: 0 0 var(--spacing-sm) 0;
+}
+
+.hot-report-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.hot-report-toggle-label {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+
+.hot-report-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: var(--el-border-radius-base);
+  padding: var(--spacing-sm);
+}
+
+.hot-report-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.hot-report-item:last-child {
+  border-bottom: none;
+}
+
+.hot-report-question {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .mcp-load-alert {

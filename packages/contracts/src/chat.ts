@@ -6,7 +6,7 @@ export interface ClarificationOption {
   resolvedQuestion: string;
 }
 
-/** 标准问数投影与 HTTP 流直接发送的线上形状。 */
+/** Wire shape of the standard query projection sent directly over the HTTP stream. */
 export type ChatClientEvent =
   | SseErrorEvent
   | RunCancelledEvent

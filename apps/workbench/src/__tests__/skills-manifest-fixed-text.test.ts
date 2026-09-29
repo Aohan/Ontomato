@@ -3,12 +3,12 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { configureOssI18n } from "../i18n";
-// 类型位置用 type-only 导入：擦除后不触发 schema 模块求值；生产导出不动。
+// Type positions use type-only imports: erased before evaluation so the schema module never loads at import time; production exports untouched.
 import type { InvalidSkillPackageError } from "@ontomato/workbench-server/core/skills/manifest";
 
-// OSS manifest 固定文字回归：纯 schema/解析/迁移函数，不经过路由。
-// 本文件自配 OSS（公共套件无 setupFiles），动态导入 manifest，保证英文消息在
-// 模块级求值前已装好。不引用私有包，不连 DB/模型/后端。
+// Regression for the OSS manifest's fixed copy: pure schema/parsing/migration functions, no routes involved.
+// This file wires the OSS assembly itself (the shared suite has no setupFiles) and dynamically imports the manifest,
+// guaranteeing the English messages are installed before module-level evaluation. No private package imports, no DB/model/backend.
 configureOssI18n();
 
 const manifest = await import("@ontomato/workbench-server/core/skills/manifest");

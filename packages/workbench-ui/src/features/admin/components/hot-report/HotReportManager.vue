@@ -288,7 +288,7 @@ onMounted(fetchReportCards);
   white-space: nowrap;
 }
 
-/* 与 32px 行高的表单标签首行对齐 */
+/* Align with the first line of form labels at a 32px line height */
 .origin-question {
   padding: 5px 0;
   line-height: 22px;

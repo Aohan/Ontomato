@@ -4,8 +4,8 @@ import { nodeApiPost, nodeApiPostFormData } from "../api";
 import { installErrorPunctuation } from "../error-punctuation";
 
 describe("web API errors", () => {
-  // 原用例为企业前端：详情拼接用企业原标点。
-  beforeEach(() => installErrorPunctuation({ detailSeparator: "：", listSeparator: "；" }));
+  // Distinct app punctuation, so the message shows the details are joined with the installed value.
+  beforeEach(() => installErrorPunctuation({ detailSeparator: " — ", listSeparator: " | " }));
 
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -17,7 +17,7 @@ describe("web API errors", () => {
       vi.fn().mockResolvedValue(
         jsonResponse(409, {
           success: false,
-          error: "技能 growth-rate-calc 已存在，是否覆盖？",
+          error: "Skill growth-rate-calc already exists. Overwrite it?",
           code: "SKILL_EXISTS",
           details: { skillId: "growth-rate-calc" },
         })
@@ -37,14 +37,14 @@ describe("web API errors", () => {
       vi.fn().mockResolvedValue(
         jsonResponse(400, {
           success: false,
-          error: "请求参数校验失败",
-          details: [{ field: "type", message: "可视化技能必须使用 executable 类型" }],
+          error: "Request validation failed",
+          details: [{ field: "type", message: "Visualization skills must use the executable type" }],
         })
       )
     );
 
     await expect(nodeApiPost("/skills", {})).rejects.toThrow(
-      "请求参数校验失败：type: 可视化技能必须使用 executable 类型"
+      "Request validation failed — type: Visualization skills must use the executable type"
     );
   });
 

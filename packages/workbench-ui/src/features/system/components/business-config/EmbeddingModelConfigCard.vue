@@ -22,7 +22,7 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-// 加载中或加载失败时既不渲染模型行，也不允许测试/编辑/保存。
+// While loading or after a failed load, no model row is rendered and test/edit/save are not allowed.
 const writable = computed(() => !props.loading && !props.loadError);
 
 const dialogVisible = ref(false);
@@ -51,7 +51,7 @@ function openEditDialog() {
 }
 
 function confirmDialog() {
-  // 完整快照：只覆盖弹窗里的4个字段，GET 中未展示的字段（如 customHeaders）原样保留。
+  // Complete snapshot: only the 4 fields in the dialog are overwritten; fields from GET that are not shown (such as customHeaders) are kept as-is.
   model.value = {
     ...model.value,
     baseUrl: draft.baseUrl,
@@ -112,7 +112,7 @@ function confirmDialog() {
           :disabled="!writable || !model"
           @click="emit('save')"
         >
-          {{ t("common.saveConfig") }}
+          {{ t("common.save") }}
         </el-button>
       </el-form-item>
 

@@ -1,8 +1,8 @@
 /**
- * 维度执行形态的运行上下文。
+ * Runtime context of the dimension execution form.
  *
- * 拆除 LangGraph 壳之前，这些入参藏在 `config.configurable` 里由三个节点各自读取；
- * 现在由编排器一次组装、显式传给各阶段函数。
+ * Before the LangGraph shell was dismantled these inputs hid inside `config.configurable`, read separately by three nodes;
+ * the orchestrator now assembles them once and passes them explicitly to the stage functions.
  */
 
 import type { PendingLateFacts } from "../../data-query/late-fact";
@@ -10,7 +10,7 @@ import { t } from "../../../i18n";
 import type { DeepAnalysisEmittedEvent } from "@ontomato/contracts/analysis-events";
 
 export interface DimensionRunContext {
-  /** 本次运行登记迟到事实的位置；分析不呈现质检，登记后不等结算 */
+  /** Where this run registers late facts; analysis never presents the quality check and does not wait for settlement after registering */
   lateFacts: PendingLateFacts;
   userQuestion: string;
   userId: string;
@@ -26,9 +26,9 @@ export interface DimensionRunContext {
   conclusionMakerPrompt: string;
   analysisDimensionPrompt?: string;
   enabledSkillIds: string[];
-  /** 显式空数组表示本次不出图，与"未配置、回退到智能体设置"区分 */
+  /** An explicit empty array means no charts this run, distinct from "unconfigured, fall back to the agent settings" */
   enabledVisualizationSkillIds?: string[];
-  /** 并发覆盖；未给出时用 DEFAULT_ANALYSIS_CONCURRENCY */
+  /** Concurrency override; DEFAULT_ANALYSIS_CONCURRENCY applies when absent */
   analysisConcurrency?: {
     dimensionQueryConcurrency?: number;
     subQuestionQueryConcurrency?: number;
@@ -37,7 +37,7 @@ export interface DimensionRunContext {
   sendEvent: (event: DeepAnalysisEmittedEvent) => void;
 }
 
-/** 阶段错误的形状与拆前的 GraphState.errors 一致，编排器按它聚合终态。 */
+/** Stage errors keep the shape of the pre-split GraphState.errors; the orchestrator aggregates the terminal state from them. */
 export interface DimensionStageError {
   node: string;
   message: string;

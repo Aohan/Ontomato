@@ -35,8 +35,8 @@ interface PlanningOutput {
 }
 
 /**
- * 维度引擎
- * 负责根据问题、数据集 schema 和智能体提示词生成维度执行计划
+ * Dimension engine
+ * Generates the dimension execution plan from the question, dataset schema, and agent prompts
  */
 export class DimensionEngine {
   async planDimensions(input: PlanningInput): Promise<PlannedDimension[]> {

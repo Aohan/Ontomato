@@ -1,14 +1,14 @@
 /**
- * 循环形态的报告笔记本。
+ * Report notebook of the loop form.
  *
- * 笔记本是本次任务的正文工作载体，也是循环形态唯一的写作通道：一个组成部分一个
- * 文件，存放在本次任务的工作目录，最终报告按文件名序拼成。组成部分与报告的语义
- * 章节不必一一对应——一个部分可以含多章，一章也可以拆成多个部分，怎么划分由主管
- * 裁量；下面的 `chapter` 只是这个文件单位的实现命名，不代表一个语义章节。
- * 写作工具复用既有基础文件工具的语义（整体写入/覆盖、按原文唯一匹配的局部修改、
- * 读回、列目录），外包一层把可操作范围钉死在任务工作目录内，越界访问确定性拒绝。
+ * The notebook is the working carrier of the task body and the only writing channel of the loop form: one file per constituent part, stored in
+ * the task's working directory, with the final report assembled in filename order. Constituent parts and the report's semantic chapters need not
+ * correspond one-to-one — one part may contain several chapters and one chapter may be split across parts; the supervisor decides the split.
+ * `chapter` below is only the implementation name of this file unit and does not imply one semantic chapter.
+ * The writing tools reuse the semantics of the existing base file tools (whole-file write/overwrite, unique-match partial edit, read-back,
+ * directory listing) wrapped in a layer that pins the operable range inside the task working directory; out-of-bounds access is deterministically rejected.
  *
- * 文件只是过程载体：终态组装产物写入任务报告产物的唯一权威存储，工作目录可清理。
+ * Files are only the working carrier: the final assembled output is written into the single authoritative store of the task report artifact, and the working directory can be cleaned up.
  */
 
 import fs from "node:fs";
@@ -22,10 +22,10 @@ import { tApp } from "../../../i18n";
 
 const logger = createLogger("analysis-loop-notebook");
 
-/** 所有任务笔记本的父目录；每个任务在其下拥有自己的工作目录。 */
+/** Parent directory of all task notebooks; each task owns its own working directory beneath it. */
 const NOTEBOOK_ROOT = path.join(os.tmpdir(), "analysis-loop-notebook");
 
-/** 章节之间的组装分隔。 */
+/** Assembly separator between chapters. */
 const CHAPTER_SEPARATOR = "\n\n";
 
 function reportDeliverableCapabilityPrompt(): string {
@@ -90,22 +90,22 @@ export interface NotebookChapter {
 }
 
 export interface ReportNotebook {
-  /** 本次任务的工作目录 */
+  /** This task's working directory */
   readonly rootDir: string;
   /**
-   * 把章节名解析为工作目录内的文件路径。越界（路径分隔符、上级目录、绝对路径）
-   * 确定性拒绝，返回拒绝原因而不是路径。
+   * Resolves a chapter name to a file path inside the working directory. Out-of-bounds names (path separators, parent directories, absolute
+   * paths) are deterministically rejected, returning the rejection reason instead of a path.
    */
   resolve(name: unknown): { filePath: string } | { rejected: string };
-  /** 全部章节，按文件名序 */
+  /** All chapters, in filename order */
   chapters(): NotebookChapter[];
-  /** 把一章标记为已定稿 */
+  /** Marks one chapter as finalized */
   markPublished(name: string): void;
-  /** 已定稿的非空章节按文件名序整体组装 */
+  /** Assembles finalized non-empty chapters as a whole, in filename order */
   assemblePublished(): string;
-  /** 全部非空章节按文件名序整体组装（终态兜底：漏定稿也不丢内容） */
+  /** Assembles all non-empty chapters as a whole, in filename order (terminal-state fallback: content is never lost to a missed finalization) */
   assembleAll(): string;
-  /** 清理任务工作目录 */
+  /** Cleans up the task working directory */
   dispose(): void;
 }
 
@@ -130,7 +130,7 @@ function buildCompactionPromptVariables(reportDeliverableEnabled: boolean): Reco
   };
 }
 
-/** 装配报告交付件（或最终回复路径）的提示词、主管/工人工具面与轨迹/SSE 接线。 */
+/** Assembles prompts, supervisor/worker tool surfaces, and trajectory/SSE wiring for the report deliverable (or final-reply path). */
 export function assembleLoopNotebookCapability(params: {
   reportDeliverableEnabled: boolean;
   dirKey: string;
@@ -258,8 +258,8 @@ function textResult(text: string): AgentToolResult {
 }
 
 /**
- * 笔记本读写工具：主管与工人共用同一套（工具集即权限，定稿工具不在其中）。
- * `onChapterWritten` 用于把章节写作登记进分析轨迹。
+ * Notebook read/write tools: supervisor and workers share one set (the tool set is the permission; the finalization tool is not included).
+ * `onChapterWritten` registers chapter writing into the analysis trajectory.
  */
 export function createNotebookTools(params: {
   notebook: ReportNotebook;
@@ -388,8 +388,8 @@ export function createNotebookTools(params: {
 }
 
 /**
- * 按章定稿工具：只授予主管。定稿后运行时把已定稿章节按章节顺序整体重排推送，
- * 报告区随章节验收逐步生长。
+ * Per-chapter finalization tool: granted to the supervisor only. After finalization the runtime re-pushes the finalized chapters re-ordered as a
+ * whole in chapter order, so the report area grows with each accepted chapter.
  */
 export function createPublishChapterTool(params: {
   notebook: ReportNotebook;

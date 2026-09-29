@@ -4,13 +4,13 @@ import type {
 } from "@ontomato/contracts/analysis-charts";
 import type { AnalysisActivity } from "@ontomato/contracts/analysis-presentation";
 /**
- * 循环形态的图表能力。
+ * Chart capability of the loop form.
  *
- * 图表基于已取得证据的**原始值**数据生成：原始值只在本工具内部流转，循环 Agent
- * 仍然只见展示值。工具复用既有的图表规划与可视化技能执行，返回 chartId 供正文按
- * 既有 marker 规则引用。图表失败不中断循环、不阻断正文，失败记入轨迹。
+ * Charts are generated from the **raw-value** data of evidence already collected: raw values flow only inside this tool while the loop agent
+ * still sees display values only. The tool reuses the existing chart planning and visualization skill execution and returns chartIds that the
+ * body references by the existing marker rules. Chart failure never interrupts the loop or blocks the body; failures are recorded in the trajectory.
  *
- * 本工具只在智能体的可视化技能选择非空时注册；空选择表示不提供图表能力。
+ * This tool is registered only when the agent's visualization skill selection is non-empty; an empty selection means no chart capability.
  */
 
 import type { AgentTool, AgentToolResult } from "../../../core/agent-loop/types";
@@ -26,7 +26,7 @@ const logger = createLogger("analysis-loop-chart");
 
 const GENERATE_CHART_TOOL_NAME = "generate_chart";
 
-/** 一次图表请求最多产出的图表数量。 */
+/** Maximum number of charts one chart request may produce. */
 const MAX_CHARTS_PER_REQUEST = 3;
 
 function buildChartCapabilityPrompt(reportDeliverableEnabled: boolean): string {
@@ -44,18 +44,18 @@ function buildChartCapabilityPrompt(reportDeliverableEnabled: boolean): string {
 export interface LoopChartDeps {
   domainId: string;
   userQuestion: string;
-  /** 智能体已选择的可视化技能；调用方保证非空 */
+  /** Visualization skills already selected by the agent; the caller guarantees non-empty */
   visualizationSkillIds: string[];
-  /** 按问数问题身份取回本次证据的原始值数据集 */
+  /** Fetches the raw-value dataset of this evidence by query question identity */
   resolveCandidates: (questionIds: string[]) => ChartDatasetCandidate[];
-  /** 图表产出登记到任务产物与页面 */
+  /** Registers chart outputs into task artifacts and the page */
   onCharts: (
     charts: Array<AnalysisChartResult & { marker: string }>,
     diagnostics: AnalysisChartDiagnostic[]
   ) => void;
 }
 
-/** 按可视化技能门控装配图表工具、提示词、轨迹和任务图表事件。 */
+/** Assembles the chart tool, prompts, trajectory, and task chart events, gated by visualization skill selection. */
 export function assembleLoopChartCapability(params: {
   domainId: string;
   userQuestion: string;
@@ -112,9 +112,9 @@ function describeCharts(charts: Array<AnalysisChartResult & { marker: string }>)
 
 export function createGenerateChartTool(params: {
   deps: LoopChartDeps;
-  /** 受理一次图表请求时回调，用于登记轨迹活动 */
+  /** Invoked when a chart request is accepted, to register the trajectory activity */
   onAccepted: () => string;
-  /** 图表请求结算时回调，用于结算轨迹活动 */
+  /** Invoked when a chart request settles, to finalize the trajectory activity */
   onSettled: (
     activityId: string,
     status: "completed" | "failed",
@@ -122,7 +122,7 @@ export function createGenerateChartTool(params: {
   ) => void;
 }): AgentTool {
   const { deps } = params;
-  // 图表标识在一次分析内必须唯一：每次请求使用独立的作用域序号。
+  // Chart identifiers must be unique within one analysis: each request uses its own scoped sequence number.
   let requestSeq = 0;
 
   return {
@@ -208,7 +208,7 @@ export function createGenerateChartTool(params: {
           ],
         } satisfies AgentToolResult;
       } catch (error: unknown) {
-        // 图表失败不中断循环，也不阻断正文。
+        // Chart failure neither interrupts the loop nor blocks the body.
         const message = error instanceof Error ? error.message : String(error);
         logger.warn(tApp("analysis.loop.chart.236"), { activityId, error: message });
         params.onSettled(activityId, "failed", { error: message });

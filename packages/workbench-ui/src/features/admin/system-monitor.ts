@@ -1,6 +1,6 @@
 /**
- * 系统监控的公共类型与纯格式化函数（原 SystemMonitor.vue 内定义，移出不改）。
- * SystemStatus 只含两版共有字段；响应里的其它扩展字段由使用它的应用视图自行声明。
+ * Shared system monitor types and pure formatting functions (originally defined in SystemMonitor.vue, moved unchanged).
+ * SystemStatus holds only the fields common to both editions; other extension fields in the response are declared by the app views that use them.
  */
 export interface CpuInfo {
   system: number;
@@ -68,8 +68,8 @@ export interface SystemStatus {
 }
 
 /**
- * SystemMonitor 的 service-panels 插槽参数（资源总览与 backend 卡之间）：
- * status 为接口原完整响应；服务动作必须经 handleAction（先确认，再由公共页执行与刷新）。
+ * Props of the SystemMonitor service-panels slot (between the resource overview and the backend card):
+ * status is the complete original API response; service actions must go through handleAction (confirm first, then the shared page executes and refreshes).
  */
 export interface SystemMonitorServicePanelsProps {
   status: SystemStatus | null;
@@ -78,7 +78,7 @@ export interface SystemMonitorServicePanelsProps {
   getActionLabel: (action: string) => string;
 }
 
-/** SystemMonitor 的具名插槽：service-panels 由需要扩展面板的应用组合页提供，开源入口直接使用本页时不提供。 */
+/** Named slots of SystemMonitor: service-panels is provided by app pages that need extra panels; the open-source entry uses this page directly without it. */
 export interface SystemMonitorSlots {
   "service-panels"?: (props: SystemMonitorServicePanelsProps) => unknown;
 }

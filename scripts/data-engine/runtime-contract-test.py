@@ -62,7 +62,7 @@ class RuntimeContractTests(unittest.TestCase):
                 contract.check_jar(path, 65)
 
     def test_canonical_json(self):
-        self.assertEqual(contract.fingerprint({'a': '中文', 'b': [2, 1]}), contract.fingerprint({'b': [2, 1], 'a': '中文'}))
+        self.assertEqual(contract.fingerprint({'a': 'café', 'b': [2, 1]}), contract.fingerprint({'b': [2, 1], 'a': 'café'}))
         self.assertNotEqual(contract.fingerprint({'jars': 'first'}), contract.fingerprint({'jars': 'second'}))
 
 

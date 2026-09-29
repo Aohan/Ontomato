@@ -1,8 +1,8 @@
 /**
- * 一次分析任务运行由哪些问数问题组成，以及它的可读最终回复。
+ * Which query questions make up one analysis task run, and its readable final reply.
  *
- * 分析任务是"复合运行"的实例：一次运行 = 自身证据 + 若干子 Turn 证据。
- * 子 Turn 列表统一从任务活动中的问题展开；调用方不依赖执行形态。
+ * An analysis task is an instance of a "composite run": one run = its own evidence + several sub-Turn evidences.
+ * The sub-Turn list is always expanded from the questions in the task activities; callers never depend on the execution form.
  */
 
 import { parseTurnKey } from "../../../logging/log-context";
@@ -12,33 +12,33 @@ import { buildDeepAnalysisTaskSnapshot } from "../task/task-result";
 import type { AnalysisTask } from "../task-types";
 import type { DeepAnalysisTaskPayload } from "@ontomato/contracts/analysis-presentation";
 
-/** 一次运行中的单个问数问题：稳定身份、展示文案与业务执行状态。 */
+/** One query question in a run: stable identity, display text, and business execution state. */
 export interface AnalysisRunQuestion {
-  /** 稳定身份，与查询运行的 sourceRef 一致 */
+  /** Stable identity, identical to the query run's sourceRef */
   questionId: string;
-  /** 展示文案，不参与关联 */
+  /** Display text; never used for correlation */
   question: string;
-  /** 问题的业务执行状态，与诊断产物状态无关 */
+  /** Business execution state of the question, independent of diagnosis artifact states */
   status: string;
 }
 
-/** 一次分析任务运行的组成。 */
+/** Composition of one analysis task run. */
 export interface AnalysisRunComposition {
   taskId: string;
   agentId: string;
   threadId: string;
   requestSeq: number;
-  /** 本次运行的用户问题 */
+  /** The user question of this run */
   question: string;
-  /** 本次运行的可读最终回复；没有可读报告时为空 */
+  /** The readable final reply of this run; empty when there is no readable report */
   report?: string;
-  /** 按受理顺序排列的问数问题 */
+  /** Query questions in acceptance order */
   questions: AnalysisRunQuestion[];
 }
 
 /**
- * 解析一个 Turn 是否是分析任务运行；不是则返回 null。
- * 子 Turn 身份（带来源类型的 turnKey）不是运行入口，一律返回 null。
+ * Resolves whether a Turn is an analysis task run; returns null when it is not.
+ * Sub-Turn identities (turnKeys carrying a source type) are never run entries and always resolve to null.
  */
 export async function resolveAnalysisRunComposition(
   turnKey: string
@@ -73,7 +73,7 @@ export async function resolveAnalysisRunComposition(
   };
 }
 
-/** 可读最终回复取任务域既有的回看构造，不从线程消息或回复快照推断。 */
+/** The readable final reply uses the task domain's existing review constructor; it is never inferred from thread messages or reply snapshots. */
 function resolveReport(task: AnalysisTask, payload?: DeepAnalysisTaskPayload): string | undefined {
   if (!payload) return undefined;
   const snapshot = buildDeepAnalysisTaskSnapshot({

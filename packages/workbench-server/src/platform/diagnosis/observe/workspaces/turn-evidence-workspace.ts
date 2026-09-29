@@ -2,9 +2,9 @@ import type { WorkspaceManifest } from "@ontomato/contracts/observe";
 /**
  * Shared Turn evidence workspace builder.
  *
- * 一次运行 = 自身证据 + 若干关联 Turn。关联 Turn 有两种语义、构建机制相同、目录分开：
- * 上游 Turn 解释本轮问题为何这样表达；子 Turn 是本次运行的组成部分。被展开的关联
- * Turn 不再继续展开。本模块拥有 Turn 事实、后端证据定位、关联 Turn 展开与最终清单。
+ * One run = its own evidence + several related turns. Related turns have two semantics, one build mechanism, separate directories:
+ * upstream turns explain why this turn's question was phrased this way; sub-turns are constituents of this run. Related turns
+ * already expanded are never expanded further. This module owns turn facts, backend evidence locating, related-turn expansion, and the final manifest.
  */
 
 import fs from "node:fs";
@@ -35,8 +35,8 @@ export type TurnEvidenceWorkspaceStatus = "success" | "degraded" | "failed";
 
 
 /**
- * 本次运行的一个组成部分。稳定身份用于定位与关联，文案只用于展示，
- * 业务执行状态与诊断产物状态表达不同事实，索引中分别呈现。
+ * One constituent of this run. The stable identity locates and correlates, the copy is display-only,
+ * and business execution state and diagnosis artifact state express different facts, presented separately in the index.
  */
 export interface TurnEvidenceSubTurn {
   turnKey: string;
@@ -46,9 +46,9 @@ export interface TurnEvidenceSubTurn {
 }
 
 /**
- * 一次复合运行由它所属的执行形态声明：形态给出本次运行的可读最终回复和子 Turn 列表。
- * 声明存在即表示"这个 Turn 的回复由形态提供"——形态没给出回复就是证据缺口，
- * 不得退回按线程与请求序号去取同线程的对话回复。
+ * A composite run is declared by the execution form it belongs to: the form supplies the run's readable final reply and the sub-turn list.
+ * The declaration's existence means "this turn's reply is provided by the form" — a missing reply is an evidence gap,
+ * and falling back to fetching same-thread conversation replies by thread and request sequence is never allowed.
  */
 export interface TurnEvidenceCompositeRun {
   finalAnswer?: string;
@@ -62,7 +62,7 @@ export type BuildTurnEvidenceWorkspaceInput = Omit<
   turnKey: string;
   domainId: string;
   includeUpstreamTurns?: boolean;
-  /** 本 Turn 所属形态对这次复合运行的声明；不传即普通运行 */
+  /** The declaration of this turn's execution form about this composite run; omitted means an ordinary run */
   compositeRun?: TurnEvidenceCompositeRun;
 };
 
@@ -115,7 +115,7 @@ async function buildSingleTurnEvidenceWorkspace(
     const metadata = {
       ...input.metadata,
       question: input.metadata.question ?? turnContext.question,
-      // 复合运行的可读最终回复只认形态给出的那一份；形态没给出即证据缺口。
+      // A composite run's readable final reply accepts only the one supplied by the form; a missing one is an evidence gap.
       finalAnswer: input.compositeRun
         ? input.compositeRun.finalAnswer
         : (input.metadata.finalAnswer ?? turnContext.finalAnswer),
@@ -197,17 +197,17 @@ async function buildUpstreamTurnWorkspaces(
 interface SubTurnIndexEntry {
   sourceRef: string;
   question: string;
-  /** 问题的业务执行状态 */
+  /** Business execution state of the question */
   status: string;
-  /** 该子 Turn 诊断产物的构建状态 */
+  /** Build state of this sub-turn's diagnosis artifacts */
   artifactStatus: TurnEvidenceWorkspaceStatus;
   artifactPath: string;
 }
 
 /**
- * 每个子 Turn 各建一次证据工作区，产出与父层同构。子 Turn 不再展开自己的关联 Turn。
- * 目录名 = 受理顺序编号 + 稳定身份，编号只表达排列，定位靠稳定身份。
- * 不传 finalAnswer：子 Turn 的回复由 Turn 解析从它自己的查询事实取，缺失即证据缺口。
+ * One evidence workspace is built per sub-turn, producing the same structure as the parent layer. Sub-turns never expand their own related turns.
+ * Directory name = acceptance order number + stable identity; the number only expresses ordering while locating relies on the stable identity.
+ * finalAnswer is not passed: a sub-turn's reply comes from its own query facts via turn resolution, and a missing one is an evidence gap.
  */
 async function buildSubTurnWorkspaces(
   input: BuildTurnEvidenceWorkspaceInput,
@@ -252,8 +252,8 @@ async function buildSubTurnWorkspaces(
 }
 
 /**
- * 根索引是分诊概览，不是报告副本：平铺列出每个子 Turn，问题执行状态与产物构建
- * 状态分列，不复述执行形态的分组事实，也不复制子 Turn 的完整回答。
+ * The root index is a triage overview, not a report copy: every sub-turn is listed flat, with question execution state and artifact
+ * build state in separate columns; it never restates the execution form's grouping facts nor copies sub-turns' full answers.
  */
 function writeSubTurnIndex(artifactDir: string, entries: SubTurnIndexEntry[]): void {
   const lines = [
@@ -283,7 +283,7 @@ function writeSubTurnIndex(artifactDir: string, entries: SubTurnIndexEntry[]): v
     fs.mkdirSync(diagnosticsDir, { recursive: true });
     fs.writeFileSync(path.join(diagnosticsDir, "index.md"), lines.join("\n"), "utf-8");
   } catch {
-    // 索引是分诊便利，写失败不影响已经落盘的子 Turn 证据。
+    // The index is a triage convenience; a write failure never affects the sub-turn evidence already on disk.
   }
 }
 

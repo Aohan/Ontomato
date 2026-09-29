@@ -4,7 +4,7 @@ import { workbenchServerResourceRoot } from "@ontomato/workbench-server/content/
 
 const shared = (...segments: string[]) => path.join(workbenchServerResourceRoot, ...segments);
 
-/** 开源版只用公共包自带的英文默认资源。 */
+/** The OSS edition uses only the shared package's built-in English default resources. */
 export function ossContentLayout(runtimeRoot: string): ContentLayout {
   return {
     runtimeRoot,

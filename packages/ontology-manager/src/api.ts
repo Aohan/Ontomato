@@ -1,4 +1,4 @@
-import { ontologyText } from "./i18n";
+import { ontologyText, type ManagerMessages } from "./i18n";
 
 export type ManagerCredential =
   | { type: "token"; token: string }
@@ -6,27 +6,29 @@ export type ManagerCredential =
   | { type: "anonymous" };
 
 /**
- * 宿主静态装配的两个数据默认值：它们会预填进编辑表单或随保存载荷提交，属于数据语义，
- * 不随界面语言、凭据种类变化。两版外壳各传原值（企业「未填写业务说明」「未命名资产」，
- * 开源 "No business description provided"、"Unnamed asset"）。
+ * The two data defaults supplied statically by the host. They pre-fill edit forms or are submitted with save payloads,
+ * so they are data, not UI text, and do not change with the UI locale or credential type. Each shell passes its own
+ * values (open source: "No business description provided", "Unnamed asset").
  */
 export interface ManagerDataFallbacks {
-  /** 对象类型没有业务说明（空值）时使用的说明。 */
+  /** Description used when an object type has no (empty) business description. */
   readonly noBusinessDescription: string;
-  /** 智能资产的 name 不是字符串时使用的名称。 */
+  /** Name used when a smart asset's name is not a string. */
   readonly unnamedAsset: string;
 }
 
 export interface ManagerRequestContext {
-  /** DataRAG 代理入口，不含末尾斜杠；请求发往 `${apiBase}/data-query/*`。 */
+  /** Data engine proxy entry without a trailing slash; requests go to `${apiBase}/data-query/*`. */
   readonly apiBase: string;
-  /** null 表示宿主已清除或尚未取得凭据：不发业务请求，也不当作匿名。 */
+  /** null means the host has cleared or not yet obtained a credential: no business request is sent and it is not treated as anonymous. */
   readonly credential: ManagerCredential | null;
   readonly locale: string;
+  /** Messages for the current locale, supplied by the host. */
+  readonly messages: ManagerMessages;
   readonly dataFallbacks: ManagerDataFallbacks;
 }
 
-/** 401 为认证失效，402 为 License 失败；如何处理由宿主决定。 */
+/** 401 means authentication expired and 402 a license failure; the host decides how to handle them. */
 export type ManagerAuthFailureStatus = 401 | 402;
 
 function credentialIdentity(credential: ManagerCredential | null) {
@@ -42,8 +44,9 @@ function credentialIdentity(credential: ManagerCredential | null) {
 }
 
 /**
- * 宿主身份：API 入口与凭据（按值）。变化即换了数据来源或用户：根组件据此重建工作区，请求层据此丢弃旧响应。
- * 语言不属于身份（与原主系统一致）：只决定每次发送时的 Accept-Language。
+ * Host identity: API entry and credential (by value). A change means a different data source or user: the root component
+ * rebuilds the workspace and the request layer drops stale responses. The locale is not part of the identity (as in the
+ * original main system); it only sets Accept-Language on each request.
  */
 export function hostSource(context: ManagerRequestContext) {
   return JSON.stringify([context.apiBase, credentialIdentity(context.credential)]);
@@ -96,11 +99,11 @@ export interface OntologyRelation {
 
 export interface CreateOntologyObjectInput {
   className: string;
-  /** 后端随类一并保存的主键属性（启用的 varchar）；M3 数据源须为 id。 */
+  /** Primary key attribute the backend saves with the class (an enabled varchar); must be id for the M3 data source. */
   primaryKeyName: string;
   showName: string;
   classDesc: string;
-  /** 可视化建模新建类时显式提交 false。 */
+  /** Visual modeling submits false explicitly when creating a class. */
   classToCard?: boolean;
   instanceToCard?: boolean;
   inStarChart?: boolean;
@@ -122,7 +125,7 @@ export interface CreateOntologyRelationInput {
   fromclass: string;
   toclass: string;
   desc: string;
-  /** 可视化建模连线时提交的关联字段。 */
+  /** Join fields submitted when visual modeling connects classes. */
   fromField?: string;
   toField?: string;
 }
@@ -141,10 +144,11 @@ export interface SmartAsset {
 export type ManagerClient = ReturnType<typeof createManagerClient>;
 
 /**
- * 每个 Manager 工作区实例一份的 DataRAG 请求层。每次请求读取 context 的当前值；
- * 响应返回或 JSON 读完时 apiBase 或凭据已变化则丢弃（AbortError），不通知宿主也不交付数据；
- * 只有语言变化时同一身份的在途结果照常交付，之后的请求带新语言。
- * dispose 后（工作区已卸载）不再发出任何请求：确认框或多步操作的旧后续不会带着新上下文发送。
+ * Data engine request layer, one per Manager workspace instance. Each request reads the current context values.
+ * If apiBase or the credential changed by the time the response or its JSON arrives, the result is dropped (AbortError)
+ * without notifying the host or delivering data; when only the locale changed, in-flight results for the same identity
+ * are delivered and later requests carry the new locale. After dispose (workspace unmounted) no request is sent, so stale
+ * follow-ups of confirmations or multi-step operations never go out with the new context.
  */
 export function createManagerClient(
   context: ManagerRequestContext,
@@ -152,12 +156,12 @@ export function createManagerClient(
 ) {
   let disposed = false;
   const stale = () =>
-    new DOMException(ontologyText(context.locale, "staleResponseDropped"), "AbortError");
+    new DOMException(ontologyText(context.messages, "staleResponseDropped"), "AbortError");
 
   async function send(path: string, init: { method: "GET" | "POST"; body?: string }) {
     if (disposed) throw stale();
     const credential = context.credential;
-    if (!credential) throw new Error(ontologyText(context.locale, "credentialMissing"));
+    if (!credential) throw new Error(ontologyText(context.messages, "credentialMissing"));
     const source = hostSource(context);
     const assertCurrent = () => {
       if (disposed || hostSource(context) !== source) throw stale();
@@ -176,13 +180,13 @@ export function createManagerClient(
     if (response.status === 401 || response.status === 402) onAuthFailure(response.status);
     if (!response.ok) {
       throw new Error(
-        ontologyText(context.locale, "requestFailedStatus", { status: response.status })
+        ontologyText(context.messages, "requestFailedStatus", { status: response.status })
       );
     }
     const json = await response.json();
     assertCurrent();
     if (json?.success === false) {
-      throw new Error(json.message || json.error || ontologyText(context.locale, "requestFailed"));
+      throw new Error(json.message || json.error || ontologyText(context.messages, "requestFailed"));
     }
     return json;
   }
@@ -198,7 +202,7 @@ export function createManagerClient(
     return post(`${smartAssetPaths[kind]}/${operation}`, body);
   }
 
-  /** 原始元数据；数据浏览与可视化建模按各自字段读取。 */
+  /** Raw metadata; data browsing and visual modeling read their own fields. */
   function getMetas() {
     return post("/admin/getMetas", {});
   }
@@ -363,7 +367,7 @@ export function createManagerClient(
     return post("/admin/delRelationship", { relationName });
   }
 
-  /** search 仅在数据浏览输入了非空关键词时提交。 */
+  /** search is submitted only when a non-empty keyword was entered in data browsing. */
   async function loadObjectData(
     className: string,
     page: number,
@@ -402,14 +406,31 @@ export function createManagerClient(
     })) as SmartAsset[];
   }
 
-  /** 可视化建模读取 data.dataAdapter（当前适配器类型）。 */
+  /** Visual modeling reads data.dataAdapter (the current adapter type). */
   function getBusinessConfig() {
     return send("/businessConfig/getConfig", { method: "GET" });
   }
 
-  /** 本版本已安装的数据适配器；可视化建模据当前类型的 sql 标记决定是否显示关联字段。 */
+  /** Data adapters installed in this edition; visual modeling uses the current type's sql flag to decide whether to show join fields. */
   function listDataAdapters() {
     return send("/businessConfig/dataAdapters", { method: "GET" });
+  }
+
+  /** Business knowledge (data engine /admin/getBussinessKnowledge etc.), used by the business knowledge page embedded in the Manager. */
+  function listKnowledge() {
+    return post("/admin/getBussinessKnowledge", {});
+  }
+
+  function addKnowledge(payload: Record<string, unknown>) {
+    return post("/admin/addBussinessKnowledge", payload);
+  }
+
+  function editKnowledge(payload: Record<string, unknown>) {
+    return post("/admin/editBussinessKnowledge", payload);
+  }
+
+  function deleteKnowledge(knowledgeID: string) {
+    return post("/admin/delBussinessKnowledge", { knowledgeID });
   }
 
   return {
@@ -432,5 +453,9 @@ export function createManagerClient(
     loadSmartAssets,
     getBusinessConfig,
     listDataAdapters,
+    listKnowledge,
+    addKnowledge,
+    editKnowledge,
+    deleteKnowledge,
   };
 }

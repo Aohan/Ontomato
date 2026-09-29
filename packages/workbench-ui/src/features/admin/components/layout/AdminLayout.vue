@@ -51,7 +51,7 @@ function openLangMenu() {
 
 const collapsed = ref(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1");
 
-// 页签可见：页签本身有权限，或组内至少一个菜单项有权限；菜单项逐项按权限过滤。
+// A tab is visible if it has permission itself or at least one menu item in its group does; menu items are filtered one by one.
 const navGroups = computed(() =>
   props.groups
     .filter(
@@ -80,6 +80,9 @@ const currentGroupItems = computed(() => {
   return group?.items || [];
 });
 
+// Only home-style tabs (a homePath and no menu items) hide the sidebar so the content fills the page.
+const showAside = computed(() => currentGroupItems.value.length > 0);
+
 const activeMenu = computed(() => {
   if (route.path.startsWith("/admin/intelligence-assets/")) {
     return "/admin/intelligence-assets/metric-views";
@@ -90,18 +93,8 @@ const activeMenu = computed(() => {
   if (route.path === "/admin/skills/analysis" || route.path === "/admin/skills/visualization") {
     return "/admin/skills";
   }
-  if (
-    route.path === "/admin/audit-log" ||
-    route.path === "/admin/feedback-records" ||
-    route.path === "/admin/system-monitor"
-  ) {
-    return "/admin/operations";
-  }
-  if (route.path === "/admin/knowledge" || route.path === "/admin/examples") {
-    return "/admin/skills";
-  }
   if (route.path.startsWith("/admin/knowledge-governance")) {
-    return "/admin/skills";
+    return "/admin/analysis";
   }
   return route.path;
 });
@@ -123,7 +116,7 @@ watch(firstAvailableGroup, (group) => {
   }
 });
 
-// 权限就绪后定位页签：当前路由所在组可见则用它，否则第一个可见组。
+// Once permissions are ready, pick the tab: the current route's group if visible, otherwise the first visible group.
 watch(
   () => props.access.ready,
   (ready) => {
@@ -141,11 +134,12 @@ watch(
 function handleGroupSelect(key: string) {
   activeGroup.value = key;
   const group = navGroups.value.find((g) => g.key === key);
-  if (group && group.items && group.items.length > 0) {
-    const currentPathInGroup = group.items.some((item) => item.path === route.path);
-    if (!currentPathInGroup) {
-      router.push(group.items[0].path);
-    }
+  if (!group) return;
+  const targetPath = group.homePath || group.items[0]?.path;
+  if (!targetPath) return;
+  const pathsInGroup = [group.homePath, ...group.items.map((item) => item.path)].filter(Boolean);
+  if (!pathsInGroup.includes(route.path)) {
+    router.push(targetPath);
   }
 }
 
@@ -289,7 +283,7 @@ function openObserve() {
         </div>
       </header>
       <div class="admin-body">
-        <aside :class="['admin-aside', { collapsed }]">
+        <aside v-if="showAside" :class="['admin-aside', { collapsed }]">
           <div class="aside-header">
             <el-button
               class="collapse-btn"
@@ -567,7 +561,7 @@ function openObserve() {
   min-width: 0;
 }
 
-/* 选中状态下确保省略号生效 */
+/* Keep the ellipsis working in the selected state */
 .admin-menu :deep(.el-menu-item.is-active) .menu-item-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -598,7 +592,7 @@ function openObserve() {
   border-radius: 0 2px 2px 0;
 }
 
-/* 折叠状态下图标居中 - 与收起按钮效果一致 */
+/* Centre icons when collapsed - consistent with the collapse button */
 .admin-aside.collapsed .admin-menu :deep(li.el-menu-item) {
   margin: 4px auto !important;
   width: 40px !important;

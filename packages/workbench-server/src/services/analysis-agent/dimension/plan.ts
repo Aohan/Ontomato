@@ -2,11 +2,11 @@ import type { AnalysisReportHotCard } from "@ontomato/contracts/analysis-report"
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
 import type { DeepAnalysisArtifactStore } from "../task/artifacts";
 /**
- * 维度形态的计划来源：热卡命中直接复用已发布报告的维度与取数事实，
- * 未命中则按智能体维度配置或提示词做一次维度规划。两条来源都要通过
- * 稳定身份校验，再以同一个计划活动下发完整框架。
+ * Plan sources of the dimension form: a hot-card hit reuses the published report's dimensions and data-fetch facts directly;
+ * a miss performs one dimension planning pass from the agent's dimension configuration or prompt. Both sources must pass
+ * stable-identity validation before the complete framework is dispatched as the same plan activity.
  *
- * 本模块同时负责热卡的另一端——分析完成后的待审核卡片沉淀。
+ * This module also owns the other end of hot cards — depositing cards for review after an analysis completes.
  */
 
 import { toDisplayFact } from "../../data-query/query-fact";
@@ -40,13 +40,13 @@ export interface AnalysisPlan {
   agent: AnalysisAgent;
   datasetSchema: string;
   plannedDimensions: PlannedDimension[];
-  /** 命中的分析报告热卡片；命中时子问题走保存的 DSL/重放计划 */
+  /** The matched analysis report hot card; on a hit sub-questions run the saved DSL/replay plan */
   hotMatchCard: AnalysisReportHotCard | null;
 }
 
 /**
- * 维度与子问题的稳定身份是溯源、热卡复用和观测切片的共同前提，
- * 规划一结束就整体校验，不留到执行期逐个失败。
+ * Stable identities of dimensions and sub-questions are the common prerequisite for tracing, hot-card reuse, and observation slices;
+ * the whole plan is validated as soon as planning ends instead of failing one by one during execution.
  */
 export function assertPlannedDimensionIds(
   plannedDimensions: PlannedDimension[],
@@ -134,17 +134,23 @@ export async function resolveAnalysisPlan(
     ctx.domainId
   );
 
-  const matchResult = await matchAnalysisReportCards({
-    question: ctx.userQuestion,
-    agentId: ctx.agentId,
-    domainId: ctx.domainId,
-    frameworkContext: {
-      agentName: agent.name,
-      analysisDimensionPrompt: ctx.analysisDimensionPrompt,
-      dimensions,
-    },
-    signal: ctx.signal,
-  });
+  const hotReportEnabled = agent.hotReportEnabled !== false;
+  const matchResult = hotReportEnabled
+    ? await matchAnalysisReportCards({
+        question: ctx.userQuestion,
+        agentId: ctx.agentId,
+        domainId: ctx.domainId,
+        frameworkContext: {
+          agentName: agent.name,
+          analysisDimensionPrompt: ctx.analysisDimensionPrompt,
+          dimensions,
+        },
+        signal: ctx.signal,
+      })
+    : { matched: false as const };
+  if (!hotReportEnabled) {
+    logger.debug(tApp("analysis.dimension.plan.159"));
+  }
 
   const hotMatchCard = matchResult.matched && matchResult.card ? matchResult.card : null;
   if (hotMatchCard) {
@@ -236,7 +242,7 @@ export async function resolveAnalysisPlan(
 }
 
 /**
- * 分析报告热卡片沉淀：只沉淀非热匹配路径产生的新报告，异步执行不阻塞收口。
+ * Analysis report hot-card deposit: only new reports from non-hot-match paths are deposited, asynchronously and without blocking finalization.
  */
 export function persistAnalysisHotCard(
   ctx: DimensionRunContext,

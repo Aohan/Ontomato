@@ -4,16 +4,16 @@ import { harnessSessions } from "../../../infrastructure/harness-sessions";
 import type { AnalysisLoopSubagentReference } from "../task-types";
 import type { EgressTextContent as TextContent } from "@ontomato/contracts/agent-egress";
 /**
- * 循环形态的派遣能力。
+ * Dispatch capability of the loop form.
  *
- * 主管把一个独立课题交给工人（子 Agent）在隔离上下文中完成，工人用同一套共享骨架
- * 新建实例。工具集即权限：工人只拿到派遣定义授予的工具（取证与笔记本读写），拿不到
- * 派遣工具本身，因此嵌套只有一层。工人的取证走与主循环同一条证据记录路径（同任务、
- * 同稳定身份规则、query_runs 同池），正文直接写进报告笔记本，只把简介返回主管，
- * 过程作为任务内部审计持久化。
+ * The supervisor hands one self-contained topic to a worker (sub-agent) that works in an isolated context, instantiated from the same shared skeleton.
+ * The tool set is the permission: a worker only gets the tools granted by the dispatch definition (evidence collection and notebook read/write),
+ * never the dispatch tool itself, so nesting is exactly one level deep. Worker evidence collection goes through the same evidence recording path as the
+ * main loop (same task, same stable identity rules, same query_runs pool); the body is written straight into the report notebook, only the summary
+ * returns to the supervisor, and the process is persisted as internal task audit.
  *
- * 派遣并发执行：工具不声明 sequential，主管同轮发出的多个派遣由底座并行调度，
- * 总时延约等于最慢的工人；单个派遣失败或取消收敛为该次派遣的失败结果。
+ * Dispatches run concurrently: the tools do not declare sequential, so multiple dispatches the supervisor issues in one turn are scheduled in
+ * parallel by the base; total latency approximates the slowest worker. A single dispatch failing or being cancelled converges into that dispatch's failed result.
  */
 
 import { v4 as uuidv4 } from "uuid";
@@ -43,20 +43,20 @@ export interface LoopDispatchDeps {
   contextWindow: number;
   compactionPromptKeys: CompactionPromptKeys;
   compactionPromptVariables: Record<string, string>;
-  /** 是否挂载报告交付件；决定工人的工具与交回语义 */
+  /** Whether a report deliverable is attached; decides the worker's tools and hand-back semantics */
   reportDeliverableEnabled: boolean;
-  /** 子 Agent 的系统提示词 */
+  /** The sub-agent's system prompt */
   systemPrompt: string;
   /**
-   * 按派遣活动身份构造子 Agent 的工具集。工具集即权限，调用方决定授予什么；
-   * 派遣工具本身不在其中。
+   * Builds the sub-agent's tool set from the dispatch activity identity. The tool set is the permission and the caller decides what to grant;
+   * the dispatch tool itself is never included.
    */
   createChildTools: (dispatchActivityId: string) => AgentTool[];
-  /** 子 Agent 过程审计持久化 */
+  /** Persistence for the sub-agent's process audit */
   saveAudit: (audit: AnalysisLoopSubagentReference) => void | Promise<void>;
 }
 
-/** 装配派遣工具、工人系统提示词、工人工具面和子轨迹审计。 */
+/** Assembles the dispatch tool, worker system prompt, worker tool surface, and sub-trajectory audit. */
 export function assembleLoopDispatchCapability(params: {
   modelConfig: ModelConfig;
   parentSessionId: string;
@@ -150,9 +150,9 @@ export function lastAssistantText(messages: AgentMessage[]): {
 
 export function createDispatchAnalystTool(params: {
   deps: LoopDispatchDeps;
-  /** 受理一次派遣时回调，用于登记轨迹活动 */
+  /** Invoked when a dispatch is accepted, to register the trajectory activity */
   onAccepted: (topic: string) => string;
-  /** 派遣结算时回调，用于结算轨迹活动 */
+  /** Invoked when a dispatch settles, to finalize the trajectory activity */
   onSettled: (
     activityId: string,
     status: "completed" | "failed" | "cancelled",

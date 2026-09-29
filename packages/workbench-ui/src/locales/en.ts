@@ -1,4 +1,4 @@
-// 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
+// Generated from the original frontend messages using the keys the migrated pages actually use; extended as more pages are migrated.
 export default {
   "admin": {
     "requestFailed": "Request failed",
@@ -39,6 +39,12 @@ export default {
     "summaryPositionBottom": "At the end of the report",
     "summaryPositionTop": "At the beginning of the report",
     "summaryPositionHint": "Choose where the comprehensive summary appears in the report.",
+    "hotReport": "Hot Reports",
+    "hotReportEnabled": "Enable hot reports",
+    "hotReportEnabledHint": "When enabled, analysis first tries to match a published hot report under this agent and, on a hit, reuses its dimensions and query results; when disabled, hot report matching is skipped and analysis always runs from the current configuration.",
+    "noHotReports": "No hot reports under this agent",
+    "hotReportLoadFailed": "Failed to load hot reports",
+    "hotReportToggleFailed": "Failed to update hot report status",
     "externalMcpServicesPlaceholder": "Select external MCP services this agent can call",
     "allTasks": "All Tasks",
     "searchColumn": "Search column values...",
@@ -377,18 +383,12 @@ export default {
   },
    "nav": {
      "dataEngine": "Data Engine",
-     "dataAssets": "Data Assets",
-     "ontologyAssets": "Ontology & Assets",
-     "intelligenceOps": "Intelligence Ops",
-     "agentCapabilities": "Agent Capabilities",
-     "appAndCapabilities": "Apps & Capabilities",
-     "analysisApplications": "Analysis Applications",
-     "platformManagement": "Platform Management",
      "knowledgeAndExamples": "Knowledge & Examples",
-     "skillLibrary": "Skill Library",
-     "skillAndKnowledge": "Skills & Knowledge",
-     "operationsCenter": "Operations Center",
      "systemManagement": "System Management",
+    "agentsAndSkills": "Agents and Skills",
+    "analysisAgents": "Analysis Agents",
+    "skills": "Skills",
+    "modelConfig": "Model Config",
     "ontologyManager": "Ontology Manager",
     "intelligenceEngine": "Intelligence Engine",
     "appManagement": "App Management",

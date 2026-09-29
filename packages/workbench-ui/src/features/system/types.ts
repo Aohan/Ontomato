@@ -49,19 +49,19 @@ export interface EmbeddingModelConfig {
   customHeaders?: Record<string, string> | null;
 }
 
-/** 数据适配器连接可填的字段；每种适配器实际需要哪些由后端列表的 fields 给出。 */
+/** Fields a data adapter connection can have; which ones each adapter needs comes from fields in the backend list. */
 export type DataAdapterField = "url" | "user" | "password";
 
-/** 某种适配器已保存的连接（业务配置 dataAdapterConnections 的值）。 */
+/** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
 export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
 
-/** 本版本已安装的数据适配器（GET /businessConfig/dataAdapters 的一项）。 */
+/** A data adapter installed in this edition (one item of GET /businessConfig/dataAdapters). */
 export interface DataAdapterInfo {
   type: string;
   label: string;
   sql: boolean;
   fields: DataAdapterField[];
-  /** 输入框示例（只含有示例的字段），由适配器模块声明。 */
+  /** Input examples (only for fields that have one), declared by the adapter module. */
   examples: Partial<Record<DataAdapterField, string>>;
 }
 

@@ -269,7 +269,7 @@ router.post("/parse", async (req: Request, res: Response<HttpResponse<LogParseRe
       return;
     }
 
-    // 日志是环境级证据，内容不按域过滤；仍要求调用方带业务域。
+    // Logs are environment-level evidence and their content is not filtered by domain; callers must still carry a business domain.
     requireDomainId(req as AuthenticatedRequest);
     const appLogs = queryAppLogs({ startTime, endTime });
     const llmLogs = queryLlmCalls({ startTime, endTime });
@@ -294,7 +294,7 @@ router.get("/errors", async (req: Request, res: Response<HttpResponse<ErrorSumma
     const endTime = req.query.endTime as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
 
-    // 日志是环境级证据，内容不按域过滤；仍要求调用方带业务域。
+    // Logs are environment-level evidence and their content is not filtered by domain; callers must still carry a business domain.
     requireDomainId(req as AuthenticatedRequest);
     const summary = await getErrorSummary(
       {
@@ -326,7 +326,7 @@ router.get("/live-logs", (req: Request, res: Response) => {
 
   const listenerId = randomUUID();
 
-  // 实时日志是环境级证据，内容不按域过滤；仍要求调用方带业务域。
+  // Live logs are environment-level evidence and their content is not filtered by domain; callers must still carry a business domain.
   requireDomainId(req as AuthenticatedRequest);
   const filter: LiveLogFilter = {};
   if (req.query.source) {
@@ -632,7 +632,7 @@ router.get("/turns/:turnKey/flowchart", (req: Request, res: Response<HttpRespons
  */
 router.get("/logs", (req: Request, res: Response<HttpResponse<ParsedLogRecord[]>>) => {
   try {
-    // 日志是环境级证据，内容不按域过滤；仍要求调用方带业务域。
+    // Logs are environment-level evidence and their content is not filtered by domain; callers must still carry a business domain.
     requireDomainId(req as AuthenticatedRequest);
     const params: LogQueryParams = {
       turnKey: req.query.turnKey as string | undefined,
@@ -657,7 +657,7 @@ router.get("/logs", (req: Request, res: Response<HttpResponse<ParsedLogRecord[]>
  */
 router.get("/llm-calls", (req: Request, res: Response<HttpResponse<ParsedLogRecord[]>>) => {
   try {
-    // 日志是环境级证据，内容不按域过滤；仍要求调用方带业务域。
+    // Logs are environment-level evidence and their content is not filtered by domain; callers must still carry a business domain.
     requireDomainId(req as AuthenticatedRequest);
     const params: LlmQueryParams = {
       turnKey: req.query.turnKey as string | undefined,
@@ -683,7 +683,7 @@ router.get(
   "/backend-logs",
   async (req: Request, res: Response<HttpResponse<ParsedLogRecord[]>>) => {
     try {
-      // 后端日志是环境级证据，内容不按域过滤；仍要求调用方带业务域。
+      // Backend logs are environment-level evidence and their content is not filtered by domain; callers must still carry a business domain.
       requireDomainId(req as AuthenticatedRequest);
       const params: BackendLogQueryParams = {
         turnKey: req.query.turnKey as string | undefined,

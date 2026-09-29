@@ -18,7 +18,7 @@ export interface CrudAdminOptions<T extends Record<string, any>> {
   batchDeleteConfirmKey?: string;
   defaultViewMode?: "table" | "card";
   viewModeStorageKey?: string;
-  /** 批量删除部分失败提示末尾的计数原文（各版原字节）。 */
+  /** Original count text at the end of the partial batch-delete failure message (each edition's original bytes). */
   batchDeleteFailureSuffix: (failed: number, total: number) => string;
 }
 

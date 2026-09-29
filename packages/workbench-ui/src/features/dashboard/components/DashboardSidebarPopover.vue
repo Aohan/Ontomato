@@ -16,7 +16,7 @@ const {
 } = storeToRefs(dashboardStore);
 
 const { t } = useLocale();
-/** 开源布局传 closeIcon：关闭按钮用 X 图标并带无障碍标签；企业布局不传，保持原文字“x”按钮。 */
+/** The open-source layout passes closeIcon: the close button uses an X icon with an accessible label; layouts that omit it keep the original text "x" button. */
 defineProps<{ closeIcon?: boolean }>();
 const emit = defineEmits<{ openDashboard: [] }>();
 

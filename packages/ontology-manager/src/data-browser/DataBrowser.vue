@@ -507,7 +507,7 @@ watch(
   gap: var(--spacing-md);
   margin-bottom: var(--spacing-lg);
   flex-wrap: wrap;
-  /* 固定高度的列布局里不被表格压缩，否则窄屏时操作按钮会换到视口外的第二列。 */
+  /* Not squeezed by the table in the fixed-height column layout; otherwise on narrow screens the action buttons wrap into a second column outside the viewport. */
   flex-shrink: 0;
 }
 
@@ -529,7 +529,7 @@ watch(
   min-width: 0;
   overflow-x: auto;
   padding-bottom: 2px;
-  /* 矮容器里由表格收缩，分页条保持完整高度可点。 */
+  /* In short containers the table shrinks so the pagination bar keeps its full, clickable height. */
   flex-shrink: 0;
 }
 
@@ -624,7 +624,7 @@ watch(
   text-overflow: clip;
 }
 
-/* 两版原值由宿主给出：企业沿用抽屉通用圆角，开源为直角。 */
+/* The value is supplied by the host presentation (open source: square corners). */
 :global(.ontology-manager .el-drawer.data-browser-filter-drawer) {
   border-radius: var(--manager-filter-drawer-radius) !important;
 }

@@ -2,12 +2,12 @@ import { qualifiedTable } from "../../postgres.js";
 import { getTableColumns, type QueryableClient } from "../helpers.js";
 
 /**
- * 报告结果单一权威 + 定时规则拆分。
+ * Single authority for report results + schedule rule split.
  *
- * 1. 存量定时行整体搬进规则表；从未承载过报告的行随即从任务表删除。
- *    既是规则又带过报告结果的脏行只搬规则字段，任务行保留为一次报告运行。
- * 2. 缺 payload 但有 result_report 的任务行做最小回填，保证老任务回看不丢正文。
- * 3. 退役任务表上的报告副本列、定时列与任务快照表。
+ * 1. Existing schedule rows move wholesale into the rule table; rows that never carried a report are deleted from the task table right away.
+ *    Dirty rows that are both a rule and once carried report results move only their rule fields, keeping the task row as one report run.
+ * 2. Task rows missing payload but holding result_report get a minimal backfill, so old task reviews never lose the body.
+ * 3. Retires the report copy columns, schedule columns, and task snapshot table on the task table.
  */
 
 export const REPORT_AUTHORITY_SPLIT_VERSION = "20260828_report_authority_schedule_split_v1";
@@ -61,7 +61,7 @@ async function moveScheduleRules(
   return result.rowCount ?? 0;
 }
 
-/** 报告痕迹：payload 或 result_report 任一存在即视为承载过报告结果。 */
+/** Report traces: the presence of either payload or result_report means report results were once carried. */
 function reportTraceSql(hasReport: boolean): string {
   return hasReport
     ? "(analysis_payload IS NOT NULL OR NULLIF(result_report, '') IS NOT NULL)"

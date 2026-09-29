@@ -2,7 +2,6 @@
 import type {
   SystemModelConfigResponse,
   SystemModelEntry,
-  SystemModelRole,
 } from "@ontomato/contracts/system-model";
 
 import { computed, reactive, ref, shallowRef, watch } from "vue";
@@ -11,7 +10,6 @@ import { useI18n } from "vue-i18n";
 import type { JsonObject } from "@ontomato/contracts/system-model";
 
 import CustomRequestParametersEditor from "./CustomRequestParametersEditor.vue";
-import { modelLabel } from "../../types";
 import { plainOuter } from "../../utils/raw";
 import { workbenchContent } from "../../../../content";
 const { t } = useI18n();
@@ -26,7 +24,6 @@ const props = defineProps<{
 const model = defineModel<SystemModelConfigResponse>("model", { required: true });
 
 const emit = defineEmits<{
-  save: [];
   test: [entry: SystemModelEntry];
   retry: [];
 }>();
@@ -35,11 +32,10 @@ const dialogVisible = ref(false);
 const editingIndex = ref(-1);
 const customRequestParametersValid = ref(true);
 const savedSignature = ref("");
-// 只比较本区保存的 models 与两个角色引用；问数设置在其他配置里单独保存。
+// Compare only the model library saved in this section; role references are maintained in the separate Role model references card.
 function modelSignature(): string {
   return JSON.stringify({
     models: model.value.models.map((entry) => plainOuter(entry)),
-    agents: model.value.agents,
   });
 }
 const dirty = computed(
@@ -52,7 +48,7 @@ watch(
   },
   { immediate: true }
 );
-// 原条目的完整快照，编辑时展开回写，保证往返保真。
+// Complete snapshot of the original entry, spread back when editing to keep round trips lossless.
 let editingBaseline: SystemModelEntry | null = null;
 
 function emptyDraft(): Omit<SystemModelEntry, "customRequestParameters"> {
@@ -69,22 +65,17 @@ function emptyDraft(): Omit<SystemModelEntry, "customRequestParameters"> {
 }
 
 const draft = reactive(emptyDraft());
-// 自定义对象不进 reactive：Vue 深层代理会吞掉保留键，用浅引用 holding 原始对象。
+// Custom objects stay out of reactive: Vue's deep proxy would swallow reserved keys, so a shallow ref holds the raw object.
 const customParams = shallowRef<JsonObject>({});
 
 function updateCustomParameters(value: JsonObject) {
-  // 显式写入 ref，避免模板将含 __v_isRef 的普通 JSON 当成新的 ref 绑定。
+  // Write the ref explicitly so the template does not treat plain JSON containing __v_isRef as a new ref binding.
   customParams.value = value;
 }
 
-const roles: { key: SystemModelRole; label: string }[] = [
-  { key: "default", label: "admin.systemModel" },
-  { key: "diagnosis", label: "admin.diagnosisModel" },
-];
-
 const isNew = computed(() => editingIndex.value < 0);
 const dialogTitle = computed(() => (isNew.value ? t("admin.addModel") : t("admin.editModel")));
-// 连接三项与 ID、显示名必填；超时、重试、上下文窗口等可选项预填默认值。
+// The three connection fields, ID and display name are required; optional fields such as timeout, retries and context window are pre-filled with defaults.
 const draftComplete = computed(() =>
   [draft.name, draft.displayName, draft.baseUrl, draft.apiKey, draft.modelName].every(
     (value) => !!value.trim()
@@ -110,7 +101,7 @@ function openEditDialog(index: number) {
   const entry = model.value.models[index];
   if (!entry) return;
   editingIndex.value = index;
-  // 只对外层解代理；custom 是不透明 JSON，原样引用，编辑器整件替换、不就地改。
+  // Unwrap only the outer proxy; custom is opaque JSON referenced as-is, and the editor replaces it whole instead of mutating it.
   const raw = plainOuter<SystemModelEntry>(entry);
   editingBaseline = raw;
   Object.assign(draft, {
@@ -132,7 +123,7 @@ function confirmDialog() {
   if (!draftComplete.value) return;
   const snapshot: SystemModelEntry = {
     ...editingBaseline,
-    // 配置 ID 是系统模型引用的身份，已有条目不可改；显示名可随时改，不影响引用。
+    // The config ID is the identity system model references use, so existing entries cannot change it; the display name can change at any time without affecting references.
     name: draft.name.trim(),
     displayName: draft.displayName.trim(),
     baseUrl: draft.baseUrl,
@@ -239,36 +230,7 @@ defineExpose({ markSaved });
             </div>
           </li>
         </ul>
-        <el-form
-          class="call-settings"
-          :disabled="props.saving"
-          label-width="120px"
-          label-position="left"
-          size="default"
-        >
-          <el-form-item v-for="role in roles" :key="role.key" :label="t(role.label)">
-            <el-select v-model="model.agents[role.key].model" class="system-model-select">
-              <el-option
-                v-for="entry in model.models"
-                :key="entry.name"
-                :label="modelLabel(entry)"
-                :value="entry.name"
-              />
-            </el-select>
-          </el-form-item>
-        </el-form>
       </template>
-
-      <el-form-item class="form-actions">
-        <el-button
-          type="primary"
-          :loading="props.saving"
-          :disabled="!!props.loadError || props.loading"
-          @click="emit('save')"
-        >
-          {{ t("admin.saveApplicationModels") }}
-        </el-button>
-      </el-form-item>
 
       <el-dialog
         v-model="dialogVisible"

@@ -1,46 +1,48 @@
 export type AnalysisAgentExecutionMode = "dimension" | "loop";
 
-/** 综合总结在报告中的展示位置。历史智能体缺省为报告末尾。 */
+/** Display position of the comprehensive summary in the report. Historical agents default to the end of the report. */
 export type AnalysisReportSummaryPosition = "top" | "bottom";
 
 export interface AnalysisAgent {
-  /** 业务 ID (UUID) */
+  /** Business ID (UUID) */
   id: string;
-  /** 智能体名称 */
+  /** Agent name */
   name: string;
-  /** 智能体描述 */
+  /** Agent description */
   description: string;
-  /** 图标（可选） */
+  /** Icon (optional) */
   icon?: string;
-  /** 执行形态标记，未标记的智能体走维度编排 */
+  /** Execution form marker; agents without one use dimension orchestration */
   executionMode: AnalysisAgentExecutionMode;
-  /** 循环形态提示词：角色定位、分析方法与报告结构要求；仅循环形态生效 */
+  /** Loop-form prompt: role positioning, analysis method, and report structure requirements; only effective in loop form */
   loopPrompt?: string;
-  /** 是否挂载报告交付件；关闭时循环以最终回复与轨迹交付 */
+  /** Whether a report deliverable is attached; when off, the loop delivers via the final reply and trajectory */
   reportDeliverableEnabled: boolean;
-  /** 分析维度提示词（用于拆分维度生成子问题） */
+  /** Whether hot report matching is on; when off, the analysis pipeline skips hot report reuse and always re-analyzes with the current configuration */
+  hotReportEnabled?: boolean;
+  /** Analysis dimension prompt (used to split dimensions into sub-questions) */
   analysisDimensionPrompt?: string;
-  /** 维度报告生成提示词 */
+  /** Dimension report generation prompt */
   summarizerPrompt: string;
-  /** 多维度总结提示词 */
+  /** Multi-dimension summary prompt */
   conclusionMakerPrompt: string;
-  /** 综合总结在报告中的展示位置；未配置的历史智能体按报告末尾处理 */
+  /** Display position of the comprehensive summary in the report; unconfigured historical agents render at the end */
   summaryPosition?: AnalysisReportSummaryPosition;
-  /** 启用的分析技能 ID 列表 */
+  /** Enabled analysis skill ID list */
   enabledSkillIds?: string[];
-  /** 启用的分析可视化技能 ID 列表 */
+  /** Enabled analysis visualization skill ID list */
   enabledVisualizationSkillIds?: string[];
-  /** 显式授权给循环主管的外部 MCP 服务名快照 */
+  /** Snapshot of external MCP service names explicitly authorized to the loop supervisor */
   enabledMcpServiceNames?: string[];
-  /** 关联的对象类名列表，用于限制维度拆分和问数范围 */
+  /** Associated object class names, limiting dimension splitting and query scope */
   classNames?: string[];
-  /** 是否启用 */
+  /** Whether enabled */
   isEnabled: boolean;
-  /** 排序序号（数值越小越靠前） */
+  /** Sort order (smaller values first) */
   sortOrder?: number;
-  /** 创建时间戳 */
+  /** Creation timestamp */
   createdAt: number;
-  /** 更新时间戳 */
+  /** Update timestamp */
   updatedAt: number;
 }
 

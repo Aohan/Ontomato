@@ -102,7 +102,7 @@ class BusinessConfigControllerDataAdapterTest {
 
 		assertFalse(ret.getBooleanValue("success"));
 		assertTrue(ret.getString("message").contains("oracle"), ret.getString("message"));
-		assertTrue(ret.getString("message").contains("本版本未安装该数据适配器"), ret.getString("message"));
+		assertTrue(ret.getString("message").contains("Data adapter not installed in this edition"), ret.getString("message"));
 		assertEquals("postgresql", businessConfig.getDataAdapter());
 		verify(businessConfigService, never()).set(any(), anyString());
 	}

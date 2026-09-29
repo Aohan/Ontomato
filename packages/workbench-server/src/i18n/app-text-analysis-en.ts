@@ -158,6 +158,7 @@ export const appTextAnalysisEn = {
   "analysis.dimension.plan.156": "Deep analysis dimension planning completed",
   "analysis.dimension.plan.157": "## {dimensionName}: {dimensionValue}\n\n",
   "analysis.dimension.plan.158": "Failed to save analysis report hot card (async):",
+  "analysis.dimension.plan.159": "Hot report matching disabled for agent, skipping match and proceeding with normal analysis",
   "analysis.dimension.report-generator.159": "\n## Analysis skill results\n",
   "analysis.dimension.report-generator.160": "\n### Analysis methodology reference\n",
   "analysis.dimension.report-generator.161": "\n### Computation skill {value}\n",

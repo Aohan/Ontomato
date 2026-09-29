@@ -3,8 +3,9 @@ import { ossProduct } from "../../src/product";
 import { ossWorkspaceArtifactText } from "../../src/workspace-artifact-text";
 
 /**
- * 本版工作台的静态内容（原值）。子图围栏与产品显示名直接取本版 Node product 的同一值；
- * 其余为迁出前网页源码里的原匹配规则、原句与原配色，不随界面语言变化。
+ * Static workbench content for this edition (original values). The subgraph fence and product display name come directly
+ * from this edition's Node product; the rest are the original matching rules, sentences and colours from the web source
+ * before extraction, independent of the UI locale.
  */
 export const workbenchContent: WorkbenchContent = {
   subgraphFence: ossProduct.subgraphFence,

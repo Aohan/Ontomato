@@ -1,4 +1,4 @@
-/** 诊断固定文字。英文是 OSS b6437c86 的原句，只进入 appTextLocale=en。 */
+/** Fixed diagnosis copy. The English is the original wording of OSS b6437c86 and only enters appTextLocale=en. */
 export const appTextDiagnosisEn: Record<string, string> = {
   "diag.autotest.artifact-writer.0": "# Evaluation",
   "diag.autotest.artifact-writer.1": "## Evaluation Result",
@@ -190,14 +190,14 @@ export const appTextDiagnosisEn: Record<string, string> = {
   "diag.observe.agent.tools.view-app-config-tool.23": "Failed to read backend config: {p0}",
   "diag.observe.agent.tools.view-app-config-tool.3": "(no description)",
   "diag.observe.agent.tools.view-app-config-tool.4": "- `langchain4j`: LLM-related configuration, including the model service address, model name, authentication info, and call parameters.",
-  "diag.observe.agent.tools.view-app-config-tool.5": "- `ontomato`: database connection configuration, plus part of datarag's runtime configuration.",
+  "diag.observe.agent.tools.view-app-config-tool.5": "- `ontomato`: database connection configuration (sections data-engine/sso/ldap), plus part of the data engine's runtime configuration.",
   "diag.observe.agent.tools.view-app-config-tool.6": "- `data.desc`: describes how configuration changes take effect; it is not a config item itself, but explains which configs can be changed on the page and take effect immediately, and which require editing the config file and restarting the app.",
   "diag.observe.agent.tools.view-app-config-tool.7": "### Configuration Section Description",
   "diag.observe.agent.tools.view-app-config-tool.8": "### Available Configuration Sections",
   "diag.observe.agent.tools.view-app-config-tool.9": "(none)",
   "diag.observe.backend-config-fetcher.0": "No token available, skipping backend config fetch",
   "diag.observe.backend-config-fetcher.1": "Backend config endpoint returned failure",
-  "diag.observe.backend-config-fetcher.2": "Backend config is missing the ontomato.datarag field",
+  "diag.observe.backend-config-fetcher.2": "Backend config is missing the ontomato.data-engine field",
   "diag.observe.backend-config-fetcher.3": "Fetched infrastructure config from backend",
   "diag.observe.backend-config-fetcher.4": "Failed to fetch backend config; will use environment variables",
   "diag.observe.log-sources.backend-node-client.0": "Backend tail SSE response is missing a body stream",

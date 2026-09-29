@@ -39,16 +39,17 @@ export async function fetchBackendConfig(token?: string): Promise<BackendInfraCo
     const data = json.data as Record<string, unknown> | undefined;
     const config = data?.config as Record<string, unknown> | undefined;
     const ontomato = config?.ontomato as Record<string, unknown> | undefined;
-    const datarag = ontomato?.datarag as Record<string, unknown> | undefined;
+    const dataEngine = ontomato?.["data-engine"] as Record<string, unknown> | undefined;
 
-    if (!datarag) {
+    if (!dataEngine) {
       logger.warn(tApp("diag.observe.backend-config-fetcher.2"));
       return null;
     }
 
     const result: BackendInfraConfig = {
-      // 后端配置未给出适配器时，按两版各自原来的默认值理解（企业 m3、开源 sql）。
-      dataAdapter: String(datarag.dataAdapter || runtimeDefaults().defaultDataAdapter),
+      // When the backend config gives no adapter, interpret it with each edition's
+      // own historical default (enterprise m3, OSS sql).
+      dataAdapter: String(dataEngine.dataAdapter || runtimeDefaults().defaultDataAdapter),
     };
 
     cached = result;

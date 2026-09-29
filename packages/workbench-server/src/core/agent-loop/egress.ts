@@ -9,7 +9,7 @@ import type {
 } from "@ontomato/contracts/agent-egress";
 import type { AgentMessage, AssistantMessage, ToolResultMessage, UserMessage } from "./types";
 
-/** 当前对外消费者所需的唯一暴露级别。 */
+/** The single exposure level the current external consumers need. */
 export interface EgressMessageOptions {
   thinking: "omit";
   toolResultContent: "full";
@@ -75,7 +75,7 @@ function toEgressToolResultMessage(
   };
 }
 
-/** 按白名单构造面向消费者的消息；未声明字段不会进入返回值。 */
+/** Builds consumer-facing messages from the allowlist; undeclared fields never enter the return value. */
 export function toEgressMessages(
   messages: readonly AgentMessage[],
   options: EgressMessageOptions

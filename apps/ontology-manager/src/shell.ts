@@ -3,12 +3,12 @@ import "element-plus/dist/index.css";
 import "element-plus/theme-chalk/dark/css-vars.css";
 import {
   OntologyManager,
-  ontologyText,
   type ManagerAuthFailureStatus,
   type ManagerCredential,
   type ManagerDataFallbacks,
   type ManagerPresentation,
 } from "@ontomato/ontology-manager";
+import { ontologyText, type ManagerMessages } from "@ontomato/ontology-manager/i18n";
 import { readRuntimeConfig } from "./config";
 import { clearSessionCredential, consumeLaunchCredential, sessionCredential } from "./credential";
 import { syncLocale, syncTheme, type LocaleSync } from "./preferences";
@@ -17,18 +17,20 @@ import "./style.css";
 
 export type { LocaleSync };
 
-/** 两个产品独立运行时的全部静态差异。 */
+/** Every static difference between the two products' standalone shells. */
 export interface ManagerShellProfile {
-  /** 本标签页没有凭据时交给组件的值：开源显式匿名，企业 null（停止请求并提示缺少凭据）。 */
+  /** Value handed to the component when this tab has no credential: explicit anonymous (open source) or null (stop requests and report the missing credential). */
   noCredential: ManagerCredential | null;
-  /** 主系统主题消息名。 */
+  /** Theme message type sent by the main system. */
   themeMessage: string;
-  /** 界面语言：无同步时即固定语言，有同步时为默认语言。 */
+  /** UI locale: the fixed locale without sync, otherwise the default locale. */
   locale: string;
   localeSync: LocaleSync | null;
-  /** 固定的数据默认值，与界面语言无关。 */
+  /** Messages per supported locale; its keys are the locales the shell accepts. */
+  messages: Readonly<Record<string, ManagerMessages>>;
+  /** Fixed data defaults, independent of the UI locale. */
   dataFallbacks: ManagerDataFallbacks;
-  /** 本产品 Manager 的展示原值（主题取值、节点色板、图谱交互与窄屏对话框等）。 */
+  /** This product's Manager presentation values (theme values, node palette, graph interaction, narrow dialogs, etc.). */
   presentation: ManagerPresentation;
 }
 
@@ -38,12 +40,19 @@ export function startManagerShell(profile: ManagerShellProfile) {
   const authExpired = ref(false);
   const theme = syncTheme(profile.themeMessage);
   const locale = profile.localeSync
-    ? syncLocale(profile.locale, profile.localeSync)
+    ? syncLocale(profile.locale, Object.keys(profile.messages), profile.localeSync)
     : ref(profile.locale);
+  const messages = () => profile.messages[locale.value];
   const { apiBase, initialRoute } = readRuntimeConfig();
   const { view, replaceView } = syncView(initialRoute);
 
-  // 401 认证失效：清除本标签页凭据并停止请求；402 License 失败保留凭据，错误由组件显示。
+  // When embedded in a host, hide the workspace brand header: the host already provides the "Ontology Manager" tab and back navigation.
+  const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
+  const presentation: ManagerPresentation = embedded
+    ? { ...profile.presentation, showWorkspaceHeader: false }
+    : profile.presentation;
+
+  // 401 means authentication expired: clear this tab's credential and stop requests. 402 (license failure) keeps the credential; the component shows the error.
   function onAuthFailure(status: ManagerAuthFailureStatus) {
     if (status !== 401) return;
     clearSessionCredential();
@@ -58,10 +67,11 @@ export function startManagerShell(profile: ManagerShellProfile) {
             apiBase,
             credential: credential.value,
             locale: locale.value,
+            messages: messages(),
             theme: theme.value,
             view: view.value,
             dataFallbacks: profile.dataFallbacks,
-            presentation: profile.presentation,
+            presentation,
             "onUpdate:view": replaceView,
             onAuthFailure,
           })
@@ -69,8 +79,8 @@ export function startManagerShell(profile: ManagerShellProfile) {
             "p",
             { class: "manager-shell-status", role: "alert" },
             authExpired.value
-              ? ontologyText(locale.value, "requestFailedStatus", { status: 401 })
-              : ontologyText(locale.value, "credentialMissing")
+              ? ontologyText(messages(), "requestFailedStatus", { status: 401 })
+              : ontologyText(messages(), "credentialMissing")
           ),
   }).mount("#app");
 }

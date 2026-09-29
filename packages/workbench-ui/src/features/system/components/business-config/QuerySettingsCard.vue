@@ -28,7 +28,7 @@ const emit = defineEmits<{
   retry: [];
 }>();
 
-// 只比较本区的两个字段；应用模型草稿在模型配置里单独保存。
+// Compare only this section's two fields; the application model draft is saved separately in the model config.
 const savedSignature = ref("");
 const signature = () =>
   JSON.stringify([model.value.abcQuestionMode, model.value.queryTimeoutSeconds]);
@@ -110,7 +110,7 @@ defineExpose({ markSaved });
           :disabled="!!props.loadError || props.loading"
           @click="emit('save')"
         >
-          {{ t("common.saveConfig") }}
+          {{ t("common.save") }}
         </el-button>
       </el-form-item>
     </div>

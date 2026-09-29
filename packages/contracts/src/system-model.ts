@@ -10,9 +10,9 @@ export type JsonValue = string | number | boolean | null | JsonObject | JsonValu
 export type JsonObject = { [key: string]: JsonValue };
 
 export interface SystemModelEntry {
-  /** 域内唯一配置 ID：创建后固定，系统模型引用与运行解析只认它。 */
+  /** Domain-unique config ID: fixed after creation; system model references and runtime resolution only accept it. */
   name: string;
-  /** 可修改、可重名的显示名；不参与引用。 */
+  /** Editable display name that may repeat; never used for references. */
   displayName: string;
   baseUrl: string;
   apiKey: string;
@@ -20,11 +20,11 @@ export interface SystemModelEntry {
   customRequestParameters: JsonObject;
   timeoutSeconds: number;
   maxRetries: number;
-  /** 模型总上下文窗口（token，正整数），Harness 按它判断压缩触发。 */
+  /** Model total context window (tokens, positive integer); the harness uses it to decide when compaction triggers. */
   contextWindow: number;
 }
 
-/** 应用模型角色：系统模型与诊断模型，各自引用模型库中的一条配置 ID，可相同。 */
+/** App model roles: system model and diagnosis model, each referencing one config ID from the model library; they may be the same. */
 export type SystemModelRole = "default" | "diagnosis";
 
 export interface SystemModelConfig {

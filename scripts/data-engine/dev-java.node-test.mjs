@@ -40,8 +40,8 @@ function product(t, { env = "FOO=bar\n", venv = true } = {}) {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const appDir = join(root, "apps/data-engine");
   put(root, {
-    "res/conf-defaults/prompt.md": "中文 v1\n",
-    "res/conf-defaults/prompt.en.md": "English v1\n",
+    "res/conf-defaults/prompt.md": "English v1\n",
+    "res/conf-defaults/prompt.zh.md": "Chinese v1\n",
     "res/conf-defaults/application.yml": "app: template\n",
     "res/conf-defaults/mcp-clients.yml": "mcp: template\n",
     "res/skills/aftercalculate/trend-forecaster/SKILL.md": "skill v1\n",
@@ -62,7 +62,7 @@ function product(t, { env = "FOO=bar\n", venv = true } = {}) {
     chmodSync(join(appDir, ".venv/bin/python"), 0o755);
   }
   const app = {
-    repoRoot: root, promptLang: "en", requiredSkill: SKILL,
+    repoRoot: root, promptLang: "en", supportedPromptLangs: ["en", "zh"], requiredSkill: SKILL,
     requirements: { root, path: "requirements.txt" },
     resources: [[root, "res/conf-defaults", "payload/conf-defaults"], [root, "res/skills", "payload/skills"]],
   };
@@ -127,7 +127,7 @@ test("a Windows .cmd wrapper receives arguments, cwd and exit code through cmd.e
 test("missing .env or a bad PROMPT_LANG stop before staging or Maven", posixOnly, (t) => {
   for (const [setup, inherited, message] of [
     [{ env: null }, {}, /Missing .*\.env/],
-    [{}, { PROMPT_LANG: "fr" }, /PROMPT_LANG must be en or zh/],
+    [{}, { PROMPT_LANG: "fr" }, /PROMPT_LANG must be one of en, zh/],
   ]) {
     const fx = product(t, setup);
     assert.throws(() => startDevJava(fx.options, [], { ...fx.inherited, ...inherited }), message);
@@ -190,14 +190,14 @@ test("sync: templates only when missing, site config and extras kept, defaults a
   const dev = (path) => join(fx.appDir, ".dev", path);
   await finish(startDevJava(fx.options, [], fx.inherited));
   assert.equal(read(dev("conf/prompt.md")), "English v1\n");
-  assert.equal(existsSync(dev("conf/prompt.en.md")), false);
+  assert.equal(existsSync(dev("conf/prompt.zh.md")), false);
   assert.equal(read(dev("conf/application.yml")), "app: template\n");
   assert.equal(read(dev("skills/aftercalculate/trend-forecaster/SKILL.md")), "skill v1\n");
   assert.ok(existsSync(dev("logs")) && existsSync(dev("python")));
   put(join(fx.appDir, ".dev"), { "conf/application.yml": "app: site\n", "conf/mcp-clients.yml": "mcp: site\n", "conf/extra.md": "extra\n", "skills/extra.txt": "x\n" });
-  put(fx.root, { "res/conf-defaults/prompt.md": "中文 v2\n", "res/skills/aftercalculate/trend-forecaster/SKILL.md": "skill v2\n" });
+  put(fx.root, { "res/conf-defaults/prompt.zh.md": "Chinese v2\n", "res/skills/aftercalculate/trend-forecaster/SKILL.md": "skill v2\n" });
   await finish(startDevJava(fx.options, [], { ...fx.inherited, PROMPT_LANG: "zh" }));
-  assert.equal(read(dev("conf/prompt.md")), "中文 v2\n");
+  assert.equal(read(dev("conf/prompt.md")), "Chinese v2\n");
   assert.equal(read(dev("conf/application.yml")), "app: site\n");
   assert.equal(read(dev("conf/mcp-clients.yml")), "mcp: site\n");
   assert.equal(read(dev("conf/extra.md")), "extra\n");

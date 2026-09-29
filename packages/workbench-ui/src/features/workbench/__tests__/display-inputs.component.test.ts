@@ -9,8 +9,8 @@ import type { WorkbenchAgent } from "../types";
 
 const global = { plugins: [workbenchI18n(), createPinia(), ElementPlus] };
 
-describe("两版布局给出的展示输入", () => {
-  it("欢迎态按明确的动画类型渲染：企业视频、开源带 alt 的静态图标", () => {
+describe("display inputs supplied by both layouts", () => {
+  it("the welcome state renders by explicit animation type: a video, or a static icon with alt (open source)", () => {
     const video = mount(WorkbenchWelcomeState, {
       props: { mode: "qa", animation: { kind: "video", src: "/robot.webm" } },
       global,
@@ -44,7 +44,7 @@ describe("两版布局给出的展示输入", () => {
       global,
     });
 
-  it("入口栏不传输入时保持企业原样：卡片为带原生 title 的 div，新增按钮带 title、图标 16", () => {
+  it("without inputs the entry rail keeps its default: cards are divs with native titles, the add button has a title and a 16px icon", () => {
     const wrapper = rail({});
     const card = wrapper.find(".agent-card");
     expect(card.element.tagName).toBe("DIV");
@@ -54,7 +54,7 @@ describe("两版布局给出的展示输入", () => {
     expect(wrapper.find(".agent-add-btn svg").attributes("width")).toBe("16");
   });
 
-  it("开源布局传入时：卡片为带 aria-label 的 button、无原生 title，新增图标 18", () => {
+  it("with the open-source layout inputs: cards are buttons with aria-label and no native title, and the add icon is 18px", () => {
     const wrapper = rail({ compact: false, cardTag: "button", nativeTitles: false, addIconSize: 18 });
     const card = wrapper.find(".agent-card");
     expect(card.element.tagName).toBe("BUTTON");

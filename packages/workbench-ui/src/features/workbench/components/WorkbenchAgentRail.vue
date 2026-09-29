@@ -24,11 +24,11 @@ const props = withDefaults(
   agents: AnalysisAgent[];
   selectionMode: WorkbenchSelectionMode;
   selectedAgentId: string;
-  /** 开源布局的紧凑栏：为 true 时各入口显示右侧提示；企业布局不传。 */
+  /** Compact rail of the open-source layout: when true, each entry shows a tooltip on the right; other layouts omit it. */
   compact?: boolean;
   /**
-   * 入口卡片的元素：企业原为带原生 title 的 div；开源为带 aria-label 与焦点框的 button。
-   * nativeTitles 决定卡片与“新增”按钮是否带原生 title；addIconSize 为“新增”图标原尺寸（企业 16、开源 18）。
+   * Element of the entry cards: a div with a native title, or (open source) a button with aria-label and a focus ring.
+   * nativeTitles decides whether the cards and the "add" button have native titles; addIconSize is the original "add" icon size (open source: 18).
    */
   cardTag?: "div" | "button";
   nativeTitles?: boolean;

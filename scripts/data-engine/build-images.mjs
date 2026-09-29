@@ -45,13 +45,15 @@ function copyLicenses(destination) {
     copyFrom(PUBLIC_ROOT, name, join(destination, name));
 }
 
-export function selectPromptLanguage(root, lang) {
+// Resources are English under the plain name. An edition's other language is a `name.<lang>.ext`
+// variant for one of its declared languages: the selected one replaces the plain file, the rest are dropped.
+export function selectPromptLanguage(root, lang, langs) {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     const path = join(root, entry.name);
-    if (entry.isDirectory()) selectPromptLanguage(path, lang);
-    else if (entry.isFile() && /\.en\.[^.]+$/.test(entry.name)) {
-      if (lang === "en")
-        renameSync(path, join(root, entry.name.replace(/\.en(\.[^.]+)$/, "$1")));
+    const variant = /\.([^.]+)(\.[^.]+)$/.exec(entry.name);
+    if (entry.isDirectory()) selectPromptLanguage(path, lang, langs);
+    else if (entry.isFile() && variant && langs.includes(variant[1])) {
+      if (variant[1] === lang) renameSync(path, join(root, entry.name.slice(0, variant.index) + variant[2]));
       else rmSync(path);
     }
   }
@@ -248,7 +250,7 @@ function buildRuntime(app, arch, version, exported, contract, fp) {
 export function stageResources(app, context, lang) {
   for (const [root, source, dest] of app.resources) copyFrom(root, source, join(context, dest));
   for (const dest of new Set(app.resources.map(([, , dest]) => dest)))
-    selectPromptLanguage(join(context, dest), lang);
+    selectPromptLanguage(join(context, dest), lang, app.supportedPromptLangs);
   if (!existsSync(join(context, app.requiredSkill)))
     throw new Error("Missing default trend-forecaster skill");
 }
@@ -312,7 +314,8 @@ export function parseJavaArgs(args, flags) {
 export async function buildJavaApp(app, { command, parsed }) {
   const arch = parsed["--arch"];
   const lang = parsed["--prompt-lang"] ?? app.promptLang;
-  if (!["zh", "en"].includes(lang)) throw new Error("Expected --prompt-lang zh|en");
+  if (!app.supportedPromptLangs.includes(lang))
+    throw new Error(`Expected --prompt-lang ${app.supportedPromptLangs.join("|")}`);
   const version = readRevision(readFileSync(app.versionPom, "utf8"));
   const stamp = buildStamp(version, app.repoRoot, sampleSources(app));
   const lockedFp = command === "app" ? loadRuntimeLock(app.lockRoot, app.family, arch) : undefined;

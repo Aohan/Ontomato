@@ -1,8 +1,8 @@
 /**
- * 维度形态的收口阶段：把已有产物组装成最终报告正文，写会话消息。
+ * Finalization stage of the dimension form: assembles existing artifacts into the final report body and writes the session message.
  *
- * 收口无论成功还是失败都要发生——失败时以错误正文写会话消息；
- * 任务详情的"对话"回看由读取侧从 `analysis_payload` 派生，这里不再另写一份快照。
+ * Finalization happens on success and on failure alike — on failure the session message carries the error body;
+ * the task detail's conversation review is derived from `analysis_payload` by the read side, so no second snapshot is written here.
  */
 
 import { AIMessage, HumanMessage } from "@langchain/core/messages";
@@ -18,8 +18,8 @@ import { tApp } from "../../../i18n";
 const logger = createLogger("deep-analysis-finalize");
 
 /**
- * 会话消息：拆图之前由 LangGraph 把 messages 通道写进 checkpoint，
- * 现在由收口阶段显式写同一条通道，观测的问答文本与线程消息读取路径不变。
+ * Session messages: before the graph was dismantled LangGraph wrote the messages channel into the checkpoint;
+ * the finalization stage now writes the same channel explicitly, keeping the observed QA text and the thread-message read path unchanged.
  */
 function saveThreadMessages(
   ctx: DimensionRunContext,

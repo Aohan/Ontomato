@@ -1,7 +1,7 @@
 import { qualifiedTable } from "../../postgres.js";
 import type { QueryableClient } from "../helpers.js";
 
-/** 存量与缺省创建均不授权外部服务；显式勾选保存服务 name 快照。 */
+/** Neither existing rows nor default creation authorize external services; explicit selection saves the services' name snapshot. */
 export async function ensureAnalysisAgentMcpServicesSchema(client: QueryableClient): Promise<void> {
   await client.query(`
     ALTER TABLE ${qualifiedTable("analysis_agents")}

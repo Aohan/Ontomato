@@ -11,7 +11,7 @@
  * caller credentials are forwarded. The response `data` is the session's full
  * routing-row array. A successful query without rows and a failed query are
  * kept apart: callers must be able to say which one happened
- * （问数后端会话的定位与取消·设计 7）.
+ * (backend session locating and cancellation · design 7).
  */
 
 import { getApiConfig, buildUrl } from "../../../../config/data-query-api";
@@ -26,7 +26,7 @@ const logger = createLogger("observe:session-registry");
 
 const SESSION_REGISTRY_ENDPOINT = "/observe/logs/session-registry";
 
-/** 路由表一行：一个后端会话在一个 datarag 节点上的执行窗口与取消时间。 */
+/** One routing-table row: the execution window and cancellation time of one backend session on one data-engine node. */
 export interface SessionRegistryRow {
   sessionId: string;
   nodeId: string;
@@ -35,10 +35,10 @@ export interface SessionRegistryRow {
   cancelledAt?: number;
 }
 
-/** 一次路由查询的结果：成功时给行（可为空），失败时给原因。 */
+/** Result of one routing query: rows on success (possibly empty), a reason on failure. */
 export interface SessionRegistryLookup {
   rows: SessionRegistryRow[];
-  /** 查询失败的原因；查询成功（含该会话无行）时为 undefined */
+  /** Why the query failed; undefined when the query succeeded (including no rows for the session) */
   error?: string;
 }
 
@@ -95,7 +95,7 @@ function parseRows(sessionId: string, text: string): SessionRegistryLookup {
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const fields = item as Record<string, unknown>;
     const nodeId = typeof fields.nodeId === "string" ? fields.nodeId.trim() : "";
-    // 节点是路由行主键的一部分；没有节点的行无法定位，不当作证据单位。
+    // The node is part of the routing row's primary key; rows without a node cannot be located and are not treated as evidence units.
     if (!nodeId) continue;
 
     const sessionIdField = fields.sessionId;

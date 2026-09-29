@@ -1,11 +1,11 @@
 /**
- * 当前请求查询结果里，分析与可视化使用的那个数据集。两版迁出前的规则不同：
- * open-source 取最后一个有行的数据集（都没有行时取最后一个），企业取最后一个。
- * 应用装配其一；行与字段展示计划都取自同一个选中数据集。历史 query run 不经过这里。
+ * The dataset from the current request's query results that analysis and visualization use. The pre-migration rules differed per edition:
+ * open-source takes the last dataset with rows (or the last one when none has rows), the enterprise edition takes the last one.
+ * The app assembles one of them; rows and the field display plan both come from the same selected dataset. Historical query runs never pass through here.
  */
 type QueryDataset = { data?: unknown };
 
-/** datasets 至少有一个。 */
+/** datasets contains at least one entry. */
 export type CurrentDatasetRule = <T extends QueryDataset>(datasets: T[]) => T;
 
 export const lastDataset: CurrentDatasetRule = (datasets) => datasets[datasets.length - 1];

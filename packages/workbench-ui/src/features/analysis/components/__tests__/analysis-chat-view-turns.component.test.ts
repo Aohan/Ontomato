@@ -104,11 +104,11 @@ function taskFixture(patch: Partial<AnalysisTaskDetail> = {}): AnalysisTaskDetai
     id: "task-1",
     agentId: "agent-1",
     userId: "owner",
-    name: "会话",
+    name: "conversation-task",
     description: "",
     status: "completed",
     reportDeliverableEnabled: false,
-    question: "任务问题",
+    question: "task-question",
     scheduleEnabled: false,
     notifyOnComplete: false,
     triggerSource: "manual",
@@ -126,7 +126,7 @@ function sessionFixture(
     taskId: "task-1",
     agentId: "agent-1",
     threadId: "thread-1",
-    taskName: "会话",
+    taskName: "conversation-task",
     messages,
     input: "",
     isLoading: false,
@@ -171,7 +171,7 @@ function render() {
     global: {
       plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), ElementPlus],
       stubs: { DeepAnalysisResult: true, QueryExecutionView: true },
-      // 回合诊断入口由装配注入；原企业用例下权限未加载，入口不显示。
+      // The turn diagnosis entry is injected by the app; here permissions are not loaded, so the entry is hidden.
       provide: { [turnDiagnosisAccessKey as symbol]: { prepare: () => {}, visible: () => false } },
     },
   });
@@ -206,18 +206,18 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-// 被测公开面：首轮消息布局；可观察结果：用户问题先于系统受理确认显示。
+// Public surface under test: first-turn message layout; observable result: the user question shows before the system acknowledgement.
 it("shows the user's question before the analysis acknowledgment", () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "用户分析问题" },
-      answerMessage(2, "分析回答", "分析活动"),
+      { id: 1, role: "user", content: "user-analysis-question" },
+      answerMessage(2, "analysis-answer", "analysis-activity"),
     ],
   });
 
   const rows = render().findAll(".chat-msg");
   expect(rows[0].classes()).toContain("user");
-  expect(rows[0].text()).toContain("用户分析问题");
+  expect(rows[0].text()).toContain("user-analysis-question");
   expect(rows[1].classes()).toContain("analysis-acknowledgment");
 });
 
@@ -225,8 +225,8 @@ it("shows the run switcher below the user's question", () => {
   seed({
     report: true,
     messages: [
-      { id: 1, role: "user", content: "用户分析问题" },
-      answerMessage(2, "分析回答", "分析活动"),
+      { id: 1, role: "user", content: "user-analysis-question" },
+      answerMessage(2, "analysis-answer", "analysis-activity"),
     ],
     runs: [
       { id: "run-1", status: "completed" },
@@ -241,14 +241,14 @@ it("shows the run switcher below the user's question", () => {
   expect(children[2].classList).toContain("analysis-acknowledgment");
 });
 
-// 被测公开面：一轮一次的执行产物消费；可观察结果：两轮问答与两轮活动同时在位，回复不重复。
+// Public surface under test: execution output consumed once per turn; observable result: both Q&A turns and both activities are present, with no repeated replies.
 it("renders every turn's question, activities and reply instead of only the last turn", async () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "第一问" },
-      answerMessage(2, "第一答", "第一轮写作", {
+      { id: 1, role: "user", content: "first-question" },
+      answerMessage(2, "first-answer", "first-round-writing", {
         activities: [
-          activity("第一轮写作"),
+          activity("first-round-writing"),
           {
             activityId: "activity-evidence",
             seq: 2,
@@ -259,7 +259,7 @@ it("renders every turn's question, activities and reply instead of only the last
             questions: [
               {
                 questionId: "q-1",
-                question: "问数问题",
+                question: "data-query-question",
                 status: "completed",
                 execution: {},
               },
@@ -267,116 +267,116 @@ it("renders every turn's question, activities and reply instead of only the last
           },
         ],
       }),
-      { id: 3, role: "user", content: "第二问" },
-      answerMessage(4, "第二答", "第二轮写作"),
+      { id: 3, role: "user", content: "second-question" },
+      answerMessage(4, "second-answer", "second-round-writing"),
     ],
   });
   const wrapper = render();
   const text = wrapper.text();
 
-  expect(text).toContain("第一问");
-  expect(text).toContain("第二问");
-  expect(text).toContain("第一轮写作");
-  expect(text).toContain("第二轮写作");
-  // Node 在 /turns 中补齐 question.execution 后，现有 QueryExecutionView 即接入该执行事实。
+  expect(text).toContain("first-question");
+  expect(text).toContain("second-question");
+  expect(text).toContain("first-round-writing");
+  expect(text).toContain("second-round-writing");
+  // Once Node fills in question.execution in /turns, the existing QueryExecutionView picks up that execution fact.
   for (const header of wrapper.findAll(".loop-activity-header")) await header.trigger("click");
   expect(wrapper.find("query-execution-view-stub").exists()).toBe(true);
-  expect(occurrences(text, "第一答")).toBe(1);
-  expect(occurrences(text, "第二答")).toBe(1);
+  expect(occurrences(text, "first-answer")).toBe(1);
+  expect(occurrences(text, "second-answer")).toBe(1);
 });
 
-// 被测公开面：取消轮的部分正文与流式尾部；可观察结果：部分正文保留且不重复，流式轮照常呈现。
+// Public surface under test: partial body of a cancelled turn and the streaming tail; observable result: the partial body stays without duplication and the streaming turn renders normally.
 it("keeps a cancelled turn's partial answer while the next turn streams", () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "第一问" },
-      answerMessage(2, "已完成的部分回答", "已完成轮写作", { runState: runState("cancelled", 1) }),
-      { id: 3, role: "user", content: "第二问" },
+      { id: 1, role: "user", content: "first-question" },
+      answerMessage(2, "completed-partial-answer", "completed-round-writing", { runState: runState("cancelled", 1) }),
+      { id: 3, role: "user", content: "second-question" },
     ],
-    streamingSnapshot: streamingExecution([activity("进行中轮写作")]),
+    streamingSnapshot: streamingExecution([activity("in-progress-round-writing")]),
   });
   const text = render().text();
 
-  expect(text).toContain("已完成的部分回答");
-  expect(text).toContain("已完成轮写作");
-  expect(text).toContain("进行中轮写作");
-  expect(occurrences(text, "已完成的部分回答")).toBe(1);
+  expect(text).toContain("completed-partial-answer");
+  expect(text).toContain("completed-round-writing");
+  expect(text).toContain("in-progress-round-writing");
+  expect(occurrences(text, "completed-partial-answer")).toBe(1);
 });
 
-// 被测公开面：standard 追问的流式正文；可观察结果：正文与打字尾部出现在该轮。
+// Public surface under test: streaming body of a standard follow-up; observable result: the body and typing tail appear in that turn.
 it("shows the streaming carrier text for a standard follow-up turn", () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "报告问题" },
-      answerMessage(2, "报告答复", "报告轮活动"),
-      { id: 3, role: "user", content: "追问问题" },
+      { id: 1, role: "user", content: "report-question" },
+      answerMessage(2, "report-reply", "report-round-activity"),
+      { id: 3, role: "user", content: "follow-up-question" },
     ],
     streamingSnapshot: {
       mode: "standard",
       status: "streaming",
       source: "live",
-      primaryText: "追问流式正文",
+      primaryText: "follow-up-streaming-body",
     },
   });
   const wrapper = render();
 
-  expect(wrapper.text()).toContain("追问流式正文");
+  expect(wrapper.text()).toContain("follow-up-streaming-body");
   expect(wrapper.find(".typing-cursor").exists()).toBe(true);
 });
 
-// 被测公开面：逐轮回复的权威来源；可观察结果：任务行仍停在上一轮时，答案不会带进未完成的新轮。
+// Public surface under test: the authoritative source of per-turn replies; observable result: while the task row is still on the previous turn, its answer is not carried into the unfinished new turn.
 it("keeps a finished turn's answer out of the next unfinished turn", () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "问题A" },
-      answerMessage(2, "答案A", "A轮活动"),
-      { id: 3, role: "user", content: "问题B" },
+      { id: 1, role: "user", content: "question-A" },
+      answerMessage(2, "answer-A", "round-A-activity"),
+      { id: 3, role: "user", content: "question-B" },
     ],
-    streamingSnapshot: streamingExecution([activity("B轮进行中")]),
-    taskPatch: { finalAnswer: "答案A" },
+    streamingSnapshot: streamingExecution([activity("round-B-in-progress")]),
+    taskPatch: { finalAnswer: "answer-A" },
   });
   const text = render().text();
 
-  expect(text).toContain("问题A");
-  expect(text).toContain("问题B");
-  expect(text).toContain("B轮进行中");
-  expect(occurrences(text, "答案A")).toBe(1);
+  expect(text).toContain("question-A");
+  expect(text).toContain("question-B");
+  expect(text).toContain("round-B-in-progress");
+  expect(occurrences(text, "answer-A")).toBe(1);
 });
 
-// 被测公开面：报告任务的历史运行选择；可观察结果：没有运行快照时不把报告正文
-// 伪装成对话消息；报告正文仍由报告视图负责呈现。
+// Public surface under test: history run selection of report tasks; observable result: without a run snapshot the report body
+// is not disguised as a chat message; the report view still renders the report body.
 it("does not show a historical run's report body in the conversation view", () => {
   seed({
     report: true,
     messages: [
-      { id: 1, role: "user", content: "当前问题" },
-      answerMessage(2, "当前回答", "当前轮活动"),
+      { id: 1, role: "user", content: "current-question" },
+      answerMessage(2, "current-answer", "current-round-activity"),
     ],
     runs: [
-      { id: "run-1", status: "completed", resultReport: "第一次运行正文" },
-      { id: "run-2", status: "completed", resultReport: "第二次运行正文" },
+      { id: "run-1", status: "completed", resultReport: "first-run-body" },
+      { id: "run-2", status: "completed", resultReport: "second-run-body" },
     ],
     runIndex: 0,
   });
   const text = render().text();
 
-  expect(text).toContain("任务问题");
-  expect(text).not.toContain("第一次运行正文");
-  expect(text).not.toContain("第二次运行正文");
-  // 运行记录没有公开消息，不应出现空的"消息与工具"面板。
+  expect(text).toContain("task-question");
+  expect(text).not.toContain("first-run-body");
+  expect(text).not.toContain("second-run-body");
+  // Run records have no public messages, so no empty "messages and tools" panel should appear.
   expect(render().findAll(".message-trace-list")).toHaveLength(0);
 });
 
-// 被测公开面：每轮公开消息与工具结果；可观察结果：展开互不串轮，内部思考字段不被读取。
+// Public surface under test: per-turn public messages and tool results; observable result: expanding does not mix turns and internal thinking fields are never read.
 it("does not leak partial report text from a cancelled run into chat", () => {
-  const cancelledPayload = execution([activity("取消前活动")], {
+  const cancelledPayload = execution([activity("pre-cancel-activity")], {
     runState: runState("cancelled", 1),
     sections: [
       {
         sectionId: "report",
         order: 0,
         revision: 1,
-        markdown: "取消前部分报告",
+        markdown: "pre-cancel-partial-report",
         status: "success",
       },
     ],
@@ -388,42 +388,42 @@ it("does not leak partial report text from a cancelled run into chat", () => {
       {
         id: "run-cancelled",
         status: "cancelled",
-        resultReport: "取消前部分报告",
+        resultReport: "pre-cancel-partial-report",
         snapshot: {
           mode: "deep-analysis",
           status: "failed",
           source: "history",
-          primaryText: "取消前部分报告",
+          primaryText: "pre-cancel-partial-report",
           deepAnalysis: cancelledPayload,
         },
       },
-      { id: "run-current", status: "completed", resultReport: "当前报告" },
+      { id: "run-current", status: "completed", resultReport: "current-report" },
     ],
     runIndex: 0,
   });
 
   const text = render().text();
-  expect(text).toContain("取消前活动");
-  expect(text).not.toContain("取消前部分报告");
+  expect(text).toContain("pre-cancel-activity");
+  expect(text).not.toContain("pre-cancel-partial-report");
 });
 
 it("keeps each turn's messages and tool results inside its own expandable trace", async () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "第一问" },
-      answerMessage(2, "第一答", "第一轮写作", {}, [
-        userTrace("第一问"),
-        userTrace("[订单](https://example.com/orders) 已提交"),
+      { id: 1, role: "user", content: "first-question" },
+      answerMessage(2, "first-answer", "first-round-writing", {}, [
+        userTrace("first-question"),
+        userTrace("[Orders](https://example.com/orders) submitted"),
         userTrace('{"sku":"SKU42","qty":3}'),
         userTrace('<img src=x onerror="alert(1)">'),
         toolCallTrace("orders_query", { region: "north" }),
-        toolResultTrace("orders_query", "订单结果甲"),
-        { ...userTrace("隐藏消息"), thinking: "内部思考甲" } as unknown as EgressMessage,
+        toolResultTrace("orders_query", "orders-result-A"),
+        { ...userTrace("hidden-message"), thinking: "internal-thinking-A" } as unknown as EgressMessage,
       ]),
-      { id: 3, role: "user", content: "第二问" },
-      answerMessage(4, "第二答", "第二轮写作", {}, [
+      { id: 3, role: "user", content: "second-question" },
+      answerMessage(4, "second-answer", "second-round-writing", {}, [
         toolCallTrace("stock_query", { sku: "SKU42" }),
-        toolResultTrace("stock_query", "库存结果乙"),
+        toolResultTrace("stock_query", "stock-result-B"),
       ]),
     ],
   });
@@ -431,16 +431,16 @@ it("keeps each turn's messages and tool results inside its own expandable trace"
   const toggles = wrapper.findAll(".message-trace-list .loop-trace-toggle");
 
   expect(toggles).toHaveLength(2);
-  expect(wrapper.text()).not.toContain("订单结果甲");
-  expect(wrapper.text()).not.toContain("内部思考甲");
+  expect(wrapper.text()).not.toContain("orders-result-A");
+  expect(wrapper.text()).not.toContain("internal-thinking-A");
 
   await toggles[0].trigger("click");
   expect(wrapper.text()).toContain("orders_query");
-  expect(wrapper.text()).toContain("订单结果甲");
+  expect(wrapper.text()).toContain("orders-result-A");
   expect(wrapper.text()).not.toContain("stock_query");
-  expect(wrapper.text()).not.toContain("库存结果乙");
-  expect(wrapper.text()).not.toContain("内部思考甲");
-  // 每轮公开消息复用旧安全 renderer：Markdown 链接与 JSON 代码块保留，原始 HTML 不执行。
+  expect(wrapper.text()).not.toContain("stock-result-B");
+  expect(wrapper.text()).not.toContain("internal-thinking-A");
+  // Per-turn public messages reuse the old safe renderer: Markdown links and JSON code blocks are kept and raw HTML is not executed.
   expect(wrapper.find('.loop-trace-text a[href="https://example.com/orders"]').exists()).toBe(true);
   const codeBlock = wrapper.find(".loop-trace-text pre code");
   expect(codeBlock.exists()).toBe(true);
@@ -450,26 +450,26 @@ it("keeps each turn's messages and tool results inside its own expandable trace"
 
   await toggles[1].trigger("click");
   expect(wrapper.text()).toContain("stock_query");
-  expect(wrapper.text()).toContain("库存结果乙");
-  expect(occurrences(wrapper.text(), "订单结果甲")).toBe(1);
-  expect(occurrences(wrapper.text(), "库存结果乙")).toBe(1);
+  expect(wrapper.text()).toContain("stock-result-B");
+  expect(occurrences(wrapper.text(), "orders-result-A")).toBe(1);
+  expect(occurrences(wrapper.text(), "stock-result-B")).toBe(1);
 });
 
-// 被测公开面：常规连续会话不按运行历史切换；可观察结果：全部回合与活动始终在位，
-// 未完成轮的流式尾部仍可见，且 store 提供给输入框的"可继续"标志为 true。
+// Public surface under test: a regular continuous session does not switch by run history; observable result: all turns and activities stay present,
+// the unfinished turn's streaming tail is still visible, and the "can continue" flag the store gives the input is true.
 it("keeps every turn visible for a regular conversation with run history", () => {
   seed({
     messages: [
-      { id: 1, role: "user", content: "第一问" },
-      answerMessage(2, "第一答", "第一轮写作"),
-      { id: 3, role: "user", content: "第二问" },
-      answerMessage(4, "第二答", "第二轮写作"),
-      { id: 5, role: "user", content: "第三问" },
+      { id: 1, role: "user", content: "first-question" },
+      answerMessage(2, "first-answer", "first-round-writing"),
+      { id: 3, role: "user", content: "second-question" },
+      answerMessage(4, "second-answer", "second-round-writing"),
+      { id: 5, role: "user", content: "third-question" },
     ],
-    streamingSnapshot: streamingExecution([activity("第三轮进行中")]),
+    streamingSnapshot: streamingExecution([activity("third-round-in-progress")]),
     runs: [
-      { id: "run-1", status: "completed", resultReport: "第一次运行正文" },
-      { id: "run-2", status: "completed", resultReport: "第二次运行正文" },
+      { id: "run-1", status: "completed", resultReport: "first-run-body" },
+      { id: "run-2", status: "completed", resultReport: "second-run-body" },
     ],
     runIndex: 0,
   });
@@ -477,39 +477,39 @@ it("keeps every turn visible for a regular conversation with run history", () =>
   const wrapper = render();
   const text = wrapper.text();
 
-  expect(text).toContain("第一问");
-  expect(text).toContain("第二问");
-  expect(text).toContain("第一轮写作");
-  expect(text).toContain("第二轮写作");
-  expect(text).toContain("第三问");
-  expect(text).toContain("第三轮进行中");
+  expect(text).toContain("first-question");
+  expect(text).toContain("second-question");
+  expect(text).toContain("first-round-writing");
+  expect(text).toContain("second-round-writing");
+  expect(text).toContain("third-question");
+  expect(text).toContain("third-round-in-progress");
   expect(store.isSelectedLatestRun).toBe(true);
   expect(store.displayStreamingSnapshot?.mode).toBe("deep-analysis");
   store.sessions["task-1"].isLoading = true;
   expect(store.displayIsLoading).toBe(true);
-  expect(text).not.toContain("第一次运行正文");
+  expect(text).not.toContain("first-run-body");
   expect(wrapper.find(".typing-cursor, .streaming-dots").exists()).toBe(false);
 });
 
-// 被测公开面：报告任务一轮执行 + 标准追问；可观察结果：报告正文留在报告视图，追问原样呈现。
+// Public surface under test: one report-task execution plus a standard follow-up; observable result: the report body stays in the report view and the follow-up renders as-is.
 it("keeps one execution block plus standard follow-up turns for a report task", () => {
   seed({
     report: true,
     messages: [
-      { id: 1, role: "user", content: "报告问题" },
-      answerMessage(2, "报告正文ABC", "报告轮活动", {
-        sections: [{ sectionId: "s1", order: 0, revision: 1, markdown: "报告正文ABC" }],
+      { id: 1, role: "user", content: "report-question" },
+      answerMessage(2, "report-body-ABC", "report-round-activity", {
+        sections: [{ sectionId: "s1", order: 0, revision: 1, markdown: "report-body-ABC" }],
       }),
-      { id: 3, role: "user", content: "追问问题" },
+      { id: 3, role: "user", content: "follow-up-question" },
       {
         id: 4,
         role: "assistant",
-        content: "追问回答",
+        content: "follow-up-answer",
         snapshot: {
           mode: "standard",
           status: "completed",
           source: "history",
-          primaryText: "追问回答",
+          primaryText: "follow-up-answer",
         },
       },
     ],
@@ -517,10 +517,10 @@ it("keeps one execution block plus standard follow-up turns for a report task", 
   const wrapper = render();
   const text = wrapper.text();
 
-  expect(text).toContain("报告问题");
-  expect(text).toContain("报告轮活动");
+  expect(text).toContain("report-question");
+  expect(text).toContain("report-round-activity");
   expect(wrapper.find(".follow-up-divider").exists()).toBe(true);
-  expect(text).toContain("追问问题");
-  expect(text).toContain("追问回答");
-  expect(text).not.toContain("报告正文ABC");
+  expect(text).toContain("follow-up-question");
+  expect(text).toContain("follow-up-answer");
+  expect(text).not.toContain("report-body-ABC");
 });

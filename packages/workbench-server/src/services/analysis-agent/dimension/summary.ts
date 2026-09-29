@@ -1,8 +1,8 @@
 import type { DimensionReportItem, DimensionSummaryInput } from "./execute";
 /**
- * 维度形态的综合总结阶段：把各维度报告汇成一份总结，并按证据补充总结级图表。
+ * Comprehensive summary stage of the dimension form: merges the dimension reports into one summary and adds summary-level charts from evidence.
  *
- * 没有任何成功的维度报告时直接跳过——总结不是必须产物，跳过不算失败。
+ * Skipped entirely when no dimension report succeeded — the summary is not a mandatory artifact and skipping is not a failure.
  */
 
 import { t } from "../../../i18n";
@@ -20,7 +20,7 @@ import { tApp } from "../../../i18n";
 
 const logger = createLogger("deep-analysis-summary");
 
-/** 综合总结的证据取所有子问题的原始值数据集，空数据集不进证据。 */
+/** The summary's evidence takes every sub-question's raw-value dataset; empty datasets are excluded. */
 function buildSummaryEvidence(plannedDimensions: any[]): AnalysisEvidence[] {
   return plannedDimensions
     .flatMap((dimension) => dimension.subQuestions || [])

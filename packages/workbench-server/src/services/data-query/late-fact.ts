@@ -2,12 +2,12 @@ import { tApp } from "../../i18n";
 import type { AbcQuestionMode } from "@ontomato/contracts/system-model";
 import type { QcState } from "@ontomato/contracts/query-thinking";
 /**
- * 迟到事实：在执行事实收口之后才就绪的事实，质检是目前唯一的一种。
+ * Late fact: a fact that becomes ready only after the execution facts have been finalized; the quality check is currently the only one.
  *
- * 产生它的执行不自行推送、也不自行起无主的后台读取，而是把待结算项交回调用方；
- * 调用方登记给本次运行，运行因此拥有它的取消与结算。运行是否等它结算再收口，
- * 取决于本次运行的呈现是否包含它——标准问数的回合展示有质检面板所以等，
- * 深度分析的工作流、报告与运行呈现都不消费质检所以不等，只补写供事后回看。
+ * The execution that produces it neither pushes it itself nor starts an unowned background read; it hands the pending item back to the caller.
+ * The caller registers it with the current run, so the run owns its cancellation and settlement. Whether the run waits for settlement
+ * before finalizing depends on whether the run's presentation includes it — the standard query turn display has a quality-check panel so it waits,
+ * while deep analysis workflows, reports, and run presentation never consume the quality check so they do not wait; it is only written back for later review.
  */
 
 import { createLogger } from "../../logging/logger";
@@ -19,12 +19,12 @@ import { updateQueryRunQualityCheck } from "./query-run-store";
 
 const logger = createLogger("data-query:late-fact");
 
-/** 迟到事实的有界时限：只决定"多久算它挂了"，不是"等多久算数"。 */
+/** Bounded time limit of a late fact: it decides only "when to consider it dead", never "how long to wait before the result counts". */
 export const LATE_FACT_SETTLE_TIMEOUT_MS = 60_000;
 
 /**
- * 一次运行登记的迟到事实。呈现该事实的运行在收口前调用 settleAll；
- * 不呈现的只登记，由运行的取消信号负责收尾。
+ * A late fact registered by one run. A run that presents the fact calls settleAll before finalizing;
+ * one that does not merely registers it, and the run's cancellation signal takes care of the cleanup.
  */
 export class PendingLateFacts {
   private readonly pending = new Set<Promise<void>>();
@@ -36,8 +36,8 @@ export class PendingLateFacts {
   }
 
   /**
-   * 等待全部登记项结算。时限由每个迟到事实自己拥有（超时即自行收口为未就绪），
-   * 这里不再叠加第二层等待上限。
+   * Waits for all registered items to settle. Each late fact owns its own time limit (on timeout it finalizes itself as not ready),
+   * and no second wait ceiling is added here.
    */
   async settleAll(): Promise<void> {
     if (this.pending.size === 0) return;
@@ -54,24 +54,24 @@ export interface QualityCheckSettlementInput {
   userId?: string;
   locale?: string;
   signal?: AbortSignal;
-  /** 呈现该事实的运行传入，用于推送过程状态；不呈现的不传 */
+  /** Passed in by the run that presents this fact, used to push progress states; runs that do not present it omit it */
   onState?: (state: QcState, markdown: string) => void;
 }
 
 /**
- * 读取一次问数问题的质检并补写进它的执行事实。两个调用方共用这一份实现：
- * 读取路径、补写通道与取消语义都在这里，调用方只决定是否推送、是否等待。
+ * Reads the quality check of one query question and writes it back into its execution facts. Both callers share this single implementation:
+ * the read path, the write-back channel, and the cancellation semantics live here; callers only decide whether to push and whether to wait.
  */
 export function startQualityCheckSettlement(input: QualityCheckSettlementInput): Promise<void> {
   const { identity, sessionId, onState, signal } = input;
   let state: QcState = { status: "running", steps: [] };
   const publish = () => onState?.(state, buildQcMarkdown(state));
 
-  // 有界时限由本事实自己拥有：查询后端的质检读取没有服务端超时，超过时限即判定它
-  // 挂了——中止读取、收口为未就绪、不补写。这不是"等多久算数"，是资源边界。
+  // The bounded time limit is owned by this fact itself: the backend quality-check read has no server-side timeout, so past the limit it is
+  // considered dead — abort the read, finalize as not ready, and skip the write-back. This is a resource boundary, not "how long to wait for a valid result".
   const bound = new AbortController();
   const abortOnCaller = () => bound.abort();
-  // 进入时已经取消与运行中收到取消复用同一个收口，不能只挂监听器。
+  // Cancellation on entry and cancellation received while running reuse the same finalization; attaching only a listener is not enough.
   if (signal?.aborted) bound.abort();
   else signal?.addEventListener("abort", abortOnCaller);
   let timedOut = false;
@@ -120,20 +120,20 @@ export function startQualityCheckSettlement(input: QualityCheckSettlementInput):
           publish();
         },
         onError: () => {
-          // 取消与超时不是失败：读取被我们自己中止时不改状态，交由下面的收口分支处理。
+          // Cancellation and timeout are not failures: when we abort the read ourselves the state is left unchanged for the finalization branch below.
           if (bound.signal.aborted) return;
           state = { ...state, status: "failed" };
           publish();
         },
       });
 
-      // 超过时限：收口为未就绪并推送，但不补写——没有结果可写。
+      // Past the time limit: finalize as not ready and push, but skip the write-back — there is no result to write.
       if (timedOut) {
         state = { ...state, status: "unsettled" };
         publish();
         return;
       }
-      // 取消不是失败，也不补写——本次运行已经不再关心这份证据。
+      // Cancellation is not a failure, and no write-back — this run no longer cares about this evidence.
       if (signal?.aborted) return;
       if (!result) {
         state = { ...state, status: "failed" };

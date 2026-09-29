@@ -12,7 +12,7 @@ export function workbenchIdentity(): WorkbenchIdentity {
   return installed;
 }
 
-/** 路由模块加载时就能挂上，具体实现到请求时才取。 */
+/** Attachable as soon as route modules load; the concrete implementation is fetched at request time. */
 export function requirePermission(keys: readonly string[]): RequestHandler {
   return (req, res, next) => {
     void workbenchIdentity().requirePermission(keys)(req, res, next);

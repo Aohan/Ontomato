@@ -107,8 +107,8 @@ export function expandQueryResultDatasetEntries(options: {
 }
 
 /**
- * 把已保存的查询运行事实读回分析域消费的形状：只在通用读投影之上做数据与 DSL 的窄化，
- * 不重新枚举执行字段。
+ * Reads saved query run facts back into the shape the analysis domain consumes: it only narrows data and DSL on top of the generic read projection,
+ * never re-enumerating execution fields.
  */
 export function toAnalysisQueryFact(run?: QueryRun | null): AnalysisQueryFact {
   const fact = toQueryExecutionFact(run);

@@ -25,7 +25,7 @@ import type { BaseQueryOutput, QueryBackendLocation } from "./branches/types";
 
 const logger = createLogger("abc-query");
 
-/** ABC 查询实际读取的调用上下文，字段与 `runAbcBranch` 的构造点一一对应。 */
+/** Call context actually read by the ABC query; its fields map one-to-one to the construction site of `runAbcBranch`. */
 export type AbcQueryConfig = RunnableConfig<{
   token?: string;
   apiKey?: string;
@@ -369,7 +369,7 @@ export async function executeAbcQuery(
       throw new Error(t("query.error.noSubQuestions"));
     }
 
-    // 会话号只由 streamQuestionSplit 保证：流结束时无号即抛错，能执行到这里必有值。
+    // The session number is guaranteed only by streamQuestionSplit: it throws when the stream ends without one, so a value must exist here.
     const backendSessionId = sessionId as string;
 
     abcLogger.setStage("data");

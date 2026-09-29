@@ -1,27 +1,27 @@
-		6.3.5 bucket类型字段输出至少需要两个step，在查询step中把该字段输出到临时表中（需要as、variable、field属性），如果不需要汇聚操作时，在后面的step中从临时表输出（由as、variable、field、time_range、conditions属性组成）
+		6.3.5 The output of a bucket type field requires at least two steps; in the query step the field is output to a temporary table (the as, variable and field attributes are required). If no aggregation operation is needed, it is output from the temporary table in the following step (consisting of the as, variable, field, time_range and conditions attributes)
    
-			6.3.5.1 如果后面的step中该字段只有as、variable、field属性，代表输出该字段的全部时序数据
+			6.3.5.1 If in the following step the field has only the as, variable and field attributes, it means outputting all the time series data of the field
    
-			6.3.5.2 如果后面的step中该字段有as、variable、field、time_range属性时，代表输出该字段按时间范围过滤后的时序数据
+			6.3.5.2 If in the following step the field has the as, variable, field and time_range attributes, it means outputting the time series data of the field filtered by time range
 
-			- time_range是一个对象，里面有两个属性start和end，它们代表需要圈定的时序值的时间范围，时间格式为`yyyy-MM-dd HH:mm:ss`，start必须有具体的值，end的值可以给空字符串（代表到当前时间）
+			- time_range is an object containing two attributes start and end, which represent the time range of the time series values to be delimited; the time format is `yyyy-MM-dd HH:mm:ss`, start must have a concrete value, and the value of end may be an empty string (meaning up to the current time)
    
-			6.3.5.3 如果后面的step中该字段有as、variable、field、time_range、conditions属性时，代表输出该字段按时间范围过滤和时序内属性过滤后的时序数据
+			6.3.5.3 If in the following step the field has the as, variable, field, time_range and conditions attributes, it means outputting the time series data of the field filtered by time range and by attributes inside the time series
 
-				6.3.5.3.1 conditions（可为空数组）是一个数组，它代表时序值的过滤条件，数组中各条件间是`AND`的关系，数组中单一对象由metric、operator、value组成
+				6.3.5.3.1 conditions (may be an empty array) is an array that represents the filter conditions of the time series values; the conditions in the array are in an `AND` relationship, and a single object in the array consists of metric, operator and value
 
-					6.3.5.3.1.1 当metric是name时，operator只能是“=”、“like”、“in”中的一个
+					6.3.5.3.1.1 When metric is name, operator can only be one of "=", "like" and "in"
 
-					- operator是“=”时，value是字符串，代表按子指标名精确过滤
-					- operator是“like”时，value是字符串，代表按子指标名模糊过滤
-					- operator是“in”时，value是字符串数组，代表按子指标名在数组范围内过滤
+					- When operator is "=", value is a string, representing exact filtering by sub-metric name
+					- When operator is "like", value is a string, representing fuzzy filtering by sub-metric name
+					- When operator is "in", value is a string array, representing filtering by sub-metric name within the array range
 
-					6.3.5.3.1.2 当metric是value时，operator只能是“=”、“>”、“<”、“>=”、“<=”中的一个，代表按时序值过滤，value的值是整型或浮点型
+					6.3.5.3.1.2 When metric is value, operator can only be one of "=", ">", "<", ">=" and "<=", representing filtering by time series value, and the value of value is an integer or a float
    
-		6.3.6 bucket类型字段输出至少需要两个step，在查询step中把该字段输出到临时表中（需要as、variable、field属性），如果需要汇聚操作时，在后面的step中从临时表输出（由as、variable、field、time_range、conditions、function、interval属性组成）
+		6.3.6 The output of a bucket type field requires at least two steps; in the query step the field is output to a temporary table (the as, variable and field attributes are required). If an aggregation operation is needed, it is output from the temporary table in the following step (consisting of the as, variable, field, time_range, conditions, function and interval attributes)
 
-		- function是汇聚函数，可选函数范围是“avg”、“sum”、“max”、“min”
-        - 不允许对在output中对Bucket类型字段做group by和having操作
-        - 不允许对在output中对Bucket类型字段做sort操作
-		- interval是汇聚的时间颗粒度，它是一个字符串，由数字部分和时间单位部分组成，数字部分是正整数，时间单位部分是“m”（分钟）、“h”（小时）、“d”（天）、“w”（周）、“M”（月）、“y”（年），例如按一周汇聚是“1w”
-        - bucket类型字段的时序数据输出会同时时序数据的时间戳、指标名称、指标值和标签，不用分别输出时间戳、指标值
+		- function is the aggregation function, and the available function range is "avg", "sum", "max" and "min"
+        - It is not allowed to perform group by and having operations on Bucket type fields in output
+        - It is not allowed to perform sort operations on Bucket type fields in output
+		- interval is the time granularity of the aggregation; it is a string consisting of a numeric part and a time unit part, the numeric part is a positive integer, and the time unit part is "m" (minute), "h" (hour), "d" (day), "w" (week), "M" (month) or "y" (year), for example aggregating by one week is "1w"
+        - The time series data output of a bucket type field outputs the timestamp, metric name, metric value and label of the time series data at the same time, so there is no need to output the timestamp and metric value separately

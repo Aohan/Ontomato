@@ -101,7 +101,7 @@ public class BusinessConfigServiceImpl implements BusinessConfigService {
 		drc.setQuestionSpliterTries(businessConfig.getQuestionSpliterTries());
 		drc.setQuestionSpliterTimeout(businessConfig.getQuestionSpliterTimeout());
 		drc.setDataAdapter(businessConfig.getDataAdapter());
-		ontomato.put("datarag", drc);
+		ontomato.put("data-engine", drc);
 		ontomato.put("sso", identityRuntimeSettings.ssoSettings());
 		ontomato.put("ldap", identityRuntimeSettings.ldapSettings());
 		wholeConfig.put("ontomato", ontomato);
@@ -117,13 +117,13 @@ public class BusinessConfigServiceImpl implements BusinessConfigService {
 				+ "The existing env placeholder mapping still applies. Persisted domain models and roles are not written back from the file.\n"
 				+ "For a saved domain, the models under `langchain4j.open-ai` (a named model list, including connections and all request parameters) "
 				+ "and agents (model references and execution fields of the five roles) can take effect promptly after being configured through the page or API, and are retained after restart.\n"
-				+ "The configurations `ontomato.datarag.knowledgeMaxResult`, "
-				+ "`ontomato.datarag.toolAndPythonRetry`, "
-				+ "`ontomato.datarag.dslCookerTries`, "
-				+ "`ontomato.datarag.dslCookerTimeout`, "
-				+ "`ontomato.datarag.questionSpliterTries`, "
-				+ "`ontomato.datarag.questionSpliterTimeout`, "
-				+ "`ontomato.datarag.dataAdapter` all take effect promptly after being configured through the page.\n"
+				+ "The configurations `ontomato.data-engine.knowledgeMaxResult`, "
+				+ "`ontomato.data-engine.toolAndPythonRetry`, "
+				+ "`ontomato.data-engine.dslCookerTries`, "
+				+ "`ontomato.data-engine.dslCookerTimeout`, "
+				+ "`ontomato.data-engine.questionSpliterTries`, "
+				+ "`ontomato.data-engine.questionSpliterTimeout`, "
+				+ "`ontomato.data-engine.dataAdapter` all take effect promptly after being configured through the page.\n"
 				+ "Apart from these configuration items, other configurations take effect only after the on-site conf/application.yml is updated, or an environment variable that the kept file still references is updated, and the application is restarted. "
 				+ "BACKEND_ and POSTGRE_ aliases apply through placeholders that remain in that file; removing a placeholder does not guarantee the alias still overrides the file.";
 	}

@@ -17,10 +17,10 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-/** 本版 Node writer 的落盘文本，交观察页新阅读解析（按本版格式）消费；另一版的格式不接受（原各自只认本版）。 */
+/** On-disk text of this edition's Node writer, consumed by the observe page's new reader/parser (this edition's format); the other edition's format is not accepted (originally each accepted only its own). */
 describe("OSS prompt transcript reader", () => {
   it("reads the current writer output as rounds and semantic marker kinds, and rejects the enterprise format", () => {
-    // writer 的 Node 文案经 tApp 取值，需本版 Node 词条装配（本 app 未配 vitest setup）。
+    // The writer's Node copy is read through tApp, requiring this edition's Node messages to be installed (this app has no vitest setup).
     configureOssI18n();
     installWorkbenchProduct(ossProduct);
     installWorkspaceArtifactText(ossWorkspaceArtifactText);
@@ -43,9 +43,11 @@ describe("OSS prompt transcript reader", () => {
       "llmOutput",
     ]);
 
-    // 另一版的原格式（c0287200（企业） 固定源 parser 的 MARKER 词与 ROUND_PATTERN）：先证它能识别自己的两类轮次标题，再证不接受本版 writer 输出
-    const otherFormat = { promptMarkers: { systemPrompt: "系统提示词", userPrompt: "用户提示词", reasoning: "模型思考", llmOutput: "大模型输出", toolCall: "工具调用", toolReturn: "工具返回", message: "消息" }, roundTitlePattern: /^##\s+调用\s+\d+(?:（原始序号=[^）]+）)?\s*$/ };
-    expect(["## 调用 1", "## 调用 4（原始序号=7）"].every((title) => otherFormat.roundTitlePattern.test(title))).toBe(true);
+    // The other edition's original format (the MARKER words and ROUND_PATTERN of the c0287200/enterprise fixed-source parser): first prove it recognizes its own two turn-title kinds, then prove it does not accept this edition's writer output
+    // The escaped literals are the enterprise edition's persisted prompt-marker words and turn-title pattern (see the \u escapes below):
+    // persisted protocol values, kept byte-identical.
+    const otherFormat = { promptMarkers: { systemPrompt: "\u7cfb\u7edf\u63d0\u793a\u8bcd", userPrompt: "\u7528\u6237\u63d0\u793a\u8bcd", reasoning: "\u6a21\u578b\u601d\u8003", llmOutput: "\u5927\u6a21\u578b\u8f93\u51fa", toolCall: "\u5de5\u5177\u8c03\u7528", toolReturn: "\u5de5\u5177\u8fd4\u56de", message: "\u6d88\u606f" }, roundTitlePattern: /^##\s+\u8c03\u7528\s+\d+(?:（\u539f\u59cb\u5e8f\u53f7=[^）]+）)?\s*$/ };
+    expect(["## \u8c03\u7528 1", "## \u8c03\u7528 4（\u539f\u59cb\u5e8f\u53f7=7）"].every((title) => otherFormat.roundTitlePattern.test(title))).toBe(true);
     expect(parsePromptTranscript(content, otherFormat)).toEqual({ ok: false, reason: "not_unified" });
   });
 });

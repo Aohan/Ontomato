@@ -14,10 +14,10 @@ const CORE = join(REPO, "packages", "data-engine-core");
 const REAL_MCP = readFileSync(join(CORE, "conf-defaults", "mcp-clients.yml"), "utf8");
 const REAL_APP = readFileSync(join(CORE, "conf-defaults", "application.yml"), "utf8");
 const LSTART = "Sat Sep 27 15:19:06 2026";
-// sandbox 用可执行 symlink 把 fake ps/lsof/docker/kill 放进 PATH，且 fake 是带 shebang 的脚本；
-// 二者都只在 POSIX 成立（Windows 建 symlink 需要特权，CreateProcess 也不认 shebang），
-// 所以依赖 sandbox 的用例在 Windows 明确 skip，由 Windows-only 用例覆盖同一边界。
-const POSIX_ONLY = process.platform === "win32" ? "fake ps/lsof/docker/kill 与可执行 symlink 仅 POSIX" : false;
+// Sandbox uses executable symlinks to put fake ps/lsof/docker/kill into PATH, and fakes are scripts with shebangs;
+// both only hold on POSIX (Windows requires privileges for symlinks, and CreateProcess ignores shebangs),
+// so sandbox-dependent tests are explicitly skipped on Windows, with Windows-only tests covering the same boundaries.
+const POSIX_ONLY = process.platform === "win32" ? "fake ps/lsof/docker/kill and executable symlinks are POSIX-only" : false;
 const posixTest = (name, fn) => test(name, { skip: POSIX_ONLY }, fn);
 
 // Fake external tools: dispatch on the invoked name, state from FAKE_SCENARIO, record argv.
@@ -120,12 +120,12 @@ test("the real templates parse with the documented keys", () => {
   assert.equal(applicationServerPort(REAL_APP, REPO), 18087);
 });
 test("MCP selection accepts only one local explicit http /sse entry", () => {
-  const doc = (clients) => `ontomato:\n  datarag:\n    mcp-clients:\n${clients}`;
-  assert.throws(() => localMcpPort(doc("      - sse-server: http://10.0.0.1:18500/sse\n"), REPO), /没有本机/);
-  assert.throws(() => localMcpPort(doc("      - sse-server: http://localhost:18500/sse\n"), REPO), /没有本机/);
-  assert.throws(() => localMcpPort(doc("      - sse-server: https://127.0.0.1:18500/sse\n"), REPO), /必须是 http/);
-  assert.throws(() => localMcpPort(doc("      - sse-server: http://127.0.0.1/sse\n"), REPO), /缺少显式端口/);
-  assert.throws(() => localMcpPort(doc("      - sse-server: http://127.0.0.1:18500/sse\n      - sse-server: http://127.0.0.1:18501/sse\n"), REPO), /要求唯一/);
+  const doc = (clients) => `ontomato:\n  data-engine:\n    mcp-clients:\n${clients}`;
+  assert.throws(() => localMcpPort(doc("      - sse-server: http://10.0.0.1:18500/sse\n"), REPO), /no local 127\.0\.0\.1 MCP entry/);
+  assert.throws(() => localMcpPort(doc("      - sse-server: http://localhost:18500/sse\n"), REPO), /no local 127\.0\.0\.1 MCP entry/);
+  assert.throws(() => localMcpPort(doc("      - sse-server: https://127.0.0.1:18500/sse\n"), REPO), /must be http/);
+  assert.throws(() => localMcpPort(doc("      - sse-server: http://127.0.0.1/sse\n"), REPO), /missing explicit port/);
+  assert.throws(() => localMcpPort(doc("      - sse-server: http://127.0.0.1:18500/sse\n      - sse-server: http://127.0.0.1:18501/sse\n"), REPO), /exactly one required/);
   assert.equal(localMcpPort(doc("      - sse-server: http://10.0.0.1:9999/sse\n      - sse-server: http://127.0.0.1:18500/sse\n"), REPO), 18500);
   try {
     localMcpPort(doc("      - sse-server: http://127.0.0.1:abc/sse\n"), REPO);
@@ -202,7 +202,7 @@ test("classify only accepts the real N10 dev commands as frontend roots", () => 
   assert.equal(classify("node /w/corepack/pnpm.js dev", ctx.root, ctx), "frontend-root");
   assert.equal(classify("node .../concurrently/dist/bin/concurrently.js pnpm:dev:server pnpm:dev:web pnpm:dev:ontology-manager", ctx.root, ctx), "frontend-root");
   assert.equal(classify("node .../tsx/dist/cli.mjs watch src/index.ts", join(ctx.root, "apps/workbench"), ctx), "frontend-root");
-  // tsx watch 启动的实际工作进程（--require/--import 形式，脚本用绝对入口）。
+  // Actual worker process started by tsx watch (--require/--import form, script uses absolute entry).
   assert.equal(classify(`node --require /x/node_modules/tsx/dist/preflight.cjs --import file:///x/node_modules/tsx/dist/loader.mjs ${join(ctx.root, "apps/workbench/src/index.ts")}`, join(ctx.root, "apps/workbench"), ctx), "frontend-root");
   assert.equal(classify("node .../vite/bin/vite.js --port 5174", join(ctx.root, "apps/ontology-manager"), ctx), "frontend-root");
   assert.equal(classify("node scripts/dev-command.mjs manager", ctx.root, ctx), "frontend-root");
@@ -278,7 +278,7 @@ posixTest("up fails fast when Docker is unavailable and never calls compose", ()
   try {
     const result = cli(sb, "up");
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /Docker 不可用/);
+    assert.match(result.stderr, /Docker is unavailable/);
     assert.equal(result.calls.some((call) => call.startsWith("docker compose")), false);
   } finally {
     cleanup(sb);
@@ -302,7 +302,7 @@ posixTest("up rejects an existing same-project resource owned by another root", 
   try {
     const result = cli(sb, "up");
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /与本检出不符/);
+    assert.match(result.stderr, /does not match this checkout/);
     assert.equal(result.calls.some((call) => call.includes(" up ")), false);
   } finally {
     cleanup(sb);
@@ -313,7 +313,7 @@ posixTest("a failing PG step stops up before MCP is started", () => {
   try {
     const result = cli(sb, "up");
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /PG 启动失败/);
+    assert.match(result.stderr, /PG startup failed/);
   } finally {
     cleanup(sb);
   }
@@ -340,7 +340,7 @@ posixTest("down skips the PG step on a foreign label and reports it", () => {
   try {
     const result = cli(sb, "down");
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /PG 步骤未完成/);
+    assert.match(result.stderr, /PG step incomplete/);
     assert.equal(result.calls.some((call) => call.includes(" down")), false);
   } finally {
     cleanup(sb);
@@ -351,8 +351,8 @@ posixTest("status reports a foreign Java port but claims no owned role", () => {
   try {
     const result = cli(sb, "status");
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Java 端口 18087 被外部进程占用/);
-    assert.match(result.stdout, /Java 入口: 未运行/);
+    assert.match(result.stdout, /Java port 18087 occupied by external process/);
+    assert.match(result.stdout, /Java entry: not running/);
   } finally {
     cleanup(sb);
   }
@@ -361,9 +361,9 @@ posixTest("up rejects a project resource with no root label and reports docker q
   const bare = sandbox(() => ({ dockerInfo: 0, labelVolumes: "\n" }), productFiles(18087));
   const broken = sandbox(() => ({ dockerInfo: 0, labelRc: 1 }), productFiles(18087));
   try {
-    assert.match(cli(bare, "up").stderr, /无 dev\.stack\.root 标签/);
+    assert.match(cli(bare, "up").stderr, /no dev\.stack\.root label/);
     const failed = cli(broken, "up");
-    assert.match(failed.stderr, /docker container 查询失败/);
+    assert.match(failed.stderr, /docker container query failed/);
     assert.equal(failed.calls.some((call) => call.includes(" up ")), false);
   } finally {
     rmSync(bare.dir, { recursive: true, force: true }); rmSync(broken.dir, { recursive: true, force: true });
@@ -374,7 +374,7 @@ posixTest("down re-verifies identity and reports a failed KILL as non-zero", () 
   try {
     const result = cli(sb, "down");
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /补杀失败|TERM 命令失败/);
+    assert.match(result.stderr, /failed to kill|TERM command failed/);
   } finally {
     cleanup(sb);
   }
@@ -397,7 +397,7 @@ posixTest("foreign frontend or Java listeners abort before starting PG", () => {
       cwd: {901: root} }), productFiles(18087));
     try {
       const r = cli(sb, "up");
-      assert.notEqual(r.status, 0); assert.match(r.stderr, /其它进程占用/);
+      assert.notEqual(r.status, 0); assert.match(r.stderr, /occupied by another process/);
       assert.equal(r.calls.some((c) => c.includes(" up ")), false);
     } finally { cleanup(sb); }
   }
@@ -407,7 +407,7 @@ posixTest("down reports an unresolved live candidate and still stops its own PG"
     command: `node ${root}/apps/data-engine/dev.mjs`}], cwd: {} }), productFiles(18087));
   try {
     const r = cli(sb, "down"); assert.notEqual(r.status, 0);
-    assert.match(r.stderr, /无法确认候选/); assert.ok(r.calls.some((c) => c.includes(" down")));
+    assert.match(r.stderr, /Unable to confirm candidate/); assert.ok(r.calls.some((c) => c.includes(" down")));
     assert.equal(r.calls.some((c) => c.startsWith("kill ")), false);
   } finally { cleanup(sb); }
 });
@@ -416,11 +416,11 @@ function waitFor(predicate, timeout = 5000) {
     const deadline = Date.now() + timeout;
     const timer = setInterval(() => {
       if (predicate()) { clearInterval(timer); done(); }
-      else if (Date.now() > deadline) { clearInterval(timer); reject(new Error("等待超时")); }
+      else if (Date.now() > deadline) { clearInterval(timer); reject(new Error("Timeout waiting")); }
     }, 50);
   });
 }
-// 纯文件用例，不依赖 sandbox 的 fake PATH / 可执行 symlink，因此在 Windows 也能跑。
+// Pure file-based test; does not depend on sandbox fake PATH / executable symlinks, so it can run on Windows as well.
 test("logs prints the last lines and follows appends, truncation and replacement", async () => {
   const dir = mkdtempSync(join(tmpdir(), "dev-stack-logs-"));
   const root = join(dir, "product");
@@ -437,29 +437,29 @@ test("logs prints the last lines and follows appends, truncation and replacement
   const seen = () => Buffer.concat(chunks).toString();
   try {
     await waitFor(() => seen().includes("first-15"));
-    assert.doesNotMatch(seen(), /first-05/); // 只保留最后 10 行
+    assert.doesNotMatch(seen(), /first-05/); // Only keep last 10 lines
     assert.match(seen(), /first-06/);
 
     appendFileSync(log, "appended-01\n");
     await waitFor(() => seen().includes("appended-01"));
 
-    writeFileSync(log, "in-place-truncate\n"); // 同一文件原地截断，size < offset
+    writeFileSync(log, "in-place-truncate\n"); // Truncated in place, size < offset
     await waitFor(() => seen().includes("in-place-truncate"));
 
-    // 同尺寸路径替换：新文件与当前一样大，必须靠文件身份而不是 size 判断，不能漏掉开头。
+    // Same-size path replacement: new file is same size, must identify by file identity instead of size to avoid missing beginning.
     const sameSize = join(dir, "same-size.log");
     writeFileSync(sameSize, "same-size-replace\n");
     assert.equal(Buffer.byteLength("same-size-replace\n"), Buffer.byteLength("in-place-truncate\n"));
     renameSync(sameSize, log);
     await waitFor(() => seen().includes("same-size-replace"));
 
-    // 更大文件的路径替换同样要从新内容开头读。
+    // Path replacement with larger file must also read from beginning of new content.
     const larger = join(dir, "larger.log");
     writeFileSync(larger, "larger-replacement-01\nsecond-line\n");
     renameSync(larger, log);
     await waitFor(() => seen().includes("larger-replacement-01"));
 
-    // ENOENT 期间等待新文件：删除后经过至少一个 poll 周期再重建。
+    // Wait for new file during ENOENT: delete and wait at least one poll cycle before recreating.
     rmSync(log);
     await new Promise((done) => setTimeout(done, 1200));
     writeFileSync(log, "recreated-01\n");

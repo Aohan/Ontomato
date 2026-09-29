@@ -1,8 +1,8 @@
-// 产品根整栈开发入口：PG → 本机 Python MCP → Java 就绪 → 前台 Node 三进程。
-// 只依赖 Node 24 内建、docker，以及各平台的进程/监听查询（Unix 用 ps/lsof/kill，Windows 用
-// 内置 PowerShell/CIM）；产品差异全部来自各产品自己的 dev/postgres.compose.yml、
-// apps/data-engine/.env 与 .dev/conf，本工具不认识 edition。
-// yaml 由调用方产品根自我声明并按该根解析，工具没有固定依赖位置。
+// Product root full-stack development entry point: PG -> local Python MCP -> Java ready -> frontend Node trio.
+// Only relies on Node 24 built-ins, docker, and platform process/port queries (Unix uses ps/lsof/kill;
+// Windows uses built-in PowerShell/CIM); product differences come entirely from each product's own dev/postgres.compose.yml,
+// apps/data-engine/.env and .dev/conf; this tool does not know about edition.
+// yaml is self-declared by the caller product root and parsed using that root; the tool has no fixed dependency location.
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, statSync } from "node:fs";
@@ -16,7 +16,7 @@ import { holdForeground } from "./dev-command.mjs";
 import { identifyWindows, windowsListeningPids, windowsProcesses, windowsStop } from "./dev-platform-windows.mjs";
 import { ensurePythonEnv, pythonExecutable, readDotEnv } from "./data-engine/dev-java.mjs";
 
-// 共享工具只锚定自己所在仓的公共 core，不按产品身份探测候选路径。
+// Shared tools only anchor to the public core of their containing repo, without probing candidate paths based on product identity.
 const CORE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "packages", "data-engine-core");
 const WINDOWS = process.platform === "win32";
 const PRODUCT_COMMANDS = ["up", "down", "status", "logs"];
@@ -31,12 +31,12 @@ function run(command, args, options = {}) {
 }
 function integerLiteral(value, label) {
   const text = String(value).trim();
-  if (!/^[0-9]+$/.test(text)) throw new Error(`${label} 必须是可确定的整数端口`);
+  if (!/^[0-9]+$/.test(text)) throw new Error(`${label} must be a determinable integer port`);
   const port = Number(text);
-  if (port < 1 || port > 65535) throw new Error(`${label} 超出端口范围`);
+  if (port < 1 || port > 65535) throw new Error(`${label} out of port range`);
   return port;
 }
-// 精确 argv 边界：路径可含空格，但必须是完整一段，避免根前缀碰撞（/x/a 与 /x/a-2）。
+// Exact argv boundary: path may contain spaces, but must be a complete segment to avoid root prefix collisions (/x/a vs /x/a-2).
 export function hasArg(command, token) {
   let from = 0;
   while (from <= command.length) {
@@ -64,7 +64,7 @@ export function productContext(rootInput) {
     appDir,
     devRoot,
     coreRoot: CORE_ROOT,
-    // venv Python 的位置只有 dev-java.mjs 一份拥有者：Windows 在 Scripts/python.exe。
+    // Location of venv Python has only dev-java.mjs as owner: on Windows it is Scripts/python.exe.
     venvPython: pythonExecutable(appDir),
     mcpScript: join(CORE_ROOT, "mcp", "mcpserver.py"),
     requirements: join(CORE_ROOT, "requirements-py310.txt"),
@@ -79,12 +79,13 @@ export function productContext(rootInput) {
     project: composeProject(root),
   };
 }
-// 配置解析是系统边界：yaml 由调用方产品根自我声明；缺失时报出该根，不退回别的 node_modules。
+// Config parsing is a system boundary: yaml is self-declared by the caller product root;
+// when missing, report that root instead of falling back to other node_modules.
 export function yamlFor(root) {
   try {
     return createRequire(join(root, "package.json"))("yaml");
   } catch {
-    throw new Error(`${join(root, "package.json")} 未声明可解析的 yaml 依赖`);
+    throw new Error(`${join(root, "package.json")} does not declare a parsable yaml dependency`);
   }
 }
 export function applicationServerPort(text, root) {
@@ -93,23 +94,24 @@ export function applicationServerPort(text, root) {
   if (typeof port === "string" && /^[0-9]+$/.test(port.trim())) return Number(port.trim());
   return undefined;
 }
-// 现场 .env 字面值覆盖继承环境；再退现场 application.yml；最后退公共模板，不静默回退端口。
+// Local .env literal overrides inherited environment; then falls back to local application.yml;
+// finally falls back to public template; never silently falls back on port.
 export function resolveJavaPort(ctx, inherited = process.env) {
   const fileVars = existsSync(ctx.javaEnvFile) ? readDotEnv(readFileSync(ctx.javaEnvFile, "utf8")) : {};
   const vars = { ...inherited, ...fileVars };
   if (vars.SERVER_PORT !== undefined) return integerLiteral(vars.SERVER_PORT, "SERVER_PORT");
   const field = join(ctx.devRoot, "conf", "application.yml");
   const file = existsSync(field) ? field : ctx.applicationTemplate;
-  if (!existsSync(file)) throw new Error(`无法确定 Java 端口：缺少 application.yml，请在 apps/data-engine/.env 显式设置 SERVER_PORT`);
+  if (!existsSync(file)) throw new Error(`Unable to determine Java port: missing application.yml; set SERVER_PORT explicitly in apps/data-engine/.env`);
   const port = applicationServerPort(readFileSync(file, "utf8"), ctx.root);
   if (port === undefined)
-    throw new Error(`application.yml 的 server.port 不是可确定整数（${file}）；请在 apps/data-engine/.env 显式设置 SERVER_PORT`);
+    throw new Error(`application.yml server.port is not a valid integer (${file}); set SERVER_PORT explicitly in apps/data-engine/.env`);
   return integerLiteral(port, "server.port");
 }
-// 只为本机计算服务挑唯一一条 http://127.0.0.1:<显式端口>/sse；远程条目允许存在。错误只报字段位置。
+// Pick the single http://127.0.0.1:<explicit-port>/sse entry for local compute service; remote entries are permitted. Errors report field locations.
 export function localMcpPort(text, root) {
-  const clients = yamlFor(root).parse(text)?.ontomato?.datarag?.["mcp-clients"];
-  if (!Array.isArray(clients)) throw new Error("mcp-clients.yml: 缺少 ontomato.datarag.mcp-clients 列表");
+  const clients = yamlFor(root).parse(text)?.ontomato?.["data-engine"]?.["mcp-clients"];
+  if (!Array.isArray(clients)) throw new Error("mcp-clients.yml: missing ontomato.data-engine.mcp-clients list");
   const locals = [];
   clients.forEach((client, index) => {
     if (client?.["sse-server"] === undefined) return;
@@ -117,22 +119,22 @@ export function localMcpPort(text, root) {
     try {
       url = new URL(String(client["sse-server"]));
     } catch {
-      throw new Error(`mcp-clients.yml: ontomato.datarag.mcp-clients[${index}].sse-server 不是有效 URL`);
+      throw new Error(`mcp-clients.yml: ontomato.data-engine.mcp-clients[${index}].sse-server is not a valid URL`);
     }
     if (url.hostname !== "127.0.0.1") return;
-    if (url.protocol !== "http:") throw new Error(`mcp-clients.yml: ontomato.datarag.mcp-clients[${index}].sse-server 必须是 http`);
-    if (url.port === "") throw new Error(`mcp-clients.yml: ontomato.datarag.mcp-clients[${index}].sse-server 缺少显式端口`);
-    if (url.pathname !== "/sse") throw new Error(`mcp-clients.yml: ontomato.datarag.mcp-clients[${index}].sse-server 路径必须是 /sse`);
-    locals.push(integerLiteral(url.port, "MCP 端口"));
+    if (url.protocol !== "http:") throw new Error(`mcp-clients.yml: ontomato.data-engine.mcp-clients[${index}].sse-server must be http`);
+    if (url.port === "") throw new Error(`mcp-clients.yml: ontomato.data-engine.mcp-clients[${index}].sse-server missing explicit port`);
+    if (url.pathname !== "/sse") throw new Error(`mcp-clients.yml: ontomato.data-engine.mcp-clients[${index}].sse-server path must be /sse`);
+    locals.push(integerLiteral(url.port, "MCP port"));
   });
-  if (locals.length === 0) throw new Error("mcp-clients.yml: 没有本机 127.0.0.1 的 MCP 条目");
-  if (locals.length > 1) throw new Error(`mcp-clients.yml: 有 ${locals.length} 个本机 MCP 条目，要求唯一`);
+  if (locals.length === 0) throw new Error("mcp-clients.yml: no local 127.0.0.1 MCP entry");
+  if (locals.length > 1) throw new Error(`mcp-clients.yml: found ${locals.length} local MCP entries, exactly one required`);
   return locals[0];
 }
 export function resolveMcpPort(ctx) {
   const field = join(ctx.devRoot, "conf", "mcp-clients.yml");
   const file = existsSync(field) ? field : ctx.mcpTemplate;
-  if (!existsSync(file)) throw new Error(`找不到 MCP 配置（${field} 或公共模板）`);
+  if (!existsSync(file)) throw new Error(`Cannot find MCP configuration (${field} or public template)`);
   return localMcpPort(readFileSync(file, "utf8"), ctx.root);
 }
 export function parseProcessTable(text) {
@@ -202,21 +204,21 @@ export function classify(command, cwd, ctx) {
     if (vite !== undefined && ["web/vite.config.ts", join(workbench, "web/vite.config.ts")].some((config) => afterScript(vite, `--config ${config}`) !== undefined)) return "frontend-root";
   }
   const vite = moduleArgs(node, "/vite/bin/vite.js");
-  // 现行 dev-command manager 传本检出绝对 root；也保留旧 apps/ontology-manager 脚本的相对形式。
+  // Current dev-command manager passes checkout absolute root; also preserve relative form of legacy apps/ontology-manager scripts.
   if (cwd === manager && vite !== undefined &&
       (afterScript(vite, "--port 5174") !== undefined || afterScript(vite, `${manager} --port 5174`) !== undefined)) return "frontend-root";
   return undefined;
 }
 function psSnapshot() {
   const result = run("ps", ["-axo", "pid=,ppid=,lstart=,command="], { env: { ...process.env, LC_ALL: "C" } });
-  if (result.status !== 0) throw new Error(`ps 读取进程表失败: ${result.stderr.trim() || `rc=${result.status}`}`);
+  if (result.status !== 0) throw new Error(`ps failed to read process table: ${result.stderr.trim() || `rc=${result.status}`}`);
   return parseProcessTable(result.stdout);
 }
 function lsofCwds(pids) {
   const cwds = new Map();
   if (!pids.length) return cwds;
   const result = run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", pids.join(",")]);
-  if (result.error || ![0, 1].includes(result.status) || result.stderr.trim()) throw new Error("lsof 无法可靠读取 cwd");
+  if (result.error || ![0, 1].includes(result.status) || result.stderr.trim()) throw new Error("lsof unable to reliably read cwd");
   let pid;
   for (const line of result.stdout.split("\n")) {
     if (line.startsWith("p")) pid = Number(line.slice(1));
@@ -228,9 +230,9 @@ function isAlive(pid) {
   const result = run("ps", ["-p", String(pid), "-o", "pid="]);
   if (result.status === 0) return true;
   if (result.status === 1 && !result.stderr.trim()) return false;
-  throw new Error("ps 无法确认进程是否退出");
+  throw new Error("ps unable to confirm process exit status");
 }
-// 一次 ps 快照（含 lstart）+ 对候选批量取 cwd；返回本检出自有的全部角色与前端后代。
+// Single ps snapshot (including lstart) + batch cwd queries for candidates; returns all checkout-owned roles and frontend descendants.
 function identifyUnix(ctx) {
   const rows = psSnapshot();
   const byPid = new Map(rows.map((row) => [row.pid, row]));
@@ -267,14 +269,14 @@ function identifyUnix(ctx) {
   for (const entry of group) if (entry.cwd === undefined && isAlive(entry.pid)) unattributable.push(entry);
   return { group, unattributable, byPid };
 }
-// 平台只影响进程/监听查询：Unix 用 ps+lsof，Windows 用 CIM 并按绝对 argv 绑定。编排共用一份。
+// Platform only affects process/port queries: Unix uses ps+lsof, Windows uses CIM with absolute argv binding. Orchestration is shared.
 export function identify(ctx) {
   return WINDOWS ? identifyWindows(windowsProcesses(), ctx) : identifyUnix(ctx);
 }
 function listeningPids(port) {
   if (WINDOWS) return windowsListeningPids(port);
   const result = run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-t"]);
-  if (result.error || ![0, 1].includes(result.status) || result.stderr.trim()) throw new Error("lsof 无法可靠读取端口");
+  if (result.error || ![0, 1].includes(result.status) || result.stderr.trim()) throw new Error("lsof unable to reliably read port");
   return result.stdout.trim().split("\n").filter(Boolean).map(Number);
 }
 export function foreignListeners(port, group) {
@@ -285,7 +287,7 @@ function ownsPort(port, entries) {
   return listeners.length > 0 && listeners.every((pid) => entries.some((entry) => entry.pid === pid));
 }
 function assertNoForeign(port, snapshot, label) {
-  if (foreignListeners(port, snapshot.group).length) throw new Error(`${label} 端口 ${port} 已被其它进程占用（本工具不停止他人进程）`);
+  if (foreignListeners(port, snapshot.group).length) throw new Error(`${label} port ${port} is already occupied by another process (this tool does not stop foreign processes)`);
 }
 function composeEnv(ctx, dbPort) {
   const env = { ...process.env, DB_PORT: String(dbPort), DEV_STACK_ROOT: ctx.root, DEV_STACK_PRODUCT: ctx.product };
@@ -300,9 +302,9 @@ function compose(ctx, dbPort, rest) {
 }
 function requireDocker() {
   if (run("docker", ["info"]).status !== 0)
-    throw new Error("Docker 不可用：请先启动 Docker Desktop 或 dockerd 后重试（本工具不自动打开 GUI）");
+    throw new Error("Docker is unavailable: please start Docker Desktop or dockerd and retry (this tool will not automatically open a GUI)");
 }
-// 同 project 的容器与卷：查询失败要报错，空 label 也要保留为“不符”。
+// Containers and volumes in the same project: query failure must raise an error; empty labels must be kept as non-matching.
 function assertNoForeignProject(ctx) {
   for (const kind of ["container", "volume"]) {
     const args =
@@ -310,23 +312,23 @@ function assertNoForeignProject(ctx) {
         ? ["ps", "-a", "--filter", `label=com.docker.compose.project=${ctx.project}`, "--format", '{{.Label "dev.stack.root"}}']
         : ["volume", "ls", "--filter", `label=com.docker.compose.project=${ctx.project}`, "--format", '{{.Label "dev.stack.root"}}'];
     const result = run("docker", args);
-    if (result.status !== 0) throw new Error(`docker ${kind} 查询失败: ${result.stderr.trim() || `rc=${result.status}`}`);
-    // 无资源时 docker 输出空串；有资源但缺 label 时输出空行——两种都不能被丢掉。
+    if (result.status !== 0) throw new Error(`docker ${kind} query failed: ${result.stderr.trim() || `rc=${result.status}`}`);
+    // Docker outputs empty string when no resources exist; outputs empty line when resources exist but lack label - neither may be dropped.
     const labels = result.stdout.split("\n");
     if (labels[labels.length - 1] === "") labels.pop();
     for (const label of labels)
       if (label !== ctx.root)
-        throw new Error(`项目 ${ctx.project} 已有${kind === "container" ? "容器" : "卷"}归属 ${label || "(无 dev.stack.root 标签)"}，与本检出不符`);
+        throw new Error(`Project ${ctx.project} has existing ${kind === "container" ? "container" : "volume"} belonging to ${label || "(no dev.stack.root label)"}, which does not match this checkout`);
   }
 }
 function postgresState(ctx, dbPort) {
   const result = compose(ctx, dbPort, ["ps", "--format", "json", "postgres"]);
-  if (result.status !== 0) throw new Error(`docker compose ps 失败: ${result.stderr.trim() || `rc=${result.status}`}`);
+  if (result.status !== 0) throw new Error(`docker compose ps failed: ${result.stderr.trim() || `rc=${result.status}`}`);
   let listed;
   try {
     listed = JSON.parse(result.stdout.trim() || "[]");
   } catch {
-    throw new Error("docker compose ps 返回了无法解析的 JSON");
+    throw new Error("docker compose ps returned unparseable JSON");
   }
   const entry = (Array.isArray(listed) ? listed : [listed]).find((item) => item?.Service === "postgres");
   if (!entry) return undefined;
@@ -382,7 +384,7 @@ function javaReady(port) {
     request.on("error", () => done(false));
   });
 }
-// 只读本轮新增字节，避免重启时把历史里的失败当成这次失败。
+// Only read bytes added in this round to prevent historical failures from being treated as current failure on restart.
 function readFrom(path, offset) {
   const fd = openSync(path, "r");
   try {
@@ -395,7 +397,7 @@ function readFrom(path, offset) {
     closeSync(fd);
   }
 }
-// 就绪必须同时是“本组 RAGMain 在监听”，避免残留 helper 把旧响应算成自己的。
+// Readiness requires this group's RAGMain to be listening, preventing residual helpers from attributing old responses to themselves.
 async function waitForJava(ctx, port, startedAt) {
   const deadline = Date.now() + JAVA_WAIT_MS;
   while (Date.now() < deadline) {
@@ -404,58 +406,58 @@ async function waitForJava(ctx, port, startedAt) {
     const rag = snapshot.group.filter((entry) => entry.role === "ragmain");
     if (ready && ownsPort(port, rag)) return;
     const helper = snapshot.group.filter((entry) => ["java-helper", "maven"].includes(entry.role));
-    if (snapshot.unattributable.length) throw new Error("无法确认候选进程归属");
-    if (!helper.length && !rag.length) throw new Error(`Java 入口已退出，未就绪；请查看 ${ctx.backendLog}`);
+    if (snapshot.unattributable.length) throw new Error("Unable to confirm candidate process ownership");
+    if (!helper.length && !rag.length) throw new Error(`Java entry point exited before becoming ready; see ${ctx.backendLog}`);
     if (startedAt !== undefined && existsSync(ctx.backendLog) && statSync(ctx.backendLog).size > startedAt) {
       if (/Application run failed/.test(readFrom(ctx.backendLog, startedAt)))
-        throw new Error(`Java 启动失败（Application run failed）；请查看 ${ctx.backendLog}`);
+        throw new Error(`Java startup failed (Application run failed); see ${ctx.backendLog}`);
     }
     await sleep(1000);
   }
-  throw new Error(`Java 在 ${JAVA_WAIT_MS / 1000} 秒内未就绪；请查看 ${ctx.backendLog}`);
+  throw new Error(`Java not ready within ${JAVA_WAIT_MS / 1000}s; see ${ctx.backendLog}`);
 }
 function requireAll(entries) {
-  for (const [path, label] of entries) if (!existsSync(path)) throw new Error(`缺少 ${path}（${label}）`);
+  for (const [path, label] of entries) if (!existsSync(path)) throw new Error(`Missing ${path} (${label})`);
 }
 async function up(ctx) {
   const dbPort = integerLiteral(process.env.DB_PORT ?? "5432", "DB_PORT");
   const javaPort = resolveJavaPort(ctx);
   const mcpPort = resolveMcpPort(ctx);
-  requireAll([[ctx.composeFile, "dev compose"], [ctx.javaEntry, "Java 入口"], [ctx.javaEnvFile, "Java .env"], [ctx.mcpScript, "MCP 脚本"]]);
+  requireAll([[ctx.composeFile, "dev compose"], [ctx.javaEntry, "Java entry"], [ctx.javaEnvFile, "Java .env"], [ctx.mcpScript, "MCP script"]]);
   ensurePythonEnv(ctx.appDir, ctx.requirements);
   requireDocker();
   const pre = identify(ctx);
   if (pre.unattributable.length)
-    throw new Error(`无法确认 ${pre.unattributable.length} 个本检出候选进程的归属（仍存活），拒绝继续: ${pre.unattributable.map((row) => row.pid).join(", ")}`);
+    throw new Error(`Unable to confirm ownership of ${pre.unattributable.length} candidate processes in this checkout (still alive), refusing to continue: ${pre.unattributable.map((row) => row.pid).join(", ")}`);
   assertNoForeignProject(ctx);
   const frontend = pre.group.filter((entry) => FRONTEND_ROLES.includes(entry.role));
-  if (frontend.length) throw new Error(`本检出的前端已在运行: ${frontend.map((entry) => entry.pid).join(", ")}`);
+  if (frontend.length) throw new Error(`Frontend in this checkout is already running: ${frontend.map((entry) => entry.pid).join(", ")}`);
 
   const pg = postgresState(ctx, dbPort);
   const ownMcp = pre.group.filter((entry) => entry.role === "mcp");
   const ownJava = pre.group.filter((entry) => entry.role === "ragmain");
   assertNoForeign(mcpPort, { group: ownMcp }, "MCP");
   assertNoForeign(javaPort, { group: ownJava }, "Java");
-  if (ownMcp.length && !ownsPort(mcpPort, ownMcp)) throw new Error("本检出 MCP 未监听配置端口");
-  for (const [port, label] of [[3000, "Node"], [5173, "主网页"], [5174, "Manager"]]) assertNoForeign(port, { group: [] }, label);
+  if (ownMcp.length && !ownsPort(mcpPort, ownMcp)) throw new Error("Checkout MCP is not listening on configured port");
+  for (const [port, label] of [[3000, "Node"], [5173, "Workbench Web"], [5174, "Manager"]]) assertNoForeign(port, { group: [] }, label);
   if (!pg || !pg.running || !pg.healthy || !pg.published) {
-    if (pg && pg.running && pg.published) throw new Error(`PG 容器未 healthy（state=${pg.state}, health=${pg.health}），停止`);
+    if (pg && pg.running && pg.published) throw new Error(`PG container not healthy (state=${pg.state}, health=${pg.health}), stopping`);
     assertNoForeign(dbPort, pre, "PG");
     const started = compose(ctx, dbPort, ["up", "-d", "--wait", "--wait-timeout", "60"]);
-    if (started.status !== 0) throw new Error(`PG 启动失败: ${started.stderr.trim() || started.stdout.trim()}`);
-  } else process.stdout.write(`[dev] PG 已就绪（项目 ${ctx.project}）\n`);
+    if (started.status !== 0) throw new Error(`PG startup failed: ${started.stderr.trim() || started.stdout.trim()}`);
+  } else process.stdout.write(`[dev] PG is ready (project ${ctx.project})\n`);
 
   let snapshot = identify(ctx);
   const mcp = snapshot.group.filter((entry) => entry.role === "mcp");
-  if (mcp.length && ownsPort(mcpPort, mcp)) process.stdout.write(`[dev] MCP 已运行\n`);
+  if (mcp.length && ownsPort(mcpPort, mcp)) process.stdout.write(`[dev] MCP is running\n`);
   else {
-    if (mcp.length) throw new Error(`本检出 MCP 进程未监听 ${mcpPort}，拒绝复用与新起`);
+    if (mcp.length) throw new Error(`Checkout MCP process is not listening on ${mcpPort}, refusing reuse and new start`);
     assertNoForeign(mcpPort, snapshot, "MCP");
     const child = await spawnDetached(ctx.venvPython, [ctx.mcpScript, "--host", "127.0.0.1", "--port", String(mcpPort)], ctx.devRoot, process.env, ctx.mcpLog);
-    process.stdout.write(`[dev] 启动 MCP pid ${child.pid}（端口 ${mcpPort}，日志 ${ctx.mcpLog}）\n`);
+    process.stdout.write(`[dev] Started MCP pid ${child.pid} (port ${mcpPort}, log ${ctx.mcpLog})\n`);
     const ready = await waitForTcp(mcpPort, Date.now() + MCP_WAIT_MS);
     if (!ready || !ownsPort(mcpPort, identify(ctx).group.filter((entry) => entry.role === "mcp")))
-      throw new Error(`MCP 未在 ${MCP_WAIT_MS / 1000} 秒内就绪或监听者不属于本组；请查看 ${ctx.mcpLog}`);
+      throw new Error(`MCP not ready within ${MCP_WAIT_MS / 1000}s or listener does not belong to this group; see ${ctx.mcpLog}`);
   }
 
   snapshot = identify(ctx);
@@ -466,20 +468,20 @@ async function up(ctx) {
     mkdirSync(dirname(ctx.backendLog), { recursive: true });
     const startedAt = existsSync(ctx.backendLog) ? statSync(ctx.backendLog).size : 0;
     const child = await spawnDetached(process.execPath, [ctx.javaEntry], ctx.root, process.env, ctx.backendLog);
-    process.stdout.write(`[dev] 启动 Java pid ${child.pid}（端口 ${javaPort}，日志 ${ctx.backendLog}）\n`);
+    process.stdout.write(`[dev] Started Java pid ${child.pid} (port ${javaPort}, log ${ctx.backendLog})\n`);
     await waitForJava(ctx, javaPort, startedAt);
   }
 
   snapshot = identify(ctx);
-  if (snapshot.unattributable.length) throw new Error("无法确认候选进程归属");
-  if (snapshot.group.some((entry) => FRONTEND_ROLES.includes(entry.role))) throw new Error("本检出的前端已在运行");
-  for (const [port, label] of [[3000, "Node"], [5173, "主网页"], [5174, "Manager"]]) assertNoForeign(port, { group: [] }, label);
-  process.stdout.write(`[dev] 启动 Node 三进程（前台；Ctrl-C 只停本组，down 停整栈）\n`);
-  // 直接以本检出 scripts/dev-command.mjs 为前台入口：不经过 pnpm.cmd，Windows 也没有 shell 解析问题。
+  if (snapshot.unattributable.length) throw new Error("Unable to confirm candidate process ownership");
+  if (snapshot.group.some((entry) => FRONTEND_ROLES.includes(entry.role))) throw new Error("Frontend in this checkout is already running");
+  for (const [port, label] of [[3000, "Node"], [5173, "Workbench Web"], [5174, "Manager"]]) assertNoForeign(port, { group: [] }, label);
+  process.stdout.write(`[dev] Starting Node trio (foreground; Ctrl-C stops this group only, down stops full stack)\n`);
+  // Direct foreground entry using checkout scripts/dev-command.mjs: bypasses pnpm.cmd, avoiding Windows shell parsing issues.
   const child = spawn(process.execPath, [ctx.devCommand, "dev"], { cwd: ctx.root, env: { ...process.env, PORT: "3000" }, stdio: "inherit", shell: false });
   const release = holdForeground(child);
   child.once("error", (error) => {
-    process.stderr.write(`[dev] 前端启动失败: ${error.message}\n`);
+    process.stderr.write(`[dev] Frontend startup failed: ${error.message}\n`);
     process.exitCode = 1;
   });
   await new Promise((done) =>
@@ -490,61 +492,61 @@ async function up(ctx) {
     }),
   );
 }
-// Windows 没有可转发的优雅信号：同一 PowerShell 调用里对每个已确认 PID 先取并保留 Process 句柄，
-// 再按 CreationDate 区分“已退出/已被复用”（可安全跳过）与“同一实例身份不可确认/停止失败”（必须报失败），
-// 通过才 Kill 同一句柄。停止后重查本组，仍有本组进程在运行就失败，不因等待超时或漏快照而宣称成功。
+// Windows lacks forwardable graceful signals: within the same PowerShell invocation, acquire and hold Process handle for each confirmed PID,
+// verify via CreationDate "already exited / reused" (safely skip) vs "identity unconfirmable / stop failed" (must report failure),
+// and Kill on confirmed handle. Re-check group after stop; any remaining group processes cause failure, never claiming success on timeout or missed snapshot.
 async function stopGroupWindows(ctx, roles, label, notes, failures) {
   const before = identify(ctx);
-  if (before.unattributable.length) failures.push(`无法确认候选进程归属: ${before.unattributable.map((row) => row.pid).join(", ")}`);
+  if (before.unattributable.length) failures.push(`Unable to confirm candidate process ownership: ${before.unattributable.map((row) => row.pid).join(", ")}`);
   const owned = before.group.filter((entry) => roles.includes(entry.role));
   if (!owned.length) {
-    notes.push(`${label} 未在运行`);
+    notes.push(`${label} is not running`);
     return;
   }
   let result;
   try {
     result = windowsStop(owned);
   } catch (error) {
-    failures.push(`${label} 停止失败: ${error.message}`);
+    failures.push(`${label} stop failed: ${error.message}`);
     return;
   }
-  for (const pid of result.stopped) notes.push(`${label} pid ${pid} 已停止`);
-  for (const pid of result.exited) notes.push(`${label} pid ${pid} 已先退出，未处理替代进程`);
-  for (const pid of result.reused) notes.push(`${label} pid ${pid} 已被复用，未处理替代进程`);
-  for (const pid of result.failed) failures.push(`${label} pid ${pid} 身份无法确认或停止失败`);
+  for (const pid of result.stopped) notes.push(`${label} pid ${pid} stopped`);
+  for (const pid of result.exited) notes.push(`${label} pid ${pid} already exited, substitute process unhandled`);
+  for (const pid of result.reused) notes.push(`${label} pid ${pid} already reused, substitute process unhandled`);
+  for (const pid of result.failed) failures.push(`${label} pid ${pid} identity unconfirmed or stop failed`);
   const after = identify(ctx);
-  if (after.unattributable.length) failures.push(`停止后仍有无法确认归属的本组候选: ${after.unattributable.map((row) => row.pid).join(", ")}`);
+  if (after.unattributable.length) failures.push(`Unconfirmable candidate processes remain in group after stop: ${after.unattributable.map((row) => row.pid).join(", ")}`);
   const residual = after.group.filter((entry) => roles.includes(entry.role));
-  if (residual.length) failures.push(`${label} 停止后仍有本组进程在运行: ${residual.map((entry) => entry.pid).join(", ")}`);
+  if (residual.length) failures.push(`${label} group processes still running after stop: ${residual.map((entry) => entry.pid).join(", ")}`);
 }
-// 先 TERM；10 秒后仅对身份未变的存活者 KILL，并核实真的退出。
+// TERM first; after 10s KILL only survivors whose identity is unchanged, and verify actual exit.
 async function stopGroup(ctx, roles, label, notes, failures) {
   if (WINDOWS) return stopGroupWindows(ctx, roles, label, notes, failures);
   const initial = identify(ctx);
-  if (initial.unattributable.length) failures.push(`无法确认候选进程归属: ${initial.unattributable.map((row) => row.pid).join(", ")}`);
+  if (initial.unattributable.length) failures.push(`Unable to confirm candidate process ownership: ${initial.unattributable.map((row) => row.pid).join(", ")}`);
   const owned = initial.group.filter((entry) => roles.includes(entry.role) && entry.cwd !== undefined);
   if (!owned.length) {
-    notes.push(`${label} 未在运行`);
+    notes.push(`${label} is not running`);
     return;
   }
-  // TERM 前再取一次同一身份字段，避免把已退出或被复用的 PID 当本组。
+  // Re-acquire identity fields before TERM to avoid targeting exited or reused PIDs.
   const current = identify(ctx);
   const taken = current.group;
   const stale = owned.filter((entry) => !taken.some((now) => now.pid === entry.pid && now.command === entry.command && now.cwd === entry.cwd && now.lstart === entry.lstart));
   for (const entry of stale) {
     const now = current.byPid.get(entry.pid);
-    if (now && now.lstart === entry.lstart) failures.push(`${label} pid ${entry.pid} 归属变化，未发送信号`);
-    else notes.push(`${label} 原 pid ${entry.pid} 已退出，未处理替代进程`);
+    if (now && now.lstart === entry.lstart) failures.push(`${label} pid ${entry.pid} ownership changed, signal not sent`);
+    else notes.push(`${label} original pid ${entry.pid} already exited, substitute process unhandled`);
   }
   const confirmed = owned.filter((entry) => !stale.includes(entry));
   if (!confirmed.length) return;
-  if (run("kill", ["-TERM", ...confirmed.map((entry) => String(entry.pid))]).status !== 0) failures.push(`${label} TERM 命令失败`);
+  if (run("kill", ["-TERM", ...confirmed.map((entry) => String(entry.pid))]).status !== 0) failures.push(`${label} TERM command failed`);
   const deadline = Date.now() + TERM_WAIT_MS;
   let survivors = confirmed;
   while (Date.now() < deadline) {
     survivors = confirmed.filter((entry) => isAlive(entry.pid));
     if (!survivors.length) {
-      notes.push(`${label} 已停止`);
+      notes.push(`${label} stopped`);
       return;
     }
     await sleep(500);
@@ -553,77 +555,78 @@ async function stopGroup(ctx, roles, label, notes, failures) {
     const row = psSnapshot().find((candidate) => candidate.pid === entry.pid);
     if (!row) continue;
     if (row.lstart !== entry.lstart || row.command !== entry.command || lsofCwds([entry.pid]).get(entry.pid) !== entry.cwd) {
-      if (row.lstart === entry.lstart) failures.push(`${label} pid ${entry.pid} 身份已变化，未补杀`);
-      else notes.push(`${label} 原 pid ${entry.pid} 已退出，未处理替代进程`);
+      if (row.lstart === entry.lstart) failures.push(`${label} pid ${entry.pid} identity changed, skipped kill`);
+      else notes.push(`${label} original pid ${entry.pid} already exited, substitute process unhandled`);
       continue;
     }
-    if (run("kill", ["-KILL", String(entry.pid)]).status !== 0) { failures.push(`${label} pid ${entry.pid} 补杀失败`); continue; }
+    if (run("kill", ["-KILL", String(entry.pid)]).status !== 0) { failures.push(`${label} pid ${entry.pid} failed to kill`); continue; }
     const end = Date.now() + 2000;
     while (isAlive(entry.pid) && Date.now() < end) await sleep(100);
-    if (isAlive(entry.pid)) failures.push(`${label} pid ${entry.pid} 仍未退出`);
-    else notes.push(`${label} pid ${entry.pid} 超时未退出，已确认身份后补杀`);
+    if (isAlive(entry.pid)) failures.push(`${label} pid ${entry.pid} still did not exit`);
+    else notes.push(`${label} pid ${entry.pid} timed out, killed after identity confirmation`);
   }
 }
 async function down(ctx) {
   const dbPort = integerLiteral(process.env.DB_PORT ?? "5432", "DB_PORT");
   const notes = [];
   const failures = [];
-  for (const [label, roles] of [["前端", FRONTEND_ROLES], ["Java 入口", ["java-helper"]], ["Java 残留", ["maven", "ragmain"]], ["MCP", ["mcp"]]]) {
+  for (const [label, roles] of [["Frontend", FRONTEND_ROLES], ["Java entry", ["java-helper"]], ["Java residual", ["maven", "ragmain"]], ["MCP", ["mcp"]]]) {
     try { await stopGroup(ctx, roles, label, notes, failures); }
-    catch (error) { failures.push(`${label} 步骤未完成: ${error.message}`); }
+    catch (error) { failures.push(`${label} step incomplete: ${error.message}`); }
   }
   try {
     requireDocker();
     assertNoForeignProject(ctx);
     const result = compose(ctx, dbPort, ["down"]);
-    if (result.status !== 0) failures.push(`PG 停止失败: ${result.stderr.trim() || `rc=${result.status}`}`);
-    else notes.push(`PG 已停止（项目 ${ctx.project}，卷保留）`);
+    if (result.status !== 0) failures.push(`PG stop failed: ${result.stderr.trim() || `rc=${result.status}`}`);
+    else notes.push(`PG stopped (project ${ctx.project}, volume preserved)`);
   } catch (error) {
-    failures.push(`PG 步骤未完成: ${error.message}`);
+    failures.push(`PG step incomplete: ${error.message}`);
   }
   for (const note of notes) process.stdout.write(`[dev] ${note}\n`);
-  if (failures.length) throw new Error(failures.join("；"));
+  if (failures.length) throw new Error(failures.join("; "));
 }
 function status(ctx) {
   const dbPort = integerLiteral(process.env.DB_PORT ?? "5432", "DB_PORT");
   const javaPort = resolveJavaPort(ctx);
   const mcpPort = resolveMcpPort(ctx);
-  process.stdout.write(`[dev] 项目 ${ctx.project}\n[dev] 根 ${ctx.root}\n`);
+  process.stdout.write(`[dev] Project ${ctx.project}\n[dev] Root ${ctx.root}\n`);
   let pgOwned = false;
   try {
     requireDocker();
     assertNoForeignProject(ctx);
     const pg = postgresState(ctx, dbPort);
     pgOwned = Boolean(pg?.running && pg.published);
-    process.stdout.write(`[dev] PG: ${pgOwned ? `${pg.state}/${pg.health} 端口${pg.published ? "已发布" : "未按本机端口发布"}` : "未运行"}\n`);
+    process.stdout.write(`[dev] PG: ${pgOwned ? `${pg.state}/${pg.health} port ${pg.published ? "published" : "not published on local port"}` : "not running"}\n`);
   } catch (error) {
-    process.stdout.write(`[dev] PG 状态未知: ${error.message}\n`);
+    process.stdout.write(`[dev] PG status unknown: ${error.message}\n`);
   }
   const snapshot = identify(ctx);
-  if (snapshot.unattributable.length) throw new Error("有候选进程无法确认归属，状态不完整");
-  for (const [role, label] of [["mcp", "MCP"], ["java-helper", "Java 入口"], ["maven", "Maven"], ["ragmain", "RAGMain"], ["frontend-root", "前端根"], ["frontend-child", "前端后代"]]) {
+  if (snapshot.unattributable.length) throw new Error("Candidate processes cannot be confirmed, status incomplete");
+  for (const [role, label] of [["mcp", "MCP"], ["java-helper", "Java entry"], ["maven", "Maven"], ["ragmain", "RAGMain"], ["frontend-root", "Frontend root"], ["frontend-child", "Frontend child"]]) {
     const pids = snapshot.group.filter((entry) => entry.role === role).map((entry) => entry.pid);
-    process.stdout.write(`[dev] ${label}: ${pids.join(", ") || "未运行"}\n`);
+    process.stdout.write(`[dev] ${label}: ${pids.join(", ") || "not running"}\n`);
   }
-  const ports = pgOwned ? [[mcpPort, "MCP"], [javaPort, "Java"], [3000, "Node"], [5173, "主网页"], [5174, "Manager"]] : [[dbPort, "PG"], [mcpPort, "MCP"], [javaPort, "Java"], [3000, "Node"], [5173, "主网页"], [5174, "Manager"]];
+  const ports = pgOwned ? [[mcpPort, "MCP"], [javaPort, "Java"], [3000, "Node"], [5173, "Workbench Web"], [5174, "Manager"]] : [[dbPort, "PG"], [mcpPort, "MCP"], [javaPort, "Java"], [3000, "Node"], [5173, "Workbench Web"], [5174, "Manager"]];
   for (const [port, label] of ports)
-    if (foreignListeners(port, snapshot.group).length) process.stdout.write(`[dev] ${label} 端口 ${port} 被外部进程占用\n`);
+    if (foreignListeners(port, snapshot.group).length) process.stdout.write(`[dev] ${label} port ${port} occupied by external process\n`);
 }
 const LOG_TAIL_LINES = 10;
 const LOG_READ_BYTES = 64 * 1024;
-// 文件身份带创建时间：同路径被重建且 inode 恰好复用时仍能判成新文件，避免 size>=offset 时漏开头。
+// File identity with creation time: when same path is recreated and inode happens to be reused, still recognized as new file to avoid missing beginning when size>=offset.
 const fileIdentity = (stats) => `${stats.dev}:${stats.ino}:${stats.birthtimeMs}`;
-// 单次最多读 LOG_READ_BYTES，短读只输出 bytesRead 字节，不带 NUL。
+// Read at most LOG_READ_BYTES at once; short read only outputs bytesRead bytes without NUL.
 function readAt(handle, offset, size) {
   const buffer = Buffer.alloc(Math.min(LOG_READ_BYTES, size - offset));
   const bytesRead = readSync(handle, buffer, 0, buffer.length, offset);
   return buffer.subarray(0, bytesRead);
 }
-// 用 Node 文件 API 替代 tail(1)：先输出最后 10 行，再按增长追加；按文件身份识别轮转/替换，
-// 原地截断从 0 重读；单次缓冲有界；ENOENT 视为轮转中并等新文件，其它错误明确失败并清定时器/监听。
+// Use Node file API instead of tail(1): output last 10 lines first, then tail on append;
+// recognize rotation/replacement by file identity, reset offset to 0 on truncate; bounded buffer;
+// ENOENT treated as rotation in progress and awaits new file; other errors fail explicitly and clean up timer/listeners.
 function logs(ctx) {
   const path = ctx.backendLog;
-  if (!existsSync(path)) throw new Error(`日志不存在: ${path}`);
+  if (!existsSync(path)) throw new Error(`Log does not exist: ${path}`);
   const initial = statSync(path);
   let handle = openSync(path, "r");
   let identity = fileIdentity(initial);
@@ -642,7 +645,7 @@ function logs(ctx) {
   };
   const fail = (error) => {
     stop();
-    process.stderr.write(`[dev] 日志跟随失败: ${error.message}\n`);
+    process.stderr.write(`[dev] Log tail failed: ${error.message}\n`);
     process.exitCode = 1;
   };
   const drain = (from) => {
@@ -661,19 +664,19 @@ function logs(ctx) {
     try {
       current = statSync(path);
     } catch (error) {
-      if (error.code === "ENOENT") return; // 轮转中：等新文件出现
+      if (error.code === "ENOENT") return; // Rotating: wait for new file to appear
       fail(error);
       return;
     }
     try {
       if (handle === undefined || fileIdentity(current) !== identity) {
         if (handle !== undefined) closeSync(handle);
-        handle = undefined; // 先作废旧 fd，openSync 失败时 stop 不会重复 close
+        handle = undefined; // Invalidate old fd first; if openSync fails, stop won't double-close
         handle = openSync(path, "r");
         identity = fileIdentity(fstatSync(handle));
-        offset = 0; // 路径上是新文件：从新内容开头读，不按旧 offset 跳过
+        offset = 0; // New file at path: read from beginning of new content, don't skip by old offset
       }
-      if (fstatSync(handle).size < offset) offset = 0; // 原地截断
+      if (fstatSync(handle).size < offset) offset = 0; // Truncated in place
       offset = drain(offset);
     } catch (error) {
       if (error.code === "ENOENT") return; // Replacement vanished between stat and open; retry next poll.
@@ -684,7 +687,7 @@ function logs(ctx) {
 }
 export async function main(argv = process.argv.slice(2)) {
   const [rootInput, command = "up"] = argv;
-  if (!rootInput || !PRODUCT_COMMANDS.includes(command)) throw new Error("用法: scripts/dev-stack.mjs <产品根> [up|down|status|logs]");
+  if (!rootInput || !PRODUCT_COMMANDS.includes(command)) throw new Error("Usage: scripts/dev-stack.mjs <product-root> [up|down|status|logs]");
   const ctx = productContext(rootInput);
   if (command === "up") await up(ctx);
   else if (command === "down") await down(ctx);

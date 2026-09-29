@@ -5,9 +5,9 @@ type Listener = Parameters<typeof window.removeEventListener>[1];
 const SHELL_EVENTS = new Set(["message", "storage", "hashchange"]);
 
 /**
- * 同一文件的用例共用一个 window；生产页面只启动一次外壳，没有停止接口。
- * 返回的清理函数撤销此后外壳注册的 window 监听与 MutationObserver，并卸载挂在 #app 上的实例；
- * 每个用例结束时自动执行，用例内重新启动外壳前也应先调用。
+ * Tests in one file share a window; the production page starts the shell only once and has no stop API.
+ * The returned cleanup removes the window listeners and MutationObservers the shell registers afterwards and unmounts
+ * the instance on #app; it runs automatically after each test and should also be called before restarting the shell within a test.
  */
 export function isolateShellPerTest() {
   const listeners: [string, Listener][] = [];
@@ -32,7 +32,7 @@ export function isolateShellPerTest() {
   const cleanup = () => {
     listeners.splice(0).forEach(([type, listener]) => window.removeEventListener(type, listener));
     observers.splice(0).forEach((observer) => observer.disconnect());
-    // Vue 挂载时把应用实例记在容器的 __vue_app__ 上。
+    // When mounting, Vue records the app instance on the container's __vue_app__.
     (document.querySelector("#app") as (Element & { __vue_app__?: App }) | null)?.__vue_app__?.unmount();
   };
   afterEach(cleanup);

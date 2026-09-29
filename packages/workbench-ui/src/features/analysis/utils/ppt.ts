@@ -5,6 +5,7 @@ import type { ReportSection } from "../../../utils/analysis-report";
 import { withSkillResourceCredentials } from "../../skills/utils/skill-resource";
 import { analysisReportApi } from "../api";
 import { workbenchContent } from "../../../content";
+import { workbenchI18n } from "../../../i18n";
 
 function escapeHtml(value: string): string {
   return value
@@ -377,7 +378,7 @@ export function buildPptHtml(title: string, sections: readonly ReportSection[]):
 
   const serializedTitle = JSON.stringify(title).replace(/</g, "\\u003c");
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${escapeHtml(workbenchI18n().global.locale.value)}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">

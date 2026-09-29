@@ -24,7 +24,7 @@ function snapshot(patch: Partial<ResponseSnapshot>): ResponseSnapshot {
   return { mode: "standard", status: "completed", primaryText: "", ...patch } as ResponseSnapshot;
 }
 
-/** 开源装配的访问：/observe 无权限门，恒可见。 */
+/** Open-source access: /observe has no permission gate, so the entry is always visible. */
 const ossAccess: TurnDiagnosisAccess = { prepare: () => {}, visible: () => true };
 
 function render(value: ResponseSnapshot, access: TurnDiagnosisAccess = ossAccess) {
@@ -60,7 +60,7 @@ it("stays hidden while streaming or without a Turn", () => {
 });
 
 it("calls prepare once on mount and follows the assembled visibility reactively", async () => {
-  // 企业装配：挂载时按需加载权限，权限到达后按钮随之出现（响应式来自应用的权限状态）。
+  // Permission-gated access: permissions load on mount and the button appears once they arrive (reactivity comes from the app's permission state).
   const allowed = ref(false);
   const prepare = vi.fn();
   const wrapper = render(snapshot({ threadId: "thread-1", requestSeq: 3 }), {

@@ -13,7 +13,7 @@ import { feedbackApi } from "../../../../api/feedback";
 import { workbenchContent } from "../../../../content";
 
 const { t } = useI18n();
-// 本页固定文字取应用装配的本版原句（不随界面语言变化）；赞/踩与回答反馈共用同一原句。
+// Fixed text on this page comes from the app-supplied edition sentences (independent of the UI locale); like/dislike share the answer-feedback sentences.
 const { feedbackRecords: copy, feedback } = workbenchContent().text;
 
 const loading = ref(false);

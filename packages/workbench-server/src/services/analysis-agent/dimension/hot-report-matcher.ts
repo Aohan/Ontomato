@@ -74,7 +74,7 @@ function formatFrameworkContext(context?: AnalysisReportMatchFrameworkContext): 
 }
 
 /**
- * 使用 LLM 判断当前问题是否与已发布的分析报告热卡片匹配
+ * Uses the LLM to decide whether the current question matches a published analysis report hot card
  */
 export async function matchAnalysisReportCards(params: {
   question: string;

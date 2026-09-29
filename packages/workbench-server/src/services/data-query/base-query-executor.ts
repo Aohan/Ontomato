@@ -146,7 +146,7 @@ export async function executeBaseQuery(
       thinking: thinking.createBranchView(branch),
       signal: controller.signal,
       reportBackendLocation: (location) => {
-        // 分支被取消后不再接受它的上报；没有会话号的定位不构成会话（设计 1、6）。
+        // Reports from a cancelled branch are no longer accepted; a location without a session number does not constitute a session (design 1, 6).
         if (!isBranchActive(branch) || !location.sessionId) return;
         options.onBackendLocation?.({
           branch,

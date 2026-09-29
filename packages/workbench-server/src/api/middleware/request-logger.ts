@@ -5,7 +5,7 @@ import type { AuthenticatedRequest } from "../../utils/request-identity";
 const logger = createLogger("access");
 
 /**
- * 精简的请求日志中间件，仅记录慢请求和异常状态码。
+ * Compact request logging middleware; records only slow requests and abnormal status codes.
  */
 export function requestLogger(req: Request, res: Response, next: NextFunction): void {
   const start = Date.now();

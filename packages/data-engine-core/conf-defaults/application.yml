@@ -1,4 +1,4 @@
-# DataRAG product default configuration. This file is the only source template and is not placed inside the jar.
+# DataEngine product default configuration. This file is the only source template and is not placed inside the jar.
 # On-site values always come from the BACKEND_* / POSTGRE_* environment variables (see the environment variable table in BUILD.md);
 # If conf/application.yml is missing, startup copies this template; an existing site file is kept and read on restart.
 server:
@@ -27,7 +27,7 @@ langchain4j:
       log-responses: false
 
 ontomato:
-  datarag:
+  data-engine:
     service-id: ${BACKEND_SERVICE_ID:}
     node-id: ${BACKEND_NODE_ID:}
     ragchatrootpath: /opt/frontend

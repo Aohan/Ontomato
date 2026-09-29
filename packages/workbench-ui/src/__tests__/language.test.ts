@@ -32,8 +32,8 @@ async function mountWithLocale(initialLocale: SupportedLocale, save: ((l: Suppor
   return () => locale;
 }
 
-describe("应用语言档", () => {
-  it("启动时写文档语言并按应用保存；切到不支持的语言回到默认语言", async () => {
+describe("app language profile", () => {
+  it("writes the document language at startup and saves it through the app; switching to an unsupported locale returns to the default", async () => {
     const save = vi.fn();
     const locale = await mountWithLocale("en", save);
     expect(document.documentElement.lang).toBe("en");
@@ -45,7 +45,7 @@ describe("应用语言档", () => {
     expect(document.documentElement.lang).toBe("zh-CN");
   });
 
-  it("没有持久化的应用（开源）切换语言时不写存储", async () => {
+  it("an app without persistence (open source) writes no storage when switching locale", async () => {
     localStorage.clear();
     const locale = await mountWithLocale("en", null);
     locale().value = "zh-CN";

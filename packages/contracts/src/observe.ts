@@ -90,34 +90,37 @@ export interface WorkspaceUpstreamTurn {
 }
 
 /**
- * 一个后端会话在一个节点上的取证单位：路由表一行，或该会话没有路由行时的回退窗口。
- * 会话与节点是两个维度，取证、条数、取消与缺失原因都落在这一层
- * （问数后端会话的定位与取消·设计 7、12）。
+ * One evidence unit of a backend session on a node: a routing-table row, or
+ * the fallback window when the session has no routing row. Session and node
+ * are two independent dimensions; evidence, counts, cancellation, and missing
+ * reasons all live at this layer (backend session locating and cancellation
+ * · design 7, 12).
  */
 export interface WorkspaceBackendSessionNode {
-  /** 路由行节点；无路由行时用查询记录里的节点；都没有时为默认后端 */
+  /** Node from the routing row; falls back to the node in the query record; defaults to the backend when neither exists */
   nodeId?: string;
-  /** 路由行登记的起止时间；无路由行或未登记时缺省，取证改用问数时间窗 */
+  /** Start/end times registered by the routing row; absent when there is no row or it is unregistered, evidence then uses the query time window */
   startTs?: number;
   endTs?: number;
-  /** 该节点上该会话的取消时间；非空即在此节点被取消 */
+  /** Cancellation time of this session on this node; non-null means cancelled on this node */
   cancelledAt?: number;
-  /** 取证窗口的说明：无路由行、路由行未登记起止等 */
+  /** Explanation of the evidence window: no routing row, row without registered start/end, etc. */
   windowMessage?: string;
   agentLlmCount: number;
   diagnosticEventCount: number;
-  /** 节点定位失败的原因 */
+  /** Why node locating failed */
   locationMessage?: string;
-  /** agent-llm 缺失或取回失败的原因 */
+  /** Why agent-llm is missing or could not be fetched */
   agentLlmMessage?: string;
-  /** diagnostic-events 缺失或取回失败的原因 */
+  /** Why diagnostic-events is missing or could not be fetched */
   diagnosticEventMessage?: string;
 }
 
 /**
- * 工作区里一个后端会话的取回状态：逐节点写明时间窗、条数、取消与缺失原因。
- * 一次问数可以产生多个后端会话，一个取证单位失败不影响其他
- * （问数后端会话的定位与取消·设计 7、12）。
+ * Retrieval status of one backend session in a workspace: per-node time
+ * windows, counts, cancellation, and missing reasons. One query can produce
+ * several backend sessions; one evidence unit failing does not affect the
+ * others (backend session locating and cancellation · design 7, 12).
  */
 export interface WorkspaceBackendSessionEvidence {
   branch: BranchKey;
@@ -160,13 +163,13 @@ export interface WorkspaceManifest {
   threadId?: string;
   /** Upstream no-query Turns embedded into this workspace. */
   upstreamTurns?: WorkspaceUpstreamTurn[];
-  /** 查询记录里的全部后端会话及各自的取回状态；没有会话时不出现。 */
+  /** All backend sessions in the query record with their retrieval status; omitted when there are none. */
   backendSessions?: WorkspaceBackendSessionEvidence[];
-  /** 问数实际开始时间（来自 turn run），与工作区生成时间分开。 */
+  /** Actual query start time (from the turn run), separate from the workspace generation time. */
   turnStartedAt?: string;
-  /** 问数实际结束时间（来自 turn run）。 */
+  /** Actual query end time (from the turn run). */
   turnEndedAt?: string;
-  /** 后端运行日志收取说明：未定位到会话、逐节点失败等。 */
+  /** Backend runtime log collection notes: session not located, per-node failures, etc. */
   backendLogMessage?: string;
   /** Highest-level summary for post-processing evidence availability. */
   postProcess?: WorkspacePostProcessSummary;
@@ -234,8 +237,11 @@ export type RetainedWorkspaceManifest = WorkspaceManifest & ArtifactRetention;
 export type ArtifactType = "turn-workspace" | "autotest-run";
 
 /**
- * 诊断提示词产物的落盘文本格式（Node 写入、观察页阅读共用）：七个语义标记在 `-----<标记> BEGIN/END-----`
- * 中的标记词，以及轮次标题的识别规则。两版各装迁出前的原值，不随界面语言变化；代码只按语义键取值。
+ * On-disk text format of diagnosis prompt artifacts (written by Node, read by
+ * the observe page): the marker words inside `-----<marker> BEGIN/END-----`
+ * for the seven semantic markers, and the recognition rule for turn titles.
+ * Each edition installs its own pre-migration values, independent of UI
+ * language; code reads values only by semantic key.
  */
 export type PromptMarkerKind =
   | "systemPrompt"
@@ -248,6 +254,6 @@ export type PromptMarkerKind =
 
 export interface PromptTranscriptFormat {
   promptMarkers: Record<PromptMarkerKind, string>;
-  /** 轮次标题行（trim 后）的原识别正则，与 Node roundTitle 的输出成对。 */
+  /** Original recognition regex for turn title lines (after trim), paired with the Node roundTitle output. */
   roundTitlePattern: RegExp;
 }

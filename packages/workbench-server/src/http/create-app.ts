@@ -54,11 +54,11 @@ const logger = createLogger("server");
 const SERVER_NOW_HEADER = "X-Server-Now";
 
 export interface WorkbenchMounts {
-  /** 企业 SSO。必须在统一 authenticate 之前。OSS 没有这条路由。 */
+  /** Enterprise SSO. Must run before the unified authenticate. OSS has no such route. */
   authRouter?: Router;
-  /** 企业治理平台连接代理。OSS 没有。 */
+  /** Enterprise governance platform connection proxy. Absent in OSS. */
   connectionRouter?: Router;
-  /** 企业治理平台 SSO ticket。OSS 没有。 */
+  /** Enterprise governance platform SSO ticket. Absent in OSS. */
   dataGovernanceRouter?: Router;
 }
 

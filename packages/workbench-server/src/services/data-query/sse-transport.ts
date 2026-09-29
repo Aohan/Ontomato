@@ -14,8 +14,9 @@ export interface BackendLocation {
 }
 
 /**
- * 后端新建会话流首帧 `{sessionId, nodeId}` 的唯一解读处（问数后端会话的定位与取消·职责归属）。
- * 只认后端实际发送的 `sessionId`、`nodeId` 两个字段；两者都没有时返回 undefined（不是首帧）。
+ * The only interpreter of the first frame `{sessionId, nodeId}` of the backend's new-session stream
+ * (backend session locating and cancellation · responsibility). Only the two fields the backend
+ * actually sends, `sessionId` and `nodeId`, are recognized; when neither exists it returns undefined (not a first frame).
  */
 export function extractBackendLocation(event: unknown): BackendLocation | undefined {
   if (!event || typeof event !== "object" || Array.isArray(event)) return undefined;

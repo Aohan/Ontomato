@@ -1,2 +1,2 @@
-// admin/api 消费这些类型；BusinessConfig 页面由路由直接懒加载，不经此处导出。
+// admin/api consumes these types; the BusinessConfig page is lazy-loaded by the router directly and is not exported here.
 export type { AgentKey, DataAdapterConnection, GeneralConfigKey } from "./types";

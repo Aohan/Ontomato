@@ -5,7 +5,7 @@ export function presentation(
 ): DeepAnalysisTaskPayload {
   return {
     executionMode: "dimension",
-    runState: { status: "running", revision: 0, progress: { done: 12, total: 100, label: "取证" } },
+    runState: { status: "running", revision: 0, progress: { done: 12, total: 100, label: "Preuve" } },
     activities: [],
     sections: [],
     charts: [],
@@ -24,8 +24,8 @@ export function evidence(overrides: Partial<AnalysisActivity> = {}): AnalysisAct
     status: "running",
     startedAt: 1,
     questions: [
-      { questionId: "q1", question: "销量", status: "running" },
-      { questionId: "q2", question: "同比", status: "pending" },
+      { questionId: "q1", question: "ventes", status: "running" },
+      { questionId: "q2", question: "annuel", status: "pending" },
     ],
     ...overrides,
   };
@@ -43,12 +43,12 @@ export function plan(): AnalysisActivity {
     dimensions: [
       {
         dimensionId: "d1",
-        name: "地区",
-        value: "华东",
-        reason: "区域观察",
+        name: "Région",
+        value: "Est",
+        reason: "observation régionale",
         questions: [
-          { questionId: "q1", question: "销量" },
-          { questionId: "q2", question: "同比" },
+          { questionId: "q1", question: "ventes" },
+          { questionId: "q2", question: "annuel" },
         ],
       },
     ],

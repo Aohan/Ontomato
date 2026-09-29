@@ -2,14 +2,14 @@
 import { Cog } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import type { BusinessConfig, GeneralConfigKey } from "../../types";
-import type { BusinessConfigLanguageLabels } from "../../business-config";
+import type { BusinessConfigLanguageOption } from "../../business-config";
 
 const { t } = useI18n();
 
 defineProps<{
   saving: Record<string, boolean>;
   disabled: boolean;
-  languageLabels: BusinessConfigLanguageLabels;
+  languageOptions: readonly BusinessConfigLanguageOption[];
   defaultLanguage: string;
 }>();
 
@@ -174,14 +174,12 @@ const emit = defineEmits<{
             <el-form-item :label="t('admin.backendLanguage')">
               <div class="inline-control">
                 <el-select v-model="config.lang" :placeholder="defaultLanguage" style="width: 160px">
-                  <el-option :label="languageLabels.zhCN" value="zh-CN" />
-                  <el-option :label="languageLabels.zhTW" value="zh-TW" />
-                  <el-option label="English" value="en" />
-                  <el-option :label="languageLabels.ja" value="ja" />
-                  <el-option label="Français" value="fr" />
-                  <el-option label="Italiano" value="it" />
-                  <el-option label="Deutsch" value="de" />
-                  <el-option label="العربية" value="ar" />
+                  <el-option
+                    v-for="option in languageOptions"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
                 </el-select>
                 <el-button
                   type="primary"

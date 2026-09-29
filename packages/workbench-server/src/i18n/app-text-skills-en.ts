@@ -1,4 +1,4 @@
-/** OSS b6437c86 技能包 manifest 固定文字。只给固定 appTextLocale=en 使用。动态后缀由调用方按 typed params 传入。 */
+/** Fixed skill manifest copy of OSS b6437c86. Used only by the fixed appTextLocale=en; dynamic suffixes are passed in by callers as typed params. */
 export const appTextSkillsEn = {
   "skills.manifest.idPattern": "Skill ID may only contain lowercase letters, numbers, and hyphens",
   "skills.manifest.comboVizType": "Visualization skills must use the executable type",

@@ -1,25 +1,27 @@
 /**
- * 系统配置页（BusinessConfig）的应用装配输入：两个应用各在路由记录上以 props 传入本版原值。
- * 业务默认值与界面语言、Node 产品配置互不推导。
+ * App assembly input of the system config page (BusinessConfig): each app passes its edition values as props on the route record.
+ * Business defaults, the UI locale and the Node product config are not derived from one another.
  */
 
-/** 数据适配器卡片的原版式：表单标签宽、URL 与凭据两列栅格。 */
+/** Original layout of the data adapter card: form label width and a two-column grid for URL and credentials. */
 export interface BusinessConfigAdapterDisplay {
   labelWidth: string;
   urlSpan: number;
   credentialSpan: number;
 }
 
-/** 后端语言下拉中三个原固定显示名（其余语言的显示名两版相同，仍在组件内）。 */
-export interface BusinessConfigLanguageLabels {
-  zhCN: string;
-  zhTW: string;
-  ja: string;
+/** One backend language option: the stored value and its fixed display label (not derived from the UI locale). */
+export interface BusinessConfigLanguageOption {
+  value: string;
+  label: string;
 }
 
 export interface BusinessConfigProps {
-  /** 业务配置语言的缺省值：初始值、加载缺省与语言下拉占位共用。 */
+  /** Default business config language: shared by the initial value, the load default and the language dropdown placeholder. */
   defaultLanguage: string;
+  /** Backend languages this edition's data engine ships resources for, in display order; the only selectable values. */
+  languageOptions: readonly BusinessConfigLanguageOption[];
   adapterDisplay: BusinessConfigAdapterDisplay;
-  languageLabels: BusinessConfigLanguageLabels;
+  /** Whether this page shows the query examples block (editions that keep examples on another page turn it off). */
+  queryExamples: boolean;
 }

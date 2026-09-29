@@ -144,7 +144,8 @@ export function prependPythonPath(env, venvBin, platform = process.platform) {
 // Python venv is prepared here too.
 export function startDevJava({ app, appDir, wrapper, profiles }, userArgs, inherited = process.env) {
   const lang = inherited.PROMPT_LANG ?? app.promptLang;
-  if (!["en", "zh"].includes(lang)) throw new Error("PROMPT_LANG must be en or zh");
+  if (!app.supportedPromptLangs.includes(lang))
+    throw new Error(`PROMPT_LANG must be one of ${app.supportedPromptLangs.join(", ")}`);
   const envFile = join(appDir, ".env");
   if (!existsSync(envFile)) throw new Error(`Missing ${envFile}: create it with this app's Java settings first`);
   const python = ensurePythonEnv(appDir, join(app.requirements.root, app.requirements.path), inherited);
@@ -165,8 +166,8 @@ export function startDevJava({ app, appDir, wrapper, profiles }, userArgs, inher
 
   const env = mergeEnvironment(inherited, vars);
   prependPythonPath(env, dirname(python));
-  // 某些 VPN（如 aTrustAgent）会给系统开 SOCKS/HTTP 代理，JVM 读到后会劫持本机 localhost 连接，
-  // 导致连不上本机 PostgreSQL。这里显式关闭 JVM 代理（置后，确保覆盖系统检测到的代理）。
+  // Certain VPNs (such as aTrustAgent) set up system SOCKS/HTTP proxies; when the JVM reads them, it hijacks local localhost connections,
+  // leading to failure connecting to local PostgreSQL. Explicitly disable the JVM proxy here (placed last to ensure it overrides system-detected proxies).
   const disableProxy = "-DsocksProxyHost= -Dhttp.proxyHost= -Dhttps.proxyHost=";
   env.JAVA_TOOL_OPTIONS = env.JAVA_TOOL_OPTIONS ? `${env.JAVA_TOOL_OPTIONS} ${disableProxy}` : disableProxy;
   const args = ["-B", "-ntp", "-DskipTests", "-pl", relative(app.repoRoot, appDir), "-am",

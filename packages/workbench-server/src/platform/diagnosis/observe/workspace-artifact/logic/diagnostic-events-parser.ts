@@ -56,7 +56,7 @@ export function parseDiagnosticEvents(
     switch (eventType) {
       case "m3.query.succeeded":
       case "m3.query.failed": {
-        // 只有装配了 M3 支持的应用解析 M3 查询事件（企业原行为）；开源原本忽略这两类事件。
+        // Only apps with M3 support assembled parse M3 query events (the enterprise's original behavior); the open-source app originally ignored both event kinds.
         const m3 = m3DiagnosticSupport();
         if (!m3) break;
         const item = m3.queryLogic.itemFromEvent(eventType, event, payload);

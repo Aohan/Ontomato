@@ -1,5 +1,5 @@
 ontomato:
-  datarag:
+  data-engine:
     mcp-clients:
       - client-name: mcpcli1
         client-version: v1.0.0

@@ -1,6 +1,6 @@
 /**
- * 并发池工具
- * 用于限制 Promise 并发执行数量
+ * Concurrency pool utility
+ * Limits the number of Promises executing concurrently
  */
 
 export async function runWithConcurrency<T>(
@@ -62,15 +62,15 @@ export async function runSequentialWithDelay<T>(
 }
 
 export interface AnalysisConcurrencyConfig {
-  /** 维度查询并发数，默认 6 */
+  /** Dimension query concurrency, default 6 */
   dimensionQueryConcurrency?: number;
-  /** 子问题查询并发数，默认 4 */
+  /** Sub-question query concurrency, default 4 */
   subQuestionQueryConcurrency?: number;
-  /** 图表生成并发数，默认 3 */
+  /** Chart generation concurrency, default 3 */
   chartGenerationConcurrency?: number;
-  /** 子问题查询间隔（毫秒），默认 2000ms */
+  /** Sub-question query interval (ms), default 2000ms */
   subQuestionQueryIntervalMs?: number;
-  /** 报告生成冷却间隔（毫秒），串行生成报告时相邻两次 LLM 调用之间的等待时间，默认 2000ms */
+  /** Report generation cooldown interval (ms): the wait between two adjacent LLM calls when reports are generated serially, default 2000ms */
   reportGenerationCooldownMs?: number;
 }
 

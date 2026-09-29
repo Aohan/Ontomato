@@ -13,14 +13,14 @@ export type AutotestActiveView = "run" | "test" | "cases";
 export type WorkspaceManifest = RemoteWorkspaceManifest & Partial<ArtifactRetention>;
 export type AutotestRunMeta = RunMeta & Partial<ArtifactRetention>;
 
-/** 观察页头部显示的当前账号（企业宿主传入；开源为 null 不显示）。 */
+/** Current account shown in the observe page header (passed by the host; null in open source, so nothing is shown). */
 export interface ObserveAccount {
   readonly userName: string;
 }
 
 /**
- * DSL 结果区的扩展页签（企业 MQL）：插在数据表与原始响应之间；payload 是原 mqlText 所用的同一次归一结果，
- * activeTab 为当前结果页签。开源不提供。
+ * Extra tabs of the DSL result area (e.g. MQL), inserted between the data table and the raw response; payload is the same
+ * normalized result the original mqlText used and activeTab is the current result tab. Not provided in open source.
  */
 export interface DslTestPageSlots {
   "result-tabs"?: (props: { payload: any; activeTab: string }) => unknown;

@@ -16,7 +16,7 @@ const config = ontologyManagerEntryConfig();
 const initialTheme = isDark.value ? "dark" : "light";
 const initialLocale = currentLocale.value;
 
-// 凭据只在启动 query 里交给 Manager；更新靠路由变化或重新进入时重建 iframe 地址（整页重载）。
+// The credential is handed to the Manager only in the launch query; updates rebuild the iframe URL on route changes or re-entry (a full reload).
 const managerUrl = computed(() => {
   if (!ONTOLOGY_MANAGER_URL) return "";
   const url = new URL(ONTOLOGY_MANAGER_URL, window.location.origin);
@@ -27,6 +27,7 @@ const managerUrl = computed(() => {
   }
   url.searchParams.set("theme", initialTheme);
   if (config.localeMessage) url.searchParams.set("locale", initialLocale);
+  url.searchParams.set("embedded", "1");
   const token = authHost().getToken();
   if (token) {
     url.searchParams.set("tk", token);

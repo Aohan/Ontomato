@@ -121,7 +121,7 @@ export function parseLlmLogsByTaskId(
 
 /**
  * Return raw LLM-log JSONL lines for a turnKey without converting them to
- * ParsedLogRecord. Turn workspaces use this for 原始日志/llm-calls.jsonl.
+ * ParsedLogRecord. Turn workspaces use this for raw-logs/llm-calls.jsonl.
  */
 export function readLlmLogLinesByTurnKey(
   turnKey: string,
@@ -132,7 +132,7 @@ export function readLlmLogLinesByTurnKey(
 
 /**
  * Return raw LLM-log JSONL lines for a taskId without converting them to
- * ParsedLogRecord. Analysis workspaces use this for 原始日志/llm-calls.jsonl.
+ * ParsedLogRecord. Analysis workspaces use this for raw-logs/llm-calls.jsonl.
  */
 export function readLlmLogLinesByTaskId(taskId: string, fileWindow?: LogFileTimeWindow): string[] {
   return readMatchingLlmLogLines((raw) => raw.taskId === taskId, fileWindow);

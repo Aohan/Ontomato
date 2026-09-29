@@ -10,7 +10,7 @@ import {
 
 export async function proxyResponse(upstreamRes: globalThis.Response, res: Response) {
   const contentType = upstreamRes.headers.get("content-type") || "application/json; charset=utf-8";
-  // 媒体类型后可带 charset 等参数；只认 text/event-stream，其余仍整段返回。
+  // A media type may carry parameters like charset; only text/event-stream is recognized, everything else is still returned as a whole.
   if (contentType.split(";", 1)[0].trim() === "text/event-stream") {
     const reader = upstreamRes.body!.getReader();
     const onClose = () => {
@@ -27,7 +27,7 @@ export async function proxyResponse(upstreamRes: globalThis.Response, res: Respo
         res.write(value);
       }
     } catch {
-      // 状态码和响应头已经写出，读取中断后只能结束这次 SSE。
+      // Status code and headers are already written; once reading is interrupted the only option is to end this SSE.
     } finally {
       res.off("close", onClose);
       res.end();
@@ -69,7 +69,7 @@ export async function proxyUpstream(
     const headers = buildUpstreamHeaders(req);
     let body: string | ReadableStream<Uint8Array> | undefined;
     if (req.is("multipart/form-data")) {
-      // express.json 不解析 multipart，请求流未被读取：连同带 boundary 的 Content-Type 原样转发（外部 Agent 上传文件）。
+      // express.json does not parse multipart and the request stream is unread: forward it as-is together with the boundary-carrying Content-Type (external agent file uploads).
       headers["Content-Type"] = req.headers["content-type"]!;
       body = Readable.toWeb(req) as ReadableStream<Uint8Array>;
     } else if (req.method !== "GET") {

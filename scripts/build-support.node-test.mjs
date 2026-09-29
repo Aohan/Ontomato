@@ -39,7 +39,9 @@ const contract = (arch) => ({
   python: { version: "3.10.18", packages: { numpy: "2.2.6" } },
 });
 function temporary(fn) {
-  const dir = mkdtempSync(join(tmpdir(), "backend 测试 space-"));
+  // The temporary path keeps a space and non-ASCII characters; the escapes keep this
+  // source file ASCII-only.
+  const dir = mkdtempSync(join(tmpdir(), "backend \u6d4b\u8bd5 space-"));
   try {
     fn(dir);
   } finally {
@@ -70,7 +72,7 @@ test("canonical contract is independent of JSON order, not actual runtime conten
   b.runtimeDependencies.jars = a.runtimeDependencies.jars;
   b.runtimeDependencies.native = "changed-native-bytes";
   assert.notEqual(fingerprint(a), fingerprint(b));
-  assert.equal(canonical({ b: 1, a: "中文" }), '{"a":"中文","b":1}');
+  assert.equal(canonical({ b: 1, a: "\u4e2d\u6587" }), '{"a":"\u4e2d\u6587","b":1}');
 });
 test("short locks contain only platform fingerprints and preserve both architectures", () =>
   temporary((dir) => {

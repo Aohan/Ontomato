@@ -63,11 +63,11 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
     }
   };
 
-  // 执行器交出契约形状的会话，这里不改字段名。
+  // The executor hands over sessions in the contract shape; field names are not changed here.
   const reportBackendLocation = (session: QueryBackendSession) => {
     const existingIndex = backendSessions.findIndex((item) => item.branch === session.branch);
     const previous = existingIndex >= 0 ? backendSessions[existingIndex] : undefined;
-    // 同一分支上报同一会话是重复帧，不产生新的会话事实，也不再写一次库。
+    // The same branch reporting the same session is a duplicate frame: no new session fact and no second write.
     if (
       previous &&
       previous.sessionId === session.sessionId &&
@@ -96,11 +96,11 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
       question: queryQuestion,
       status,
       error,
-      // 没有取得任何事实时也走同一个构造，只是事实为空——不另立第二个写入构造。
+      // Even with no facts at all the same constructor runs with empty facts — no second write constructor is introduced.
       fact: queryResult ?? {},
     });
 
-    // 终态写入运行期间按分支收集到的同一份会话列表。
+    // The terminal state writes the same session list collected per branch during the run.
     if (backendSessions.length > 0) {
       input.backendSessions = backendSessions;
     }
@@ -214,7 +214,7 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
               replayPlan: fallback?.replayPlan,
               markdownTable: fallbackContent || undefined,
               datasets: fallbackDatasets,
-              // 失败原因随执行事实下发：直播与历史都经同一份事实看见错误说明。
+              // The failure reason travels with the execution facts: live and history both see the error description through the same facts.
               error: errorMsg,
             }
           : undefined;
@@ -226,8 +226,8 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
         timestamp: Date.now(),
       };
 
-      // 失败但有部分结果时同样下发结果事件：直播与历史据同一份执行事实渲染，
-      // 连部分正文都没有时也下发思考与错误事实，与持久化的失败快照一致。
+      // A failure with partial results still publishes result events: live and history render from the same execution facts,
+      // and even with no partial body the thinking and error facts go out, consistent with the persisted failure snapshot.
       if (fallbackQueryResult) {
         pushEvent({
           type: "result",
@@ -308,7 +308,7 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
         complete: true,
         markdownTable: content,
         winner: winnerName,
-        // 直播路径据此渲染与刷新后同一份执行展示视图，不再只拿到表格与胜出分支。
+        // From this the live path renders the same execution display view as after a refresh, no longer receiving only the table and winning branch.
         execution: toDisplayFact(queryResult),
       },
       timestamp: Date.now(),
@@ -317,11 +317,11 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
     pushEvent(thinkingEvent);
     pushEvent(resultEvent);
 
-    // 执行事实在数据到手时即收口，不等质检。
+    // Execution facts finalize as soon as data arrives, without waiting for the quality check.
     await finishQueryRun(queryResult, "completed");
 
-    // 质检是迟到事实：本回合的展示包含质检面板，所以登记给本次运行并推送过程状态，
-    // 由运行在收口前等它结算；执行事实本身不受它影响。
+    // The quality check is a late fact: this turn's display includes the quality-check panel, so it is registered with the run and progress states are pushed,
+    // and the run waits for its settlement before finalizing; the execution facts themselves are unaffected by it.
     if (execution.winner === "abc" && sessionId) {
       const pendingLateFacts = resolvePendingLateFacts(config);
       const settlement = startQualityCheckSettlement({

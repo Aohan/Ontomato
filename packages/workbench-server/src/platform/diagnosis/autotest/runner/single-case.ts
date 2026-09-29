@@ -87,7 +87,7 @@ export async function executeSingleCase(options: SingleCaseOptions): Promise<Cas
       tk,
       signal,
       caseTimeoutMs,
-      // Forward workflow node switches (查询数据/分析数据/生成图表) upward.
+      // Forwards workflow node switches (query data / analyze data / generate charts) upward.
       onStep: reportStep,
     });
 

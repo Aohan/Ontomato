@@ -1,1 +1,1 @@
-或expr二选一
+ or expr (choose one)

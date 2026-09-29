@@ -1,8 +1,8 @@
 import { t } from "../../../../i18n";
 
 /**
- * 查询返回 0 行时可视化节点直接给出的“未生成图表”提示（open-source 迁出前的行为）：
- * 不调用渲染，写入提示图并结束。企业沿用通用渲染路径，装配 null。
+ * The "no chart generated" notice the visualization node emits directly when the query returns 0 rows (open-source pre-migration behavior):
+ * rendering is not invoked; the notice image is written and the node ends. The enterprise edition keeps the generic render path and assembles null.
  */
 export type NoDataVisualization = () => { title: string; message: string; html: string };
 

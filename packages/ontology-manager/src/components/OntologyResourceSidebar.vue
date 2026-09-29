@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  BookOpen,
   Boxes,
   ChartColumn,
   Clock3,
@@ -21,6 +22,7 @@ defineProps<{
   activeAssetTab: AssetTab;
   activeModelResource: ModelResource;
   counts: OntologyResourceCounts;
+  businessKnowledge: boolean;
 }>();
 
 defineEmits<{
@@ -29,6 +31,7 @@ defineEmits<{
   asset: [asset: AssetTab];
   visualModeling: [];
   playground: [];
+  knowledge: [];
 }>();
 </script>
 
@@ -143,6 +146,16 @@ defineEmits<{
           <Clock3 :size="16" />
           <span>{{ t("nav.scheduledWriteTasks") }}</span>
           <small v-if="counts.tasks !== null">{{ counts.tasks }}</small>
+        </button>
+      </section>
+
+      <section v-if="businessKnowledge" class="nav-group">
+        <button
+          :class="['nav-item', { active: activeWorkspace === 'knowledge' }]"
+          @click="$emit('knowledge')"
+        >
+          <BookOpen :size="16" />
+          <span>{{ t("nav.businessKnowledge") }}</span>
         </button>
       </section>
     </nav>

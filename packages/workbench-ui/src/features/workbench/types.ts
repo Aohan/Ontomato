@@ -20,7 +20,7 @@ export interface TaskProgressState {
   stageText: string;
 }
 
-/** 欢迎态的机器人动画：企业为明暗两版视频，开源为静态图标；类型由应用明确给出，不按后缀猜。 */
+/** Robot animation of the welcome state: light/dark videos or a static icon (open source); the app states the type explicitly instead of guessing from the file suffix. */
 export type WelcomeAnimation =
   | { kind: "video"; src: string }
   | { kind: "image"; src: string; alt: string };

@@ -2,9 +2,9 @@ import { qualifiedTable } from "../../postgres.js";
 import type { QueryableClient } from "../helpers.js";
 
 /**
- * 核心业务表基线：承接 initializePostgres 内联的建表与补列历史。
- * 与 business-storage-v1 一致采用幂等 DDL：空库一次到位，存量库按缺列收敛。
- * 报告副本列与定时列已随 20260828 迁移退役，基线不再补齐它们。
+ * Core business table baseline: carries over the inline table creation and column backfill history of initializePostgres.
+ * Like business-storage-v1 it uses idempotent DDL: an empty database gets everything in one pass, existing databases converge by missing columns.
+ * The report copy columns and schedule columns retired with the 20260828 migration are no longer backfilled by this baseline.
  */
 export async function ensureCoreSchemaBaseline(client: QueryableClient): Promise<void> {
   await ensureThreadMetadata(client);
@@ -75,7 +75,7 @@ async function ensureAnalysisAgents(client: QueryableClient): Promise<void> {
     "domain_id TEXT",
     "sort_order INTEGER DEFAULT 0",
     "class_names TEXT[] DEFAULT '{}'",
-    // 存量智能体保持维度编排
+    // Existing agents keep dimension orchestration
     "execution_mode TEXT NOT NULL DEFAULT 'dimension'",
     "loop_prompt TEXT",
   ]);
@@ -200,7 +200,7 @@ async function ensureAnalysisTasks(client: QueryableClient): Promise<void> {
   await client.query(`
     ALTER TABLE ${qualifiedTable("analysis_tasks")} ALTER COLUMN trigger_source SET DEFAULT 'manual'
   `);
-  // 索引在补列之后创建（agent_id/user_id/status 旧表可能缺失）
+  // Indexes are created after column backfill (old tables may lack agent_id/user_id/status)
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_tasks_agent
       ON ${qualifiedTable("analysis_tasks")} (agent_id, created_at DESC)
@@ -233,7 +233,7 @@ async function ensureAnalysisTaskEvents(client: QueryableClient): Promise<void> 
       UNIQUE (task_id, source_kind, source_ref)
     )
   `);
-  // 结构化事实列承载循环分析轨迹
+  // Structured fact columns carry the loop analysis trajectory
   await addColumns(client, "analysis_task_events", ["payload JSONB"]);
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_analysis_task_events_task
@@ -270,7 +270,7 @@ async function ensureFeedbackRecords(client: QueryableClient): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_feedback_source_rating
       ON ${qualifiedTable("feedback_records")} (source_type, rating, created_at DESC)
   `);
-  // 唯一索引落地前先按目标键确定性去重，保留每个目标最新的一条反馈。
+  // Before the unique index lands, deduplicate deterministically by the target keys, keeping each target's latest feedback.
   await client.query(`
     WITH ranked AS (
       SELECT id,

@@ -43,8 +43,8 @@ async function dialog(extra: Record<string, unknown>) {
   return wrapper;
 }
 
-describe("新建智能体弹窗在两版布局下的展示输入", () => {
-  it("企业不传：左栏表单星号在左、下拉不随输入框宽、标签不换行", async () => {
+describe("display inputs of the new agent dialog under both layouts", () => {
+  it("when omitted: left-column asterisk on the left, dropdown not as wide as the input, labels not wrapped", async () => {
     const wrapper = await dialog({});
     const items = wrapper.findAll(".form-left .el-form-item");
     expect(items.length).toBeGreaterThan(0);
@@ -53,7 +53,7 @@ describe("新建智能体弹窗在两版布局下的展示输入", () => {
     expect(wrapper.find(".agent-form-layout").classes()).toContain("agent-form-layout--label-nowrap");
   });
 
-  it("开源传入：左栏表单星号在右、MCP 下拉随输入框宽、标签换行", async () => {
+  it("open-source input: left-column asterisk on the right, MCP dropdown as wide as the input, labels wrapped", async () => {
     const wrapper = await dialog({ requireAsteriskPosition: "right", fitInputWidth: true, labelWrap: true });
     const items = wrapper.findAll(".form-left .el-form-item");
     for (const item of items) expect(item.classes()).toContain("asterisk-right");

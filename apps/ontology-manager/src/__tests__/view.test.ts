@@ -10,20 +10,20 @@ function start(url: string, initialRoute = "") {
   return syncView(initialRoute);
 }
 
-describe("视图与 hash", () => {
+describe("view and hash", () => {
   beforeEach(() => window.history.replaceState({}, "", "/"));
 
-  it("非根 hash 优先于 view 参数与初始路由，查询串原样透传", () => {
+  it("a non-root hash wins over the view parameter and initial route, and the query passes through as-is", () => {
     const { view } = start("/?view=assets#/visual-modeling?focus=object&id=A&back=playground", "/objects");
     expect(view.value).toBe("/visual-modeling?focus=object&id=A&back=playground");
   });
 
-  it("根 hash 不算定位，view 参数映射到数据浏览与智能资产", () => {
+  it("a root hash does not locate anything; the view parameter maps to data browsing and smart assets", () => {
     expect(start("/?view=data-browser#/").view.value).toBe("/data");
     expect(start("/?view=assets").view.value).toBe("/assets/metrics");
   });
 
-  it("view=visual-modeling 映射到建模视图，focus/id/back 原样进入视图查询串，其他参数不带入", () => {
+  it("view=visual-modeling maps to the modeling view; focus/id/back enter the view query as-is and other parameters are dropped", () => {
     expect(start("/?view=visual-modeling&theme=dark").view.value).toBe("/visual-modeling");
     expect(
       start("/?view=visual-modeling&focus=relation&id=placedBy&back=playground&keep=1").view.value
@@ -31,13 +31,13 @@ describe("视图与 hash", () => {
     expect(start("/?view=visual-modeling&id=Order#/data").view.value).toBe("/data");
   });
 
-  it("其次取部署配置的初始路由并规范成路径，最后为 /playground", () => {
+  it("next comes the deployment's initial route normalized to a path, and finally /playground", () => {
     expect(start("/?view=other", "#objects/A").view.value).toBe("/objects/A");
     expect(start("/", " /data ").view.value).toBe("/data");
     expect(start("/").view.value).toBe("/playground");
   });
 
-  it("初始视图与组件导航都以替换方式写回 hash，不增加历史", () => {
+  it("the initial view and component navigation replace the hash without adding history", () => {
     const before = window.history.length;
     const { view, replaceView } = start("/?view=assets");
     expect(window.location.hash).toBe("#/assets/metrics");
@@ -48,14 +48,14 @@ describe("视图与 hash", () => {
     expect(window.history.length).toBe(before);
   });
 
-  it("手动改 hash 时视图跟随", () => {
+  it("the view follows manual hash changes", () => {
     const { view } = start("/#/data/Order");
     window.location.hash = "#/relations/placedBy";
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     expect(view.value).toBe("/relations/placedBy");
   });
 
-  it("测试隔离：重新启动前撤销旧实例的 hashchange 监听", () => {
+  it("test isolation: restarting removes the old instance's hashchange listener", () => {
     const first = start("/#/data").view;
     const second = start("/#/objects").view;
     window.location.hash = "#/relations/placedBy";

@@ -32,7 +32,7 @@ interface LoopDataProbeDeps {
   dispatchId?: string;
 }
 
-/** 装配主管与工人共享的数据探测工具面及其提示词片段。 */
+/** Assembles the data-probing tool surface shared by supervisor and workers, with its prompt fragment. */
 export function assembleLoopDataProbeCapability(deps: Omit<LoopDataProbeDeps, "dispatchId">) {
   return {
     prompt: dataProbeCapabilityPrompt(),

@@ -1,4 +1,5 @@
-# 本机开发用 PostgreSQL。只由产品根 `pnpm dev:up` 的整栈工具以显式 -p/-f 调用；账号密码仅本机示例。
+# PostgreSQL for local development. Called only by the product root's `pnpm dev:up`
+# full-stack tool with explicit -p/-f; the account and password are local examples only.
 services:
   postgres:
     image: pgvector/pgvector:pg18
@@ -12,12 +13,14 @@ services:
       TZ: Asia/Shanghai
     volumes:
       - pgdata:/var/lib/postgresql
-      # 复用部署脚本的建库文件：它建立 ontomato 与 datarag，只在空卷首次初始化时执行。
+      # Reuse the deployment script's database-creation file: it creates ontomato and
+      # datarag, and runs only on the first initialization of an empty volume.
       - ../deploy/initdb.sql:/docker-entrypoint-initdb.d/create-databases.sql:ro
     labels:
       dev.stack.root: "${DEV_STACK_ROOT:?DEV_STACK_ROOT not set}"
       dev.stack.product: "${DEV_STACK_PRODUCT:?DEV_STACK_PRODUCT not set}"
-    # TCP：镜像 init 服务不监听 127.0.0.1，所以这里等到 initdb（含建库脚本）完成才通过。
+    # TCP: the image init server does not listen on 127.0.0.1, so this stays down until
+    # initdb, including the database-creation script, has finished.
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ontomato -d datarag"]
       interval: 5s

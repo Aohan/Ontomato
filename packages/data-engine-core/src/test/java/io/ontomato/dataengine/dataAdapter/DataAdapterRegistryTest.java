@@ -78,6 +78,6 @@ class DataAdapterRegistryTest {
 
 		IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () -> registry.create(businessConfig, null));
 		assertTrue(failure.getMessage().contains("m3"), failure.getMessage());
-		assertTrue(failure.getMessage().contains("本版本未安装该数据适配器"), failure.getMessage());
+		assertTrue(failure.getMessage().contains("Data adapter not installed in this edition"), failure.getMessage());
 	}
 }

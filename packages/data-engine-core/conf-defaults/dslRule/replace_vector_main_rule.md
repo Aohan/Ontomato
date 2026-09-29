@@ -1,13 +1,13 @@
-			5.2.5.3 vector表示向量查询，如果对对象的vector类型字段做过滤的话，只能在这里定义，不允许在临时表中对它做group by或者having。它由一个属性properties组成，properties对象由operator和and/or属性组成
+			5.2.5.3 vector represents a vector query; if filtering is performed on a vector type field of an object, it can only be defined here, and it is not allowed to perform group by or having on it in a temporary table. It consists of one attribute properties, and the properties object consists of operator and the and/or attributes
 
-				5.2.5.3.1 operator属性的值是"logic"
+				5.2.5.3.1 The value of the operator attribute is "logic"
 
-				5.2.5.3.2 当约束条件间是`AND`逻辑时，需要有and属性，and属性是一个数组
+				5.2.5.3.2 When the constraints are in an `AND` relationship, the and attribute is required, and the and attribute is an array
 
-				5.2.5.3.3 当约束条件间是`OR`逻辑时，需要有or属性，or属性是一个数组
+				5.2.5.3.3 When the constraints are in an `OR` relationship, the or attribute is required, and the or attribute is an array
 
-				5.2.5.3.4 and或or属性对应的数组中的单个对象由field、query属性组成
+				5.2.5.3.4 A single object in the array corresponding to the and or or attribute consists of the field and query attributes
 
-					5.2.5.3.4.1 field（必填）代表类中的vector类型字段名
+					5.2.5.3.4.1 field (required) represents the name of the vector type field in the class
 
-					5.2.5.3.4.2 query（必填）代表要查询的文字
+					5.2.5.3.4.2 query (required) represents the text to be queried

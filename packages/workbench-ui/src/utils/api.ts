@@ -13,7 +13,7 @@ function normalizePath(path: string): string {
   return p.startsWith("/") ? p : `/${p}`;
 }
 
-/** 当前凭据（token 优先）：请求发出时捕获，响应与 JSON 读完后再比对。 */
+/** Current credential (token first): captured when the request is sent and compared again after the response and its JSON arrive. */
 function currentCredential(): string | null {
   const host = authHost();
   return host.getToken() || host.getApiKey();

@@ -1,23 +1,23 @@
 /**
- * 诊断工作区产物里的文本协议：提示词产物的分段标记与子查询文件名、
- * 后端取证说明与其失败判定、响应快照里折叠表格摘要的改写。
- * 两版各装迁出前的原值，不随请求语言变化；代码按语义键取值，不按显示词分支。
+ * Text protocol inside diagnosis workspace artifacts: segment markers of prompt artifacts and sub-query file names,
+ * backend evidence notes and their failure decisions, and the rewrite of collapsed-table summaries in response snapshots.
+ * Each edition installs its pre-migration original values, independent of request language; code reads by semantic key and never branches on display words.
  */
 import type { PromptTranscriptFormat } from "@ontomato/contracts/observe";
 
-/** 提示词标记词与轮次标题识别规则归共享契约 PromptTranscriptFormat（观察页按同一对象阅读）。 */
+/** Prompt marker words and turn-title recognition rules belong to the shared contract PromptTranscriptFormat (the observe page reads the same object). */
 export interface WorkspaceArtifactText extends PromptTranscriptFormat {
-  /** 子查询 try 会话的提示词文件名片段：`-<词><子查询序号>-try-<n>`。 */
+  /** Prompt file-name fragment of a sub-query try session: `-<word><sub-query number>-try-<n>`. */
   subQueryFilenameWord: string;
   /**
-   * 提示词产物的轮次标题。第二参只在 originalRound 与 round 不同时传入；
-   * 省略时是普通轮次（序号取 originalRound ?? round）。
+   * Turn title of a prompt artifact. The second parameter is passed only when originalRound differs from round;
+   * when omitted it is an ordinary turn (number taken as originalRound ?? round).
    */
   roundTitle(round: number, originalRound?: number): string;
   /**
-   * 后端取证（agent-llm、diagnostic-events、backend.log）的说明文字。`…Failed` 后接外部错误详情；
-   * 多条说明、多节点失败以 `separator` 连接。post_process_status 按 `failureMessagePattern`
-   * 判定说明是否表示取回失败，文字与规则成对。
+   * Note text of backend evidence collection (agent-llm, diagnostic-events, backend.log). `…Failed` is followed by external error details;
+   * multiple notes and multi-node failures are joined by `separator`. post_process_status uses `failureMessagePattern` to decide whether a
+   * note means a fetch failure; the copy and the rule come as a pair.
    */
   backendEvidence: {
     agentLlmEmpty: string;
@@ -31,7 +31,7 @@ export interface WorkspaceArtifactText extends PromptTranscriptFormat {
     separator: string;
     failureMessagePattern: RegExp;
   };
-  /** 折叠表格摘要里的展开提示，改写为未写入快照的说明。 */
+  /** The expand hint inside a collapsed-table summary, rewritten as a note that it was not written into the snapshot. */
   foldedTableHint: { pattern: RegExp; replacement: string };
 }
 

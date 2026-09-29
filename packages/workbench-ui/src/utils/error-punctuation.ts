@@ -1,8 +1,8 @@
-/** 请求错误详情的拼接标点：两版原值不同（企业全角“：”“；”，开源半角），由应用静态提供，不随界面语言变化。 */
+/** Punctuation joining request error details: the values differ per edition (open source uses ASCII ":" and ";"), are supplied statically by the app and do not change with the UI locale. */
 export interface ErrorPunctuation {
-  /** 主消息与字段详情之间。 */
+  /** Between the main message and field details. */
   detailSeparator: string;
-  /** 多条字段详情之间。 */
+  /** Between multiple field details. */
   listSeparator: string;
 }
 

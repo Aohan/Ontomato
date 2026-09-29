@@ -9,7 +9,7 @@ import { runAnalysisLoopWorkflow } from "./loop/loop-workflow";
 import type { DeepAnalysisTaskPayload } from "@ontomato/contracts/analysis-presentation";
 import type { DeepAnalysisEmittedEvent } from "@ontomato/contracts/analysis-events";
 
-/** 智能体服务实例入口收敛在 config/agent-service.ts；此处按运行时门面继续对外暴露。 */
+/** The agent service instance entry lives in config/agent-service.ts; this runtime facade keeps exposing it. */
 export { getAnalysisAgentService };
 
 type RunDeepAnalysisParams = {
@@ -17,7 +17,7 @@ type RunDeepAnalysisParams = {
   userId: string;
   threadId: string;
   taskId: string;
-  /** 受理时捕获的运行身份；产物与终态据此确认是否仍可写当前任务。 */
+  /** Run identity captured at acceptance; artifacts and terminal states use it to confirm the current task is still writable. */
   identity?: AnalysisRunIdentity;
   agentId: string;
   domainId: string;
@@ -26,9 +26,9 @@ type RunDeepAnalysisParams = {
   onEvent: (event: DeepAnalysisEmittedEvent) => void;
   signal?: AbortSignal;
   conversationTurn?: AnalysisConversationTurnRecord;
-  /** 已创建任务的交付模式快照；直接运行时使用智能体默认配置。 */
+  /** Delivery mode snapshot of the created task; direct runs use the agent's default configuration. */
   reportDeliverableEnabled?: boolean;
-  /** 预加载的 agent 配置，避免重复查询 DB */
+  /** Preloaded agent configuration, avoiding repeated DB queries */
   agentConfig?: {
     executionMode: AnalysisAgentExecutionMode;
     summarizerPrompt: string;
@@ -76,7 +76,7 @@ export async function runDeepAnalysis(
     agentReportDeliverableEnabled = agent.reportDeliverableEnabled;
   }
 
-  // 已受理的常规会话轮次固定使用循环；分析任务仍按当前智能体配置分派。
+  // Accepted regular-session turns always use the loop; analysis tasks still dispatch by the current agent configuration.
   if (params.conversationTurn || executionMode === "loop") {
     return runAnalysisLoopWorkflow({
       userQuestion: params.message,

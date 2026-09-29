@@ -183,7 +183,7 @@ router.get("/download", (req: Request, res: Response) => {
 /**
  * GET /timeline - Get timeline for a case's artifacts.
  *
- * Reads from the stored 诊断结果/timeline.json within the case artifact directory.
+ * Reads from the stored diagnostics/timeline.json within the case artifact directory.
  */
 router.get("/timeline", (req: Request, res: Response<HttpResponse<TimelineEvent[]>>) => {
   try {
@@ -209,7 +209,7 @@ router.get("/timeline", (req: Request, res: Response<HttpResponse<TimelineEvent[
 /**
  * GET /flowchart - Get flowchart for a case's artifacts.
  *
- * Reads from the stored 诊断结果/flowchart.json within the case artifact directory.
+ * Reads from the stored diagnostics/flowchart.json within the case artifact directory.
  */
 router.get("/flowchart", (req: Request, res: Response<HttpResponse<Flowchart>>) => {
   try {

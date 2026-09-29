@@ -23,9 +23,9 @@ let configured = false;
 export function configureI18n(input: {
   defaultLocale: Locale;
   packs: Partial<Record<Locale, LocalePack>>;
-  /** 企业允许用户切换语言，调用方给出的语言原样转给 DataRAG；开源固定英文。 */
+  /** The host decides whether users may switch languages; the language given by the caller is passed through to DataRAG as-is. The OSS build is fixed to English. */
   languageSwitchEnabled: boolean;
-  /** 产物、匹配词和既有错误子串使用的固定语言。不随请求 setLocale 或 APP_DEFAULT_LOCALE 变化。 */
+  /** Fixed language for artifacts, matcher terms, and existing error substrings. Does not follow request setLocale or APP_DEFAULT_LOCALE. */
   appTextLocale: Locale;
 }): void {
   const selected = input.packs[input.defaultLocale];
@@ -57,7 +57,7 @@ export function getDefaultLocale(): Locale {
   return defaultLocale;
 }
 
-/** 已注册的语言才接受；否则用应用安装的默认语言，不再经过第三种语言。 */
+/** Only registered locales are accepted; otherwise fall back to the locale installed by the app, never through a third language. */
 export function resolveLocale(locale: string | undefined): Locale {
   assertConfigured();
   const trimmed = locale?.trim();
@@ -107,7 +107,7 @@ export function t(key: string, params?: Record<string, any>): string {
   return translate(getLocale(), key, params);
 }
 
-/** 固定应用文字。读 configureI18n 安装的 appTextLocale，不读当前请求语言。 */
+/** Fixed app text. Reads the appTextLocale installed by configureI18n, not the current request locale. */
 export function tApp(key: string, params?: Record<string, any>): string {
   return translate(appTextLocale, key, params);
 }

@@ -21,7 +21,7 @@ vi.mock("interactjs", () => ({
 }));
 
 const ossContent = workbenchContent();
-/** 企业布局给出的两项展示输入（企业 workbench-content 原值）。 */
+/** Overrides the two dashboard display inputs another layout may supply (the non-default values). */
 function useDashboardVisuals(patch: Partial<DashboardVisuals>) {
   installWorkbenchContent({ ...ossContent, dashboard: { ...ossContent.dashboard, ...patch } });
 }
@@ -35,8 +35,8 @@ afterEach(() => {
 const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }] });
 const global = () => ({ plugins: [workbenchI18n(), createPinia(), router, ElementPlus] });
 
-describe("看板在两版布局下的展示输入", () => {
-  it("我的看板关闭按钮：企业原文字 x；开源为带无障碍标签的图标按钮", () => {
+describe("dashboard display inputs under both layouts", () => {
+  it("my dashboards close button: plain text x by default; an icon button with an accessible label in the open-source layout", () => {
     const text = mount(DashboardSidebarPopover, { global: global() }).find(".dashboard-close-btn");
     expect(text.text()).toBe("x");
     expect(text.attributes("aria-label")).toBeUndefined();
@@ -51,13 +51,13 @@ describe("看板在两版布局下的展示输入", () => {
 
   async function openZoom() {
     const wrapper = mount(ChartZoomModal, { props: { option: { series: [] } }, global: global() });
-    // 组件为 JS <script setup>，test-utils 推不出其 props 类型。
+    // The component is a JS <script setup>, so test-utils cannot infer its props type.
     await wrapper.setProps({ open: true } as never);
     await flushPromises();
     return wrapper;
   }
 
-  it("放大弹窗：企业用 echarts 默认主题；开源先注册仪表盘主题再按主题名初始化", async () => {
+  it("zoom dialog: echarts default theme when configured; open source registers the dashboard theme and initializes by theme name", async () => {
     useDashboardVisuals({ zoomChartTheme: "default" });
     await openZoom();
     expect(echartsMock.registerTheme).not.toHaveBeenCalled();
@@ -71,7 +71,7 @@ describe("看板在两版布局下的展示输入", () => {
     expect(echartsMock.init).toHaveBeenCalledWith(expect.any(HTMLElement), ossContent.dashboard.themeName);
   });
 
-  it("指标卡加载遮罩：企业保持默认底色；开源加透明遮罩类", () => {
+  it("metric card loading mask: default background when configured; open source adds the transparent mask class", () => {
     const metric = { name: "Orders", value: 1, unit: "", layout: { colSpan: 1, rowSpan: 1 } };
     useDashboardVisuals({ loadingMask: "default" });
     const enterprise = mount(MetricCard, { props: { metric }, global: global() });

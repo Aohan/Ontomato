@@ -326,7 +326,7 @@ export function resolveSystemModel(
   role: SystemModelRole = "default"
 ): SystemModelEntry {
   const config = getSystemModelConfig(domainId);
-  // 读取与保存都已校验两个角色引用存在于模型库。
+  // Both role references are validated to exist in the model library on read and save.
   return config.models.find((model) => model.name === config.agents[role].model)!;
 }
 
@@ -342,8 +342,8 @@ export function saveSystemModelConfig(
   const resolvedDomainId = resolveDomainId(domainId);
   const current = getSystemModelConfig(resolvedDomainId);
 
-  // 模型区与问数区共用本入口：未提交的字段沿用已保存当前值；
-  // 提交了空值仍按提交值校验（空数组、空字符串不会被当成缺省）。
+  // The model section and the query section share this entry: fields not submitted keep their saved current values;
+  // submitted empty values are still validated as submitted (empty arrays and empty strings are never treated as defaults).
   let models = current.models;
   let names = new Set(models.map((model) => model.name));
   if (input.models !== undefined) {

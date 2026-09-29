@@ -16,9 +16,9 @@ export interface AnalysisTaskArtifactSyncResult {
 const NOW_MS_SQL = "(EXTRACT(EPOCH FROM NOW()) * 1000)::bigint";
 
 /**
- * 任务快照表是本次同步自己的中转结构：老库的页面快照先归并到这里，
- * 再由它反向补齐任务行的报告与 payload。20260828 迁移在同步之后把它删除，
- * 因此建表放在同步内部——只在这次同步真正执行时存在，运行时不再拥有这张表。
+ * The task snapshot table is this sync's own staging structure: the old database's page snapshots are merged here first,
+ * then backfilled from it into the task rows' report and payload. The 20260828 migration drops it after syncing,
+ * so the table is created inside the sync — it exists only while this sync actually runs, and the runtime never owns it.
  */
 async function ensureAnalysisTaskSnapshotTable(client: QueryableClient): Promise<void> {
   await client.query(`

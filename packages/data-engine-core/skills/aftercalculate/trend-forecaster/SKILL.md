@@ -1,30 +1,30 @@
 ---
 name: trend-forecaster
-description: 业务指标趋势预测技能。用于预测业务指标（如销售额、用户数、收入等）的未来走势。当用户需要基于历史数据预测未来趋势、进行业务规划或做决策支持时使用此技能。支持多种预测模型，包括ARIMA、Prophet、指数平滑和线性回归。
+description: Business metric trend forecasting skill. Used to forecast the future trajectory of business metrics (such as sales, user count, revenue, etc.). Use this skill when the user needs to forecast future trends based on historical data, carry out business planning, or support decision-making. Supports multiple forecasting models, including ARIMA, Prophet, exponential smoothing, and linear regression.
 ---
 
 # Trend Forecaster
 
-业务指标趋势预测技能，基于历史数据预测未来走势。
+Business metric trend forecasting skill that forecasts future trends based on historical data.
 
-## 适用场景
+## Applicable scenarios
 
-- 销售预测：预测未来销售额、订单量
-- 用户增长：预测新增用户、活跃用户数
-- 收入预测：预测月度/季度收入
-- 业务规划：为业务决策提供数据支持
-- KPI预警：监控指标异常趋势
+- Sales forecasting: forecast future sales and order volume
+- User growth: forecast new users and active users
+- Revenue forecasting: forecast monthly/quarterly revenue
+- Business planning: provide data support for business decisions
+- KPI alerting: monitor abnormal metric trends
 
-## 支持的模型
+## Supported models
 
-| 模型 | 说明 | 适用场景 |
+| Model | Description | Applicable scenarios |
 |------|------|----------|
-| `arima` | 自回归差分移动平均模型 | 常规时间序列，有季节性 |
-| `prophet` | Facebook Prophet模型 | 有强季节性、节假日效应 |
-| `exp_smoothing` | 指数平滑模型 | 短期预测，数据平滑 |
-| `linear_regression` | 线性回归 | 简单趋势预测 |
+| `arima` | Autoregressive integrated moving average model | Regular time series with seasonality |
+| `prophet` | Facebook Prophet model | Strong seasonality and holiday effects |
+| `exp_smoothing` | Exponential smoothing model | Short-term forecasting, smooth data |
+| `linear_regression` | Linear regression | Simple trend forecasting |
 
-## 输入格式
+## Input format
 
 ```json
 {
@@ -40,17 +40,17 @@ description: 业务指标趋势预测技能。用于预测业务指标（如销�
 }
 ```
 
-### 参数说明
+### Parameter description
 
-| 参数 | 类型 | 必填 | 说明 |
+| Parameter | Type | Required | Description |
 |------|------|------|------|
-| `model` | string | 是 | 预测模型：`arima`, `prophet`, `exp_smoothing`, `linear_regression` |
-| `data` | array | 是 | 历史数据，数组元素需包含 `date` 和 `value` 字段 |
-| `periods` | int | 是 | 预测周期数 |
-| `confidence` | float | 否 | 置信度，0-1之间，默认0.95 |
-| `seasonality` | string | 否 | 季节性模式：`auto`, `daily`, `weekly`, `monthly`, `quarterly` |
+| `model` | string | Yes | Forecasting model: `arima`, `prophet`, `exp_smoothing`, `linear_regression` |
+| `data` | array | Yes | Historical data; each array element must contain the `date` and `value` fields |
+| `periods` | int | Yes | Number of forecast periods |
+| `confidence` | float | No | Confidence level, between 0 and 1, default 0.95 |
+| `seasonality` | string | No | Seasonality mode: `auto`, `daily`, `weekly`, `monthly`, `quarterly` |
 
-## 输出格式
+## Output format
 
 ```json
 {
@@ -74,66 +74,66 @@ description: 业务指标趋势预测技能。用于预测业务指标（如销�
 }
 ```
 
-### 输出字段说明
+### Output field description
 
-| 字段 | 类型 | 说明 |
+| Field | Type | Description |
 |------|------|------|
-| `success` | bool | 是否成功 |
-| `predictions` | array | 预测结果数组 |
-| `confidence_interval.lower` | array | 置信区间下限 |
-| `confidence_interval.upper` | array | 置信区间上限 |
-| `metrics.mae` | float | 平均绝对误差 |
-| `metrics.rmse` | float | 均方根误差 |
-| `metrics.mape` | string | 平均绝对百分比误差 |
-| `model` | string | 使用的模型 |
-| `training_period` | string | 训练数据时间范围 |
-| `forecast_period` | string | 预测时间范围 |
+| `success` | bool | Whether it succeeded |
+| `predictions` | array | Array of forecast results |
+| `confidence_interval.lower` | array | Lower bound of the confidence interval |
+| `confidence_interval.upper` | array | Upper bound of the confidence interval |
+| `metrics.mae` | float | Mean absolute error |
+| `metrics.rmse` | float | Root mean squared error |
+| `metrics.mape` | string | Mean absolute percentage error |
+| `model` | string | The model used |
+| `training_period` | string | Time range of the training data |
+| `forecast_period` | string | Time range of the forecast |
 
-## 使用示例
+## Usage examples
 
-### 命令行调用
+### Command-line invocation
 
 ```bash
-# 方式1：直接传JSON字符串
+# Option 1: pass the JSON string directly
 python scripts/forecaster.py -d '{"model": "prophet", "data": [{"date": "2024-01-01", "value": 1000}, {"date": "2024-02-01", "value": 1150}, {"date": "2024-03-01", "value": 1080}], "periods": 3, "confidence": 0.95, "seasonality": "monthly"}'
 
-# 方式2：从JSON文件读取
+# Option 2: read from a JSON file
 python scripts/forecaster.py -f input.json
 ```
 
-### 参数说明
+### Parameter description
 
-| 参数 | 简写 | 必填 | 说明 |
+| Parameter | Short | Required | Description |
 |------|------|------|------|
-| `--data` | `-d` | 是 | JSON 字符串输入 |
-| `--file` | `-f` | 是 | JSON 文件路径 |
+| `--data` | `-d` | Yes | JSON string input |
+| `--file` | `-f` | Yes | JSON file path |
 
-## 错误处理
+## Error handling
 
-| 错误码 | 说明 | 处理建议 |
+| Error code | Description | Suggested handling |
 |--------|------|----------|
-| `INVALID_MODEL` | 不支持的模型 | 检查model参数是否正确 |
-| `INVALID_DATA` | 数据格式错误 | 确保data包含date和value字段 |
-| `INSUFFICIENT_DATA` | 数据不足 | 至少需要3个数据点 |
-| `MODEL_ERROR` | 模型执行错误 | 检查数据是否满足模型要求 |
-| `DATE_PARSE_ERROR` | 日期解析错误 | 使用标准日期格式YYYY-MM-DD |
+| `INVALID_MODEL` | Unsupported model | Check whether the model parameter is correct |
+| `INVALID_DATA` | Invalid data format | Make sure data contains the date and value fields |
+| `INSUFFICIENT_DATA` | Insufficient data | At least 3 data points are required |
+| `MODEL_ERROR` | Model execution error | Check whether the data meets the model requirements |
+| `DATE_PARSE_ERROR` | Date parse error | Use the standard date format YYYY-MM-DD |
 
-## 数据要求
+## Data requirements
 
-- **最小数据量**：至少需要3个历史数据点
-- **日期格式**：支持 `YYYY-MM-DD`, `YYYY-MM`, `YYYY-MM-DD HH:MM:SS`
-- **数值要求**：value必须为数值类型，不能为空或NaN
-- **数据频率**：支持日、周、月、季度数据
+- **Minimum data volume**: at least 3 historical data points are required
+- **Date format**: supports `YYYY-MM-DD`, `YYYY-MM`, `YYYY-MM-DD HH:MM:SS`
+- **Value requirement**: value must be numeric and must not be null or NaN
+- **Data frequency**: supports daily, weekly, monthly, and quarterly data
 
-## 依赖安装
+## Dependency installation
 
 ```bash
 pip install pandas numpy statsmodels prophet scikit-learn
 ```
 
-## 注意事项
+## Notes
 
-1. Prophet模型需要较长的训练时间，数据量大时可能需要更久
-2. ARIMA模型对数据平稳性有要求，非平稳数据会自动差分
-3. 线性回归适合有明显线性趋势的数据
-4. 指数平滑适合短期预测，对噪声敏感
+1. The Prophet model requires a long training time, and may take even longer when the data volume is large
+2. The ARIMA model requires stationary data; non-stationary data is automatically differenced
+3. Linear regression is suitable for data with an obvious linear trend
+4. Exponential smoothing is suitable for short-term forecasting and is sensitive to noise

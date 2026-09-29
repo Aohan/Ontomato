@@ -1,23 +1,23 @@
 import path from "path";
 
-/** 一条默认资源：from 是只读来源（文件或目录），to 是相对目标根的路径。 */
+/** One default resource: `from` is the read-only source (file or directory) and `to` the path relative to the target root. */
 export interface ResourceCopy {
   from: string;
   to: string;
 }
 
 /**
- * 应用在启动前按自身位置安装。只读默认资源各有明确来源；
- * 运行数据只写在应用给出的产品运行根下，读取与同步目标同为该处。
+ * Installed by the app before startup according to its own location. Read-only default resources each have an explicit source;
+ * runtime data is written only beneath the product runtime root the app provides, and reads and sync targets use the same place.
  */
 export interface ContentLayout {
-  /** 产品运行根：运行数据在其 data/，生产网页在其 dist/web。 */
+  /** Product runtime root: runtime data under its data/, production web pages under its dist/web. */
   runtimeRoot: string;
-  /** 默认提示词，同步到 data/prompts。 */
+  /** Default prompts, synced into data/prompts. */
   prompts: readonly ResourceCopy[];
-  /** 技能模板，新域初始化时复制到 data/domain-skills/<域>。 */
+  /** Skill templates, copied into data/domain-skills/<domain> when a new domain initializes. */
   skillTemplate: readonly ResourceCopy[];
-  /** 默认运行资源，同步到 data/ 下的 echart、knowledge、skills。 */
+  /** Default runtime resources, synced into echart, knowledge, and skills under data/. */
   runtimeResources: readonly ResourceCopy[];
 }
 

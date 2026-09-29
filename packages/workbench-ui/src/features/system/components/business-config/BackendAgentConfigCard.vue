@@ -24,7 +24,7 @@ const emit = defineEmits<{
   save: [];
 }>();
 
-// 五个键必须完整；选项只来自已保存模型，值始终是配置 ID，未选角色不允许提交。
+// All five keys are required; options come only from saved models, values are always config IDs, and unselected roles cannot be submitted.
 const incomplete = computed(() => agentKeys.some((key) => !agents.value[key].model));
 </script>
 

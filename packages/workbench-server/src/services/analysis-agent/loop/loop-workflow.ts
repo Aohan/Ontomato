@@ -1,14 +1,15 @@
 /**
- * 循环执行形态的运行时。
+ * Runtime of the loop execution form.
  *
- * 主 Agent 是主管：在响应循环中自行决定取证、派遣工人与交付，直到判断任务完成或
- * 用户取消。报告交付件由智能体布尔配置决定是否装配；循环底座本身只负责响应循环、
- * 通用工具、分析轨迹与任务收口。
+ * The main agent is the supervisor: inside the response loop it decides on its own when to collect evidence, dispatch workers, and deliver, until it
+ * judges the task complete or the user cancels. The agent's boolean configuration decides whether the report deliverable is assembled; the loop base
+ * itself only handles the response loop, common tools, the analysis trajectory, and task finalization.
  *
- * 报告正文只经报告笔记本产生：定稿一章就把已定稿章节按章节顺序整体重排推送；
- * 终态兜底组装全部非空章节，漏定稿不丢内容，笔记本全空才判没有可交付报告。
+ * The report body is produced only through the report notebook: finalizing a chapter re-pushes the finalized chapters re-ordered as a whole in
+ * chapter order; the terminal-state fallback assembles all non-empty chapters, a missed finalization never loses content, and only a completely
+ * empty notebook counts as no deliverable report.
  *
- * 循环路径不做热卡匹配、不沉淀待审核卡片；分析技能经受控工具由模型按需使用。
+ * The loop path performs no hot-card matching and deposits no cards for review; analysis skills are used by the model on demand through controlled tools.
  */
 
 import { v4 as uuidv4 } from "uuid";
@@ -52,7 +53,7 @@ import { tApp } from "../../../i18n";
 
 const logger = createLogger("analysis-loop-workflow");
 
-/** 循环形态共用一套压缩模板，报告交付件相关要求由运行时变量条件化。 */
+/** The loop form shares one compaction template; report-deliverable requirements are conditioned by runtime variables. */
 export const ANALYSIS_LOOP_COMPACTION_PROMPT_KEYS: CompactionPromptKeys = {
   system: "analysis-agent.compaction.system",
   summarize: "analysis-agent.compaction.summarize.user",
@@ -64,7 +65,7 @@ export interface RunAnalysisLoopParams {
   userId: string;
   threadId: string;
   taskId?: string;
-  /** 受理时捕获的运行身份；产物与终态据此确认是否仍可写当前任务。 */
+  /** Run identity captured at acceptance; artifacts and terminal states use it to confirm the current task is still writable. */
   identity?: AnalysisRunIdentity;
   agentId: string;
   domainId: string;
@@ -73,9 +74,9 @@ export interface RunAnalysisLoopParams {
   locale?: string;
   onEvent?: (event: DeepAnalysisEmittedEvent) => void;
   signal?: AbortSignal;
-  /** 常规会话的当前轮；提供时逐轮持久化消息、活动与最终回复，并且不交付报告正文。 */
+  /** The current turn of a regular session; when provided, messages, activities, and the final reply are persisted per turn and no report body is delivered. */
   conversationTurn?: AnalysisConversationTurnRecord;
-  /** 入口对报告交付件的覆盖；不提供时使用智能体配置。 */
+  /** The entry point's override of the report deliverable; when absent the agent configuration applies. */
   reportDeliverableEnabled?: boolean;
 }
 
@@ -116,7 +117,7 @@ export async function runAnalysisLoopWorkflow(
   if (!agent) {
     throw new Error(t("analysis.agentNotFound", { agentId }));
   }
-  // 常规会话只交付每轮最终回复；报告任务按智能体配置或入口覆盖装配报告交付件。
+  // Regular sessions deliver only each turn's final reply; report tasks assemble the report deliverable per the agent configuration or the entry override.
   const reportDeliverableEnabled = params.conversationTurn
     ? false
     : (params.reportDeliverableEnabled ?? agent.reportDeliverableEnabled) !== false;
@@ -133,7 +134,7 @@ export async function runAnalysisLoopWorkflow(
     let harnessTurnId: string | undefined;
     let harnessStatus: "completed" | "failed" | "cancelled" = "failed";
     let turnSaveQueue = Promise.resolve();
-    /** 中间过程随事件写入回合；失败只记日志，终态仍保存完整回合。 */
+    /** Intermediate progress is written into the turn as events; failures are only logged and the terminal state still stores the complete turn. */
     const saveTurnProgress = () => {
       if (!conversationTurn || !taskId) return;
       const payload = trajectory.current();
@@ -403,7 +404,7 @@ export async function runAnalysisLoopWorkflow(
         }),
       });
 
-      // 报告件兜底组装全部非空部分；无报告件以最后一条助手文本直接交付。
+      // The report deliverable's fallback assembles all non-empty parts; without a deliverable, the last assistant text is delivered directly.
       const report = notebook?.assembleAll() || "";
       const finalAnswer = reportDeliverableEnabled
         ? undefined
@@ -452,7 +453,7 @@ export async function runAnalysisLoopWorkflow(
       if (status === "cancelled") return trajectory.current();
       throw error;
     } finally {
-      // 文件只是过程载体，终态产物已写入唯一权威存储，工作目录随本次运行清理。
+      // Files are only the working carrier; the terminal output is already in the single authoritative store, and the working directory is cleaned up with this run.
       try {
         if (sessionId && harnessTurnId)
           await harnessSessions.finishTurn(sessionId, harnessTurnId, harnessStatus);

@@ -5,7 +5,7 @@ function normalizeInitialRoute(value: string) {
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 }
 
-// 主系统旧可视化建模入口带来的定位参数，原样组成 Manager 视图查询串。
+// Location parameters from the main system's old visual modeling entry form the Manager view query as-is.
 function visualModelingQuery(params: URLSearchParams) {
   const query = new URLSearchParams();
   for (const key of ["focus", "id", "back"]) {
@@ -16,7 +16,7 @@ function visualModelingQuery(params: URLSearchParams) {
   return text ? `?${text}` : "";
 }
 
-// 非根 hash 优先（刷新与深链），其次主系统传入的 view，再次部署配置的初始路由。
+// A non-root hash wins (reloads and deep links), then the view passed by the main system, then the deployment's initial route.
 function initialView(initialRoute: string) {
   const hashPath = window.location.hash.slice(1);
   if (hashPath && hashPath !== "/") return hashPath;
@@ -28,7 +28,7 @@ function initialView(initialRoute: string) {
   return initialRoute ? normalizeInitialRoute(initialRoute) : "/playground";
 }
 
-/** 组件视图与地址栏 hash 同步：组件导航以替换方式写回（不增加历史），手动改 hash 时跟随。 */
+/** Keeps the component view and the address bar hash in sync: component navigation replaces the hash (no history entry) and manual hash changes are followed. */
 export function syncView(initialRoute: string) {
   const view = ref("");
   const replaceView = (value: string) => {

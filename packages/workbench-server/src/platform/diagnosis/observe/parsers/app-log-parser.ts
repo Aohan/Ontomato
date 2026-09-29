@@ -115,7 +115,7 @@ export function parseAppLogsByTaskId(
 
 /**
  * Return raw app-log JSON lines for a turnKey without converting them to
- * ParsedLogRecord. Turn workspaces use this for 原始日志/app.log.
+ * ParsedLogRecord. Turn workspaces use this for raw-logs/app.log.
  */
 export function readAppLogLinesByTurnKey(
   turnKey: string,
@@ -126,7 +126,7 @@ export function readAppLogLinesByTurnKey(
 
 /**
  * Return raw app-log JSON lines for a taskId without converting them to
- * ParsedLogRecord. Analysis workspaces use this for 原始日志/app.log.
+ * ParsedLogRecord. Analysis workspaces use this for raw-logs/app.log.
  */
 export function readAppLogLinesByTaskId(taskId: string, fileWindow?: LogFileTimeWindow): string[] {
   return readMatchingAppLogLines((raw) => raw.taskId === taskId, fileWindow);

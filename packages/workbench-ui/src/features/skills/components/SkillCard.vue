@@ -112,7 +112,7 @@ function formatNumber(num?: number): string {
         </div>
       </div>
 
-      <!-- 使用统计 -->
+      <!-- Usage statistics -->
       <div
         v-if="skill.callCount !== undefined || skill.successRate !== undefined"
         class="skill-stats"
@@ -281,7 +281,7 @@ function formatNumber(num?: number): string {
   font-weight: 600;
 }
 
-/* 使用统计 */
+/* Usage statistics */
 .skill-stats {
   display: flex;
   gap: 20px;
@@ -347,7 +347,7 @@ function formatNumber(num?: number): string {
   right: 20px;
 }
 
-/* 下拉菜单紧凑样式 */
+/* Compact dropdown menu style */
 .skill-dropdown-menu {
   padding: 4px 0;
 }

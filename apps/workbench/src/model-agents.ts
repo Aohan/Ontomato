@@ -1,6 +1,6 @@
 import type { ModelAgentCatalog } from "@ontomato/workbench-server/logging/model-agents";
 
-/** open-source 迁出前的模型 Agent 名与诊断显示名（b6437c86 的调用处与 prompt-agent-catalog）。 */
+/** Model agent names and diagnosis display names from before the open-source migration (call sites and prompt-agent-catalog of b6437c86). */
 export const ossModelAgents: ModelAgentCatalog = {
   roles: {
     taskPlanner: { agentName: "Standard Data Query-TaskPlanner", displayName: "1.1 Task Planner" },

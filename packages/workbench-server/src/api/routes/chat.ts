@@ -116,7 +116,7 @@ router.get(
     setLocale(locale as Locale);
 
     const runId = queryRunId || `chat-${threadId}-${Date.now()}`;
-    // 同一 runId 表示 EventSource 重连，直接回放该 run。
+    // The same runId means an EventSource reconnect; replay that run directly.
     const existingRun = runStreamStore.getRun(runId);
     if (existingRun) {
       requireRunAccess(existingRun, authReq, chatRunKey(threadId));
@@ -124,7 +124,7 @@ router.get(
       return;
     }
 
-    // 在任何异步初始化前占住 thread key；新问题不能替换正在运行的服务端任务。
+    // Occupy the thread key before any async initialization; a new question must not replace a running server-side task.
     const run = runStreamStore.reserveRun({ runId, key: chatRunKey(threadId), userId, domainId });
     if (!run) {
       const activeRun = runStreamStore.getActiveRunByKey(chatRunKey(threadId));
@@ -275,11 +275,11 @@ router.get(
           });
         }
 
-        // 一次执行包含工作流执行与登记在本次执行上的迟到事实结算；本回合的展示
-        // 包含质检面板，因此订阅通道在两者都收口后才关闭。超过有界时限即放弃等待。
+        // One execution covers the workflow execution plus the settlement of late facts registered on it; this turn's display
+        // includes the quality-check panel, so the subscription channel closes only after both finalize. Past the bounded limit, waiting is abandoned.
         await finalState.pendingLateFacts?.settleAll();
 
-        // 等待迟到事实期间用户仍可能取消；取消不是完成，收口前重新判定。
+        // The user can still cancel while late facts are awaited; cancellation is not completion and is re-evaluated before finalization.
         if (run.controller.signal.aborted) {
           logger.info(tApp("foundation.log.chat.cancelledLate"), { userId, threadId, requestSeq });
           await finishTurnRun("cancelled");

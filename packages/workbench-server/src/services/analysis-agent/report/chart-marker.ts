@@ -65,7 +65,7 @@ export function replaceChartMarkers(
   return result;
 }
 
-/** 报告正文交付前把 marker 换成图表 HTML；匹配不上的 marker 删掉并告警。 */
+/** Replaces markers with chart HTML before the report body is delivered; unmatched markers are removed with a warning. */
 export function replaceChartMarkersWithHtml(markdown: string, chartMap: Map<string, string>) {
   const availableChartIds = Array.from(chartMap.keys());
   return replaceChartMarkers(

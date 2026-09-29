@@ -21,7 +21,7 @@ import {
   type SystemStatus,
 } from "../../system-monitor";
 
-// 资源总览与 backend 卡之间的服务面板插槽（由应用组合页提供）；服务动作经 handleAction 回到本页确认与执行。
+// Service panel slot between the resource overview and the backend card (provided by the app's composed page); service actions go back through handleAction for confirmation and execution here.
 defineSlots<SystemMonitorSlots>();
 
 const { t } = useI18n();

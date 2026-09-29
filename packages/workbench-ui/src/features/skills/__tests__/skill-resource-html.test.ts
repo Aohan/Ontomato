@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { withSkillResourceCredentials } from "../utils/skill-resource";
 import { installAuthHost } from "../../../utils/auth";
 
-// 原用例经企业认证模块写入凭据；共享代码现经应用宿主读取，这里用同语义的内存凭据。
+// The original test wrote credentials through the auth module; shared code now reads them through the app host, so an in-memory credential with the same semantics is used here.
 const credential: { token: string | null; apiKey: string | null } = { token: null, apiKey: null };
 installAuthHost({
   getToken: () => credential.token,

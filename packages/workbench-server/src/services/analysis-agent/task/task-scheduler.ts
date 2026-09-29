@@ -18,8 +18,8 @@ let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 const CHECK_INTERVAL_MS = 30000;
 
 /**
- * 下一个触发槽位。解析不出或已经过期时退到 30 分钟后：认领即推进 next_run_at，
- * 槽位必须落在将来，否则调度器每 30s 轮询都会重新选中同一条规则。
+ * The next trigger slot. When unparseable or already past, fall back to 30 minutes later: claiming advances next_run_at,
+ * and the slot must land in the future or the scheduler's 30s poll would re-select the same rule every time.
  */
 function nextRunSlot(rule: AnalysisScheduleRule, triggeredAt: number): number {
   const parsed = parseScheduleToNextRun(rule.scheduleExpression, triggeredAt);
@@ -34,8 +34,8 @@ function nextRunSlot(rule: AnalysisScheduleRule, triggeredAt: number): number {
 }
 
 /**
- * 定时规则到点时，等价于系统替用户重新发起一次深度分析：
- * 认领规则并推进下次触发时刻，实际报告写入新建的一次性任务。
+ * When a schedule rule fires it is equivalent to the system re-initiating one deep analysis on the user's behalf:
+ * claim the rule and advance its next trigger time; the actual report is written into a newly created one-shot task.
  */
 export async function triggerScheduleRule(
   ruleId: string,
@@ -98,14 +98,14 @@ export async function triggerScheduleRule(
 }
 
 /**
- * 认领一个待执行的一次性任务并交给运行编排器。
- * 调度侧只负责 claim 与执行前置条件，运行本身（事件、终态、通知、取消）在编排器里。
+ * Claims one pending one-shot task and hands it to the run orchestrator.
+ * The scheduler side owns only claim and execution preconditions; the run itself (events, terminal states, notifications, cancellation) lives in the orchestrator.
  */
 async function executeTask(taskId: string, domainId: string): Promise<void> {
   const taskService = getAnalysisTaskService();
   const agentService = await getAnalysisAgentService();
 
-  // 常规会话任务不走这里：入口按回合受理，由 startConversationTurn 占用任务并分配受理序号。
+  // Regular-session tasks never come through here: entries accept per turn, with startConversationTurn occupying the task and assigning the acceptance sequence.
   const task = await taskService.tryStartTask(taskId, domainId);
   if (!task) return;
 
@@ -124,8 +124,8 @@ async function executeTask(taskId: string, domainId: string): Promise<void> {
 }
 
 /**
- * 受理一轮常规会话并异步执行。任务已占用或不是常规会话时返回 null，
- * 由入口回 409；回合受理序号即本轮在会话内的稳定身份。
+ * Accepts one regular-session turn and executes it asynchronously. Returns null when the task is already occupied or not a regular session,
+ * and the entry answers 409; the turn's acceptance sequence is this turn's stable identity within the session.
  */
 export async function startConversationTurn(
   taskId: string,
@@ -141,7 +141,7 @@ export async function startConversationTurn(
   return turn.requestSeq;
 }
 
-/** 常规会话每轮都走循环：入口凭据优先，缺省回退任务行保存的 token。 */
+/** Every regular-session turn goes through the loop: entry credentials win, falling back to the token saved on the task row. */
 async function runConversationTurn(
   taskId: string,
   domainId: string,
@@ -209,7 +209,7 @@ async function recoverStaleRunningTasks(): Promise<void> {
   const STALE_THRESHOLD_MS = 60 * 60 * 1000;
 
   for (const task of running) {
-    // 常规会话的 running 回合只可能来自本进程已丢失的运行，直接收口为失败。
+    // A running regular-session turn can only come from a run this process has lost; finalize it directly as failed.
     if (task.reportDeliverableEnabled === false) {
       for (const turn of await taskService.listConversationTurns(task.id)) {
         if (turn.status !== "running") continue;

@@ -55,11 +55,11 @@ const reportPayload = {
   sections: [
     {
       sectionId: "report",
-      title: "结论",
+      title: "Summary",
       titleLevel: 2,
       order: 0,
       revision: 1,
-      markdown: "正文\n\n[chart:summary:c1]",
+      markdown: "Body\n\n[chart:summary:c1]",
       status: "success" as const,
     },
   ],
@@ -67,7 +67,7 @@ const reportPayload = {
     {
       chartId: "c1",
       scopeId: "report",
-      title: "图",
+      title: "Chart",
       chartType: "bar",
       sourceSubQuestion: "q",
       html: "<div>chart</div>",
@@ -82,7 +82,7 @@ const task = {
   id: "task-1",
   userId: "system",
   domainId: "default",
-  name: "季度分析",
+  name: "Analyse trimestrielle",
   status: "cancelled" as const,
   reportDeliverableEnabled: true,
   analysisPayload: reportPayload,
@@ -131,7 +131,7 @@ describe("open-source anonymous report PDF", () => {
         throw new Error(`unexpected download URL: ${listed.downloadUrl ?? listed.error}`);
       }
       const response = await fetch(downloadUrl);
-      const fileName = "季度分析_2026-09-24T10-00-00.pdf";
+      const fileName = "Analyse trimestrielle_2026-09-24T10-00-00.pdf";
 
       expect(mocks.dotenv).toHaveBeenCalledWith({ path: path.join(repoRoot, ".env") });
       expect(listed).toEqual({ success: true, downloadUrl });
@@ -140,11 +140,11 @@ describe("open-source anonymous report PDF", () => {
       expect(response.headers.get("content-disposition")).toBe(
         buildAttachmentContentDisposition(fileName)
       );
-      expect(response.headers.get("content-disposition")).toContain(encodeURIComponent("季度分析"));
+      expect(response.headers.get("content-disposition")).toContain(encodeURIComponent("Analyse trimestrielle"));
       expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from("%PDF-1.4"));
       expect(mocks.exportMarkdownPdf).toHaveBeenCalledTimes(1);
       expect(mocks.exportMarkdownPdf).toHaveBeenCalledWith({
-        title: "季度分析",
+        title: "Analyse trimestrielle",
         markdown: buildDeepAnalysisMarkdown(reportPayload),
         renderInlineCharts: true,
       });
@@ -234,7 +234,7 @@ describe("open-source anonymous report PDF", () => {
   it("rejects a schedule rule even when the projection has report text", async () => {
     mocks.getTask.mockResolvedValue(null);
     mocks.getRule.mockResolvedValue({ id: "rule-1" });
-    mocks.toScheduleRuleTask.mockReturnValue({ ...task, id: "rule-1", name: "定时规则" });
+    mocks.toScheduleRuleTask.mockReturnValue({ ...task, id: "rule-1", name: "Schedule rule" });
     const response = await fetch(`${base}/api/analysis-tasks/rule-1/report.pdf`);
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ error: t("api.noReportToExport") });

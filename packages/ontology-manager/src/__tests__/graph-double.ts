@@ -1,6 +1,6 @@
 /**
- * 图谱库（G6/X6）内部的有限替身：happy-dom 没有布局与 SVG 测量，这里只记录事件处理器，
- * 其余调用都返回无副作用的惰性对象。页面、请求层与 fetch 之间的链路不经替身。
+ * A limited double for the graph libraries (G6/X6) internals: happy-dom has no layout or SVG measurement, so this only
+ * records event handlers and returns inert, side-effect-free objects for every other call. The path between pages, the request layer and fetch is not doubled.
  */
 type Handler = (event: unknown) => void;
 
@@ -20,7 +20,7 @@ function inert(): any {
 
 export const graphHandlers: Record<string, Handler> = {};
 
-/** 页面交给图谱库的输入：构造选项、X6 addNode 参数、G6 适配时的缩放读写（getZoom 返回 zoom）。 */
+/** Inputs the page hands to the graph libraries: constructor options, X6 addNode arguments, and zoom reads/writes during G6 fitting (getZoom returns zoom). */
 export const graphRecord = {
   options: [] as any[],
   addedNodes: [] as any[],

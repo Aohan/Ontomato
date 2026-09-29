@@ -1,6 +1,6 @@
 import type { AbcProgramOutKeyRef } from "@ontomato/contracts/dashboard";
 /**
- * 热报告重放计划：由 ABC 查询链路从 streamchatV1 最终 JSON 构建，供分析域重放执行。
+ * Hot report replay plan: built from the streamchatV1 final JSON by the ABC query chain, for the analysis domain to replay.
  */
 
 import type { DataChunk } from "./client";

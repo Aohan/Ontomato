@@ -28,7 +28,7 @@ import { fingerprint, loadRuntimeLock, readRevision } from "../build-support.mjs
 import { app as publicEntry } from "../../apps/data-engine/build.mjs";
 
 function temporary(fn) {
-  const dir = mkdtempSync(join(tmpdir(), "backend 测试 space-"));
+  const dir = mkdtempSync(join(tmpdir(), "backend test café space-"));
   try {
     fn(dir);
   } finally {
@@ -67,22 +67,17 @@ test("the POM's compiler target may not exceed the runtime JRE and must be decla
   assert.throws(() => verifyJavaTarget("<project></project>", 21), /declares no Java compiler target/);
 });
 
-test("prompt language staging selects only the final .en suffix and overwrites the paired default", () => {
+test("prompt language staging: the selected variant replaces the plain file, other declared variants are dropped", () => {
   for (const lang of ["zh", "en"])
     temporary((dir) => {
       mkdirSync(join(dir, "lang"));
-      writeFileSync(join(dir, "prompt.md"), "中文");
-      writeFileSync(join(dir, "prompt.en.md"), "English");
-      writeFileSync(join(dir, "lang/en.json"), "{}");
-      writeFileSync(join(dir, "tricky.en.middle.md"), "keep");
-      selectPromptLanguage(dir, lang);
-      assert.equal(
-        readFileSync(join(dir, "prompt.md"), "utf8"),
-        lang === "en" ? "English" : "中文",
-      );
-      assert.equal(existsSync(join(dir, "prompt.en.md")), false);
-      assert.equal(existsSync(join(dir, "tricky.en.middle.md")), true);
-      assert.equal(existsSync(join(dir, "lang/en.json")), true);
+      writeFileSync(join(dir, "prompt.md"), "English");
+      writeFileSync(join(dir, "prompt.zh.md"), "Chinese");
+      writeFileSync(join(dir, "lang/zh-CN.json"), "{}");
+      writeFileSync(join(dir, "tricky.zh.middle.md"), "keep");
+      selectPromptLanguage(dir, lang, ["zh", "en"]);
+      assert.equal(readFileSync(join(dir, "prompt.md"), "utf8"), lang === "en" ? "English" : "Chinese");
+      assert.deepEqual(readdirSync(dir, { recursive: true }).sort(), ["lang", "lang/zh-CN.json", "prompt.md", "tricky.zh.middle.md"]);
     });
 });
 test("revision is the single concrete public POM property", () => {
@@ -147,13 +142,11 @@ function fixture(t) {
     "packages/data-engine-core/src/test/java/CoreTest.java": "class CoreTest {}\n",
     "packages/data-engine-core/requirements-py310.txt": "numpy==2.2.6\n",
     "packages/data-engine-core/mcp/mcpserver.py": "# mcp\n",
-    "packages/data-engine-core/conf-defaults/prompt.md": "public 中文\n",
-    "packages/data-engine-core/conf-defaults/prompt.en.md": "public English\n",
+    "packages/data-engine-core/conf-defaults/prompt.md": "public English\n",
     "packages/data-engine-core/conf-defaults/application.yml": "app: public\n",
-    "packages/data-engine-core/conf-defaults/lang/zh-CN.json": "{}\n",
+    "packages/data-engine-core/conf-defaults/lang/en.json": "{}\n",
     "packages/data-engine-core/conf-defaults/static/login.html": "oss page\n",
-    "packages/data-engine-core/skills/aftercalculate/trend-forecaster/SKILL.md": "public skill 中文\n",
-    "packages/data-engine-core/skills/aftercalculate/trend-forecaster/SKILL.en.md": "public skill English\n",
+    "packages/data-engine-core/skills/aftercalculate/trend-forecaster/SKILL.md": "public skill English\n",
     "packages/data-engine-core/skills/aftercalculate/trend-forecaster/scripts/forecaster.py": "# py\n",
     "apps/data-engine/pom.xml": "<project/>\n",
     "apps/data-engine/src/main/java/App.java": "class App {}\n",
@@ -166,7 +159,10 @@ function fixture(t) {
     "packages/data-engine-enterprise/src/main/java/Ent.java": "class Ent {}\n",
     "packages/data-engine-enterprise/src/license-real/java/L.java": "class L {}\n",
     "packages/data-engine-enterprise/src/license-override/java/L.java": "class L {}\n",
+    "packages/data-engine-enterprise/conf-defaults/prompt.zh.md": "enterprise Chinese\n",
+    "packages/data-engine-enterprise/conf-defaults/lang/zh-CN.json": "{}\n",
     "packages/data-engine-enterprise/conf-defaults/static/login.html": "enterprise page\n",
+    "packages/data-engine-enterprise/skills/aftercalculate/trend-forecaster/SKILL.zh.md": "enterprise skill Chinese\n",
     "apps/data-engine/pom.xml": "<project/>\n",
     "apps/data-engine/src/main/java/EntApp.java": "class EntApp {}\n",
     "scripts/data-engine/verify-license-jar.sh": "#!/bin/sh\n",
@@ -181,7 +177,7 @@ function publicApp({ pub }) {
   return {
     repoRoot: pub, lockRoot: join(pub, "apps/data-engine"), lockExclude: LOCK, versionPom: join(pub, "pom.xml"),
     sources: [{ id: "ontomato", root: pub }],
-    component: "datarag-opensource", family: "java-app", interfaceVersion: 3, promptLang: "en",
+    component: "datarag-opensource", family: "java-app", interfaceVersion: 3, promptLang: "en", supportedPromptLangs: ["en"],
     reactorDir: "ontomato", appModule: "apps/data-engine", appLibModules: ["packages/data-engine-core", "apps/data-engine"], excludeArtifactIds: "data-engine-core,data-engine-app",
     contextTrees: [publicTree(pub)],
     secretExport: null,
@@ -201,7 +197,7 @@ function enterpriseApp({ pub, ent, settings }, mode) {
     ...base,
     repoRoot: ent, lockRoot: join(ent, "apps/data-engine"),
     sources: [{ id: "ontomato", root: pub }, { id: "enterprise", root: ent }],
-    component: "datarag", promptLang: "zh", reactorDir: "enterprise",
+    component: "datarag", promptLang: "zh", supportedPromptLangs: ["zh", "en"], reactorDir: "enterprise",
     appLibModules: ["../ontomato/packages/data-engine-core", "packages/data-engine-enterprise", "apps/data-engine"],
     excludeArtifactIds: "data-engine-core,data-engine-enterprise,data-engine-enterprise-app",
     contextTrees: [
@@ -218,8 +214,9 @@ function enterpriseApp({ pub, ent, settings }, mode) {
       [pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"],
       [ent, "packages/data-engine-enterprise/conf-defaults", "payload/conf-defaults"],
       [pub, "packages/data-engine-core/skills", "payload/skills"],
+      [ent, "packages/data-engine-enterprise/skills", "payload/skills"],
     ],
-    payloadFiles: { "license-mode": mode }, appLabels: { "io.example.license.mode": mode }, appTagSuffix: mode === "override" ? "-override" : "",
+    payloadFiles: { "license-mode": mode }, appLabels: { "io.enterprise.license.mode": mode }, appTagSuffix: mode === "override" ? "-override" : "",
   };
 }
 
@@ -258,7 +255,7 @@ else if (args[0] === "buildx") {
   } else {
     const labels = {};
     for (const l of value("--label")) { const at = l.indexOf("="); labels[l.slice(0, at)] = l.slice(at + 1); }
-    if (process.env.FAKE_MODE === "bad-label" && target === "app") labels["io.example.license.mode"] = "real";
+    if (process.env.FAKE_MODE === "bad-label" && target === "app") labels["io.enterprise.license.mode"] = "real";
     for (const tag of value("-t")) images[tag] = labels;
     save();
   }
@@ -339,7 +336,7 @@ test("public build: central export of the public tree only, runtime target and e
   assert.equal(app.context["payload/conf-defaults/prompt.md"], "public English\n");
   assert.equal(app.context["payload/conf-defaults/static/login.html"], "oss page\n");
   assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
-  assert.equal(Object.keys(app.context).some((p) => /\.en\.[^./]+$/.test(p)), false);
+  assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
   assert.equal("payload/license-mode" in app.context, false);
   for (const name of ["LICENSE", "NOTICE"]) {
     assert.equal(runtime.context[name], shipped(name));
@@ -392,13 +389,13 @@ for (const mode of ["real", "override"])
     assert.equal(runtime.context["bin/enterprise-runtime-contract.py"], "# enterprise checker\n");
     assert.equal(runtime.context["lib/libLicense-native-aarch64-5.4.2.so"], "so");
     const app = docker.build("app");
-    assert.equal(app.context["payload/conf-defaults/prompt.md"], "public 中文\n");
+    assert.equal(app.context["payload/conf-defaults/prompt.md"], "enterprise Chinese\n");
     assert.equal(app.context["payload/conf-defaults/application.yml"], "app: public\n");
     assert.equal(app.context["payload/conf-defaults/draft.md"], "untracked public\n");
     assert.equal(app.context["payload/conf-defaults/lang/zh-CN.json"], "{}\n");
     assert.equal(app.context["payload/conf-defaults/static/login.html"], "enterprise page\n");
-    assert.equal(Object.keys(app.context).some((p) => /\.en\.[^./]+$/.test(p)), false);
-    assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill 中文\n");
+    assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
+    assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "enterprise skill Chinese\n");
     assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/scripts/forecaster.py"], "# py\n");
     assert.equal(app.context["payload/license-mode"], mode);
     // The fake names each exported jar after its module directory.
@@ -414,7 +411,7 @@ for (const mode of ["real", "override"])
       "io.runtime.kind": "app",
       "io.runtime.compat-fingerprint": runtimeFp,
       "io.runtime.family": "java-app",
-      "io.example.license.mode": mode,
+      "io.enterprise.license.mode": mode,
     });
     assert.deepEqual(docker.images()[runtime.args[runtime.args.indexOf("-t") + 1]], {
       "org.opencontainers.image.version": VERSION,
@@ -425,7 +422,7 @@ for (const mode of ["real", "override"])
     });
   });
 
-test("enterprise en: public English pairs are selected after the overlay and the edition page stays", async (t) => {
+test("enterprise en: the public English defaults stay under the overlay's Chinese variants and the edition page stays", async (t) => {
   const fx = fixture(t);
   const docker = fakeDocker(t, fx.dir);
   await run(enterpriseApp(fx, "real"), ["all", "--arch", "arm64", "--license-mode", "real", "--prompt-lang", "en"]);
@@ -434,30 +431,26 @@ test("enterprise en: public English pairs are selected after the overlay and the
   assert.equal(app.context["payload/conf-defaults/static/login.html"], "enterprise page\n");
   assert.equal(app.context["payload/conf-defaults/lang/zh-CN.json"], "{}\n");
   assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
-  assert.equal(Object.keys(app.context).some((p) => /\.en\.[^./]+$/.test(p)), false);
+  assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
 });
 
-// The real public resource trees through the production staging: each stem is the paired
-// language, no *.en.* survives and every other file is staged unchanged.
-for (const lang of ["zh", "en"])
-  test(`real public resources staged for ${lang}`, async (t) => {
-    const fx = fixture(t);
-    const docker = fakeDocker(t, fx.dir);
-    await run({ ...publicApp(fx), resources: publicEntry.resources }, ["all", "--arch", "arm64", "--prompt-lang", lang]);
-    const staged = docker.build("app").context;
-    const EN = /\.en(\.[^./]+)$/;
-    for (const [root, source, dest] of publicEntry.resources) {
-      const files = readdirSync(join(root, source), { recursive: true, withFileTypes: true })
-        .filter((e) => e.isFile()).map((e) => join(e.parentPath, e.name).slice(join(root, source).length + 1));
-      const pairs = new Set(files.filter((p) => EN.test(p)).map((p) => p.replace(EN, "$1")));
-      const expected = Object.fromEntries(files.filter((p) => !EN.test(p)).map((p) => [
-        `${dest}/${p}`, readFileSync(join(root, source, lang === "en" && pairs.has(p) ? p.replace(/(\.[^./]+)$/, ".en$1") : p), "utf8"),
-      ]));
-      assert.ok(pairs.size > 0);
-      assert.deepEqual(Object.fromEntries(Object.entries(staged).filter(([p]) => p.startsWith(`${dest}/`))), expected);
-    }
-    assert.equal(Object.keys(staged).filter((p) => /^payload\/conf-defaults\/lang\/[^/]+\.json$/.test(p)).length, 8);
-  });
+// The real public entry declares English only: another language fails before any build step, and
+// the real public resource trees are staged unchanged.
+test("real public entry rejects an undeclared prompt language before building", async (t) => {
+  const fx = fixture(t);
+  const docker = fakeDocker(t, fx.dir);
+  const app = { ...publicApp(fx), resources: publicEntry.resources, supportedPromptLangs: publicEntry.supportedPromptLangs };
+  await assert.rejects(() => run(app, ["all", "--arch", "arm64", "--prompt-lang", "zh"]), /Expected --prompt-lang en$/);
+  assert.equal(existsSync(join(fx.pub, ".build")), false);
+  await run(app, ["all", "--arch", "arm64", "--prompt-lang", "en"]);
+  const staged = docker.build("app").context;
+  for (const [root, source, dest] of publicEntry.resources) {
+    const files = readdirSync(join(root, source), { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile()).map((e) => join(e.parentPath, e.name).slice(join(root, source).length + 1));
+    const expected = Object.fromEntries(files.map((p) => [`${dest}/${p}`, readFileSync(join(root, source, p), "utf8")]));
+    assert.deepEqual(Object.fromEntries(Object.entries(staged).filter(([p]) => p.startsWith(`${dest}/`))), expected);
+  }
+});
 
 test("app-only: a missing lock fails before settings or export; with a lock no runtime is ever built", async (t) => {
   const fx = fixture(t);

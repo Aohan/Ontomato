@@ -1,6 +1,6 @@
 import type { QueryFactDatasetPreview as QueryResultDatasetPreview } from "@ontomato/contracts/query-execution";
 /**
- * 证据层：标准化的子问题查询结果，供图表与报告消费，并带来源追踪。
+ * Evidence layer: normalized sub-question query results for charts and reports, with source tracing.
  */
 
 import type { Dataset, FieldDisplayPlan } from "../../data-query/adapter";
@@ -8,69 +8,69 @@ import type { QueryResultData, QueryResultDsl } from "./query-result";
 import type { QueryExecutionFact } from "../../data-query/query-fact";
 
 /**
- * 证据层数据结构 - 标准化查询结果供图表和报告消费
+ * Evidence layer data structure - normalized query results for charts and reports
  */
 export interface AnalysisEvidence {
-  /** 子问题 ID */
+  /** Sub-question ID */
   questionId: string;
-  /** 子问题文本 */
+  /** Sub-question text */
   questionText: string;
-  /** 维度 ID */
+  /** Dimension ID */
   dimensionId: string;
-  /** 维度名称 */
+  /** Dimension name */
   dimensionName: string;
-  /** 查询状态 */
+  /** Query status */
   status: "completed" | "failed";
-  /** 数据 */
+  /** Data */
   data: any[];
-  /** 数据条数 */
+  /** Data row count */
   dataCount: number;
-  /** 面向用户回答时使用的字段展示计划 */
+  /** Field display plan used when answering the user */
   fieldDisplayPlan?: FieldDisplayPlan;
-  /** Markdown 表格 */
+  /** Markdown table */
   markdownTable?: string;
-  /** 关键发现 */
+  /** Key findings */
   keyFindings?: string[];
-  /** ABC 拆分后的子问题 */
+  /** Sub-questions after ABC decomposition */
   abcSubQuestions?: string[];
-  /** 错误信息 */
+  /** Error message */
   error?: string;
 }
 
 /**
- * 分析域消费的执行事实：与 data-query 的 QueryExecutionFact 同一批字段，只窄化数据与
- * DSL 的形状。分析域所有查询结果类型都在它之上做加法，不再各自声明执行字段。
+ * Execution facts consumed by the analysis domain: the same fields as data-query's QueryExecutionFact, with only data and
+ * DSL shapes narrowed. Every query result type in the analysis domain adds on top of it and never re-declares execution fields.
  */
 export interface AnalysisQueryFact extends Omit<
   QueryExecutionFact,
   "data" | "dsl" | "datasets" | "datasetPreviews"
 > {
-  /** 查询结果数据 */
+  /** Query result data */
   data?: QueryResultData;
-  /** DSL 信息 */
+  /** DSL information */
   dsl?: QueryResultDsl;
-  /** 数据集 */
+  /** Datasets */
   datasets?: Dataset[];
-  /** 多数据集预览 */
+  /** Multi-dataset preview */
   datasetPreviews?: QueryResultDatasetPreview[];
 }
 
 /**
- * 维度查询结果 = 执行事实 + 分析域附加的计划身份与业务执行状态。
+ * Dimension query result = execution facts + the plan identity and business execution state the analysis domain attaches.
  */
 export interface DimensionQueryResult extends AnalysisQueryFact {
-  /** 子问题稳定 ID */
+  /** Stable sub-question ID */
   questionId: string;
-  /** 维度 ID */
+  /** Dimension ID */
   dimensionId: string;
-  /** 维度名称 */
+  /** Dimension name */
   dimensionName: string;
-  /** 维度值 */
+  /** Dimension value */
   dimensionValue: string;
-  /** 子问题 */
+  /** Sub-question */
   subQuestion: string;
-  /** 查询状态 */
+  /** Query status */
   status: "pending" | "in_progress" | "completed" | "failed";
-  /** 错误信息 */
+  /** Error message */
   error?: string;
 }

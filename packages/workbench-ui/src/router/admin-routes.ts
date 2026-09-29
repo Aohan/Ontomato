@@ -1,6 +1,6 @@
 import type { RouteRecordRaw } from "vue-router";
 
-/** Manager 外壳认识的视图参数；其余 query（含凭据）不带入 Manager。 */
+/** View parameters the Manager shell understands; the rest of the query (including credentials) is not passed to the Manager. */
 const MANAGER_VIEW_PARAMS = ["focus", "id", "back"] as const;
 
 export function managerViewQuery(query: Record<string, unknown>): Record<string, string> {
@@ -15,8 +15,9 @@ export function managerViewQuery(query: Record<string, unknown>): Record<string,
 const managerMeta = { group: "data-assets", permission: "ontology-modeling" };
 
 /*
- * 已迁入的 /admin 子路由记录。应用按原顺序显式排列（企业页插在公共页之间），不做注册或排序框架。
- * meta 只保留有消费者的 group（布局页签定位）、permission（企业守卫）与 category（技能页分类）；原 title/icon/hidden 无读取者。
+ * Shared /admin child route records. Each app lists them explicitly in the original order (its own pages go between the
+ * shared ones), with no registration or ordering framework. meta keeps only fields with consumers: group (layout tab
+ * lookup), permission (app guards) and category (skill page category); the original title/icon/hidden had no reader.
  */
 export const adminRoutes = {
   root: { path: "", name: "AdminRoot", redirect: "/admin/ontology-manager" },
@@ -37,7 +38,7 @@ export const adminRoutes = {
     redirect: "/admin/ontology-manager",
     meta: managerMeta,
   },
-  // 可视化建模已归并到 Manager：旧路由带着 Manager 认识的 focus/id/back 进入 Manager 入口。
+  // Visual modeling now lives in the Manager: the old route enters the Manager entry with the focus/id/back it understands.
   visualModeling: {
     path: "ontology/visual-modeling",
     name: "VisualModeling",
@@ -57,23 +58,23 @@ export const adminRoutes = {
     redirect: "/admin/ontology-manager?view=assets",
     meta: { permission: "ontology-modeling" },
   },
-  // 原隐藏路由（无菜单项）。
+  // Originally hidden route (no menu item).
   knowledgeGovernance: {
     path: "knowledge-governance/:sessionId?",
     name: "KnowledgeGovernance",
     component: () => import("../features/knowledge-governance/GovernancePage.vue"),
     meta: { group: "app-capabilities", permission: "business-knowledge" },
   },
-  // 版本原值（KnowledgeManagerProps）由应用在路由记录上以 props 传入。
+  // Business knowledge moved into the Ontology Manager sidebar; the old route redirects to the Manager.
   knowledge: {
     path: "knowledge",
-    redirect: "/admin/skills?tab=knowledge",
-    meta: { group: "app-capabilities", permission: "business-knowledge" },
+    redirect: "/admin/ontology-manager",
+    meta: { group: "data-assets", permission: "business-knowledge" },
   },
   examples: {
     path: "examples",
-    redirect: "/admin/skills?tab=knowledge&section=examples",
-    meta: { group: "app-capabilities", permission: "query-examples" },
+    redirect: "/admin/system-config",
+    meta: { group: "platform-management", permission: "query-examples" },
   },
   actionManagement: {
     path: "action-management",
@@ -113,32 +114,35 @@ export const adminRoutes = {
     redirect: "/admin/skills?tab=visualization",
     meta: { group: "app-capabilities", category: "visualization", permission: "visualization-skills" },
   },
-  // 版本原值（BusinessConfigProps）由应用在路由记录上以 props 传入。
+  modelConfig: {
+    path: "model-config",
+    name: "ModelConfig",
+    component: () => import("../features/system/components/ModelConfig.vue"),
+    meta: { group: "platform-management", permission: "system-config" },
+  },
+  // Edition values (BusinessConfigProps) are passed by the app as props on the route record.
   businessConfig: {
     path: "system-config",
-    name: "BusinessConfig",
+    name: "SystemConfig",
     component: () => import("../features/system/components/BusinessConfig.vue"),
     meta: { group: "platform-management", permission: "system-config" },
   },
-  operations: {
-    path: "operations",
-    name: "OperationsGovernance",
-    component: () => import("../features/admin/components/platform-operations/OperationsGovernance.vue"),
-    meta: { group: "platform-management", permission: "system-management" },
-  },
   auditLog: {
     path: "audit-log",
-    redirect: "/admin/operations?section=audit",
+    name: "AuditLog",
+    component: () => import("../features/admin/components/platform-operations/AuditLogManager.vue"),
     meta: { group: "platform-management", permission: "audit-logs" },
   },
   feedbackRecords: {
     path: "feedback-records",
-    redirect: "/admin/operations?section=feedback",
+    name: "FeedbackRecords",
+    component: () => import("../features/admin/components/platform-operations/FeedbackRecords.vue"),
     meta: { group: "platform-management", permission: "audit-logs" },
   },
   systemMonitor: {
     path: "system-monitor",
-    redirect: "/admin/operations?section=monitor",
+    name: "SystemMonitor",
+    component: () => import("../features/admin/components/platform-operations/SystemMonitor.vue"),
     meta: { group: "platform-management", permission: "system-monitoring" },
   },
 } satisfies Record<string, RouteRecordRaw>;

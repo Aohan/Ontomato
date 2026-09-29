@@ -3,15 +3,15 @@
  *
  * Generates a lightweight diagnostic evidence index. Fixed sections:
  *
- * - 链路模式（标准 ABC / ABC Harness / 未识别，从捕获角色反推）
- * - 用户问题
- * - MQL / 逻辑链
+ * - Chain mode (standard ABC / ABC Harness / unrecognized, inferred from captured roles)
+ * - The user question
+ * - MQL / logic chain
  *
  * Role sections are rendered only when the corresponding role is captured
  * in the prompt conversations (displayName substring match):
  *
- * - 问题分析员输出 / 子问题 DSL / 数据分析专家 Python 代码（标准链）
- * - ABCHarness 程序员（harness 链）
+ * - Question analyst output / sub-question DSL / data analysis expert Python code (standard chain)
+ * - ABCHarness programmer (harness chain)
  *
  * When neither chain's roles are captured, a single extraction-anomaly note
  * replaces the per-section placeholders.
@@ -46,7 +46,7 @@ export interface SummaryInput {
   metadata: WorkspaceArtifactSummaryMetadata;
   /** MQLS logic markdown extracted from diagnostic-events (mqls_logic.md content). */
   logicMarkdown?: string;
-  /** Merged prompt conversations written to 提示词/. */
+  /** Merged prompt conversations written to prompts/. */
   promptConversations?: UnifiedConversation[];
 }
 

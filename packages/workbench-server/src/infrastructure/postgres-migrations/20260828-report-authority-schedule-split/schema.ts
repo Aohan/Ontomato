@@ -2,8 +2,8 @@ import { qualifiedTable } from "../../postgres.js";
 import type { QueryableClient } from "../helpers.js";
 
 /**
- * 定时规则表：规则从 analysis_tasks 拆出后自己的运行时结构。
- * 与其他表一致采用幂等 DDL：空库一次到位，存量库按缺列收敛。
+ * Schedule rule table: the rules' own runtime structure after being split out of analysis_tasks.
+ * Like the other tables it uses idempotent DDL: an empty database gets everything in one pass, existing databases converge by missing columns.
  */
 export async function ensureScheduleRuleSchema(client: QueryableClient): Promise<void> {
   await client.query(`

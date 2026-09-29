@@ -162,7 +162,7 @@
                             <additionalClasspathElement>${project.basedir}/.dev/conf</additionalClasspathElement>
                         </additionalClasspathElements>
                         <systemPropertyVariables>
-                            <ontomato.datarag.pythonpath>${project.basedir}/${datarag.venv.python}</ontomato.datarag.pythonpath>
+                            <ontomato.data-engine.pythonpath>${project.basedir}/${datarag.venv.python}</ontomato.data-engine.pythonpath>
                         </systemPropertyVariables>
                     </configuration>
                 </plugin>

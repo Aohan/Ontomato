@@ -12,7 +12,7 @@ export interface AnalysisTask extends ClientAnalysisTask {
   token?: string;
 }
 /**
- * 分析任务与任务事件。
+ * Analysis tasks and task events.
  */
 
 export interface UpsertAnalysisTaskEventInput {
@@ -24,19 +24,19 @@ export interface UpsertAnalysisTaskEventInput {
   phase?: string;
   sourceKind?: string;
   sourceRef: string;
-  /** 事件自身的结构化事实；分析任务事件只承载派遣子轨迹审计 */
+  /** Structured facts of the event itself; analysis task events only carry dispatch sub-trajectory audit */
   payload?: unknown;
 }
 
 /**
- * 分析任务。
+ * An analysis task.
  *
- * 定时字段（`scheduleExpression` / `scheduleEnabled` / `nextRunAt`）不属于任务行，
- * 只在定时规则以任务形状出现在既有列表接口时被填充。
+ * Schedule fields (`scheduleExpression` / `scheduleEnabled` / `nextRunAt`) are not part of the task row;
+ * they are filled only when schedule rules appear in task shape through the existing list endpoints.
  */
 
 /**
- * 创建分析任务的参数
+ * Parameters for creating an analysis task
  */
 export interface CreateAnalysisTaskParams {
   agentId: string;
@@ -50,7 +50,7 @@ export interface CreateAnalysisTaskParams {
   notifyOnComplete?: boolean;
   triggerSource?: AnalysisTaskTriggerSource;
   token?: string;
-  /** 关闭报告交付即为常规会话任务；缺省按交付报告任务创建。 */
+  /** With report delivery off this is a regular session task; by default the task is created as a report-delivery task. */
   reportDeliverableEnabled?: boolean;
 }
 

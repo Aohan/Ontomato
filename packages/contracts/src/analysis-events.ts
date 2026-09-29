@@ -64,7 +64,7 @@ export type AnalysisFollowUpEvent =
   | Extract<AnalysisRunEvent, { type: "workflow_complete" | "error" }>
   | { type: "follow_up_chunk"; content: string };
 
-/** 查询执行层的思考态以活动和问题身份定位，不暴露循环 Agent 的思考链。 */
+/** Query-execution thinking states are located by activity and question identity; the loop agent's chain of thought is never exposed. */
 export type DeepAnalysisThinkingStateEvent = {
   type: "thinking_state";
   node: "analysis";
@@ -79,8 +79,9 @@ export type DeepAnalysisThinkingStateEvent = {
 };
 
 /**
- * 受理回合序号：常规会话的事件携带它标注所属回合，页面据此丢弃迟到回合的事件；
- * 报告任务的事件可以缺省该字段。
+ * Acceptance turn number: regular-session events carry it to mark their turn,
+ * and the page drops events from late turns based on it; report-task events
+ * may omit this field.
  */
 export interface AnalysisTurnScope {
   requestSeq?: number;

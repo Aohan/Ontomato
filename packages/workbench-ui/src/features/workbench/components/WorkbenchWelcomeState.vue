@@ -86,7 +86,7 @@ function handleQaKeydown(event: KeyboardEvent, qaLoading: boolean) {
   justify-content: center;
   overflow: hidden;
 }
-/* 企业原动画视频与开源原静态图标的原尺寸。 */
+/* Original sizes of the animated video and the static icon variants. */
 .empty-icon-large--video {
   width: 200px;
   height: 200px;

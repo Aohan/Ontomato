@@ -1,12 +1,12 @@
 import type { AnalysisChartResult, ProvenanceInfo } from "@ontomato/contracts/analysis-charts";
 /**
- * 维度报告与多维度总结的生成入参与产物。
+ * Generation inputs and outputs of dimension reports and the multi-dimension summary.
  */
 
 import type { AnalysisEvidence } from "../runtime/evidence-types";
 
 /**
- * 维度报告生成结果（带来源追踪）
+ * Dimension report generation result (with source tracing)
  */
 export interface DimensionReportGenerationResult {
   report: string;
@@ -14,7 +14,7 @@ export interface DimensionReportGenerationResult {
 }
 
 /**
- * 多维度总结生成结果（带来源追踪）
+ * Multi-dimension summary generation result (with source tracing)
  */
 export interface MultiDimensionSummaryGenerationResult {
   summary: string;
@@ -22,54 +22,54 @@ export interface MultiDimensionSummaryGenerationResult {
 }
 
 /**
- * 维度报告生成参数
+ * Dimension report generation parameters
  */
 export interface DimensionReportParams {
-  /** 维度名称 */
+  /** Dimension name */
   dimensionName: string;
-  /** 维度值 */
+  /** Dimension value */
   dimensionValue: string;
-  /** 证据层数据（标准化查询结果） */
+  /** Evidence layer data (normalized query results) */
   evidence: AnalysisEvidence[];
-  /** 数据集定义 */
+  /** Dataset definitions */
   datasetSchema: string;
-  /** 提示词规则 */
+  /** Prompt rules */
   summarizerPrompt: string;
-  /** 分析维度提示词（用于指导报告生成） */
+  /** Analysis dimension prompt (guides report generation) */
   analysisDimensionPrompt?: string;
-  /** 分析技能执行结果 */
+  /** Analysis skill execution results */
   skillResults?: any[];
-  /** 前序已生成维度报告上下文 */
+  /** Context of previously generated dimension reports */
   priorDimensionReports?: Array<{
     dimensionName: string;
     dimensionValue: string;
     report: string;
   }>;
   charts?: AnalysisChartResult[];
-  /** 展示值格式化使用的请求语言 */
+  /** Request locale used for display-value formatting */
   locale?: string;
-  /** 取消信号 */
+  /** Cancellation signal */
   signal?: AbortSignal;
 }
 
 /**
- * 多维度总结参数
+ * Multi-dimension summary parameters
  */
 export interface MultiDimensionSummaryParams {
-  /** 所有维度报告 */
+  /** All dimension reports */
   dimensionReports: Array<{
     dimensionName: string;
     dimensionValue: string;
     report: string;
   }>;
-  /** 原始问题 */
+  /** The original question */
   originalQuestion: string;
-  /** 提示词规则 */
+  /** Prompt rules */
   conclusionMakerPrompt: string;
-  /** 分析技能执行结果 */
+  /** Analysis skill execution results */
   skillResults?: any[];
-  /** 可用图表 */
+  /** Available charts */
   charts?: AnalysisChartResult[];
-  /** 取消信号 */
+  /** Cancellation signal */
   signal?: AbortSignal;
 }

@@ -69,7 +69,7 @@ export function extractSubgraphBlocks(markdown: string): Array<{
   index: number;
 }> {
   const blocks: Array<{ subgraph: unknown; fullMatch: string; index: number }> = [];
-  // 每次调用新建（exec 循环依赖 lastIndex），围栏名取应用值。
+  // Created on every call (the exec loop depends on lastIndex); the fence name comes from the app value.
   const subgraphRegex = new RegExp(
     `\`\`\`${workbenchContent().subgraphFence}\\s*\\n([\\s\\S]*?)\\n\`\`\``,
     "g"
