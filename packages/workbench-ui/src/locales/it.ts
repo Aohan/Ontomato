@@ -55,8 +55,6 @@ export default {
     "noOptions": "Nessuna opzione",
     "testFailed": "Test fallito",
     "displayName": "Nome visualizzato",
-    "knowledgeTitleRequired": "Titolo obbligatorio",
-    "deleteKnowledgeConfirm": "Eliminare conoscenza {name}?",
     "filterColumn": "Filtra colonna",
     "deleteFailed": "Eliminazione fallita",
     "renameFailed": "Rinomina fallita",
@@ -127,7 +125,6 @@ export default {
     "skillIdImmutable": "Minuscole, numeri, trattini (immutabile)",
     "operationFailed": "Operazione fallita",
     "executeFailed": "Esecuzione fallita",
-    "batchDeleteKnowledgeConfirm": "Eliminare {n} conoscenze?",
     "batchDeleteExampleConfirm": "Eliminare {n} esempi?",
     "batchDeleteSpliterConfirm": "Eliminare {n} esempi?",
     "saveSuccess": "Salvato",
@@ -199,10 +196,8 @@ export default {
       "intelligent": "Query intelligente",
       "deep": "Ragionamento approfondito"
     },
-    "modelConfig": "Configurazione modelli",
     "applicationModels": "Modelli applicativi",
     "queryEngineModels": "Modelli del motore di query",
-    "otherSettings": "Altre impostazioni",
     "querySettings": "Impostazioni query",
     "configId": "ID configurazione",
     "unsaved": "Modifiche non salvate",
@@ -213,14 +208,6 @@ export default {
     "questionSpliterTries": "Tentativi analizzatore domande",
     "questionSpliterTimeout": "Timeout analizzatore domande (ms)",
     "backendLanguage": "Lingua backend",
-    "addKnowledge": "Aggiungi conoscenza",
-    "editKnowledge": "Modifica conoscenza",
-    "knowledgeContent": "Contenuto conoscenza",
-    "knowledgeContentPlaceholder": "Contenuto (Markdown)",
-    "knowledgeTitle": "Titolo conoscenza",
-    "knowledgeTitlePlaceholder": "Titolo",
-    "objectClassTags": "Tag classe oggetto",
-    "selectOrEnterTags": "Seleziona o inserisci tag",
     "deleteExampleConfirm": "Eliminare esempio {name}?"
   },
   "user": {
@@ -386,19 +373,13 @@ export default {
     "codeEditorPlaceholder": "Scrivi codice qui"
   },
   "nav": {
-    "dataEngine": "Motore dati",
-    "intelligenceEngine": "Motore IA",
-    "appManagement": "Gestione app",
-    "skillManagement": "Gestione skill",
     "systemManagement": "Gestione sistema",
     "ontologyManager": "Gestore ontologia",
     "agentsAndSkills": "Agenti e skill",
     "analysisAgents": "Agenti di analisi",
     "skills": "Skill",
     "modelConfig": "Configurazione modelli",
-    "knowledgeAndExamples": "Conoscenze ed esempi",
     "hotReportManagement": "Report caldi",
-    "businessKnowledge": "Conoscenza business",
     "queryExamples": "Esempi query",
     "mcpService": "Servizio MCP",
     "systemConfig": "Configurazione sistema",
@@ -1058,9 +1039,6 @@ export default {
     "collapseReturn": "Comprimi, prime {n} righe"
   },
   "knowledge": {
-    "general": "Generale",
-    "business": "Business",
-    "tech": "Tecnico",
     "noFiles": "Nessun file conoscenza",
     "selectMarkdownHint": "Seleziona file Markdown a sinistra"
   },

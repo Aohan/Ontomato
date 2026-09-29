@@ -55,8 +55,6 @@ export default {
     "noOptions": "選択肢なし",
     "testFailed": "テスト失敗",
     "displayName": "表示名",
-    "knowledgeTitleRequired": "知識タイトルを入力してください",
-    "deleteKnowledgeConfirm": "知識【{name}】を削除しますか？",
     "filterColumn": "この列をフィルター",
     "deleteFailed": "削除失敗",
     "renameFailed": "名前変更失敗",
@@ -127,7 +125,6 @@ export default {
     "skillIdImmutable": "小文字、数字、ハイフンのみ（作成後変更不可）",
     "operationFailed": "操作失敗",
     "executeFailed": "実行失敗",
-    "batchDeleteKnowledgeConfirm": "選択した {n} ビジネス知識を削除しますか？",
     "batchDeleteExampleConfirm": "選択した {n} サンプルを削除しますか？",
     "batchDeleteSpliterConfirm": "選択した {n} サンプルを削除しますか？",
     "saveSuccess": "保存成功",
@@ -199,10 +196,8 @@ export default {
       "intelligent": "スマートクエリ",
       "deep": "詳細な推論"
     },
-    "modelConfig": "モデル設定",
     "applicationModels": "アプリケーションモデル",
     "queryEngineModels": "クエリエンジンモデル",
-    "otherSettings": "その他の設定",
     "querySettings": "クエリ設定",
     "configId": "設定 ID",
     "unsaved": "未保存の変更",
@@ -213,14 +208,6 @@ export default {
     "questionSpliterTries": "質問分析員投票数",
     "questionSpliterTimeout": "質問分析員タイムアウト（ミリ秒）",
     "backendLanguage": "バックエンド言語",
-    "addKnowledge": "知識追加",
-    "editKnowledge": "知識編集",
-    "knowledgeContent": "知識内容",
-    "knowledgeContentPlaceholder": "知識内容を入力（Markdown対応）",
-    "knowledgeTitle": "知識タイトル",
-    "knowledgeTitlePlaceholder": "知識タイトルを入力",
-    "objectClassTags": "オブジェクトクラスタグ",
-    "selectOrEnterTags": "タグを選択または入力",
     "deleteExampleConfirm": "サンプル【{name}】を削除しますか？"
   },
   "user": {
@@ -386,19 +373,13 @@ export default {
     "codeEditorPlaceholder": "ここにコードを記述"
   },
   "nav": {
-    "dataEngine": "データエンジン",
-    "intelligenceEngine": "インテリジェンスエンジン",
-    "appManagement": "アプリ管理",
-    "skillManagement": "スキル管理",
     "systemManagement": "システム管理",
     "ontologyManager": "オントロジーマネージャー",
     "agentsAndSkills": "エージェントとスキル",
     "analysisAgents": "分析エージェント",
     "skills": "スキル",
     "modelConfig": "モデル設定",
-    "knowledgeAndExamples": "知識と例",
     "hotReportManagement": "ホットレポート管理",
-    "businessKnowledge": "ビジネス知識",
     "queryExamples": "クエリ例",
     "mcpService": "MCPサービス",
     "systemConfig": "システム設定",
@@ -1058,9 +1039,6 @@ export default {
     "collapseReturn": "折りたたみ、先頭 {n} 行に戻る"
   },
   "knowledge": {
-    "general": "一般",
-    "business": "ビジネス",
-    "tech": "技術",
     "noFiles": "ナレッジベースファイルなし",
     "selectMarkdownHint": "左側のMarkdownファイルを選択"
   },

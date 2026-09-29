@@ -55,8 +55,6 @@ export default {
     "noOptions": "لا توجد خيارات",
     "testFailed": "فشل الاختبار",
     "displayName": "اسم العرض",
-    "knowledgeTitleRequired": "يرجى إدخال عنوان المعرفة",
-    "deleteKnowledgeConfirm": "تأكيد حذف المعرفة 【{name}】؟",
     "filterColumn": "تصفية هذا العمود",
     "deleteFailed": "فشل الحذف",
     "renameFailed": "فشلت إعادة التسمية",
@@ -127,7 +125,6 @@ export default {
     "skillIdImmutable": "أحرف صغيرة وأرقام وواصلات فقط (غير قابل للتغيير بعد الإنشاء)",
     "operationFailed": "فشلت العملية",
     "executeFailed": "فشل التنفيذ",
-    "batchDeleteKnowledgeConfirm": "تأكيد حذف {n} عنصر معرفة محدد؟",
     "batchDeleteExampleConfirm": "تأكيد حذف {n} مثال محدد؟",
     "batchDeleteSpliterConfirm": "تأكيد حذف {n} مثال محدد؟",
     "saveSuccess": "تم الحفظ بنجاح",
@@ -199,10 +196,8 @@ export default {
       "intelligent": "استعلام ذكي",
       "deep": "تفكير عميق"
     },
-    "modelConfig": "إعداد النماذج",
     "applicationModels": "نماذج التطبيق",
     "queryEngineModels": "نماذج محرك الاستعلام",
-    "otherSettings": "إعدادات أخرى",
     "querySettings": "إعدادات الاستعلام",
     "configId": "معرّف التكوين",
     "unsaved": "تغييرات غير محفوظة",
@@ -213,14 +208,6 @@ export default {
     "questionSpliterTries": "محاولات محلل الأسئلة",
     "questionSpliterTimeout": "مهلة محلل الأسئلة (مللي ثانية)",
     "backendLanguage": "لغة الخلفية",
-    "addKnowledge": "إضافة معرفة",
-    "editKnowledge": "تحرير المعرفة",
-    "knowledgeContent": "محتوى المعرفة",
-    "knowledgeContentPlaceholder": "أدخل محتوى المعرفة (يدعم Markdown)",
-    "knowledgeTitle": "عنوان المعرفة",
-    "knowledgeTitlePlaceholder": "أدخل عنوان المعرفة",
-    "objectClassTags": "وسوم فئة الكائن",
-    "selectOrEnterTags": "اختر أو أدخل الوسوم",
     "deleteExampleConfirm": "حذف المثال 【{name}】؟"
   },
   "user": {
@@ -386,19 +373,13 @@ export default {
     "codeEditorPlaceholder": "اكتب الكود الخاص بك هنا"
   },
   "nav": {
-    "dataEngine": "محرك البيانات",
-    "intelligenceEngine": "محرك الذكاء",
-    "appManagement": "إدارة التطبيقات",
-    "skillManagement": "إدارة المهارات",
     "systemManagement": "إدارة النظام",
     "ontologyManager": "مدير الأنطولوجيا",
     "agentsAndSkills": "الوكلاء والمهارات",
     "analysisAgents": "وكلاء التحليل",
     "skills": "المهارات",
     "modelConfig": "إعداد النماذج",
-    "knowledgeAndExamples": "المعرفة والأمثلة",
     "hotReportManagement": "إدارة التقارير الساخنة",
-    "businessKnowledge": "معرفة الأعمال",
     "queryExamples": "أمثلة الاستعلام",
     "mcpService": "خدمة MCP",
     "systemConfig": "إعدادات النظام",
@@ -1058,9 +1039,6 @@ export default {
     "collapseReturn": "طي، العودة إلى أول {n} صف"
   },
   "knowledge": {
-    "general": "عام",
-    "business": "أعمال",
-    "tech": "تقني",
     "noFiles": "لا توجد ملفات قاعدة معرفة",
     "selectMarkdownHint": "اختر ملف Markdown من اليسار"
   },

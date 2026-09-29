@@ -55,8 +55,6 @@ export default {
     "noOptions": "暫無可選項",
     "testFailed": "測試失敗",
     "displayName": "顯示名稱",
-    "knowledgeTitleRequired": "請輸入知識標題",
-    "deleteKnowledgeConfirm": "確定要刪除知識【{name}】嗎？",
     "filterColumn": "篩選此欄位",
     "deleteFailed": "刪除失敗",
     "renameFailed": "重新命名失敗",
@@ -127,7 +125,6 @@ export default {
     "skillIdImmutable": "只能包含小寫字母、數字和連字號（建立後不可修改）",
     "operationFailed": "操作失敗",
     "executeFailed": "執行失敗",
-    "batchDeleteKnowledgeConfirm": "確定要刪除選中的 {n} 個業務知識嗎？",
     "batchDeleteExampleConfirm": "確定要刪除選中的 {n} 個範例嗎？",
     "batchDeleteSpliterConfirm": "確定要刪除選中的 {n} 個範例嗎？",
     "saveSuccess": "儲存成功",
@@ -199,10 +196,8 @@ export default {
       "intelligent": "智慧問數",
       "deep": "深度思考"
     },
-    "modelConfig": "模型設定",
     "applicationModels": "應用模型",
     "queryEngineModels": "問數引擎模型",
-    "otherSettings": "其他設定",
     "querySettings": "問數設定",
     "configId": "設定 ID",
     "unsaved": "未儲存的變更",
@@ -213,14 +208,6 @@ export default {
     "questionSpliterTries": "問題分析員投票數",
     "questionSpliterTimeout": "問題分析員逾時時間（毫秒）",
     "backendLanguage": "後端服務語言",
-    "addKnowledge": "新增知識",
-    "editKnowledge": "編輯知識",
-    "knowledgeContent": "知識內容",
-    "knowledgeContentPlaceholder": "請輸入知識內容（支援Markdown格式）",
-    "knowledgeTitle": "知識標題",
-    "knowledgeTitlePlaceholder": "請輸入知識標題",
-    "objectClassTags": "物件類別標籤",
-    "selectOrEnterTags": "選擇或輸入標籤",
     "deleteExampleConfirm": "確定要刪除範例【{name}】嗎？"
   },
   "user": {
@@ -386,19 +373,13 @@ export default {
     "codeEditorPlaceholder": "在此撰寫你的程式碼"
   },
   "nav": {
-    "dataEngine": "資料引擎",
-    "intelligenceEngine": "智慧引擎",
-    "appManagement": "應用管理",
-    "skillManagement": "技能管理",
     "systemManagement": "系統管理",
     "ontologyManager": "本體管理器",
     "agentsAndSkills": "智慧體與技能",
     "analysisAgents": "分析智慧體",
     "skills": "技能",
     "modelConfig": "模型設定",
-    "knowledgeAndExamples": "知識與範例",
     "hotReportManagement": "熱報告管理",
-    "businessKnowledge": "業務知識",
     "queryExamples": "查詢範例",
     "mcpService": "MCP 服務",
     "systemConfig": "系統設定",
@@ -1058,9 +1039,6 @@ export default {
     "collapseReturn": "收起，返回前 {n} 行"
   },
   "knowledge": {
-    "general": "通用",
-    "business": "業務",
-    "tech": "技術",
     "noFiles": "暫無知識庫檔案",
     "selectMarkdownHint": "選擇左側 Markdown 檔案"
   },

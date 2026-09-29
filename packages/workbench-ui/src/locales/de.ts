@@ -55,8 +55,6 @@ export default {
     "noOptions": "Keine Optionen",
     "testFailed": "Test fehlgeschlagen",
     "displayName": "Anzeigename",
-    "knowledgeTitleRequired": "Titel erforderlich",
-    "deleteKnowledgeConfirm": "Wissen {name} löschen?",
     "filterColumn": "Spalte filtern",
     "deleteFailed": "Löschen fehlgeschlagen",
     "renameFailed": "Umbenennung fehlgeschlagen",
@@ -127,7 +125,6 @@ export default {
     "skillIdImmutable": "Kleinbuchstaben, Zahlen, Bindestriche (unveränderlich)",
     "operationFailed": "Operation fehlgeschlagen",
     "executeFailed": "Ausführung fehlgeschlagen",
-    "batchDeleteKnowledgeConfirm": "{n} Wissenseinträge löschen?",
     "batchDeleteExampleConfirm": "{n} Beispiele löschen?",
     "batchDeleteSpliterConfirm": "{n} Beispiele löschen?",
     "saveSuccess": "Gespeichert",
@@ -199,10 +196,8 @@ export default {
       "intelligent": "Intelligente Abfrage",
       "deep": "Tiefgehendes Denken"
     },
-    "modelConfig": "Modellkonfiguration",
     "applicationModels": "Anwendungsmodelle",
     "queryEngineModels": "Abfrage-Engine-Modelle",
-    "otherSettings": "Weitere Einstellungen",
     "querySettings": "Abfrageeinstellungen",
     "configId": "Konfigurations-ID",
     "unsaved": "Ungespeicherte Änderungen",
@@ -213,14 +208,6 @@ export default {
     "questionSpliterTries": "Frageanalysator-Versuche",
     "questionSpliterTimeout": "Frageanalysator-Timeout (ms)",
     "backendLanguage": "Backend-Sprache",
-    "addKnowledge": "Wissen hinzufügen",
-    "editKnowledge": "Wissen bearbeiten",
-    "knowledgeContent": "Wissensinhalt",
-    "knowledgeContentPlaceholder": "Inhalt (Markdown)",
-    "knowledgeTitle": "Wissenstitel",
-    "knowledgeTitlePlaceholder": "Titel",
-    "objectClassTags": "Objektklassen-Tags",
-    "selectOrEnterTags": "Tags auswählen/eingeben",
     "deleteExampleConfirm": "Beispiel {name} löschen?"
   },
   "user": {
@@ -386,19 +373,13 @@ export default {
     "codeEditorPlaceholder": "Code hier schreiben"
   },
   "nav": {
-    "dataEngine": "Daten-Engine",
-    "intelligenceEngine": "KI-Engine",
-    "appManagement": "App-Verwaltung",
-    "skillManagement": "Skill-Verwaltung",
     "systemManagement": "Systemverwaltung",
     "ontologyManager": "Ontologie-Manager",
     "agentsAndSkills": "Agenten und Skills",
     "analysisAgents": "Analyse-Agenten",
     "skills": "Skills",
     "modelConfig": "Modellkonfiguration",
-    "knowledgeAndExamples": "Wissen und Beispiele",
     "hotReportManagement": "Hot-Report-Verwaltung",
-    "businessKnowledge": "Geschäftswissen",
     "queryExamples": "Abfragebeispiele",
     "mcpService": "MCP-Dienst",
     "systemConfig": "Systemkonfiguration",
@@ -1058,9 +1039,6 @@ export default {
     "collapseReturn": "Einklappen, erste {n} Zeilen"
   },
   "knowledge": {
-    "general": "Allgemein",
-    "business": "Geschäftlich",
-    "tech": "Technisch",
     "noFiles": "Keine Wissensdateien",
     "selectMarkdownHint": "Markdown-Datei links wählen"
   },
