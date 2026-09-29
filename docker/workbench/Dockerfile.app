@@ -27,6 +27,11 @@ ARG APP_META_JSON
 
 ARG PNPM_VERSION=9.15.9
 RUN npm install -g pnpm@${PNPM_VERSION}
+# pnpm's package store persists on the build machine across builds (a BuildKit
+# cache mount): packages are downloaded once and still installed exactly by the
+# frozen lock with integrity checks, so image contents do not depend on it.
+# Every step that reads the store (install, licenses) mounts the same cache.
+ENV npm_config_store_dir=/pnpm/store
 
 WORKDIR /build
 COPY workspace/ /build/workspace/
@@ -35,7 +40,7 @@ COPY tools/ /tmp/tools/
 COPY launch.sh /tmp/launch.sh
 
 WORKDIR /build/workspace/${WORKSPACE}
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 WORKDIR /build/workspace/${WORKSPACE}/apps/workbench
 RUN pnpm build:web
 RUN node /tmp/tools/workbench/stage-app.mjs
@@ -48,7 +53,7 @@ RUN cp /tmp/launch.sh /stage/launch.sh \
 # devDependencies, and listing more than the bundle uses is accepted where
 # listing less is not. Everything else under /app comes from the runtime.
 COPY LICENSE NOTICE /stage/licenses/
-RUN pnpm --filter "${APPLICATION}..." licenses list --json > /tmp/npm-licenses.json
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm --filter "${APPLICATION}..." licenses list --json > /tmp/npm-licenses.json
 RUN python3 /tmp/tools/third_party_notices.py /stage/licenses/THIRD_PARTY_NOTICES.txt --npm /tmp/npm-licenses.json <<'EOF'
 None in this image: it holds only application files and the bundled web
 assets. Node.js, Python, the system packages and the server's production

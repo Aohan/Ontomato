@@ -25,13 +25,18 @@ FROM ${NODE_RUNTIME_IMAGE} AS installer
 
 ARG PNPM_VERSION=9.15.9
 RUN npm install -g pnpm@${PNPM_VERSION}
+# pnpm's package store persists on the build machine across builds (a BuildKit
+# cache mount): packages are downloaded once and still installed exactly by the
+# frozen lock with integrity checks, so image contents do not depend on it.
+# The installer installs and reports licenses in one step, under the mount.
+ENV npm_config_store_dir=/pnpm/store
 # Playwright's browsers come from apt in the runtime stage (verified in N1).
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 COPY sources/ /src/
 COPY inputs.json /inputs.json
 COPY tools/ /tmp/tools/
-RUN node /tmp/tools/workbench/install-runtime.mjs
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store node /tmp/tools/workbench/install-runtime.mjs
 
 FROM ${PYTHON_RUNTIME_IMAGE} AS runtime-files
 
@@ -145,7 +150,7 @@ FROM --platform=$BUILDPLATFORM ${NODE_RUNTIME_IMAGE} AS compat-contract
 ARG TARGETARCH
 ARG YAML_VERSION=2.8.3
 WORKDIR /contract
-RUN npm install --no-save --no-audit --no-fund --no-package-lock yaml@${YAML_VERSION}
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm npm install --no-save --no-audit --no-fund --no-package-lock yaml@${YAML_VERSION}
 COPY . /contract/
 RUN node /contract/tools/workbench/runtime-contract.mjs contract /contract "${TARGETARCH}" > /contract.json
 

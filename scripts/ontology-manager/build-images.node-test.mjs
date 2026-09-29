@@ -232,7 +232,7 @@ function assertRecipeMatches(argv, listing) {
     JSON.parse(readFileSync(join(listing.context, manifest.path), "utf8")).name,
     application,
   );
-  assert.match(recipe, /^RUN pnpm install --frozen-lockfile --filter "\$\{APPLICATION\}\.\.\."$/m);
+  assert.match(recipe, /^RUN --mount=type=cache,id=pnpm-store,target=\/pnpm\/store pnpm install --frozen-lockfile --filter "\$\{APPLICATION\}\.\.\."$/m);
   assert.match(recipe, /^COPY --from=web-builder \/build\/workspace\/\$\{WORKSPACE\}\/apps\/ontology-manager\/dist /m);
 }
 
