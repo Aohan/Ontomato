@@ -182,7 +182,7 @@ export function saveRuntimeLock(
 }
 // lockPath is the service's own runtime lock (Node/Java); a builder without a
 // runtime lock (Manager) omits it and the whole source state counts as dirty.
-export function sourceIdentity(version, root, lockPath) {
+export function sourceIdentity(root, lockPath) {
   const revision = output("git", ["-C", root, "rev-parse", "HEAD"]);
   const dirty =
     output("git", [
@@ -195,29 +195,13 @@ export function sourceIdentity(version, root, lockPath) {
       ".",
       ...(lockPath ? [`:(exclude)${lockPath}`] : []),
     ]) !== "";
-  const now = new Date();
-  const local = new Date(now.getTime() + 8 * 3600 * 1000)
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace("T", "-")
-    .slice(0, 15);
-  return {
-    version,
-    revision,
-    revisionShort: revision.slice(0, 12),
-    dirty,
-    created: now.toISOString(),
-    stamp: `${version}-${local}-g${revision.slice(0, 12)}${dirty ? "-dirty" : ""}`,
-  };
+  return { revision, dirty };
 }
-export function imageLabels(component, kind, identity, fp, family) {
+export function imageLabels(component, kind, version, fp, family) {
   const labels = {
-    "org.opencontainers.image.version": identity.version,
-    "org.opencontainers.image.revision": identity.revision,
-    "org.opencontainers.image.created": identity.created,
+    "org.opencontainers.image.version": version,
     "io.runtime.component": component,
     "io.runtime.kind": kind,
-    "io.runtime.source.dirty": String(identity.dirty),
   };
   if (fp) {
     labels[COMPAT_LABEL] = fp;
@@ -228,8 +212,6 @@ export function imageLabels(component, kind, identity, fp, family) {
     `${key}=${value}`,
   ]);
 }
-// The two Manager image names (private, public); any other app tag is APP.
-const MANAGER_PREFIXES = ["ontology-manager:", "ontomato-ontology-manager:"];
 export async function exportImage(tags, file) {
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
@@ -260,9 +242,7 @@ export async function exportImage(tags, file) {
     rmSync(temporary, { force: true });
     throw error;
   }
-  console.log(
-    `PACK_${tags[0].includes("-runtime:") ? "RUNTIME" : MANAGER_PREFIXES.some((prefix) => tags[0].startsWith(prefix)) ? "MANAGER" : "APP"}_TAR=${file}`,
-  );
+  console.log(`[build] pack ${file}`);
 }
 export function parseOptions(args, allowedFlags) {
   const options = {};
@@ -287,52 +267,34 @@ export function parseOptions(args, allowedFlags) {
   return options;
 }
 
-// Shared by the workbench and Manager builders: one version from the public
-// POM; each source keeps its own revision/dirty. The top revision is this
-// version's app repo, the top dirty covers every participating source,
-// otherwise a dirty public tree could ship as clean.
-export function combineIdentity(version, appRoot, entries) {
-  const app = entries.find((entry) => entry.root === appRoot);
-  if (!app) throw new Error("this version's app repo is not a build source");
-  const dirty = entries.some((entry) => entry.identity.dirty);
-  return {
-    version,
-    revision: app.identity.revision,
-    revisionShort: app.identity.revisionShort,
-    created: app.identity.created,
-    dirty,
-    // The app tag reuses the sampled stamp so repeated builds do not collide;
-    // only its dirty marking follows the combined sources, sampled once.
-    stamp: `${app.identity.stamp.replace(/-dirty$/, "")}${dirty ? "-dirty" : ""}`,
-    sources: entries.map((entry) => ({
-      id: entry.id,
-      revision: entry.identity.revision,
-      revisionShort: entry.identity.revisionShort,
-      dirty: entry.identity.dirty,
-      created: entry.identity.created,
-    })),
-  };
-}
-
-export function sampleSources(app, version) {
+// Every participating source is sampled once, before staging. The stamp names
+// the version tag: this version's app repo supplies the revision, and any dirty
+// source marks the whole build dirty, otherwise a dirty public tree could ship
+// as clean.
+export function sampleSources(app) {
   return app.sources.map((source) => ({
     id: source.id,
     root: source.root,
-    identity: sourceIdentity(version, source.root, app.lockExclude),
+    ...sourceIdentity(source.root, app.lockExclude),
   }));
 }
 
-// The collector's recorded HEADs must be the sampled ones.
-export function assertFreshRecord(entries, record) {
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  for (const source of record.sources)
-    if (source.head !== byId.get(source.id).identity.revision)
-      throw new Error(`source ${source.id} changed during staging; restart the build`);
+export function buildStamp(version, appRoot, entries) {
+  const app = entries.find((entry) => entry.root === appRoot);
+  if (!app) throw new Error("this version's app repo is not a build source");
+  const dirty = entries.some((entry) => entry.dirty);
+  const local = new Date(Date.now() + 8 * 3600 * 1000)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace("T", "-")
+    .slice(0, 15);
+  return `${version}-${local}-g${app.revision.slice(0, 12)}${dirty ? "-dirty" : ""}`;
 }
 
-// Reads HEAD only and never resamples: a source that moved since sampling fails.
-export function assertEntriesCurrent(entries, phase) {
-  for (const entry of entries)
-    if (output("git", ["-C", entry.root, "rev-parse", "HEAD"]) !== entry.identity.revision)
-      throw new Error(`source ${entry.id} changed during ${phase}; restart the build`);
+// A fixed per-builder staging directory, emptied before every build.
+export function stagingDirectory(root, ...parts) {
+  const directory = join(root, ".build", "contexts", ...parts);
+  rmSync(directory, { recursive: true, force: true });
+  mkdirSync(directory, { recursive: true });
+  return directory;
 }

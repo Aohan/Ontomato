@@ -2,12 +2,10 @@
 // only its image name, sources and per-source owners; the recipe with its
 // pinned Node builder and Nginx images and the three Nginx runtime files are
 // this builder's shared facts. There is no runtime family, lock or fingerprint.
-import { cpSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  assertEntriesCurrent,
-  assertFreshRecord,
-  combineIdentity,
+  buildStamp,
   docker,
   exportImage,
   imageLabels,
@@ -15,6 +13,7 @@ import {
   parseOptions,
   readRevision,
   sampleSources,
+  stagingDirectory,
 } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
 
@@ -29,16 +28,7 @@ const LICENSE_FILES = [
   ["NOTICE", "NOTICE"],
   ["scripts/third_party_notices.py", "tools/third_party_notices.py"],
 ];
-// The per-source revisions/dirty flags; no second metadata file is written.
-const SOURCES_LABEL = "io.runtime.sources";
-
-function stageContext(app, arch) {
-  const base = join(app.repoRoot, ".build", "contexts", "ontology-manager", arch);
-  mkdirSync(base, { recursive: true });
-  return mkdtempSync(join(base, "run-"));
-}
-
-function assertManagerImage(tag, arch, component, identity) {
+function assertManagerImage(tag, arch, component, version) {
   const inspected = inspectImage(tag, `linux/${arch}`);
   const labels = inspected && inspected.Config.Labels ? inspected.Config.Labels : {};
   if (
@@ -47,10 +37,7 @@ function assertManagerImage(tag, arch, component, identity) {
     inspected.Architecture !== arch ||
     labels["io.runtime.component"] !== component ||
     labels["io.runtime.kind"] !== "manager" ||
-    labels["org.opencontainers.image.version"] !== identity.version ||
-    labels["org.opencontainers.image.revision"] !== identity.revision ||
-    labels["io.runtime.source.dirty"] !== String(identity.dirty) ||
-    labels[SOURCES_LABEL] !== JSON.stringify(identity.sources)
+    labels["org.opencontainers.image.version"] !== version
   )
     throw new Error(`Built image identity mismatch: ${tag}`);
 }
@@ -65,24 +52,20 @@ export async function buildManagerImage(app, args) {
   const parsed = parseOptions(args, FLAGS);
   const arch = parsed["--arch"];
   const version = readRevision(readFileSync(join(app.publicRoot, "pom.xml"), "utf8"));
-  // Identity is sampled once; the later checks read HEAD only and never resample.
-  const entries = sampleSources(app, version);
-  const context = stageContext(app, arch);
+  const entries = sampleSources(app);
+  const context = stagingDirectory(app.repoRoot, "ontology-manager", arch);
   const record = collectMetadataContext({
     sources: app.sources,
     workspaceId: app.workspaceId,
     appImporter: app.appImporter,
     destination: context,
   });
-  assertFreshRecord(entries, record);
   copyWorkspace(app, context, record, app.owners);
-  assertEntriesCurrent(entries, "staging");
   for (const name of RUNTIME_FILES)
     cpSync(join(app.publicRoot, RECIPE, name), join(context, name));
   for (const [source, dest] of LICENSE_FILES)
     cpSync(join(app.publicRoot, source), join(context, dest));
-  const combined = combineIdentity(version, app.repoRoot, entries);
-  const tag = `${app.component}:${combined.stamp}-${arch}`;
+  const tag = `${app.component}:${buildStamp(version, app.repoRoot, entries)}-${arch}`;
   const alias = `${app.component}:deploy-${arch}`;
   console.log(`[build] manager ${tag}`);
   docker([
@@ -97,9 +80,7 @@ export async function buildManagerImage(app, args) {
     `WORKSPACE=${record.workspaceId}`,
     "--build-arg",
     `APPLICATION=${record.application}`,
-    ...imageLabels(app.component, "manager", combined),
-    "--label",
-    `${SOURCES_LABEL}=${JSON.stringify(combined.sources)}`,
+    ...imageLabels(app.component, "manager", version),
     "-t",
     tag,
     "-t",
@@ -108,11 +89,7 @@ export async function buildManagerImage(app, args) {
     join(app.publicRoot, RECIPE, "Dockerfile"),
     context,
   ]);
-  assertManagerImage(tag, arch, app.component, combined);
-  // The labels describe the sampled inputs: a source that moved during the
-  // build fails instead of being relabeled.
-  assertEntriesCurrent(entries, "the build");
-  console.log(`MANAGER_IMAGE=${tag}\nMANAGER_DEPLOY_IMAGE=${alias}`);
+  assertManagerImage(tag, arch, app.component, version);
   if (parsed["--pack"])
     await exportImage(
       [tag, alias],

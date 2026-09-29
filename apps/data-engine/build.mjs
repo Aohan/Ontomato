@@ -19,7 +19,6 @@ export const app = {
   family: "java-app",
   interfaceVersion: 3,
   promptLang: "en",
-  promptLabel: "io.ontomato.prompt.lang",
   reactorDir: "ontomato",
   appModule: "apps/data-engine",
   appLibModules: ["packages/data-engine-core", "packages/data-adapters/postgresql", "apps/data-engine"],

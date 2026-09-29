@@ -131,7 +131,7 @@ export function checkNoBrokenSymlinks(root) {
       }
     }
   }
-  if (existsSync(root)) walk(root);
+  walk(root);
 }
 
 // Deployment assembly: the pairing plus the architecture the assembler

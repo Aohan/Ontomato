@@ -3,19 +3,11 @@
 // recipes, tools and requirements are this builder's shared facts. The
 // runtime subcommand builds and locks the shared dependency runtime; the app
 // subcommand consumes an already locked runtime and never rebuilds it.
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
-  assertEntriesCurrent,
-  assertFreshRecord,
-  combineIdentity,
+  buildStamp,
   COMPAT_LABEL,
   docker,
   exportImage,
@@ -23,14 +15,12 @@ import {
   imageLabels,
   inspectImage,
   loadRuntimeLock,
-  output,
   parseOptions,
-  readJson,
   readRevision,
   runtimeTag,
   sampleSources,
   saveRuntimeLock,
-  validateContract,
+  stagingDirectory,
 } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
 import {
@@ -96,11 +86,6 @@ function runtimeAlias(app, arch) {
   return `${app.runtimeImageName}:deploy-${arch}`;
 }
 
-function stageContext(app, arch) {
-  const base = join(app.repoRoot, ".build", "contexts", "workbench", arch);
-  mkdirSync(base, { recursive: true });
-  return mkdtempSync(join(base, "run-"));
-}
 
 // Both images ship the public repository's own license files beside the
 // generated third-party notices.
@@ -154,64 +139,52 @@ function readWorkspaceManifests(context, record) {
   return manifests;
 }
 
+// The one computation of the runtime compatibility contract, from sources only:
+// the runtime command locks it, the app command compares it with the lock.
+function workbenchContract(app, context, record, arch) {
+  const lock = parseLock(readFileSync(join(app.repoRoot, "pnpm-lock.yaml"), "utf8"));
+  const graph = productionClosure(
+    { importer: record.appImporter, manifests: readWorkspaceManifests(context, record) },
+    lock,
+    `linux/${arch}`,
+  );
+  return computeWorkbenchContract({
+    dockerfileRuntimeText: readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.runtime"), "utf8"),
+    dockerfileAppText: readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.app"), "utf8"),
+    requirementsText: readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8"),
+    graph,
+    arch,
+  });
+}
+
 async function buildWorkbenchAppImage(app, parsed, version, arch) {
   const lockedFp = loadRuntimeLock(app.lockRoot, FAMILY, arch);
-  const entries = sampleSources(app, version);
-  const context = stageContext(app, arch);
+  const entries = sampleSources(app);
+  const context = stagingDirectory(app.repoRoot, "workbench", arch, "app");
   const record = collectMetadataContext({
     sources: app.sources,
     workspaceId: app.workspaceId,
     appImporter: app.appImporter,
     destination: context,
   });
-  assertFreshRecord(entries, record);
   copyWorkspace(app, context, record);
-  assertEntriesCurrent(entries, "staging");
   await copyAppTools(app, context);
   copyLicenses(app, context);
-
-  const lock = parseLock(readFileSync(join(app.repoRoot, "pnpm-lock.yaml"), "utf8"));
-  const manifests = readWorkspaceManifests(context, record);
-  const graph = productionClosure(
-    { importer: record.appImporter, manifests },
-    lock,
-    `linux/${arch}`,
-  );
-  const dockerfileRuntimeText = readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.runtime"), "utf8");
-  const dockerfileAppText = readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.app"), "utf8");
-  const requirementsText = readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8");
-  const currentContract = computeWorkbenchContract({
-    dockerfileRuntimeText,
-    requirementsText,
-    graph,
-    arch,
-    dockerfileAppText,
-  });
-  const currentFp = fingerprint(currentContract);
+  const currentFp = fingerprint(workbenchContract(app, context, record, arch));
   if (currentFp !== lockedFp) {
     throw new Error(
       `Runtime dependencies or contract changed (expected ${lockedFp}, current ${currentFp}); rebuild runtime first with make workbench-runtime ARCH=${arch}. No app build was started.`,
     );
   }
-
-  const combined = combineIdentity(version, app.repoRoot, entries);
   const meta = {
     schema: 3,
     family: FAMILY,
-    component: app.component,
     kind: "app",
-    version: combined.version,
-    revision: combined.revision,
-    revisionShort: combined.revisionShort,
-    created: combined.created,
-    dirty: combined.dirty,
-    stamp: combined.stamp,
     arch,
     platform: `linux/${arch}`,
     runtimeCompatFingerprint: lockedFp,
-    sources: combined.sources,
   };
-  const tag = `${app.component}-app:${combined.stamp}-${arch}`;
+  const tag = `${app.component}-app:${buildStamp(version, app.repoRoot, entries)}-${arch}`;
   const alias = `${app.component}-app:deploy`;
   const dockerfile = join(app.publicRoot, "docker/workbench/Dockerfile.app");
   console.log(`[build] app ${tag}`);
@@ -225,7 +198,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     `APPLICATION=${record.application}`,
     "--build-arg",
     `APP_META_JSON=${JSON.stringify(meta)}`,
-    ...imageLabels(app.component, "app", combined, lockedFp, FAMILY),
+    ...imageLabels(app.component, "app", version, lockedFp, FAMILY),
     "-t",
     tag,
     "-t",
@@ -235,9 +208,6 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     context,
   ]);
   assertAppImage(tag, arch, app.component, lockedFp);
-  assertEntriesCurrent(entries, "the build");
-  console.log(`RUNTIME_COMPAT_FINGERPRINT=${lockedFp}`);
-  console.log(`APP_IMAGE=${tag}\nAPP_DEPLOY_IMAGE=${alias}`);
   if (parsed["--pack-app"])
     await exportImage(
       [tag, alias],
@@ -281,73 +251,43 @@ export async function buildWorkbenchApp(app, args) {
     await buildWorkbenchAppImage(app, parsed, version, arch);
     return;
   }
-  const entries = sampleSources(app, version);
-  const context = stageContext(app, arch);
+  const context = stagingDirectory(app.repoRoot, "workbench", arch, "runtime");
   const record = collectMetadataContext({
     sources: app.sources,
     workspaceId: app.workspaceId,
     appImporter: app.appImporter,
     destination: context,
   });
-  assertFreshRecord(entries, record);
   await copyTools(context);
   copyLicenses(app, context);
   writeFileSync(
     join(context, "runtime-requirements.txt"),
     readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt")),
   );
-  const platform = `linux/${arch}`;
-  const dockerfile = join(app.publicRoot, "docker/workbench/Dockerfile.runtime");
-  const common = [...baseBuild(arch), ...imageBuildArgs(), "-f", dockerfile];
-  output("docker", ["version", "--format", "{{.Server.Version}}"]);
-
-  const lock = parseLock(readFileSync(join(app.repoRoot, "pnpm-lock.yaml"), "utf8"));
-  const manifests = readWorkspaceManifests(context, record);
-  const graph = productionClosure(
-    { importer: record.appImporter, manifests },
-    lock,
-    platform,
-  );
-  const dockerfileRuntimeText = readFileSync(dockerfile, "utf8");
-  const dockerfileAppText = readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.app"), "utf8");
-  const requirementsText = readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8");
-  const contract = computeWorkbenchContract({
-    dockerfileRuntimeText,
-    requirementsText,
-    graph,
-    arch,
-    dockerfileAppText,
-  });
+  const contract = workbenchContract(app, context, record, arch);
   const fp = fingerprint(contract);
-  validateContract(FAMILY, platform, contract, fp, INTERFACE);
-
-  const combined = combineIdentity(version, app.repoRoot, entries);
   const meta = {
     schema: 3,
     family: FAMILY,
-    component: FAMILY,
     kind: "runtime",
-    version: combined.version,
-    revision: combined.revision,
-    revisionShort: combined.revisionShort,
-    created: combined.created,
-    dirty: combined.dirty,
     arch,
-    platform,
+    platform: `linux/${arch}`,
     runtimeCompatFingerprint: fp,
-    sources: combined.sources,
   };
   const tag = runtimeTag(FAMILY, fp, arch);
   const alias = runtimeAlias(app, arch);
   console.log(`[build] runtime ${tag}`);
   docker([
-    ...common,
+    ...baseBuild(arch),
+    ...imageBuildArgs(),
+    "-f",
+    join(app.publicRoot, "docker/workbench/Dockerfile.runtime"),
     "--target",
     "runtime",
     "--load",
     "--build-arg",
     `RUNTIME_META_JSON=${JSON.stringify(meta)}`,
-    ...imageLabels(FAMILY, "runtime", combined, fp, FAMILY),
+    ...imageLabels(FAMILY, "runtime", version, fp, FAMILY),
     "-t",
     tag,
     "-t",
@@ -355,9 +295,7 @@ export async function buildWorkbenchApp(app, args) {
     context,
   ]);
   assertWorkbenchImage(tag, arch, fp);
-  assertEntriesCurrent(entries, "the build");
   saveRuntimeLock(app.lockRoot, FAMILY, arch, contract, INTERFACE);
-  console.log(`RUNTIME_IMAGE=${tag}\nRUNTIME_DEPLOY_IMAGE=${alias}\nRUNTIME_COMPAT_FINGERPRINT=${fp}`);
   if (parsed["--pack-runtime"])
     await exportImage(
       [tag, alias],
