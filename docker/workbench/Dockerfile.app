@@ -9,12 +9,10 @@
 #                           tests/.env excluded by the driver) with the two
 #                           repos adjacent, so workspace links keep working
 #   inputs.json             N4a build input record (workspace/app selection)
-#   runtime-contract.json   the locked runtime's contract, read by the host
-#                           from the already imported runtime image
 #   tools/                  the installer/contract scripts this stage needs
 #   launch.sh               the single app launcher owned by this recipe
 #   LICENSE, NOTICE         the public repository's own license files
-ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:24.21.0@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
+ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.21.0@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
 ARG WORKSPACE=ontomato
 ARG APP_META_JSON
 
@@ -32,7 +30,6 @@ RUN npm install -g pnpm@${PNPM_VERSION}
 
 WORKDIR /build
 COPY workspace/ /build/workspace/
-COPY runtime-contract.json /tmp/runtime-contract.json
 COPY inputs.json /inputs.json
 COPY tools/ /tmp/tools/
 COPY launch.sh /tmp/launch.sh

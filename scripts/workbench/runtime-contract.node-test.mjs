@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -11,16 +11,13 @@ import {
   assembleMetadata,
   assertPair,
   buildContract,
-  checkAgainst,
-  checkBuild,
-  checkPythonRequirements,
-  nativeFiles,
-  pairMetadata,
+  checkNoBrokenSymlinks,
+  computeWorkbenchContract,
   productionClosure,
   productionFingerprint,
 } from "./runtime-contract.mjs";
 
-const both = { os: ["linux"], cpu: ["arm64", "x64"], libc: ["glibc"] };
+const both = { os: ["linux"], cpu: ["arm64", "x64"] };
 
 function lock() {
   return {
@@ -40,7 +37,7 @@ function lock() {
     packages: {
       "left@1.0.0": { resolution: { integrity: "sha512-left" }, ...both },
       "fsevents@2.3.3": { resolution: { integrity: "sha512-fs" }, os: ["darwin"] },
-      "onlyarm@1.0.0": { resolution: { integrity: "sha512-arm" }, os: ["linux"], cpu: ["arm64"], libc: ["glibc"] },
+      "onlyarm@1.0.0": { resolution: { integrity: "sha512-arm" }, os: ["linux"], cpu: ["arm64"] },
       "right@1.0.0": { resolution: { integrity: "sha512-right" }, ...both },
     },
     snapshots: {
@@ -111,14 +108,10 @@ function movedBundle() {
 function observed() {
   return {
     platform: "linux/arm64",
-    node: { api: "fixture", modules: "fixture", glibc: "fixture" },
-    nativeDependencies: "fixture",
-    python: { version: "fixture", packages: { numpy: "1.2.3" } },
+    node: "24.21",
+    pnpm: "9.15.9",
+    python: { version: "3.10", packages: { numpy: "1.2.3" } },
   };
-}
-
-function inputFor(source, manifests, importer, requirements) {
-  return { importer, manifests, lock: source, pythonRequirements: requirements };
 }
 
 test("same third-party packages stay compatible when own bindings differ", () => {
@@ -131,40 +124,26 @@ test("same third-party packages stay compatible when own bindings differ", () =>
   assert.equal(productionFingerprint(moved), productionFingerprint(base));
   assert.notEqual(fingerprint(moved), fingerprint(base));
   assert.equal(Object.hasOwn(base.packages, "@app/app"), false);
-  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
+  const contract = buildContract(base, observed());
   assert.equal(contract.interfaceVersion, INTERFACE);
   assert.equal(INTERFACE, 3);
   assert.equal(contract.family, "node-app");
   assert.equal(contract.productionDependencies, productionFingerprint(base));
-  const pins = "NumPy==1.2.3 # pin\r\n\n# comment\n";
-  checkAgainst(inputFor(lock(), bundle().manifests, "apps/app", pins), contract);
-  checkAgainst(inputFor(movedLock(), movedBundle().manifests, "services/app", pins), contract);
-  checkBuild(moved, contract, fingerprint(contract));
 });
 
-test("dependency and integrity changes are rejected without a rebuild", () => {
+test("dependency and integrity changes alter productionFingerprint", () => {
   const base = productionClosure(bundle(), lock(), "linux/arm64");
-  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
+  const contract = buildContract(base, observed());
   const changed = lock();
   changed.packages["left@1.0.0"].resolution.integrity = "sha512-changed";
   const changedGraph = productionClosure(bundle(), changed, "linux/arm64");
   assert.notEqual(productionFingerprint(changedGraph), contract.productionDependencies);
-  assert.throws(
-    () => checkAgainst(inputFor(changed, bundle().manifests, "apps/app", "numpy==1.2.3\n"), contract),
-    /No runtime rebuild was started/,
-  );
+
   const linked = lock();
   linked.snapshots["left@1.0.0"] = { dependencies: { right: "1.0.0" } };
   const linkedGraph = productionClosure(bundle(), linked, "linux/arm64");
   assert.equal(linkedGraph.packages["left@1.0.0"].dependencies.right, "right@1.0.0");
-  assert.throws(
-    () => checkAgainst(inputFor(linked, bundle().manifests, "apps/app", "numpy==1.2.3\n"), contract),
-    /No runtime rebuild was started/,
-  );
-  assert.throws(
-    () => checkBuild(linkedGraph, contract, fingerprint(contract)),
-    /does not match runtime/,
-  );
+  assert.notEqual(productionFingerprint(linkedGraph), contract.productionDependencies);
 });
 
 test("linux/amd64 selects cpu x64 once and other arch spellings are rejected", () => {
@@ -187,27 +166,80 @@ test("linux/amd64 selects cpu x64 once and other arch spellings are rejected", (
   );
 });
 
-test("snapshotPaths and interface enter the full contract fingerprint only", () => {
+test("libc filter allows glibc and rejects musl packages", () => {
+  const source = lock();
+  source.importers["apps/app"].dependencies.muslpkg = { specifier: "1", version: "1.0.0" };
+  const manifests = bundle().manifests;
+  manifests["apps/app"].dependencies.muslpkg = "1";
+  source.packages["muslpkg@1.0.0"] = {
+    resolution: { integrity: "sha512-musl" },
+    os: ["linux"],
+    cpu: ["arm64"],
+    libc: ["musl"],
+  };
+  source.snapshots["muslpkg@1.0.0"] = {};
+  const selected = { importer: "apps/app", manifests };
+  assert.throws(
+    () => productionClosure(selected, source, "linux/arm64"),
+    /required muslpkg@1\.0\.0 is not linux\/arm64 glibc/,
+  );
+
+  source.packages["muslpkg@1.0.0"].libc = ["glibc"];
+  const okGraph = productionClosure(selected, source, "linux/arm64");
+  assert.ok(okGraph.packages["muslpkg@1.0.0"]);
+});
+
+test("computeWorkbenchContract parses dockerfiles and enforces Node and pnpm version consistency", () => {
   const base = productionClosure(bundle(), lock(), "linux/arm64");
-  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
-  const relocated = buildContract(base, { "left@1.0.0": "store/other" }, observed());
-  assert.equal(relocated.productionDependencies, contract.productionDependencies);
-  assert.notEqual(fingerprint(relocated), fingerprint(contract));
-  assert.throws(() => checkBuild(base, relocated, fingerprint(contract)), /required fingerprint/);
-  const drifted = buildContract(base, contract.snapshotPaths, observed());
-  drifted.interfaceVersion = 2;
-  assert.notEqual(fingerprint(drifted), fingerprint(contract));
-  assert.throws(() => checkBuild(base, drifted, fingerprint(contract)), /required fingerprint/);
-  checkBuild(base, contract, fingerprint(contract));
+  const dfRuntime = "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:24.21.0-slim\nARG PNPM_VERSION=9.15.9\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n";
+  const dfApp = "ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.21.0\nARG PNPM_VERSION=9.15.9\n";
+  const reqs = "numpy==1.2.3\n";
+
+  const contract = computeWorkbenchContract({
+    dockerfileRuntimeText: dfRuntime,
+    requirementsText: reqs,
+    graph: base,
+    arch: "arm64",
+    dockerfileAppText: dfApp,
+  });
+  assert.equal(contract.family, "node-app");
+  assert.equal(contract.node, "24.21");
+  assert.equal(contract.pnpm, "9.15.9");
+  assert.equal(contract.python.version, "3.10");
+  assert.deepEqual(contract.python.packages, { numpy: "1.2.3" });
+
+  assert.throws(
+    () =>
+      computeWorkbenchContract({
+        dockerfileRuntimeText: dfRuntime,
+        requirementsText: reqs,
+        graph: base,
+        arch: "arm64",
+        dockerfileAppText: "ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.22.0\nARG PNPM_VERSION=9.15.9\n",
+      }),
+    /Node version mismatch: runtime 24.21.0 vs app builder 24.22.0/,
+  );
+
+  assert.throws(
+    () =>
+      computeWorkbenchContract({
+        dockerfileRuntimeText: dfRuntime,
+        requirementsText: reqs,
+        graph: base,
+        arch: "arm64",
+        dockerfileAppText: "ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.21.0\nARG PNPM_VERSION=9.15.8\n",
+      }),
+    /pnpm version mismatch/,
+  );
 });
 
 test("pair rejects schema, kind, family, arch and fingerprint mismatches", () => {
   const base = productionClosure(bundle(), lock(), "linux/arm64");
-  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
+  const contract = buildContract(base, observed());
   const fp = fingerprint(contract);
   const app = { schema: 3, kind: "app", family: "node-app", runtimeCompatFingerprint: fp };
   const runtime = { schema: 3, kind: "runtime", family: "node-app", arch: "arm64", runtimeCompatFingerprint: fp };
-  pairMetadata(app, runtime, contract, "arm64");
+  assertPair(app, runtime, "arm64");
   assert.throws(() => assertPair({ ...app, schema: 2 }, runtime, "arm64"), /schema, runtime family or image kind/);
   assert.throws(() => assertPair({ ...app, kind: "runtime" }, runtime, "arm64"), /image kind/);
   assert.throws(() => assertPair({ ...app, family: "java-app" }, runtime, "arm64"), /runtime family/);
@@ -218,34 +250,23 @@ test("pair rejects schema, kind, family, arch and fingerprint mismatches", () =>
     () => assertPair({ ...app, runtimeCompatFingerprint: other }, runtime, "arm64"),
     /fingerprint mismatch/,
   );
-  assert.throws(
-    () =>
-      pairMetadata(
-        { ...app, runtimeCompatFingerprint: other },
-        { ...runtime, runtimeCompatFingerprint: other },
-        contract,
-        "arm64",
-      ),
-    /metadata is inconsistent/,
-  );
-  assert.throws(
-    () => pairMetadata(app, runtime, { ...contract, family: "java-app" }, "arm64"),
-    /metadata is inconsistent/,
-  );
 });
 
 test("assemble pairs like startup and then requires the expected architecture", () => {
   const base = productionClosure(bundle(), lock(), "linux/arm64");
-  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
+  const contract = buildContract(base, observed());
   const fp = fingerprint(contract);
   const app = { schema: 3, kind: "app", family: "node-app", runtimeCompatFingerprint: fp };
   const runtime = { schema: 3, kind: "runtime", family: "node-app", arch: "arm64", runtimeCompatFingerprint: fp };
-  assembleMetadata(app, runtime, contract, "arm64", "arm64");
-  assert.throws(() => assembleMetadata(app, runtime, contract, "arm64", "amd64"), /Assembly architecture mismatch: expected amd64, actual arm64/);
-  // Every pairing failure still fails first.
-  assert.throws(() => assembleMetadata({ ...app, kind: "runtime" }, runtime, contract, "arm64", "arm64"), /image kind/);
-  assert.throws(() => assembleMetadata(app, { ...runtime, arch: "amd64" }, contract, "arm64", "arm64"), /architecture mismatch/);
-  assert.throws(() => assembleMetadata(app, runtime, { ...contract, family: "java-app" }, "arm64", "arm64"), /metadata is inconsistent/);
+  const dir = mkdtempSync(join(tmpdir(), "assemble-test-"));
+  try {
+    assembleMetadata(app, runtime, "arm64", "arm64", dir);
+    assert.throws(() => assembleMetadata(app, runtime, "arm64", "amd64", dir), /Assembly architecture mismatch: expected amd64, actual arm64/);
+    assert.throws(() => assembleMetadata({ ...app, kind: "runtime" }, runtime, "arm64", "arm64", dir), /image kind/);
+    assert.throws(() => assembleMetadata(app, { ...runtime, arch: "amd64" }, "arm64", "arm64", dir), /architecture mismatch/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("the assemble command rejects a missing or unknown expected architecture before reading metadata", () => {
@@ -257,41 +278,15 @@ test("the assemble command rejects a missing or unknown expected architecture be
   }
 });
 
-test("python pins match exactly and reject drift or ranges", () => {
-  const packages = { numpy: "1.2.3" };
-  checkPythonRequirements("# note\n\nnumpy==1.2.3\n", packages);
-  assert.throws(() => checkPythonRequirements("numpy==9.9.9\n", packages), /provides 1\.2\.3/);
-  assert.throws(() => checkPythonRequirements("scipy==1.0.0\n", packages), /provides missing/);
-  assert.throws(() => checkPythonRequirements("numpy>=1.2.3\n", packages), /exact name==version pins/);
-  const base = productionClosure(bundle(), lock(), "linux/arm64");
-  const contract = buildContract(base, { "left@1.0.0": "store/left" }, observed());
-  assert.throws(
-    () => checkAgainst(inputFor(lock(), bundle().manifests, "apps/app", "numpy>=1.2.3\n"), contract),
-    /exact name==version pins/,
-  );
-  assert.throws(
-    () =>
-      checkAgainst(inputFor(lock(), bundle().manifests, "apps/app", "numpy==1.2.3\n"), {
-        platform: "linux/arm64",
-        productionDependencies: contract.productionDependencies,
-      }),
-    /no python packages/,
-  );
-});
-
-test("native hash covers elf and .node contents", () => {
-  const root = mkdtempSync(join(tmpdir(), "runtime-contract-"));
+test("checkNoBrokenSymlinks detects broken symlinks and allows valid ones", () => {
+  const root = mkdtempSync(join(tmpdir(), "symlink-test-"));
   try {
-    writeFileSync(join(root, "note.txt"), "text");
-    writeFileSync(join(root, "addon.node"), "one");
-    mkdirSync(join(root, "nested"));
-    writeFileSync(join(root, "nested", "lib.so"), Buffer.from([127, 69, 76, 70, 1]));
-    const first = nativeFiles(root);
-    assert.match(first, /^[a-f0-9]{64}$/);
-    writeFileSync(join(root, "note.txt"), "changed text");
-    assert.equal(nativeFiles(root), first);
-    writeFileSync(join(root, "addon.node"), "two");
-    assert.notEqual(nativeFiles(root), first);
+    writeFileSync(join(root, "real.txt"), "hello");
+    spawnSync("ln", ["-s", join(root, "nonexistent"), join(root, "broken")]);
+    assert.throws(() => checkNoBrokenSymlinks(root), /Broken symbolic link/);
+    rmSync(join(root, "broken"));
+    spawnSync("ln", ["-s", join(root, "real.txt"), join(root, "valid")]);
+    checkNoBrokenSymlinks(root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
-import { linkPlan, snapshotIndex, writeStage } from "./runtime-layout.mjs";
+import { bindingIndex, linkPlan, snapshotIndex, writeStage } from "./runtime-layout.mjs";
 
 function place(root, rel, version) {
   const dir = join(root, rel);
@@ -89,6 +89,35 @@ test("index reads the linked store path and rejects paths outside it", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+// The app builder installs for the build host: another architecture's optional
+// binary in the target graph is absent there, and the stage never links it.
+test("the stage index resolves only direct dependencies, so an absent transitive platform package is not looked up", () => {
+  const root = mkdtempSync(join(tmpdir(), "p4-n2-binding-"));
+  try {
+    const storeDir = "node_modules/.pnpm/esbuild@0.27.4/node_modules/esbuild";
+    place(root, storeDir);
+    mkdirSync(join(root, "apps/app/node_modules"), { recursive: true });
+    symlinkSync(resolve(root, storeDir), join(root, "apps/app/node_modules/esbuild"));
+    const graph = {
+      packages: {
+        "esbuild@0.27.4": {
+          dependencies: {},
+          optionalDependencies: { "@esbuild/linux-x64": "@esbuild/linux-x64@0.27.4" },
+        },
+        "@esbuild/linux-x64@0.27.4": { dependencies: {}, optionalDependencies: {} },
+      },
+      skipped: [],
+      bindings: {
+        "apps/app": { dependencies: { esbuild: "esbuild@0.27.4" }, optionalDependencies: {}, links: {} },
+      },
+    };
+    assert.deepEqual(bindingIndex(root, root, graph), { "esbuild@0.27.4": storeDir });
+    assert.throws(() => snapshotIndex(root, root, graph), /ENOENT/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

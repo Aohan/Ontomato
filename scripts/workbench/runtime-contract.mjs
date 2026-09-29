@@ -1,10 +1,13 @@
-import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { closeSync, openSync, readFileSync, readdirSync, readSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonical, fingerprint } from "../build-support.mjs";
+import { canonical, fingerprint, parsePythonRequirements } from "../build-support.mjs";
 import { productionGraph } from "./production-graph.mjs";
 
 export const INTERFACE = 3;
@@ -43,82 +46,55 @@ export function productionFingerprint(graph) {
   return fingerprint(graph.packages);
 }
 
-export function buildContract(graph, snapshotPaths, observed) {
+export function buildContract(graph, observed) {
   return {
     family: FAMILY,
     interfaceVersion: INTERFACE,
     platform: observed.platform,
     node: observed.node,
+    pnpm: observed.pnpm,
     productionDependencies: productionFingerprint(graph),
-    snapshotPaths,
-    nativeDependencies: observed.nativeDependencies,
     python: observed.python,
   };
 }
 
-export function checkPythonRequirements(text, packages) {
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.replace(/\s*#.*$/, "").trim();
-    if (!line) continue;
-    const match = /^([A-Za-z0-9_.-]+)==([^\s;]+)$/.exec(line);
-    if (!match)
-      throw new Error(`Runtime Python requirements must use exact name==version pins: ${line}`);
-    const name = match[1].toLowerCase().replace(/[-_.]+/g, "-");
-    if (packages[name] !== match[2])
-      throw new Error(
-        `Runtime Python dependency mismatch: ${name} requires ${match[2]}, provides ${packages[name] || "missing"}; publish a matching runtime`,
-      );
-  }
-}
+export function computeWorkbenchContract({
+  dockerfileRuntimeText,
+  requirementsText,
+  graph,
+  arch,
+  dockerfileAppText,
+}) {
+  // The app builder installs the same lock with pnpm to find the link paths,
+  // and optional packages are chosen by the Node version: both recipes must
+  // declare the same Node release, as they must the same pnpm.
+  const nodeMatch = /ARG\s+NODE_RUNTIME_IMAGE=[^\s]+node:(\d+\.\d+\.\d+)/.exec(dockerfileRuntimeText);
+  if (!nodeMatch) throw new Error("Could not parse Node version from Dockerfile.runtime");
+  const builderMatch = /ARG\s+NODE_BUILDER_IMAGE=[^\s]+node:(\d+\.\d+\.\d+)/.exec(dockerfileAppText);
+  if (!builderMatch) throw new Error("Could not parse Node version from Dockerfile.app");
+  if (builderMatch[1] !== nodeMatch[1])
+    throw new Error(`Node version mismatch: runtime ${nodeMatch[1]} vs app builder ${builderMatch[1]}`);
+  const node = nodeMatch[1].split(".").slice(0, 2).join(".");
 
-export function nativeFiles(root) {
-  const files = {};
-  function walk(dir) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      if (entry.isDirectory()) walk(path);
-      else if (entry.isFile()) {
-        const fd = openSync(path, "r");
-        const magic = Buffer.alloc(4);
-        try {
-          readSync(fd, magic, 0, 4, 0);
-        } finally {
-          closeSync(fd);
-        }
-        if (magic.equals(Buffer.from([127, 69, 76, 70])) || entry.name.endsWith(".node")) {
-          files[relative(root, path).split("\\").join("/")] = createHash("sha256")
-            .update(readFileSync(path))
-            .digest("hex");
-        }
-      }
-    }
-  }
-  walk(root);
-  return fingerprint(files);
-}
+  const pnpmMatch = /ARG\s+PNPM_VERSION=([^\s]+)/.exec(dockerfileRuntimeText);
+  if (!pnpmMatch) throw new Error("Could not parse PNPM_VERSION from Dockerfile.runtime");
+  const pnpm = pnpmMatch[1];
 
-function readNodeFacts() {
-  return {
-    api: process.versions.node.split(".").slice(0, 2).join("."),
-    modules: process.versions.modules,
-    glibc: process.report.getReport().header.glibcVersionRuntime,
-  };
-}
+  const appPnpmMatch = /ARG\s+PNPM_VERSION=([^\s]+)/.exec(dockerfileAppText);
+  if (!appPnpmMatch) throw new Error("Could not parse PNPM_VERSION from Dockerfile.app");
+  if (appPnpmMatch[1] !== pnpm)
+    throw new Error(`pnpm version mismatch: runtime ${pnpm} vs app ${appPnpmMatch[1]}`);
 
-function readPython() {
-  return JSON.parse(
-    execFileSync("python3", ["/runtime/runtime_dependencies.py", "/tmp/runtime-requirements.txt"], {
-      encoding: "utf8",
-    }),
-  );
-}
+  const pythonMatch = /ARG\s+PYTHON_RUNTIME_IMAGE=[^\s]+python:(\d+\.\d+)/.exec(dockerfileRuntimeText);
+  if (!pythonMatch) throw new Error("Could not parse Python version line from Dockerfile.runtime");
+  const pythonVersion = pythonMatch[1];
 
-function installedContract(graph, snapshotPaths) {
-  return buildContract(graph, snapshotPaths, {
-    platform: `linux/${liveArch()}`,
-    node: readNodeFacts(),
-    nativeDependencies: nativeFiles("/opt/runtime/node_modules"),
-    python: readPython(),
+  const pythonPackages = parsePythonRequirements(requirementsText);
+  return buildContract(graph, {
+    platform: `linux/${arch}`,
+    node,
+    pnpm,
+    python: { version: pythonVersion, packages: pythonPackages },
   });
 }
 
@@ -141,43 +117,33 @@ export function assertPair(app, runtime, actualArch) {
     throw new Error("Runtime compatibility fingerprint mismatch");
 }
 
-export function checkAgainst(input, contract) {
-  const graph = productionClosure(
-    { importer: input.importer, manifests: input.manifests },
-    input.lock,
-    contract.platform,
-  );
-  if (productionFingerprint(graph) !== contract.productionDependencies)
-    throw new Error(
-      "Production dependency graph differs from the runtime; publish a matching runtime with make pack. No runtime rebuild was started.",
-    );
-  const python = objectMap(contract.python, "runtime contract has no python packages");
-  objectMap(python.packages, "runtime contract has no python packages");
-  checkPythonRequirements(input.pythonRequirements, python.packages);
+export function checkNoBrokenSymlinks(root) {
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink()) {
+        if (!existsSync(path)) {
+          throw new Error(`Broken symbolic link: ${path}`);
+        }
+      } else if (stat.isDirectory()) {
+        walk(path);
+      }
+    }
+  }
+  walk(root);
 }
 
-export function checkBuild(graph, contract, expected) {
-  if (fingerprint(contract) !== expected)
-    throw new Error("Builder runtime contract does not match the required fingerprint");
-  if (productionFingerprint(graph) !== contract.productionDependencies)
-    throw new Error("App production dependency graph does not match runtime");
-}
-
-export function pairMetadata(app, runtime, contract, actualArch) {
+// Deployment assembly: the pairing plus the architecture the assembler
+// expects and no broken symlinks under /app.
+export function assembleMetadata(app, runtime, actualArch, expectedArch, appDir) {
   assertPair(app, runtime, actualArch);
-  if (fingerprint(contract) !== runtime.runtimeCompatFingerprint)
-    throw new Error("Runtime contract metadata is inconsistent");
-}
-
-// Deployment assembly: the startup pairing plus the architecture the assembler
-// expects (the retired assemble-check.sh rule). Startup `pair` is unchanged.
-export function assembleMetadata(app, runtime, contract, actualArch, expectedArch) {
-  pairMetadata(app, runtime, contract, actualArch);
   if (expectedArch !== actualArch)
     throw new Error(`Assembly architecture mismatch: expected ${expectedArch}, actual ${actualArch}`);
+  checkNoBrokenSymlinks(appDir);
 }
 
-function parseLock(text) {
+export function parseLock(text) {
   return createRequire(import.meta.url)("yaml").parse(text);
 }
 
@@ -185,76 +151,58 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
-function objectMap(value, message) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(message);
-  return value;
+// Every workspace manifest of the staged metadata context, keyed by its
+// directory relative to the workspace root (other sources sit beside it).
+function contextManifests(root, record) {
+  const manifests = {};
+  for (const source of record.sources)
+    for (const candidate of source.candidates) {
+      if (candidate.path !== "package.json" && !candidate.path.endsWith("/package.json")) continue;
+      const dir = candidate.path === "package.json" ? "." : dirname(candidate.path);
+      const key = source.id === record.workspaceId ? dir : dir === "." ? `../${source.id}` : `../${source.id}/${dir}`;
+      manifests[key] = readJson(join(root, "sources", source.id, candidate.path));
+    }
+  return manifests;
 }
 
-function readGraph(path) {
-  const graph = objectMap(readJson(path), "graph has no packages");
-  objectMap(graph.packages, "graph has no packages");
-  return graph;
-}
-
-function readSnapshotPaths(path) {
-  return objectMap(readJson(path), "snapshot paths must be an object");
-}
-
-function readContract(path) {
-  return objectMap(readJson(path), "runtime contract must be an object");
+// The compatibility contract of one target architecture, from the staged
+// sources only: the metadata context, both workbench recipes and the Python
+// requirements. It needs the yaml parser, so it runs in the recipe's contract
+// stage and never on the build host.
+export function contractFromContext(root, arch) {
+  const record = readJson(join(root, "inputs.json"));
+  const lock = parseLock(readFileSync(join(root, "sources", record.workspaceId, "pnpm-lock.yaml"), "utf8"));
+  const graph = productionClosure(
+    { importer: record.appImporter, manifests: contextManifests(root, record) },
+    lock,
+    `linux/${arch}`,
+  );
+  const input = (name) => readFileSync(join(root, "contract-inputs", name), "utf8");
+  return computeWorkbenchContract({
+    dockerfileRuntimeText: input("Dockerfile.runtime"),
+    dockerfileAppText: input("Dockerfile.app"),
+    requirementsText: input("requirements.txt"),
+    graph,
+    arch,
+  });
 }
 
 async function main() {
   const [command, ...args] = process.argv.slice(2);
-  if (command === "production") {
-    if (args.length !== 3) throw new Error("production requires manifest bundle, lock and architecture");
-    const [bundlePath, lockPath, arch] = args;
-    const graph = productionClosure(readJson(bundlePath), parseLock(readFileSync(lockPath, "utf8")), arch);
-    process.stdout.write(canonical(graph));
-  } else if (command === "inspect") {
-    if (args.length !== 2) throw new Error("inspect requires graph and snapshot paths");
-    const [graphPath, pathsPath] = args;
-    process.stdout.write(canonical(installedContract(readGraph(graphPath), readSnapshotPaths(pathsPath))));
-  } else if (command === "check") {
-    // Docker attach can leave stdin nonblocking; readFileSync(0) throws EAGAIN.
-    process.stdin.setEncoding("utf8");
-    let body = "";
-    for await (const chunk of process.stdin) body += chunk;
-    const input = JSON.parse(body);
-    if (typeof input.lockfile !== "string") throw new Error("check input requires lockfile text");
-    if (typeof input.pythonRequirements !== "string")
-      throw new Error("check input requires pythonRequirements");
-    checkAgainst(
-      {
-        importer: input.importer,
-        manifests: input.manifests,
-        lock: parseLock(input.lockfile),
-        pythonRequirements: input.pythonRequirements,
-      },
-      readContract("/runtime/contract.json"),
-    );
-    console.log("Runtime dependencies match");
-  } else if (command === "pair") {
-    pairMetadata(
-      readJson("/app/.image-meta.json"),
-      readJson("/runtime/.image-meta.json"),
-      readContract("/runtime/contract.json"),
-      liveArch(),
-    );
+  if (command === "contract") {
+    if (args.length !== 2 || !["amd64", "arm64"].includes(args[1]))
+      throw new Error("contract requires the context root and the architecture amd64|arm64");
+    process.stdout.write(canonical(contractFromContext(args[0], args[1])));
   } else if (command === "assemble") {
     if (args.length !== 1 || !["amd64", "arm64"].includes(args[0]))
       throw new Error("assemble requires the expected architecture amd64|arm64");
     assembleMetadata(
       readJson("/app/.image-meta.json"),
       readJson("/runtime/.image-meta.json"),
-      readContract("/runtime/contract.json"),
       liveArch(),
       args[0],
+      "/app",
     );
-  } else if (command === "check-build") {
-    if (args.length !== 3) throw new Error("check-build requires graph, contract and fingerprint");
-    const [graphPath, contractPath, expected] = args;
-    checkBuild(readGraph(graphPath), readContract(contractPath), expected);
   } else throw new Error(`Unknown runtime contract command: ${command}`);
 }
 

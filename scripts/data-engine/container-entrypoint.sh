@@ -1,7 +1,6 @@
 #!/bin/bash
 # DataRAG container entrypoint (inside the runtime image; Docker 26 / Compose assembles the application content into /app with a plain COPY).
-# Responsibilities: hard pairing and architecture checks, data directory preparation, product file synchronization, built-in MCP startup, process supervision.
-# The image must set PAIR_CONTRACT to an absolute checker path. Breaking startup changes, including that requirement and the image CMD, need a new interfaceVersion.
+# Responsibilities: data directory preparation, product file synchronization, built-in MCP startup, process supervision.
 set -euo pipefail
 
 APP_ROOT=/app
@@ -22,15 +21,6 @@ die() { echo "[entrypoint] $*" >&2; exit 78; }
 ls "$APP_LIB"/*.jar >/dev/null 2>&1 || die "no application jar under $APP_LIB"
 [ -d "$APP_SKILLS" ] || die "$APP_SKILLS is missing, the application image is incomplete"
 
-# 2/3) Pairing runs before sync or either process. The image supplies the checker; this script does not choose one.
-if [ -z "${PAIR_CONTRACT:-}" ]; then
-  die "PAIR_CONTRACT is required"
-fi
-case "$PAIR_CONTRACT" in
-  /*) ;;
-  *) die "PAIR_CONTRACT must be an absolute path" ;;
-esac
-python "$PAIR_CONTRACT" pair
 runtime_fp="$(cat /opt/datarag/runtime-compat-fingerprint)"
 runtime_arch="$(cat /opt/datarag/runtime-arch)"
 

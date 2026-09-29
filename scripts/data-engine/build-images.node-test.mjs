@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
   chmodSync,
@@ -17,13 +18,13 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildJavaApp,
-  checkPythonRequirements,
-  importedRuntime,
+  computeDataEngineContract,
   JAVA_FLAGS,
   parseJavaArgs,
   selectPromptLanguage,
+  verifyJavaTarget,
 } from "./build-images.mjs";
-import { fingerprint, readRevision } from "../build-support.mjs";
+import { fingerprint, loadRuntimeLock, readRevision } from "../build-support.mjs";
 import { app as publicEntry } from "../../apps/data-engine/build.mjs";
 
 function temporary(fn) {
@@ -35,17 +36,37 @@ function temporary(fn) {
   }
 }
 
-test("Python dependency requirements are semantic and exactly pinned", () => {
-  checkPythonRequirements(
-    "NumPy==2.2.6 # note\r\n# comment\r\npython_dateutil==2.9.0.post0",
-    { numpy: "2.2.6", "python-dateutil": "2.9.0.post0" },
-  );
-  assert.throws(
-    () => checkPythonRequirements("numpy==1.26.4", { numpy: "2.2.6" }),
-    /mismatch/,
-  );
-  assert.throws(() => checkPythonRequirements("numpy>=1", {}), /exact/);
+test("the Java fingerprint comes from the runtime recipe, the exported jars and the pinned Python list", () => {
+  const dir = mkdtempSync(join(tmpdir(), "de-contract-"));
+  try {
+    writeFileSync(join(dir, "a.jar"), "a");
+    writeFileSync(join(dir, "libx.so"), "native");
+    const recipe = "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:x\nARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy@sha256:y\n";
+    const input = { dockerfileRuntimeText: recipe, exportedLibDir: dir, requirementsText: "numpy==1.26.4\n", arch: "arm64", interfaceVersion: 3 };
+    const contract = computeDataEngineContract(input);
+    assert.deepEqual(contract, {
+      family: "java-app",
+      interfaceVersion: 3,
+      platform: "linux/arm64",
+      java: { classVersion: 65 },
+      runtimeDependencies: { jars: fingerprint({ "a.jar": createHash("sha256").update("a").digest("hex") }) },
+      python: { version: "3.10", packages: { numpy: "1.26.4" } },
+    });
+    writeFileSync(join(dir, "libx.so"), "other native");
+    assert.deepEqual(computeDataEngineContract(input), contract, "native files are not fingerprinted");
+    assert.throws(() => computeDataEngineContract({ ...input, dockerfileRuntimeText: "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim\n" }), /JRE major/);
+    assert.throws(() => computeDataEngineContract({ ...input, dockerfileRuntimeText: "ARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy\n" }), /Python version/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
+
+test("the POM's compiler target may not exceed the runtime JRE and must be declared", () => {
+  verifyJavaTarget("<maven.compiler.target>21</maven.compiler.target>", 21);
+  assert.throws(() => verifyJavaTarget("<maven.compiler.release>25</maven.compiler.release>", 21), /target 25 exceeds JRE major version 21/);
+  assert.throws(() => verifyJavaTarget("<project></project>", 21), /declares no Java compiler target/);
+});
+
 test("prompt language staging selects only the final .en suffix and overwrites the paired default", () => {
   for (const lang of ["zh", "en"])
     temporary((dir) => {
@@ -84,7 +105,7 @@ test("revision is the single concrete public POM property", () => {
 test("pack-app rejects a missing lock before it can inspect a runtime", () =>
   temporary((dir) => {
     assert.throws(
-      () => importedRuntime({ lockRoot: dir, family: "java-app" }, "arm64"),
+      () => loadRuntimeLock(dir, "java-app", "arm64"),
       /missing/,
     );
   }));
@@ -119,7 +140,7 @@ function fixture(t) {
   const pub = join(dir, "ontomato");
   const ent = join(dir, "enterprise");
   repository(pub, {
-    "pom.xml": `<project><properties><revision>${VERSION}</revision></properties></project>\n`,
+    "pom.xml": `<project><properties><revision>${VERSION}</revision><maven.compiler.target>21</maven.compiler.target></properties></project>\n`,
     mvnw: "#!/bin/sh\n", "mvnw.cmd": "@echo off\n", ".mvn/wrapper/maven-wrapper.properties": "x=1\n",
     "packages/data-engine-core/pom.xml": "<project/>\n",
     "packages/data-engine-core/src/main/java/Core.java": "class Core {}\n",
@@ -138,7 +159,6 @@ function fixture(t) {
     "apps/data-engine/src/main/java/App.java": "class App {}\n",
     "scripts/data-engine/container-entrypoint.sh": "#!/bin/bash\n",
     "scripts/data-engine/runtime-contract.py": "# public checker\n",
-    "scripts/data-engine/runtime_dependencies.py": "# deps\n",
   });
   repository(ent, {
     "pom.xml": "<project/>\n",
@@ -161,18 +181,17 @@ function publicApp({ pub }) {
   return {
     repoRoot: pub, lockRoot: join(pub, "apps/data-engine"), lockExclude: LOCK, versionPom: join(pub, "pom.xml"),
     sources: [{ id: "ontomato", root: pub }],
-    component: "datarag-opensource", family: "java-app", interfaceVersion: 3, promptLang: "en", promptLabel: "io.ontomato.prompt.lang",
+    component: "datarag-opensource", family: "java-app", interfaceVersion: 3, promptLang: "en",
     reactorDir: "ontomato", appModule: "apps/data-engine", appLibModules: ["packages/data-engine-core", "apps/data-engine"], excludeArtifactIds: "data-engine-core,data-engine-app",
     contextTrees: [publicTree(pub)],
     secretExport: null,
     requirements: { root: pub, path: "packages/data-engine-core/requirements-py310.txt" },
     mcp: { root: pub, path: "packages/data-engine-core/mcp/mcpserver.py" },
-    bin: [[pub, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"], [pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"], [pub, "scripts/data-engine/runtime_dependencies.py", "bin/runtime_dependencies.py"]],
+    bin: [[pub, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"], [pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"]],
     pairContract: "/opt/datarag/bin/runtime-contract.py", runtimeTarget: "runtime",
     resources: [[pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"], [pub, "packages/data-engine-core/skills", "payload/skills"]],
     requiredSkill: "payload/skills/aftercalculate/trend-forecaster/SKILL.md",
     payloadFiles: {}, appLabels: {}, appTagSuffix: "",
-    exportImages: ["JDK_IMAGE"], runtimeImages: ["JRE_IMAGE", "PYTHON_RUNTIME_IMAGE"],
   };
 }
 // Enterprise-shaped description with the same fields as the private entry's.
@@ -182,7 +201,7 @@ function enterpriseApp({ pub, ent, settings }, mode) {
     ...base,
     repoRoot: ent, lockRoot: join(ent, "apps/data-engine"),
     sources: [{ id: "ontomato", root: pub }, { id: "enterprise", root: ent }],
-    component: "datarag", promptLang: "zh", promptLabel: "io.example.prompt.lang", reactorDir: "enterprise",
+    component: "datarag", promptLang: "zh", reactorDir: "enterprise",
     appLibModules: ["../ontomato/packages/data-engine-core", "packages/data-engine-enterprise", "apps/data-engine"],
     excludeArtifactIds: "data-engine-core,data-engine-enterprise,data-engine-enterprise-app",
     contextTrees: [
@@ -207,10 +226,9 @@ function enterpriseApp({ pub, ent, settings }, mode) {
 // Minimal fixture Docker for this builder's calls. It records every argv and each
 // build context's full file set (path -> content), writes plausible export outputs,
 // and answers inspect from the labels it was given. FAKE_MODE=bad-label alters one
-// app label; FAKE_COMMIT_AT=<runtime|version> commits once in FAKE_COMMIT_REPO then.
+// app label.
 const FAKE = `#!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const args = process.argv.slice(2);
@@ -220,11 +238,10 @@ const contract = { family: "java-app", interfaceVersion: 3, platform: "linux/arm
 const fp = createHash("sha256").update(canonical(contract)).digest("hex");
 const images = existsSync(join(state, "images.json")) ? JSON.parse(readFileSync(join(state, "images.json"), "utf8")) : {};
 const save = () => writeFileSync(join(state, "images.json"), JSON.stringify(images));
-const commit = (at) => { if (process.env.FAKE_COMMIT_AT === at) execFileSync("git", ["-C", process.env.FAKE_COMMIT_REPO, "-c", "user.name=fake", "-c", "user.email=fake@example.invalid", "commit", "-q", "--allow-empty", "-m", "moved"]); };
 const files = (root, prefix = "") => readdirSync(join(root, prefix), { withFileTypes: true }).flatMap((e) => { const rel = prefix ? prefix + "/" + e.name : e.name; return e.isDirectory() ? files(root, rel) : [rel]; });
 const value = (flag) => args.filter((a, i) => args[i - 1] === flag);
 const buildArg = (name) => (value("--build-arg").find((a) => a.startsWith(name + "=")) || "").slice(name.length + 1);
-if (args[0] === "version") { commit("version"); process.stdout.write("1.47\\n"); }
+if (args[0] === "version") { process.stdout.write("1.47\\n"); }
 else if (args[0] === "buildx") {
   const context = args[args.length - 1];
   const snapshot = Object.fromEntries(files(context).sort().map((p) => [p, readFileSync(join(context, p), "utf8")]));
@@ -238,11 +255,7 @@ else if (args[0] === "buildx") {
     writeFileSync(join(dest, "runtime-lib/dep.jar"), "dep");
     writeFileSync(join(dest, "maven-licenses.json"), "[]");
     if (buildArg("KEEP_NATIVE")) writeFileSync(join(dest, "runtime-lib", buildArg("KEEP_NATIVE")), "so");
-  } else if (target === "contract-export") {
-    mkdirSync(dest, { recursive: true });
-    writeFileSync(join(dest, "contract.json"), JSON.stringify(contract));
   } else {
-    commit(target);
     const labels = {};
     for (const l of value("--label")) { const at = l.indexOf("="); labels[l.slice(0, at)] = l.slice(at + 1); }
     if (process.env.FAKE_MODE === "bad-label" && target === "app") labels["io.example.license.mode"] = "real";
@@ -253,9 +266,7 @@ else if (args[0] === "buildx") {
   const labels = images[args[args.length - 1]];
   if (!labels) { process.stderr.write("Error: No such image\\n"); process.exit(1); }
   process.stdout.write(JSON.stringify([{ Os: "linux", Architecture: "arm64", Config: { Labels: labels } }]));
-} else if (args[0] === "run") process.stdout.write(JSON.stringify(contract));
-else if (args[0] === "tag") { images[args[2]] = images[args[1]]; save(); }
-else { process.stderr.write("unexpected docker call " + args.join(" ") + "\\n"); process.exit(2); }
+} else { process.stderr.write("unexpected docker call " + args.join(" ") + "\\n"); process.exit(2); }
 `;
 function fakeDocker(t, dir, env = {}) {
   const bin = join(dir, "fakebin");
@@ -265,7 +276,7 @@ function fakeDocker(t, dir, env = {}) {
   chmodSync(join(bin, "docker"), 0o755);
   const set = { PATH: `${bin}${delimiter}${process.env.PATH}`, FAKE_STATE: state, ...env };
   const saved = {};
-  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "FAKE_COMMIT_AT", "FAKE_COMMIT_REPO", "DOCKER_API_VERSION", "JDK_IMAGE", "JRE_IMAGE", "PYTHON_RUNTIME_IMAGE"]) {
+  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "DOCKER_API_VERSION"]) {
     saved[key] = process.env[key];
     if (set[key] === undefined) delete process.env[key];
     else process.env[key] = set[key];
@@ -305,7 +316,7 @@ test("recipes: the secret export checks one explicit script on the exported jar;
   assert.match(runtime, /\nFROM runtime-files AS runtime\n[\s\S]*ENTRYPOINT \["\/opt\/datarag\/bin\/container-entrypoint.sh"\]\nCMD \[\]\n[\s\S]*FROM runtime AS runtime-native\nCMD \["-Djna.library.path=\/opt\/datarag\/lib"\]\n$/);
 });
 
-test("public build: central export of the public tree only, runtime target, one-source identity, en prompts", async (t) => {
+test("public build: central export of the public tree only, runtime target and en prompts", async (t) => {
   const fx = fixture(t);
   const docker = fakeDocker(t, fx.dir);
   await run(publicApp(fx), ["all", "--arch", "arm64", "--prompt-lang", "en"]);
@@ -317,7 +328,7 @@ test("public build: central export of the public tree only, runtime target, one-
   assert.deepEqual(argOf(exp.args, "APP_LIB_MODULES"), ["packages/data-engine-core apps/data-engine"]);
   const runtime = docker.build("runtime");
   assert.ok(runtime && !docker.build("runtime-native"));
-  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/container-entrypoint.sh", "bin/runtime-contract.py", "bin/runtime_dependencies.py"]);
+  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/container-entrypoint.sh", "bin/runtime-contract.py"]);
   assert.equal(runtime.context["requirements-py310.txt"], "numpy==2.2.6\n");
   // Third-party notice inputs; the public LICENSE and NOTICE go to both images.
   const shipped = (name) => readFileSync(join(RECIPES, "../..", name), "utf8");
@@ -337,9 +348,22 @@ test("public build: central export of the public tree only, runtime target, one-
   const head = git(fx.pub, "rev-parse", "HEAD");
   const tag = app.args[app.args.indexOf("-t") + 1];
   assert.match(tag, new RegExp(`^datarag-opensource-app:${VERSION}-\\d{8}-\\d{6}-g${head.slice(0, 12)}-arm64$`));
-  const labels = docker.images()[tag];
-  assert.deepEqual(JSON.parse(labels["io.runtime.sources"]).map((s) => [s.id, s.revision, s.dirty]), [["ontomato", head, false]]);
-  assert.equal(labels["io.ontomato.prompt.lang"], "en");
+  // App and runtime carry the version, component, kind and the runtime pair only.
+  const runtimeFp = argOf(runtime.args, "RUNTIME_COMPAT_FINGERPRINT")[0];
+  assert.deepEqual(docker.images()[tag], {
+    "org.opencontainers.image.version": VERSION,
+    "io.runtime.component": "datarag-opensource",
+    "io.runtime.kind": "app",
+    "io.runtime.compat-fingerprint": runtimeFp,
+    "io.runtime.family": "java-app",
+  });
+  assert.deepEqual(docker.images()[runtime.args[runtime.args.indexOf("-t") + 1]], {
+    "org.opencontainers.image.version": VERSION,
+    "io.runtime.component": "java-app",
+    "io.runtime.kind": "runtime",
+    "io.runtime.compat-fingerprint": runtimeFp,
+    "io.runtime.family": "java-app",
+  });
   assert.equal(JSON.parse(readFileSync(join(fx.pub, LOCK), "utf8")).runtimes["linux/arm64"].length, 64);
 });
 
@@ -380,15 +404,25 @@ for (const mode of ["real", "override"])
     // The fake names each exported jar after its module directory.
     assert.deepEqual(Object.keys(app.context).filter((p) => p.startsWith("payload/lib/")), ["payload/lib/data-engine-core.jar", "payload/lib/data-engine-enterprise.jar", "payload/lib/data-engine.jar"]);
     const tag = app.args[app.args.indexOf("-t") + 1];
-    const heads = { ontomato: git(fx.pub, "rev-parse", "HEAD"), enterprise: git(fx.ent, "rev-parse", "HEAD") };
-    assert.match(tag, new RegExp(`^datarag-app:${VERSION}-\\d{8}-\\d{6}-g${heads.enterprise.slice(0, 12)}-dirty${mode === "override" ? "-override" : ""}-arm64$`));
-    const labels = docker.images()[tag];
-    assert.equal(labels["io.example.license.mode"], mode);
-    assert.equal(labels["io.example.prompt.lang"], "zh");
-    assert.equal(labels["org.opencontainers.image.revision"], heads.enterprise);
-    assert.equal(labels["io.runtime.source.dirty"], "true");
-    for (const image of [tag, runtime.args[runtime.args.indexOf("-t") + 1]])
-      assert.deepEqual(JSON.parse(docker.images()[image]["io.runtime.sources"]).map((s) => [s.id, s.revision, s.dirty]), [["ontomato", heads.ontomato, true], ["enterprise", heads.enterprise, false]]);
+    const enterpriseHead = git(fx.ent, "rev-parse", "HEAD");
+    assert.match(tag, new RegExp(`^datarag-app:${VERSION}-\\d{8}-\\d{6}-g${enterpriseHead.slice(0, 12)}-dirty${mode === "override" ? "-override" : ""}-arm64$`));
+    // The edition mode is the only app label on top of the shared runtime pair.
+    const runtimeFp = argOf(runtime.args, "RUNTIME_COMPAT_FINGERPRINT")[0];
+    assert.deepEqual(docker.images()[tag], {
+      "org.opencontainers.image.version": VERSION,
+      "io.runtime.component": "datarag",
+      "io.runtime.kind": "app",
+      "io.runtime.compat-fingerprint": runtimeFp,
+      "io.runtime.family": "java-app",
+      "io.example.license.mode": mode,
+    });
+    assert.deepEqual(docker.images()[runtime.args[runtime.args.indexOf("-t") + 1]], {
+      "org.opencontainers.image.version": VERSION,
+      "io.runtime.component": "java-app",
+      "io.runtime.kind": "runtime",
+      "io.runtime.compat-fingerprint": runtimeFp,
+      "io.runtime.family": "java-app",
+    });
   });
 
 test("enterprise en: public English pairs are selected after the overlay and the edition page stays", async (t) => {
@@ -431,11 +465,18 @@ test("app-only: a missing lock fails before settings or export; with a lock the 
   const docker = fakeDocker(t, fx.dir);
   await assert.rejects(() => run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override", "--pack-app"]), /runtime-lock.json missing/);
   assert.deepEqual(docker.builds(), []);
-  const contract = { family: "java-app", interfaceVersion: 3, platform: "linux/arm64", java: { version: "21", classVersion: 65 }, runtimeDependencies: { jars: "a", native: "b" }, python: { version: "3.10", packages: { numpy: "2.2.6" } } };
+  const depHash = createHash("sha256").update("dep").digest("hex");
+  const contract = {
+    family: "java-app",
+    interfaceVersion: 3,
+    platform: "linux/arm64",
+    java: { classVersion: 65 },
+    runtimeDependencies: { jars: fingerprint({ "dep.jar": depHash }) },
+    python: { version: "3.10", packages: { numpy: "2.2.6" } },
+  };
   const fp = fingerprint(contract);
   put(fx.ent, { [LOCK]: `${JSON.stringify({ schema: 3, family: "java-app", runtimes: { "linux/arm64": fp } }, null, 2)}\n` });
   const lock = readFileSync(join(fx.ent, LOCK), "utf8");
-  docker.importRuntime(`java-app-runtime:compat-${fp.slice(0, 16)}-arm64`, { "io.runtime.family": "java-app", "io.runtime.kind": "runtime", "io.runtime.compat-fingerprint": fp });
   await assert.rejects(() => run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override"]), /Missing Maven settings/);
   assert.deepEqual(docker.builds(), []);
   put(fx.dir, { "home/.m2/settings.xml": "<settings/>\n" });
@@ -443,18 +484,6 @@ test("app-only: a missing lock fails before settings or export; with a lock the 
   assert.deepEqual(docker.builds().map((b) => b.target), ["export-secret", "app"]);
   assert.equal(readFileSync(join(fx.ent, LOCK), "utf8"), lock);
 });
-
-// "version" commits after sampling and before the context copy; "runtime-native"
-// commits while the runtime image is built, before the lock would be written.
-for (const [at, phase] of [["version", "staging"], ["runtime-native", "the build"]])
-  test(`a source moving during ${phase} fails without writing the lock`, async (t) => {
-    const fx = fixture(t);
-    const docker = fakeDocker(t, fx.dir, { FAKE_COMMIT_AT: at, FAKE_COMMIT_REPO: fx.pub });
-    await assert.rejects(() => run(enterpriseApp(fx, "real"), ["all", "--arch", "arm64", "--license-mode", "real"]), new RegExp(`source ontomato changed during ${phase}`));
-    assert.equal(existsSync(join(fx.ent, LOCK)), false);
-    assert.equal(docker.build("app"), undefined);
-    assert.equal(docker.build("export-secret") === undefined, at === "version");
-  });
 
 test("an app image whose license label differs from the mode is rejected", async (t) => {
   const fx = fixture(t);

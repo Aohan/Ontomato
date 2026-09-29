@@ -7,11 +7,16 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const SHARED = resolve(dirname(fileURLToPath(import.meta.url)), "product-targets.mk");
+const MAKEFILE = resolve(dirname(fileURLToPath(import.meta.url)), "../Makefile");
+// The public repository's own recipe body for one target, without its header.
+const recipe = (makefile, name) =>
+  makefile.match(new RegExp(`^${name}:\\n((?:\\t.*\\n)+)`, "m"))[1];
 
 const FAKE = [
   "workbench-runtime",
   "workbench-app",
   "data-engine",
+  "data-engine-app",
   "ontology-manager",
   "workbench-runtime-pack",
   "workbench-app-pack",
@@ -20,6 +25,7 @@ const FAKE = [
   "pack-ontology-manager",
 ];
 const BUILD = ["workbench-runtime", "workbench-app", "data-engine", "ontology-manager"];
+const BUILD_APP = ["workbench-app", "data-engine-app", "ontology-manager"];
 const PACK = ["workbench-runtime-pack", "workbench-app-pack", "pack-data-engine", "pack-ontology-manager"];
 const PACK_APP = ["workbench-app-pack", "pack-data-engine-app", "pack-ontology-manager"];
 let counter = 0;
@@ -71,6 +77,17 @@ test("the shared rules only call service targets and never carry edition variabl
   assert.doesNotMatch(readFileSync(SHARED, "utf8"), /LICENSE_MODE|PROMPT_LANG|enterprise/);
 });
 
+test("data-engine-app builds the app without packing; only its pack target packs", () => {
+  const makefile = readFileSync(MAKEFILE, "utf8");
+  const app = recipe(makefile, "data-engine-app");
+  assert.match(
+    app,
+    /^\t\$\(NODE\) apps\/data-engine\/build\.mjs app --arch \$\(ARCH\) --prompt-lang \$\(PROMPT_LANG\)\n$/,
+  );
+  assert.doesNotMatch(app, /--pack-app/);
+  assert.match(recipe(makefile, "pack-data-engine-app"), /--pack-app\n$/);
+});
+
 test("build is the default goal and runs Node, Java and Manager in order", () => {
   inWorkspace((dir) => {
     const implicit = run(dir, []);
@@ -79,6 +96,18 @@ test("build is the default goal and runs Node, Java and Manager in order", () =>
     const explicit = run(dir, ["build"]);
     assert.equal(explicit.status, 0, explicit.stderr);
     assert.deepEqual(explicit.calls, BUILD.map((name) => line(name)));
+  });
+});
+
+test("build-app builds the apps in order and never rebuilds a runtime", () => {
+  inWorkspace((dir) => {
+    const result = run(dir, ["build-app"]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(result.calls, BUILD_APP.map((name) => line(name)));
+    assert.equal(
+      result.calls.some((call) => call.startsWith("workbench-runtime")),
+      false,
+    );
   });
 });
 

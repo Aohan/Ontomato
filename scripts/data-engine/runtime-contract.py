@@ -1,13 +1,11 @@
 """Runtime contract inspection/checks inside Linux images; no host Python needed."""
 import hashlib
-from runtime_dependencies import python_contract
 import json
 import os
 from pathlib import Path
 import platform
 import re
 import struct
-import subprocess
 import sys
 import zipfile
 
@@ -50,56 +48,19 @@ def check_jar(path, maximum):
                 raise ValueError(f'Incompatible Java bytecode: {path.name}!{name} is {major}.{minor}, runtime supports non-preview <= {maximum}')
 
 
-def check_requirements(text, packages):
-    for raw in text.splitlines():
-        line = raw.split('#', 1)[0].strip()
-        if not line:
-            continue
-        match = re.fullmatch(r'([A-Za-z0-9_.-]+)==([^\s;]+)', line)
-        if not match:
-            raise ValueError(f'Runtime Python requirements need exact name==version pins: {line}')
-        name = re.sub(r'[-_.]+', '-', match[1].lower())
-        if packages.get(name) != match[2]:
-            raise ValueError(f'Runtime Python dependency mismatch: {name} requires {match[2]}, provides {packages.get(name, "missing")}')
-
-
-def java_class_version():
-    java = subprocess.run(['java', '-XshowSettings:properties', '-version'], capture_output=True, text=True, check=True)
-    properties = dict(re.findall(r'^\s*([\w.]+) = (.+)$', java.stderr, re.MULTILINE))
-    return int(float(properties['java.class.version']))
-
-
-def scan_runtime_lib(lib, maximum, arch):
-    jars, native = {}, {}
+def verify_runtime(root=ROOT):
+    arch = (root / 'runtime-arch').read_text().strip()
+    contract = json.loads((root / 'runtime-contract.json').read_text())
+    maximum = contract['java']['classVersion']
+    lib = root / 'lib'
     for path in sorted(lib.iterdir()):
         if path.suffix == '.jar':
             check_jar(path, maximum)
-            jars[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
         elif path.suffix == '.so':
             data = path.read_bytes()
             expected_machine = 62 if arch == 'amd64' else 183
             if len(data) < 20 or data[:6] != b'\x7fELF\x02\x01' or struct.unpack('<H', data[18:20])[0] != expected_machine:
                 raise ValueError(f'Native library is not a 64-bit {arch} ELF: {path.name}')
-            native[path.name] = hashlib.sha256(data).hexdigest()
-    if not jars:
-        raise ValueError('Runtime is missing Java dependencies')
-    return jars, native
-
-
-def inspect(interface_version, root=ROOT):
-    if interface_version < 1:
-        raise ValueError('Invalid runtime interface version')
-    maximum = java_class_version()
-    arch = architecture()
-    jars, native = scan_runtime_lib(root / 'lib', maximum, arch)
-    return {
-        'family': 'java-app', 'interfaceVersion': interface_version,
-        'platform': f'linux/{arch}',
-        'java': {'classVersion': maximum},
-        'runtimeDependencies': {'jars': fingerprint(jars), 'native': fingerprint(native)},
-        'libc': list(platform.libc_ver()),
-        'python': python_contract((root / 'requirements.txt').read_text()),
-    }
 
 
 def load_contract(root=ROOT):
@@ -112,7 +73,7 @@ def load_contract(root=ROOT):
     return contract, actual
 
 
-def pair(root=ROOT, app=APP, environ=os.environ):
+def assemble(root=ROOT, app=APP, environ=os.environ):
     contract, actual = load_contract(root)
     if (app / 'runtime-family').read_text().strip() != 'java-app':
         raise ValueError('Application runtime family mismatch')
@@ -121,24 +82,20 @@ def pair(root=ROOT, app=APP, environ=os.environ):
     arch = architecture()
     if (root / 'runtime-arch').read_text().strip() != arch:
         raise ValueError('Runtime recorded architecture mismatch')
-    expected_arch = environ.get('EXPECTED_ARCH')
-    if expected_arch is not None and expected_arch != arch:
+    expected_arch = environ['EXPECTED_ARCH']
+    if expected_arch != arch:
         raise ValueError(f'Architecture mismatch: expected {expected_arch}, actual {arch}')
     return contract
 
 
 def main(argv, root=ROOT, app=APP, environ=os.environ):
     command, *args = argv
-    if command == 'inspect':
-        print(canonical(inspect(int(args[0]), root)))
-    elif command == 'check-app':
-        loaded, _ = load_contract(root)
-        check_jar(Path(args[0]), loaded['java']['classVersion'])
-        check_requirements(Path(args[1]).read_text(), loaded['python']['packages'])
-        print('Application bytecode and Python requirements match the runtime')
-    elif command == 'pair':
-        contract = pair(root, app, environ)
-        print(f'Pairing OK ({contract["platform"]})')
+    if command == 'verify-runtime':
+        verify_runtime(Path(args[0]))
+        print('Runtime verification OK')
+    elif command == 'assemble':
+        contract = assemble(root, app, environ)
+        print(f'Assembly pairing OK ({contract["platform"]})')
     else:
         raise ValueError(f'Unknown runtime contract command: {command}')
 

@@ -11,8 +11,8 @@
 #   runtime-requirements.txt  public docker/workbench/requirements.txt
 #   LICENSE, NOTICE           the public repository's own license files
 # The entrypoint and the runtime contract tools are copied out of tools/.
-ARG NODE_RUNTIME_IMAGE=docker.1ms.run/library/node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
-ARG PYTHON_RUNTIME_IMAGE=docker.1ms.run/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
+ARG NODE_RUNTIME_IMAGE=docker.io/library/node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG DEBIAN_MIRROR=https://deb.debian.org/debian
 ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
@@ -48,6 +48,8 @@ COPY --from=installer /tmp/tool-links/node_modules /runtime/node_modules
 
 COPY runtime-requirements.txt /tmp/runtime-requirements.txt
 
+# pip installs exactly the pinned list with --no-deps (it is part of the
+# compatibility fingerprint) and pip check fails if the list misses a dependency.
 RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.conf.d/99retries && \
     sed -i -E \
       -e "s#https?://deb.debian.org/debian-security#${DEBIAN_SECURITY_MIRROR}#g" \
@@ -80,8 +82,9 @@ RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.co
  && test -x /usr/bin/chromium \
  && node --version \
  && python3 --version | grep -E '^Python 3\.10\.' \
- && python3 -m pip install --no-cache-dir --only-binary=:all: --index-url "$PIP_INDEX_URL" \
+ && python3 -m pip install --no-cache-dir --only-binary=:all: --no-deps --index-url "$PIP_INDEX_URL" \
     -r /tmp/runtime-requirements.txt \
+ && python3 -m pip check \
  && python3 -c "import pandas, sys; assert sys.version_info[:2] == (3, 10); print('pandas', pandas.__version__)" \
  && rm -rf /usr/local/lib/python3.10/site-packages/pip* /usr/local/lib/python3.10/site-packages/setuptools* /usr/local/lib/python3.10/site-packages/pkg_resources /usr/local/bin/pip* \
  && python3 -c "import pandas, numpy" \
@@ -122,24 +125,10 @@ RUN ln -s /opt/runtime/node_modules /node_modules
 COPY tools/build-support.mjs /runtime/scripts/build-support.mjs
 COPY tools/workbench/runtime-contract.mjs /runtime/scripts/workbench/runtime-contract.mjs
 COPY tools/workbench/production-graph.mjs /runtime/scripts/workbench/production-graph.mjs
-COPY tools/data-engine/runtime_dependencies.py /runtime/runtime_dependencies.py
 COPY tools/workbench/container-entrypoint.sh /runtime/container-entrypoint.sh
 RUN chmod 0755 /runtime/container-entrypoint.sh
 
-# The real N3 inspect runs against this installed environment. Only the
-# packages projection enters this stage; the full graph, which carries the
-# enterprise bindings and app paths, stays in the installer and never reaches
-# an image layer.
-FROM runtime-files AS contract
-COPY --from=installer /tmp/packages.json /tmp/packages.json
-COPY --from=installer /tmp/snapshot-paths.json /tmp/snapshot-paths.json
-RUN node /runtime/scripts/workbench/runtime-contract.mjs inspect /tmp/packages.json /tmp/snapshot-paths.json > /runtime/contract.json
-
-FROM scratch AS contract-export
-COPY --from=contract /runtime/contract.json /contract.json
-
 FROM runtime-files AS runtime
-COPY --from=contract /runtime/contract.json /runtime/contract.json
 # Build metadata is traceability only, outside the compatibility contract.
 ARG RUNTIME_META_JSON
 RUN test -n "$RUNTIME_META_JSON" \
@@ -149,3 +138,19 @@ WORKDIR /app
 ENTRYPOINT ["/runtime/container-entrypoint.sh"]
 # The app package owns this launcher.
 CMD ["/app/launch.sh"]
+
+# Compatibility contract, computed from the staged sources only (lock file,
+# workspace manifests, both workbench recipes, Python requirements). Both host
+# builders read it before building an image; it needs a YAML parser, which the
+# build host does not have to install. It runs on the build host's platform and
+# names the target architecture itself.
+FROM --platform=$BUILDPLATFORM ${NODE_RUNTIME_IMAGE} AS compat-contract
+ARG TARGETARCH
+ARG YAML_VERSION=2.8.3
+WORKDIR /contract
+RUN npm install --no-save --no-audit --no-fund --no-package-lock yaml@${YAML_VERSION}
+COPY . /contract/
+RUN node /contract/tools/workbench/runtime-contract.mjs contract /contract "${TARGETARCH}" > /contract.json
+
+FROM scratch AS compat-contract-export
+COPY --from=compat-contract /contract.json /contract.json

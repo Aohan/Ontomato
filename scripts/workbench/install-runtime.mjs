@@ -1,6 +1,6 @@
 // Build-time installer for the workbench runtime image. It runs in the installer
 // stage against the N4a metadata context under /src and produces the fixed
-// virtual-store runtime tree plus the inputs of the N3 contract inspect.
+// virtual-store runtime tree.
 // Workspace members are resolved by pnpm itself; the host passes no globs.
 import { createRequire } from "node:module";
 import {
@@ -25,8 +25,6 @@ import { snapshotIndex } from "./runtime-layout.mjs";
 const SOURCES = "/src";
 const RUNTIME = "/opt/runtime";
 const STORE = join(RUNTIME, "node_modules/.pnpm");
-const PACKAGES = "/tmp/packages.json";
-const SNAPSHOT_PATHS = "/tmp/snapshot-paths.json";
 const TOOL_LINKS = "/tmp/tool-links/node_modules";
 // pnpm's license report of this installation, read by the runtime stage's
 // third-party notice generator; it never enters the runtime tree.
@@ -159,8 +157,6 @@ function main() {
     );
   const index = snapshotIndex(root, RUNTIME, graph);
   finalizeRuntime({ runtimeRoot: RUNTIME, members, index });
-  writeFileSync(PACKAGES, `${JSON.stringify({ packages: graph.packages })}\n`);
-  writeFileSync(SNAPSHOT_PATHS, `${JSON.stringify(index, null, 2)}\n`);
   const binding = graph.bindings[server.path];
   if (!binding) throw new Error(`${SERVER} is not in the production graph closure`);
   const yamlKey = binding.dependencies.yaml;
