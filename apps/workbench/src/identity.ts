@@ -17,11 +17,20 @@ export const ossIdentity: WorkbenchIdentity = {
     authReq.userName = "system";
     authReq.roles = [];
     authReq.domainId = "default";
-    authReq.domainName = "default";
-    authReq.token = "";
-    authReq.apiKey = environment.queryKey() || "";
+    authReq.token = typeof req.headers.tk === "string" ? req.headers.tk : "";
+    authReq.apiKey =
+      (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : "") ||
+      environment.queryKey() ||
+      "";
     authReq.locale = resolveLocale(getLocaleFromRequest(req));
-    runWithLogContext({ domainId: authReq.domainId }, () => next());
+    runWithLogContext(
+      {
+        domainId: authReq.domainId,
+        token: authReq.token || undefined,
+        apiKey: authReq.apiKey || undefined,
+      },
+      () => next()
+    );
   },
 
   async confirmTaskOwner() {},
@@ -38,8 +47,13 @@ export const ossIdentity: WorkbenchIdentity = {
     return { userId: "system", domainId: "default" };
   },
 
-  async resolveSkillResourceDomain() {
-    return { ok: true, domainId: "default" };
+  async resolveSkillResourceDomain(req) {
+    const token = typeof req.headers.tk === "string" ? req.headers.tk : undefined;
+    const apiKey =
+      (typeof req.headers["x-api-key"] === "string" ? req.headers["x-api-key"] : undefined) ||
+      environment.queryKey() ||
+      undefined;
+    return { ok: true, domainId: "default", token, apiKey };
   },
 
   requirePermission() {
