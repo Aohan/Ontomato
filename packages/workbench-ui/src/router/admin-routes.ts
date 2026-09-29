@@ -64,10 +64,10 @@ export const adminRoutes = {
     component: () => import("../features/knowledge-governance/GovernancePage.vue"),
     meta: { group: "app-capabilities", permission: "business-knowledge" },
   },
-  // 业务知识已迁入本体管理器内部侧边栏，旧路由重定向到本体管理器。
+  // 业务知识已迁入本体管理器，旧路由重定向到本体管理器的业务知识页。
   knowledge: {
     path: "knowledge",
-    redirect: "/admin/ontology-manager",
+    redirect: "/admin/ontology-manager?view=knowledge",
     meta: { group: "data-assets", permission: "business-knowledge" },
   },
   examples: {

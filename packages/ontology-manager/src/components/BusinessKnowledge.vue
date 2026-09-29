@@ -35,7 +35,7 @@ const dialogVisible = ref(false);
 const editing = reactive<BusinessKnowledge>(emptyKnowledge());
 const dialogTitle = computed(() => ot(editing.knowledgeID ? "knowledgeEdit" : "knowledgeAdd"));
 
-// 标签只取本版三个存储值；显示文字走 Manager 词条。
+// 预设本版三个标签存储值（显示文字走 Manager 词条），也可输入自定义标签，与迁移前页面一致。
 const tagOptions = computed(() => [
   { value: context.knowledgeTagValues.general, label: ot("knowledgeTagGeneral") },
   { value: context.knowledgeTagValues.business, label: ot("knowledgeTagBusiness") },
@@ -208,6 +208,8 @@ onMounted(load);
           <el-select
             v-model="editing.knowledgeTags"
             multiple
+            filterable
+            allow-create
             :placeholder="ot('knowledgeTagsPlaceholder')"
             class="knowledge-tag-select"
           >
