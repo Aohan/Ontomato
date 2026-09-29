@@ -46,8 +46,6 @@ export function productionFingerprint(graph) {
   return fingerprint(graph.packages);
 }
 
-export { parsePythonRequirements } from "../build-support.mjs";
-
 export function buildContract(graph, observed) {
   return {
     family: FAMILY,
@@ -67,10 +65,16 @@ export function computeWorkbenchContract({
   arch,
   dockerfileAppText,
 }) {
-  if (!dockerfileAppText) throw new Error("dockerfileAppText is required");
-  const nodeMatch = /ARG\s+NODE_RUNTIME_IMAGE=[^\s]+node:(\d+\.\d+)/.exec(dockerfileRuntimeText);
-  if (!nodeMatch) throw new Error("Could not parse Node version line from Dockerfile.runtime");
-  const node = nodeMatch[1];
+  // The app builder installs the same lock with pnpm to find the link paths,
+  // and optional packages are chosen by the Node version: both recipes must
+  // declare the same Node release, as they must the same pnpm.
+  const nodeMatch = /ARG\s+NODE_RUNTIME_IMAGE=[^\s]+node:(\d+\.\d+\.\d+)/.exec(dockerfileRuntimeText);
+  if (!nodeMatch) throw new Error("Could not parse Node version from Dockerfile.runtime");
+  const builderMatch = /ARG\s+NODE_BUILDER_IMAGE=[^\s]+node:(\d+\.\d+\.\d+)/.exec(dockerfileAppText);
+  if (!builderMatch) throw new Error("Could not parse Node version from Dockerfile.app");
+  if (builderMatch[1] !== nodeMatch[1])
+    throw new Error(`Node version mismatch: runtime ${nodeMatch[1]} vs app builder ${builderMatch[1]}`);
+  const node = nodeMatch[1].split(".").slice(0, 2).join(".");
 
   const pnpmMatch = /ARG\s+PNPM_VERSION=([^\s]+)/.exec(dockerfileRuntimeText);
   if (!pnpmMatch) throw new Error("Could not parse PNPM_VERSION from Dockerfile.runtime");
@@ -113,10 +117,6 @@ export function assertPair(app, runtime, actualArch) {
     throw new Error("Runtime compatibility fingerprint mismatch");
 }
 
-export function pairMetadata(app, runtime, actualArch) {
-  assertPair(app, runtime, actualArch);
-}
-
 export function checkNoBrokenSymlinks(root) {
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -136,8 +136,8 @@ export function checkNoBrokenSymlinks(root) {
 
 // Deployment assembly: the pairing plus the architecture the assembler
 // expects and no broken symlinks under /app.
-export function assembleMetadata(app, runtime, actualArch, expectedArch, appDir = "/app") {
-  pairMetadata(app, runtime, actualArch);
+export function assembleMetadata(app, runtime, actualArch, expectedArch, appDir) {
+  assertPair(app, runtime, actualArch);
   if (expectedArch !== actualArch)
     throw new Error(`Assembly architecture mismatch: expected ${expectedArch}, actual ${actualArch}`);
   checkNoBrokenSymlinks(appDir);

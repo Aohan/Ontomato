@@ -82,8 +82,8 @@ def assemble(root=ROOT, app=APP, environ=os.environ):
     arch = architecture()
     if (root / 'runtime-arch').read_text().strip() != arch:
         raise ValueError('Runtime recorded architecture mismatch')
-    expected_arch = environ.get('EXPECTED_ARCH')
-    if expected_arch is not None and expected_arch != arch:
+    expected_arch = environ['EXPECTED_ARCH']
+    if expected_arch != arch:
         raise ValueError(f'Architecture mismatch: expected {expected_arch}, actual {arch}')
     return contract
 
@@ -91,8 +91,7 @@ def assemble(root=ROOT, app=APP, environ=os.environ):
 def main(argv, root=ROOT, app=APP, environ=os.environ):
     command, *args = argv
     if command == 'verify-runtime':
-        target = Path(args[0]) if args else root
-        verify_runtime(target)
+        verify_runtime(Path(args[0]))
         print('Runtime verification OK')
     elif command == 'assemble':
         contract = assemble(root, app, environ)

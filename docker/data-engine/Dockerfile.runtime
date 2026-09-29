@@ -23,7 +23,10 @@ ENV PAIR_CONTRACT=${PAIR_CONTRACT}
 COPY --from=jre /opt/java/openjdk /opt/java/openjdk
 
 COPY requirements-py310.txt /tmp/requirements-py310.txt
-RUN pip install --no-cache-dir -i "${PIP_INDEX_URL}" -r /tmp/requirements-py310.txt \
+# The pinned list is the whole installed set (it is part of the compatibility
+# fingerprint): --no-deps installs only it, and pip check fails if it misses one.
+RUN pip install --no-cache-dir --no-deps -i "${PIP_INDEX_URL}" -r /tmp/requirements-py310.txt \
+    && pip check \
     && python -c "import pandas, requests, numpy, mcp, sympy" \
     && rm -rf /usr/local/lib/python3.10/site-packages/pip* /usr/local/lib/python3.10/site-packages/setuptools* /usr/local/lib/python3.10/site-packages/pkg_resources /usr/local/bin/pip* \
     && python -c "import pandas, requests, numpy, mcp, sympy"

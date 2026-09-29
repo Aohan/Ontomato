@@ -51,11 +51,11 @@ packages: {}
   mkdirSync(join(dir, "docker/workbench"), { recursive: true });
   writeFileSync(
     join(dir, "docker/workbench/Dockerfile.runtime"),
-    "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:20.18-bookworm-slim\nARG PNPM_VERSION=9.15.4\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n",
+    "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:20.18.0-slim\nARG PNPM_VERSION=9.15.4\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n",
   );
   writeFileSync(
     join(dir, "docker/workbench/Dockerfile.app"),
-    "ARG PNPM_VERSION=9.15.4\n",
+    "ARG NODE_BUILDER_IMAGE=docker.io/library/node:20.18.0\nARG PNPM_VERSION=9.15.4\n",
   );
   writeFileSync(join(dir, "docker/workbench/requirements.txt"), "numpy==1.26.4\npandas==1.5.3\n");
   mkdirSync(join(dir, "apps/workbench"), { recursive: true });

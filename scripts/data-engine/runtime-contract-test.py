@@ -126,7 +126,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
             self.install(root, app, self.body())
             stdout = StringIO()
             with redirect_stdout(stdout):
-                contract.main(['assemble'], root, app, {})
+                contract.main(['assemble'], root, app, {'EXPECTED_ARCH': self.arch})
             self.assertEqual(stdout.getvalue(), f'Assembly pairing OK (linux/{self.arch})\n')
 
     def test_assemble_rejects_family_fingerprint_and_arch(self):
@@ -138,15 +138,15 @@ class RuntimeBoundaryTests(unittest.TestCase):
             self.install(root, app, self.body())
             (app / 'runtime-family').write_text('other')
             with self.assertRaisesRegex(ValueError, 'family'):
-                contract.assemble(root, app, {})
+                contract.assemble(root, app, {'EXPECTED_ARCH': self.arch})
             (app / 'runtime-family').write_text('java-app')
             (app / 'runtime-compat-fingerprint').write_text('0' * 64)
             with self.assertRaisesRegex(ValueError, 'fingerprint'):
-                contract.assemble(root, app, {})
+                contract.assemble(root, app, {'EXPECTED_ARCH': self.arch})
             self.install(root, app, self.body())
             (root / 'runtime-arch').write_text(self.other)
             with self.assertRaisesRegex(ValueError, 'architecture'):
-                contract.assemble(root, app, {})
+                contract.assemble(root, app, {'EXPECTED_ARCH': self.arch})
             self.install(root, app, self.body())
             with self.assertRaisesRegex(ValueError, 'Architecture mismatch'):
                 contract.assemble(root, app, {'EXPECTED_ARCH': self.other})
@@ -154,7 +154,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
             changed['platform'] = f'linux/{self.other}'
             self.install(root, app, changed)
             with self.assertRaisesRegex(ValueError, 'family or actual architecture'):
-                contract.assemble(root, app, {})
+                contract.assemble(root, app, {'EXPECTED_ARCH': self.arch})
 
     def test_cli_failure_exits_without_pairing_ok(self):
         completed = subprocess.run([sys.executable, str(Path(__file__).with_name('runtime-contract.py'))], capture_output=True, text=True)

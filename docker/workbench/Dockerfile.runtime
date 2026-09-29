@@ -48,6 +48,8 @@ COPY --from=installer /tmp/tool-links/node_modules /runtime/node_modules
 
 COPY runtime-requirements.txt /tmp/runtime-requirements.txt
 
+# pip installs exactly the pinned list with --no-deps (it is part of the
+# compatibility fingerprint) and pip check fails if the list misses a dependency.
 RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.conf.d/99retries && \
     sed -i -E \
       -e "s#https?://deb.debian.org/debian-security#${DEBIAN_SECURITY_MIRROR}#g" \
@@ -80,8 +82,9 @@ RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.co
  && test -x /usr/bin/chromium \
  && node --version \
  && python3 --version | grep -E '^Python 3\.10\.' \
- && python3 -m pip install --no-cache-dir --only-binary=:all: --index-url "$PIP_INDEX_URL" \
+ && python3 -m pip install --no-cache-dir --only-binary=:all: --no-deps --index-url "$PIP_INDEX_URL" \
     -r /tmp/runtime-requirements.txt \
+ && python3 -m pip check \
  && python3 -c "import pandas, sys; assert sys.version_info[:2] == (3, 10); print('pandas', pandas.__version__)" \
  && rm -rf /usr/local/lib/python3.10/site-packages/pip* /usr/local/lib/python3.10/site-packages/setuptools* /usr/local/lib/python3.10/site-packages/pkg_resources /usr/local/bin/pip* \
  && python3 -c "import pandas, numpy" \

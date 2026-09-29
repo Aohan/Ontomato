@@ -17,7 +17,7 @@ import { join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { output } from "../build-support.mjs";
 import { productionClosure } from "./runtime-contract.mjs";
-import { linkPlan, snapshotIndex, writeStage } from "./runtime-layout.mjs";
+import { bindingIndex, linkPlan, writeStage } from "./runtime-layout.mjs";
 
 const SOURCES = "/build/workspace";
 const STAGE = "/stage";
@@ -76,7 +76,6 @@ export function copyMember(from, to) {
   }
 }
 
-// The runtime contract carries the target platform, so the graph is built
 // Pure assembly: bindings plus the pnpm-reported members plus the runtime
 // index become stage directories, the link plan, and the member copies.
 export function stagePlan(graph, members, index) {
@@ -115,14 +114,14 @@ export function assembleAppStage({
     lock,
     platform,
   );
-  const snapshotPaths = snapshotIndex(root, root, graph);
+  const index = bindingIndex(root, root, graph);
   const closure = Object.keys(graph.bindings).sort().join("\n");
   const chosen = selected.map((member) => member.path).sort().join("\n");
   if (closure !== chosen)
     throw new Error(
       `pnpm production selection differs from the graph closure\nselected:\n${chosen}\nclosure:\n${closure}`,
     );
-  const { plan, copies } = stagePlan(graph, members, snapshotPaths);
+  const { plan, copies } = stagePlan(graph, members, index);
   for (const copy of copies) copyMember(copy.from, join(stageRoot, copy.to));
   cpSync(join(root, "dist/web"), join(stageRoot, "dist/web"), { recursive: true });
   writeFileSync(join(stageRoot, ".image-meta.json"), `${JSON.stringify(meta)}\n`);

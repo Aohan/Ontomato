@@ -13,7 +13,6 @@ import {
   buildContract,
   checkNoBrokenSymlinks,
   computeWorkbenchContract,
-  pairMetadata,
   productionClosure,
   productionFingerprint,
 } from "./runtime-contract.mjs";
@@ -190,10 +189,10 @@ test("libc filter allows glibc and rejects musl packages", () => {
   assert.ok(okGraph.packages["muslpkg@1.0.0"]);
 });
 
-test("computeWorkbenchContract parses dockerfiles and enforces pnpm version consistency", () => {
+test("computeWorkbenchContract parses dockerfiles and enforces Node and pnpm version consistency", () => {
   const base = productionClosure(bundle(), lock(), "linux/arm64");
-  const dfRuntime = "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:24.21-bookworm-slim\nARG PNPM_VERSION=9.15.9\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n";
-  const dfApp = "ARG PNPM_VERSION=9.15.9\n";
+  const dfRuntime = "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:24.21.0-slim\nARG PNPM_VERSION=9.15.9\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n";
+  const dfApp = "ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.21.0\nARG PNPM_VERSION=9.15.9\n";
   const reqs = "numpy==1.2.3\n";
 
   const contract = computeWorkbenchContract({
@@ -216,8 +215,9 @@ test("computeWorkbenchContract parses dockerfiles and enforces pnpm version cons
         requirementsText: reqs,
         graph: base,
         arch: "arm64",
+        dockerfileAppText: "ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.22.0\nARG PNPM_VERSION=9.15.9\n",
       }),
-    /dockerfileAppText is required/,
+    /Node version mismatch: runtime 24.21.0 vs app builder 24.22.0/,
   );
 
   assert.throws(
@@ -227,7 +227,7 @@ test("computeWorkbenchContract parses dockerfiles and enforces pnpm version cons
         requirementsText: reqs,
         graph: base,
         arch: "arm64",
-        dockerfileAppText: "ARG PNPM_VERSION=9.15.8\n",
+        dockerfileAppText: "ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.21.0\nARG PNPM_VERSION=9.15.8\n",
       }),
     /pnpm version mismatch/,
   );
@@ -239,7 +239,7 @@ test("pair rejects schema, kind, family, arch and fingerprint mismatches", () =>
   const fp = fingerprint(contract);
   const app = { schema: 3, kind: "app", family: "node-app", runtimeCompatFingerprint: fp };
   const runtime = { schema: 3, kind: "runtime", family: "node-app", arch: "arm64", runtimeCompatFingerprint: fp };
-  pairMetadata(app, runtime, "arm64");
+  assertPair(app, runtime, "arm64");
   assert.throws(() => assertPair({ ...app, schema: 2 }, runtime, "arm64"), /schema, runtime family or image kind/);
   assert.throws(() => assertPair({ ...app, kind: "runtime" }, runtime, "arm64"), /image kind/);
   assert.throws(() => assertPair({ ...app, family: "java-app" }, runtime, "arm64"), /runtime family/);

@@ -74,6 +74,27 @@ export function snapshotIndex(linkRoot, storeRoot, graph) {
   return index;
 }
 
+// The store directories of the stage's own links: each binding's direct
+// dependencies, resolved in the app builder's install. Transitive packages are
+// never linked by the stage, so a platform package the build host did not
+// install (another architecture's optional binary) is never looked up.
+export function bindingIndex(linkRoot, storeRoot, graph) {
+  const storeReal = realpathSync(storeRoot);
+  const index = {};
+  for (const [importer, binding] of Object.entries(graph.bindings)) {
+    for (const [name, key] of Object.entries(mergedEdges(binding))) {
+      const rel = storeRelative(
+        relative(storeReal, realpathSync(join(linkRoot, importer, "node_modules", name)))
+          .split(sep)
+          .join("/"),
+      );
+      if (Object.hasOwn(index, key) && index[key] !== rel) throw new Error(`inconsistent ${key}`);
+      index[key] = rel;
+    }
+  }
+  return index;
+}
+
 export function linkPlan(bindings, directories, index) {
   const dirs = {};
   const used = new Map();

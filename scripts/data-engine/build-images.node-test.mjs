@@ -18,9 +18,11 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildJavaApp,
+  computeDataEngineContract,
   JAVA_FLAGS,
   parseJavaArgs,
   selectPromptLanguage,
+  verifyJavaTarget,
 } from "./build-images.mjs";
 import { fingerprint, loadRuntimeLock, readRevision } from "../build-support.mjs";
 import { app as publicEntry } from "../../apps/data-engine/build.mjs";
@@ -33,6 +35,37 @@ function temporary(fn) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+test("the Java fingerprint comes from the runtime recipe, the exported jars and the pinned Python list", () => {
+  const dir = mkdtempSync(join(tmpdir(), "de-contract-"));
+  try {
+    writeFileSync(join(dir, "a.jar"), "a");
+    writeFileSync(join(dir, "libx.so"), "native");
+    const recipe = "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:x\nARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy@sha256:y\n";
+    const input = { dockerfileRuntimeText: recipe, exportedLibDir: dir, requirementsText: "numpy==1.26.4\n", arch: "arm64", interfaceVersion: 3 };
+    const contract = computeDataEngineContract(input);
+    assert.deepEqual(contract, {
+      family: "java-app",
+      interfaceVersion: 3,
+      platform: "linux/arm64",
+      java: { classVersion: 65 },
+      runtimeDependencies: { jars: fingerprint({ "a.jar": createHash("sha256").update("a").digest("hex") }) },
+      python: { version: "3.10", packages: { numpy: "1.26.4" } },
+    });
+    writeFileSync(join(dir, "libx.so"), "other native");
+    assert.deepEqual(computeDataEngineContract(input), contract, "native files are not fingerprinted");
+    assert.throws(() => computeDataEngineContract({ ...input, dockerfileRuntimeText: "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim\n" }), /JRE major/);
+    assert.throws(() => computeDataEngineContract({ ...input, dockerfileRuntimeText: "ARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy\n" }), /Python version/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the POM's compiler target may not exceed the runtime JRE and must be declared", () => {
+  verifyJavaTarget("<maven.compiler.target>21</maven.compiler.target>", 21);
+  assert.throws(() => verifyJavaTarget("<maven.compiler.release>25</maven.compiler.release>", 21), /target 25 exceeds JRE major version 21/);
+  assert.throws(() => verifyJavaTarget("<project></project>", 21), /declares no Java compiler target/);
+});
 
 test("prompt language staging selects only the final .en suffix and overwrites the paired default", () => {
   for (const lang of ["zh", "en"])
@@ -107,7 +140,7 @@ function fixture(t) {
   const pub = join(dir, "ontomato");
   const ent = join(dir, "enterprise");
   repository(pub, {
-    "pom.xml": `<project><properties><revision>${VERSION}</revision></properties></project>\n`,
+    "pom.xml": `<project><properties><revision>${VERSION}</revision><maven.compiler.target>21</maven.compiler.target></properties></project>\n`,
     mvnw: "#!/bin/sh\n", "mvnw.cmd": "@echo off\n", ".mvn/wrapper/maven-wrapper.properties": "x=1\n",
     "packages/data-engine-core/pom.xml": "<project/>\n",
     "packages/data-engine-core/src/main/java/Core.java": "class Core {}\n",

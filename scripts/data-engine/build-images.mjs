@@ -131,13 +131,16 @@ export function computeDataEngineContract({
   };
 }
 
+// The app's bytecode level is declared by the version POM; the runtime's JRE
+// major comes from the fingerprint. No declared level is an error, not a pass.
 export function verifyJavaTarget(pomText, maxMajor) {
-  for (const match of pomText.matchAll(/<(?:java\.version|maven\.compiler\.target|maven\.compiler\.release)>(\d+)<\//g)) {
-    const target = parseInt(match[1], 10);
-    if (target > maxMajor) {
+  const targets = [
+    ...pomText.matchAll(/<(?:java\.version|maven\.compiler\.target|maven\.compiler\.release)>(\d+)<\//g),
+  ].map((match) => parseInt(match[1], 10));
+  if (targets.length === 0) throw new Error("pom declares no Java compiler target");
+  for (const target of targets)
+    if (target > maxMajor)
       throw new Error(`pom compiler target ${target} exceeds JRE major version ${maxMajor}`);
-    }
-  }
 }
 // Central export needs no settings or checker. The secret export takes the Maven
 // settings file only as a BuildKit secret (never copied or read here), the target
