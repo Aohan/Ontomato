@@ -55,35 +55,81 @@ public class BusinessConfig {
 			io.ontomato.dataengine.config.EmbeddingModelProperties fileEmbeddingModelProperties,
 			DataRagConfig dataRagConfig) {
 		BusinessConfig businessConfig = new BusinessConfig();
-			List<ModelConfig> models = new ArrayList<>();
-			if (modelDefaultsProperties.getModels() != null) {
-				for (ModelConfig defaultsModel : modelDefaultsProperties.getModels()) {
-					ModelConfig model = new ModelConfig();
-					BeanUtils.copyProperties(defaultsModel, model);
-					model.setApiKeys(defaultsModel.getApiKeys() == null
-							? new ArrayList<>()
-							: new ArrayList<>(defaultsModel.getApiKeys()));
-					model.setCustomRequestParameters(CustomRequestParameters.normalize(
-							defaultsModel.getCustomRequestParameters() == null
-									? new LinkedHashMap<>()
-									: defaultsModel.getCustomRequestParameters()));
-					models.add(model);
+		List<ModelConfig> models = new ArrayList<>();
+		ModelConfig defaultSeed = null;
+		if (modelDefaultsProperties != null && modelDefaultsProperties.getModels() != null) {
+			for (ModelConfig m : modelDefaultsProperties.getModels()) {
+				if ("default".equals(m.getName()) || defaultSeed == null) {
+					defaultSeed = m;
+					if ("default".equals(m.getName())) {
+						break;
+					}
 				}
 			}
-			businessConfig.setModels(models);
+		}
 
-			Map<String, AgentConfig> agents = new LinkedHashMap<>();
-			if (modelDefaultsProperties.getAgents() != null) {
-				for (Map.Entry<String, AgentConfig> entry : modelDefaultsProperties.getAgents().entrySet()) {
-					AgentConfig defaultsAgent = entry.getValue();
-					AgentConfig agent = new AgentConfig();
-					agent.setModel(defaultsAgent.getModel());
-					agent.setActorCopies(defaultsAgent.getActorCopies());
-					agent.setSkilldir(defaultsAgent.getSkilldir());
-					agents.put(entry.getKey(), agent);
+		boolean hasCompleteConnection = false;
+		if (defaultSeed != null && defaultSeed.getBaseUrl() != null && !defaultSeed.getBaseUrl().isBlank()
+				&& defaultSeed.getModelName() != null && !defaultSeed.getModelName().isBlank()
+				&& defaultSeed.getApiKeys() != null) {
+			for (String key : defaultSeed.getApiKeys()) {
+				if (key != null && !key.isBlank()) {
+					hasCompleteConnection = true;
+					break;
 				}
 			}
-			businessConfig.setAgents(agents);
+		}
+
+		Map<String, AgentConfig> agents = new LinkedHashMap<>();
+		String codingSkillDir = "";
+		if (modelDefaultsProperties != null && modelDefaultsProperties.getAgents() != null) {
+			AgentConfig codingDefaults = modelDefaultsProperties.getAgents().get(AgentRole.CODING);
+			if (codingDefaults != null && codingDefaults.getSkilldir() != null) {
+				codingSkillDir = codingDefaults.getSkilldir();
+			}
+		}
+
+		if (hasCompleteConnection) {
+			ModelConfig model = new ModelConfig();
+			BeanUtils.copyProperties(defaultSeed, model);
+			model.setName("default");
+			if (model.getDisplayName() == null || model.getDisplayName().isBlank()) {
+				model.setDisplayName("default");
+			}
+			List<String> validKeys = new ArrayList<>();
+			for (String key : defaultSeed.getApiKeys()) {
+				if (key != null && !key.isBlank()) {
+					validKeys.add(key.trim());
+				}
+			}
+			model.setApiKeys(validKeys);
+			model.setCustomRequestParameters(CustomRequestParameters.normalize(
+					defaultSeed.getCustomRequestParameters() == null
+							? new LinkedHashMap<>()
+							: defaultSeed.getCustomRequestParameters()));
+			models.add(model);
+
+			for (String role : AgentRole.ALL) {
+				AgentConfig agent = new AgentConfig();
+				agent.setModel("default");
+				if (AgentRole.CODING.equals(role)) {
+					agent.setSkilldir(codingSkillDir);
+				}
+				agents.put(role, agent);
+			}
+		} else {
+			for (String role : AgentRole.ALL) {
+				AgentConfig agent = new AgentConfig();
+				agent.setModel(null);
+				if (AgentRole.CODING.equals(role)) {
+					agent.setSkilldir(codingSkillDir);
+				}
+				agents.put(role, agent);
+			}
+		}
+
+		businessConfig.setModels(models);
+		businessConfig.setAgents(agents);
 			
 			EmbeddingModelProperties embeddingModelProperties = businessConfig.new EmbeddingModelProperties();
 			embeddingModelProperties.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
