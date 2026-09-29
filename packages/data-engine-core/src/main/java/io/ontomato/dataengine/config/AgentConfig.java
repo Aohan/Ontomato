@@ -23,6 +23,5 @@ public class AgentConfig {
             "logRequests", "logResponses");
 
     private String model;
-    private int actorCopies;
     private String skilldir;
 }

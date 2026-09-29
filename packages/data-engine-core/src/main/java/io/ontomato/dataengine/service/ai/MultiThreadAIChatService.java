@@ -71,8 +71,6 @@ public class MultiThreadAIChatService {
 	public static final String QUESTION_CHECKER = "QUESTION_CHECKER";
 	public static final String QUESTION_CHECKER_V2 = "QUESTION_CHECKER_V2";
 	
-	public static final String ANALYSIS_QUESTION_SPLITER = "ANALYSIS_QUESTION_SPLITER";
-	
 	public static final String DASHBOARD_RENAMER = "DASHBOARD_RENAMER";
 	
 	public static final String BUSSINESS_KNOWLEDGE_GENERATOR = "BUSSINESS_KNOWLEDGE_GENERATOR";
@@ -123,14 +121,12 @@ public class MultiThreadAIChatService {
 		return ToolErrorHandlerResult.text("Tool execution failed:\n" + rawErrorText(error));
 	}
 
-	private static final int FORMAL_DEFAULT_MAX_TOKENS = 50000;
 	private static final int FORMAL_DEFAULT_MAX_COMPLETION_TOKENS = 50000;
 
 	/**
-	 * The single entry point for building the six models: the full model configuration drives the SDK, settings that have a value are actually passed through, and unset ones keep the existing system defaults.
-	 * Custom JSON is not preprocessed by the SDK and is overwritten as a whole at the final HTTP exit (see OntomatoHttpClientBuilder).
+	 * The single entry point for building chat models: the model configuration drives the SDK, with strictTools determined by the caller branch.
 	 */
-	static ChatModel buildChatModel(ModelConfig model, Integer defaultMaxTokens, Integer defaultMaxCompletionTokens) {
+	static ChatModel buildChatModel(ModelConfig model, boolean strictTools, Integer defaultMaxCompletionTokens) {
 		return OpenAiChatModel.builder()
 				.httpClientBuilder(new OntomatoHttpClientBuilder(model.getCustomRequestParameters()))
 				.baseUrl(model.getBaseUrl())
@@ -141,7 +137,7 @@ public class MultiThreadAIChatService {
 				.temperature(model.getTemperature())
 				.topP(model.getTopP())
 				.stop(model.getStop())
-				.maxTokens(model.getMaxTokens() != null ? model.getMaxTokens() : defaultMaxTokens)
+				.maxTokens(model.getMaxTokens())
 				.maxCompletionTokens(model.getMaxCompletionTokens() != null ? model.getMaxCompletionTokens() : defaultMaxCompletionTokens)
 				.presencePenalty(model.getPresencePenalty())
 				.frequencyPenalty(model.getFrequencyPenalty())
@@ -151,7 +147,7 @@ public class MultiThreadAIChatService {
 				.strictJsonSchema(model.getStrictJsonSchema())
 				.seed(model.getSeed())
 				.user(model.getUser())
-				.strictTools(model.getStrictTools())
+				.strictTools(strictTools)
 				.parallelToolCalls(model.getParallelToolCalls())
 				.store(model.getStore())
 				.metadata(model.getMetadata())
@@ -302,7 +298,7 @@ public class MultiThreadAIChatService {
 	}
     
     public String testModel(ModelConfig modelConfig, String userContent, String domainId) throws Exception {
-		ChatModel chatModel = buildChatModel(modelConfig, null, null);
+		ChatModel chatModel = buildChatModel(modelConfig, false, null);
 		NormalAgent chatAgent = newNormalAgent(chatModel).build();
 		String sessionId = UUID.randomUUID().toString();
 		AgentCallContext.begin(sessionId, "AdhocChat", domainId);
@@ -320,7 +316,7 @@ public class MultiThreadAIChatService {
     		if (TOOL_AND_PYTHON_CALCULATOR.equals(agentName)) {
     			ResolvedChatModel toolModel = modelProperties;
 			ChatModel chatModel = buildChatModel(toolModel.model(),
-					FORMAL_DEFAULT_MAX_TOKENS, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
+					true, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
 				String skill_dir = toolModel.getSkilldir();
 				Skills skills = null;
 				if (skill_dir != null && !skill_dir.isBlank()) {
@@ -349,13 +345,12 @@ public class MultiThreadAIChatService {
         	} else if (PYTHON_CALCULATOR.equals(agentName)) {
         		ResolvedChatModel pythonModel = modelProperties;
 		ChatModel chatModel = buildChatModel(pythonModel.model(),
-					FORMAL_DEFAULT_MAX_TOKENS, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
+					false, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
 				chatAgent = newNormalAgent(chatModel)
 		                .tools(afterCalculatorSkillTools, abcHarnessFileTools, afterCalculatorSubmitTools)
 		                .build();
-        	} else if (ANALYSIS_QUESTION_SPLITER.equals(agentName) || 
-        			ABC_PROGRAMMER.equals(agentName) || 
-        			ABC_PROGRAM_DASHBOARD_MAKER.equals(agentName) ||
+        	} else if (ABC_PROGRAMMER.equals(agentName) || 
+        			ABC_PROGRAM_DASHBOARD_MAKER.equals(agentName) || 
         			READ_FUNCTION_MAKER.equals(agentName) ||
         			STATIC_READ_FUNCTION_NAME_MAKER.equals(agentName) ||
         			READ_FUNCTION_INSTANCER.equals(agentName) || 
@@ -364,7 +359,7 @@ public class MultiThreadAIChatService {
         			ACTION_CODE_EXPLAINER.equals(agentName)) {
         		ResolvedChatModel cleverModel = modelProperties;
 		ChatModel chatModel = buildChatModel(cleverModel.model(),
-					FORMAL_DEFAULT_MAX_TOKENS, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
+					false, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
 				AiServices<NormalAgent> aiServices = newNormalAgent(chatModel);
 				if (ABC_PROGRAMMER.equals(agentName)) {
 					aiServices = aiServices.tools(
@@ -421,7 +416,7 @@ public class MultiThreadAIChatService {
         			QUESTION_SPLITER_V1.equals(agentName)) {
         		ResolvedChatModel splitterModel = modelProperties;
 		ChatModel chatModel = buildChatModel(splitterModel.model(),
-					FORMAL_DEFAULT_MAX_TOKENS, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
+					false, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
 				AiServices<NormalAgent> aiServices = newNormalAgent(chatModel);
 				if (QUESTION_SPLITER_V1.equals(agentName)) {
 					aiServices = aiServices.tools(schemaSkillTools);
@@ -430,7 +425,7 @@ public class MultiThreadAIChatService {
         	} else {
         		ResolvedChatModel normalModel = modelProperties;
 		ChatModel chatModel = buildChatModel(normalModel.model(),
-					FORMAL_DEFAULT_MAX_TOKENS, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
+					false, FORMAL_DEFAULT_MAX_COMPLETION_TOKENS);
 				AiServices<NormalAgent> aiServices = newNormalAgent(chatModel);
 				if (DSL_COOKER.equals(agentName)) {
 					aiServices = aiServices.tools(dslSkillTools, dataDetectorSkillTools, abcHarnessFileTools, dslSubmitTools);

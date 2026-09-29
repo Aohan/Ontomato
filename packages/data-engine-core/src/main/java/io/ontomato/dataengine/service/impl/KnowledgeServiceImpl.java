@@ -221,7 +221,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
         originalQuestion.setQuestion("Business knowledge summary");
         originalQuestion.setStartTime(new Date());
         BusinessConfig businessConfig = businessConfigService.get(domainId);
-        String knowledgeChatRetStr = multiThreadAIChatService.chat(MultiThreadAIChatService.BUSSINESS_KNOWLEDGE_GENERATOR,originalQuestion,kwSessionid,userMessage,ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT), domainId);
+        String knowledgeChatRetStr = multiThreadAIChatService.chat(MultiThreadAIChatService.BUSSINESS_KNOWLEDGE_GENERATOR,originalQuestion,kwSessionid,userMessage,ModelResolver.resolve(businessConfig, AgentRole.QUERY), domainId);
 
         Matcher matcher = JSON_PATTERN.matcher(knowledgeChatRetStr);
         if (matcher.find()) {

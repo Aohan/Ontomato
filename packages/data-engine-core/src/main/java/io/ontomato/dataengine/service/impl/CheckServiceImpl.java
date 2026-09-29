@@ -242,7 +242,7 @@ public class CheckServiceImpl implements CheckService {
 					originalQuestion,
 					BackendSessionEntrance.derive(sessionId, "dsl-describer-" + subQueryIndex),
 					userMessage,
-					ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+					ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 					domainId
 			).trim();
 			if (str.startsWith("```markdown")) {
@@ -302,7 +302,7 @@ public class CheckServiceImpl implements CheckService {
 				originalQuestion,
 				BackendSessionEntrance.derive(task.getId(), "after-calc-describer"),
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 				task.getDomainId()
 		);
 		if (str.startsWith("```markdown")) {
@@ -349,7 +349,7 @@ public class CheckServiceImpl implements CheckService {
 				originalQuestion,
 				BackendSessionEntrance.derive(task.getId(), "question-checker"),
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 				task.getDomainId()
 		);
 		if (str.startsWith("```markdown")) {
@@ -487,7 +487,7 @@ public class CheckServiceImpl implements CheckService {
 							originalQuestion,
 							BackendSessionEntrance.derive(sessionId, "spliter-evaluator"),
 							userMessage,
-							ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+							ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 							domainId);
 					if (retStr.indexOf("```json") >= 0) {
 			    		retStr = retStr.substring(retStr.indexOf("```json") + 7);
@@ -564,7 +564,7 @@ public class CheckServiceImpl implements CheckService {
 							originalQuestion,
 							BackendSessionEntrance.derive(evaluation.getSessionId(), "dsl-evaluator-" + index),
 							userMessage,
-							ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+							ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 							domainId);
 					if (retStr.indexOf("```json") >= 0) {
 			    		retStr = retStr.substring(retStr.indexOf("```json") + 7);
@@ -637,7 +637,7 @@ public class CheckServiceImpl implements CheckService {
 								originalQuestion,
 								BackendSessionEntrance.derive(evaluation.getSessionId(), "pycalc-evaluator"),
 								userMessage,
-								ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+								ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 								domainId);
 						if (retStr.indexOf("```json") >= 0) {
 				    		retStr = retStr.substring(retStr.indexOf("```json") + 7);
@@ -661,7 +661,7 @@ public class CheckServiceImpl implements CheckService {
 								originalQuestion,
 								BackendSessionEntrance.derive(evaluation.getSessionId(), "toolcalc-evaluator"),
 								userMessage,
-								ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+								ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 								domainId);
 						if (retStr.indexOf("```json") >= 0) {
 				    		retStr = retStr.substring(retStr.indexOf("```json") + 7);

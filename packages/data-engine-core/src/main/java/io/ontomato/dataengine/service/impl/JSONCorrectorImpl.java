@@ -75,7 +75,7 @@ public class JSONCorrectorImpl implements JSONCorrector {
 				originalQuestion, 
 				correctSessionId,
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 				domainId);
 		if (correctJsonStr.indexOf("```json") >= 0) {
 			correctJsonStr = correctJsonStr.substring(correctJsonStr.indexOf("```json") + 7);

@@ -80,7 +80,7 @@ public final class ModelResolver {
         Map<String, AgentConfig> agents = config.getAgents();
         AgentConfig agent = agents == null ? null : agents.get(role);
         if (agent == null || agent.getModel() == null || agent.getModel().isBlank()) {
-            throw new IllegalStateException("Role has no model reference configured: " + role);
+            throw new IllegalStateException("角色『" + AgentRole.displayName(role) + "』未配置模型，请在模型配置中选择");
         }
         ModelConfig model = findModel(config, agent.getModel());
         if (model == null) {
@@ -90,7 +90,7 @@ public final class ModelResolver {
         return new ResolvedChatModel(role, model, agent);
     }
 
-    /** The only validation at the save boundary: the name is unique and non-empty, all five roles are present with existing references (deleting a referenced model is rejected). */
+    /** The only validation at the save boundary: name unique/non-empty, connections required for each model, all five roles present with existing or empty references. */
     public static void validateForSave(BusinessConfig config) {
         List<ModelConfig> models = config.getModels() == null ? List.of() : config.getModels();
         Set<String> names = new HashSet<>();
@@ -102,25 +102,24 @@ public final class ModelResolver {
                 throw new IllegalArgumentException("Duplicate model name: " + model.getName());
             }
         }
+        requireConnections(models);
         Map<String, AgentConfig> agents = config.getAgents() == null ? Map.of() : config.getAgents();
         for (String role : AgentRole.ALL) {
             AgentConfig agent = agents.get(role);
             if (agent == null) {
                 throw new IllegalArgumentException("Missing role configuration: " + role);
             }
-            if (agent.getModel() == null || agent.getModel().isBlank()) {
-                throw new IllegalArgumentException("Role does not reference a model: " + role);
-            }
-            if (!names.contains(agent.getModel())) {
-                throw new IllegalArgumentException(
-                        "Model referenced by role " + role + " does not exist: " + agent.getModel());
+            if (agent.getModel() != null && !agent.getModel().isBlank()) {
+                if (!names.contains(agent.getModel())) {
+                    throw new IllegalArgumentException(
+                            "Model referenced by role " + role + " does not exist: " + agent.getModel());
+                }
             }
         }
     }
 
     /**
      * Saving the model list requires every entry to carry its connection: base URL, at least one non-blank API key and the API model name.
-     * Only saveModels calls this; role saves and template seeding go through validateForSave alone, so a model still blank after migration does not block them.
      */
     public static void requireConnections(List<ModelConfig> models) {
         for (ModelConfig model : models) {
@@ -141,9 +140,7 @@ public final class ModelResolver {
     }
 
     /**
-     * Compatibility for legacy records at the read boundary: when the display name is missing it is initialized to the config ID (name), and a missing/null apiKeys is returned as an empty array meaning not configured.
-     * Neither the display name nor the keys take part in references; real strings (including empty strings) are kept as-is; nothing is written back to the database and no migration is added.
-     * A null models uses the same tolerance as validateForSave, so this normalization does not make legacy records fail to read.
+     * Normalization at read boundary: defaults displayName to name, apiKeys to empty list, maxTokens to 50000, contextWindow to 256000.
      */
     public static void normalizeForRead(List<ModelConfig> models) {
         if (models == null) {
@@ -155,6 +152,12 @@ public final class ModelResolver {
             }
             if (model.getApiKeys() == null) {
                 model.setApiKeys(new ArrayList<>());
+            }
+            if (model.getMaxTokens() == null) {
+                model.setMaxTokens(50000);
+            }
+            if (model.getContextWindow() == null) {
+                model.setContextWindow(256000);
             }
         }
     }

@@ -524,7 +524,7 @@ public class AfterCalculateServiceImpl implements AfterCalculateService {
 		while(currentRetry < retryTimes){
 			// submissions are valid per round: clear the submission registry from before this round before each round starts
 			agentWorkspaceService.clearSubmission(pySessionid);
-			String calculateChatRetStr = multiThreadAIChatService.chat(MultiThreadAIChatService.TOOL_AND_PYTHON_CALCULATOR,originalQuestion,pySessionid,userMessage,ModelResolver.resolve(businessConfig, AgentRole.TOOL_CHAT), domainId);
+			String calculateChatRetStr = multiThreadAIChatService.chat(MultiThreadAIChatService.TOOL_AND_PYTHON_CALCULATOR,originalQuestion,pySessionid,userMessage,ModelResolver.resolve(businessConfig, AgentRole.CODING), domainId);
 			log.info("<<< sessionid:{}, calculateResult:{}",sessionid, calculateChatRetStr);
 
 			// delivery comes only from the current round's submission registry

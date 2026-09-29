@@ -385,7 +385,7 @@ public class ChatServiceImpl implements ChatService {
 								originalQuestion,
 								trySessionId,
 								userMessage,
-								ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+								ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 								domainId);
 						String rawQueryJson = queryJson + "";
 				        // The DSL comes only from the submission registry; a try that did not submit is treated as not having produced a usable DSL
@@ -563,7 +563,7 @@ public class ChatServiceImpl implements ChatService {
 							originalQuestion,
 							illegalTrySessionId,
 							userMessageRetry,
-							ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+							ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 							domainId);
 				} catch (RuntimeException e) {
 					// Second-round model follow-up failed: like a total first-round aggregation failure it is a CompletionException and passes through to the caller; cancellation is not logged as an error.
@@ -742,7 +742,7 @@ public class ChatServiceImpl implements ChatService {
 								originalQuestion,
 								trySessionId,
 								userMessage,
-								ModelResolver.resolve(businessConfig, AgentRole.QUESTION_SPLITER),
+								ModelResolver.resolve(businessConfig, AgentRole.QUERY),
 								user.getDomainId());
 				    	if (retStr.indexOf("```json") >= 0) {
 				    		retStr = retStr.substring(retStr.indexOf("```json") + 7);

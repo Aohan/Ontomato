@@ -174,7 +174,7 @@ public class FunctionServiceImpl implements FunctionService {
 				originalQuestion,
 				sessionId,
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.CODING),
 				domainId);
 		// Deliveries come only from submission registration
 		String submitted = agentWorkspaceService.getSubmission(sessionId);
@@ -257,7 +257,7 @@ public class FunctionServiceImpl implements FunctionService {
 				originalQuestion,
 				sessionId,
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.CODING),
 				domainId);
 		// Deliveries come only from submission registration
 		String submitted = agentWorkspaceService.getSubmission(sessionId);
@@ -327,7 +327,7 @@ public class FunctionServiceImpl implements FunctionService {
 					originalQuestion,
 					sessionId,
 					userMessage,
-					ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+					ModelResolver.resolve(businessConfig, AgentRole.CODING),
 					generalFunction.getDomainId());
 			Matcher nameMatcher = NAME_PATTERN.matcher(retStr);
         	if (nameMatcher.find()) {
