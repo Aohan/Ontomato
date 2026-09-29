@@ -8,14 +8,15 @@ export const MODEL_ROLES = [
 
 export type ModelRole = (typeof MODEL_ROLES)[number];
 
+/** 模型条目：Java getModelSettings 读取归一化后 displayName、maxTokens、contextWindow 必有值（默认值只在 Java 维护）。 */
 export interface BackendModelConfig {
   name: string;
-  displayName?: string;
+  displayName: string;
   baseUrl: string;
   apiKeys: string[];
   modelName: string;
-  contextWindow?: number;
-  maxTokens?: number;
+  contextWindow: number;
+  maxTokens: number;
   timeout?: string;
   maxRetries?: number;
   temperature?: number;
@@ -60,4 +61,3 @@ export function parseIsoDurationSeconds(isoDuration: string): number {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-export const parseIsoDuration = parseIsoDurationSeconds;

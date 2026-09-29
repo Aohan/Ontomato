@@ -83,14 +83,8 @@ public final class ModelResolver {
         AgentConfig agent = agents == null ? null : agents.get(role);
         if (agent == null || agent.getModel() == null || agent.getModel().isBlank()) {
             String lang = config.getLang();
-            String roleName = langService != null ? langService.get(lang, "AgentRole." + role) : null;
-            if (roleName == null || roleName.isBlank()) {
-                roleName = role;
-            }
-            String template = langService != null ? langService.get(lang, "AgentRole.notConfigured") : null;
-            if (template == null || template.isBlank()) {
-                template = "No model is configured for role \"{0}\". Choose one in Model Configuration.";
-            }
+            String roleName = langService.get(lang, "AgentRole." + role);
+            String template = langService.get(lang, "AgentRole.notConfigured");
             throw new IllegalStateException(template.replace("{0}", roleName));
         }
         ModelConfig model = findModel(config, agent.getModel());

@@ -71,6 +71,7 @@ describe("model-resolver", () => {
       models: [
         {
           name: "m-general",
+          displayName: "m-general",
           baseUrl: "https://llm.example.com/v1",
           apiKeys: ["key-gen-1", "key-gen-2"],
           modelName: "gpt-4o",
@@ -82,6 +83,7 @@ describe("model-resolver", () => {
         },
         {
           name: "m-diag",
+          displayName: "m-diag",
           baseUrl: "https://diag.example.com/v1",
           apiKeys: ["key-diag-1"],
           modelName: "diag-model",
@@ -182,7 +184,7 @@ describe("model-resolver", () => {
 
       await expect(
         runWithLogContext({ domainId: "d1" }, () => resolveModelForRole("general"))
-      ).rejects.toThrow("模型配置数据不一致");
+      ).rejects.toThrow("Model settings are inconsistent");
     });
 
     it("throws error with Java message when backend returns success false", async () => {

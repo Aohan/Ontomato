@@ -51,7 +51,7 @@ export async function resolveModelForRole(role: ModelRole = "general"): Promise<
 
   const model = body.data.models?.find((m) => m.name === modelId);
   if (!model) {
-    throw new Error(`模型配置数据不一致：角色『${role}』引用的模型『${modelId}』不存在`);
+    throw new Error(`Model settings are inconsistent: role "${role}" references missing model "${modelId}"`);
   }
 
   const apiKey = model.apiKeys?.[0];
@@ -65,8 +65,8 @@ export async function resolveModelForRole(role: ModelRole = "general"): Promise<
     modelName,
     timeoutSeconds,
     maxRetries: model.maxRetries,
-    maxTokens: model.maxTokens as number,
-    contextWindow: model.contextWindow as number,
+    maxTokens: model.maxTokens,
+    contextWindow: model.contextWindow,
     customRequestParameters: model.customRequestParameters ?? {},
   };
 }
