@@ -135,5 +135,6 @@ export default {
     relationTypes: "Tipi di relazione",
     scheduledWriteTasks: "Attività di scrittura pianificate",
     visualModeling: "Modellazione visiva",
+    businessKnowledge: "Conoscenza business",
   },
 };

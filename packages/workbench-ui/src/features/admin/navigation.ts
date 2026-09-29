@@ -1,21 +1,29 @@
-import type { Component } from "vue";
+import type { Component, InjectionKey } from "vue";
 import {
+  Activity,
   Blocks,
+  Cpu,
   Database,
+  MessageSquare,
   Monitor,
   Network,
-  Orbit,
   Puzzle,
   ScrollText,
   ServerCog,
 } from "lucide-vue-next";
 
-/** 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。 */
+/**
+ * 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。
+ * 页签本身有权限或组内至少一个菜单项有权限时可见。
+ */
 export interface AdminGroup {
   key: string;
   titleKey: string;
+  /** 首页型页签即首页页面的权限：有它才可见、才落到首页。 */
   permission: string;
   icon: Component;
+  /** 首页型页签：选中即进入该页，无左侧菜单项（Ontology Manager 直接展示 iframe）。 */
+  homePath?: string;
 }
 
 export interface AdminMenuItem {
@@ -40,6 +48,9 @@ export interface AdminAccess {
   can(permission: string): boolean;
 }
 
+/** 管理布局把应用的访问判定交给其下页面（入口卡、Manager 入口按它决定显示什么）。 */
+export const adminAccessKey: InjectionKey<AdminAccess> = Symbol("admin-access");
+
 /** 已登录账号的头部显示与退出（企业）；开源无账号。 */
 export interface AdminAccount {
   readonly userName: string;
@@ -63,36 +74,30 @@ export interface AdminLayoutConfig {
 export const adminGroups = {
   dataAssets: {
     key: "data-assets",
-    titleKey: "nav.dataAssets",
-    permission: "intelligence-engine",
+    titleKey: "nav.ontologyManager",
+    permission: "ontology-modeling",
     icon: Database,
+    homePath: "/admin/ontology-manager",
   },
   appCapabilities: {
     key: "app-capabilities",
-    titleKey: "nav.appAndCapabilities",
+    titleKey: "nav.agentsAndSkills",
     permission: "application-management",
     icon: Blocks,
   },
   platformManagement: {
     key: "platform-management",
-    titleKey: "nav.platformManagement",
+    titleKey: "nav.systemManagement",
     permission: "system-management",
     icon: Monitor,
   },
 } satisfies Record<string, AdminGroup>;
 
 export const adminMenuItems = {
-  ontologyManager: {
-    permission: "ontology-modeling",
-    path: "/admin/ontology-manager",
-    titleKey: "nav.ontologyAssets",
-    icon: Orbit,
-    groupKey: "data-assets",
-  },
   analysis: {
     permission: "analysis-agent",
     path: "/admin/analysis",
-    titleKey: "nav.analysisApplications",
+    titleKey: "nav.analysisAgents",
     icon: Blocks,
     groupKey: "app-capabilities",
   },
@@ -106,22 +111,43 @@ export const adminMenuItems = {
   skills: {
     permission: "skill-management",
     path: "/admin/skills",
-    titleKey: "nav.skillAndKnowledge",
+    titleKey: "nav.skills",
     icon: Puzzle,
     groupKey: "app-capabilities",
   },
-  businessConfig: {
+  modelConfig: {
+    permission: "system-config",
+    path: "/admin/model-config",
+    titleKey: "nav.modelConfig",
+    icon: Cpu,
+    groupKey: "platform-management",
+  },
+  systemConfig: {
     permission: "system-config",
     path: "/admin/system-config",
     titleKey: "nav.systemConfig",
     icon: ServerCog,
     groupKey: "platform-management",
   },
-  operations: {
-    permission: "system-management",
-    path: "/admin/operations",
-    titleKey: "nav.operationsCenter",
+  auditLog: {
+    permission: "audit-logs",
+    path: "/admin/audit-log",
+    titleKey: "nav.auditLogs",
     icon: ScrollText,
+    groupKey: "platform-management",
+  },
+  feedbackRecords: {
+    permission: "audit-logs",
+    path: "/admin/feedback-records",
+    titleKey: "nav.feedbackRecords",
+    icon: MessageSquare,
+    groupKey: "platform-management",
+  },
+  systemMonitor: {
+    permission: "system-monitoring",
+    path: "/admin/system-monitor",
+    titleKey: "nav.systemMonitoring",
+    icon: Activity,
     groupKey: "platform-management",
   },
 } satisfies Record<string, AdminMenuItem>;

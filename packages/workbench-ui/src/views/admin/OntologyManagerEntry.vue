@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useTheme } from "../../composables/useTheme";
 import { useLocale } from "../../composables/useLocale";
 import { ONTOLOGY_MANAGER_URL } from "../../config/app";
 import { managerViewQuery } from "../../router/admin-routes";
 import { authHost } from "../../utils/auth";
+import { useAdminAccess } from "../../features/admin";
 import { ontologyManagerEntryConfig } from "./manager-entry-config";
 
 const route = useRoute();
+const router = useRouter();
+const access = useAdminAccess();
 const iframeRef = ref<HTMLIFrameElement | null>(null);
 const { isDark } = useTheme();
 const { currentLocale } = useLocale();
@@ -27,6 +30,12 @@ const managerUrl = computed(() => {
   }
   url.searchParams.set("theme", initialTheme);
   if (config.localeMessage) url.searchParams.set("locale", initialLocale);
+  url.searchParams.set("embedded", "1");
+  // 业务知识治理页的绝对地址：Manager 据此在业务知识页显示入口并在顶层窗口打开；无治理权限不传。
+  if (access.can("business-knowledge")) {
+    const governance = router.resolve({ name: "KnowledgeGovernance" }).href;
+    url.searchParams.set("knowledgeGovernanceUrl", new URL(governance, window.location.origin).href);
+  }
   const token = authHost().getToken();
   if (token) {
     url.searchParams.set("tk", token);

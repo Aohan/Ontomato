@@ -47,6 +47,7 @@ interface AnalysisAgentRow {
   execution_mode: string | null;
   loop_prompt: string | null;
   report_deliverable_enabled: boolean;
+  hot_report_enabled: boolean;
   analysis_dimension_prompt: string | null;
   summarizer_prompt: string | null;
   conclusion_maker_prompt: string | null;
@@ -195,13 +196,13 @@ export class AnalysisAgentService {
     const id = uuidv4();
     const now = Date.now();
     await this.pool.query(
-      `INSERT INTO ${qualifiedTable("analysis_agents")}
+       `INSERT INTO ${qualifiedTable("analysis_agents")}
        (id, name, description, icon, execution_mode, loop_prompt,
         analysis_dimension_prompt, summarizer_prompt,
         conclusion_maker_prompt, enabled_skill_ids, enabled_visualization_skill_ids,
         enabled_mcp_service_names, class_names, is_enabled, sort_order, domain_id,
-        report_deliverable_enabled, summary_position, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+        report_deliverable_enabled, hot_report_enabled, summary_position, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
       [
         id,
         agent.name,
@@ -222,6 +223,7 @@ export class AnalysisAgentService {
         agent.sortOrder ?? 0,
         domainId,
         agent.reportDeliverableEnabled ?? true,
+        agent.hotReportEnabled ?? true,
         isAnalysisReportSummaryPosition(agent.summaryPosition)
           ? agent.summaryPosition
           : DEFAULT_ANALYSIS_REPORT_SUMMARY_POSITION,
@@ -283,6 +285,10 @@ export class AnalysisAgentService {
     if (updates.reportDeliverableEnabled !== undefined) {
       vals.push(updates.reportDeliverableEnabled);
       sets.push(`report_deliverable_enabled = $${idx++}`);
+    }
+    if (updates.hotReportEnabled !== undefined) {
+      vals.push(updates.hotReportEnabled);
+      sets.push(`hot_report_enabled = $${idx++}`);
     }
     if (updates.enabledMcpServiceNames !== undefined) {
       vals.push(updates.enabledMcpServiceNames);
@@ -441,6 +447,7 @@ function mapAgentRow(row: AnalysisAgentRow): AnalysisAgent {
       : DEFAULT_ANALYSIS_AGENT_EXECUTION_MODE,
     loopPrompt: row.loop_prompt || undefined,
     reportDeliverableEnabled: row.report_deliverable_enabled !== false,
+    hotReportEnabled: row.hot_report_enabled !== false,
     analysisDimensionPrompt: row.analysis_dimension_prompt || getDefaultAnalysisDimensionPrompt(),
     summarizerPrompt: row.summarizer_prompt || getDefaultSummarizerPrompt(),
     conclusionMakerPrompt: row.conclusion_maker_prompt || getDefaultConclusionMakerPrompt(),

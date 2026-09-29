@@ -23,6 +23,7 @@ import {
 } from "../../services/analysis-agent/config/agent-types";
 import { InvalidAgentSkillSelectionError } from "../../services/analysis-agent/config/agent-service";
 import { getAnalysisDimensionService } from "../../services/analysis-agent/config/dimension-service";
+import { listAgentHotReports } from "../../services/analysis-agent/hot-card/analysis-report-hot-cards";
 
 import { asyncHandler } from "../utils/http";
 import { HttpError } from "../../utils/errors";
@@ -117,6 +118,7 @@ router.post(
         executionMode,
         loopPrompt,
         reportDeliverableEnabled,
+        hotReportEnabled,
         summaryPosition,
         analysisDimensionPrompt,
         summarizerPrompt,
@@ -152,6 +154,9 @@ router.post(
       if (reportDeliverableEnabled !== undefined && typeof reportDeliverableEnabled !== "boolean") {
         throw new HttpError(400, "reportDeliverableEnabled must be a boolean");
       }
+      if (hotReportEnabled !== undefined && typeof hotReportEnabled !== "boolean") {
+        throw new HttpError(400, "hotReportEnabled must be a boolean");
+      }
       if (summaryPosition !== undefined && !isAnalysisReportSummaryPosition(summaryPosition)) {
         throw new HttpError(
           400,
@@ -179,6 +184,7 @@ router.post(
           executionMode: resolvedExecutionMode,
           loopPrompt: loopPrompt || "",
           reportDeliverableEnabled: reportDeliverableEnabled ?? true,
+          hotReportEnabled: hotReportEnabled ?? true,
           summaryPosition,
           analysisDimensionPrompt: analysisDimensionPrompt || "",
           summarizerPrompt,
@@ -213,13 +219,16 @@ router.put(
   "/:id",
   asyncHandler(async (req: Request, res: Response) => {
     try {
-      const { executionMode, reportDeliverableEnabled, summaryPosition, enabledMcpServiceNames } =
+      const { executionMode, reportDeliverableEnabled, hotReportEnabled, summaryPosition, enabledMcpServiceNames } =
         req.body ?? {};
       if (executionMode !== undefined && !isAnalysisAgentExecutionMode(executionMode)) {
         throw new HttpError(400, INVALID_EXECUTION_MODE_ERROR);
       }
       if (reportDeliverableEnabled !== undefined && typeof reportDeliverableEnabled !== "boolean") {
         throw new HttpError(400, "reportDeliverableEnabled must be a boolean");
+      }
+      if (hotReportEnabled !== undefined && typeof hotReportEnabled !== "boolean") {
+        throw new HttpError(400, "hotReportEnabled must be a boolean");
       }
       if (summaryPosition !== undefined && !isAnalysisReportSummaryPosition(summaryPosition)) {
         throw new HttpError(
@@ -293,6 +302,23 @@ router.delete(
 );
 
 // ==================== Dimension CRUD ====================
+
+/**
+ * GET /api/analysis-agents/:agentId/hot-reports
+ * 获取智能体下的热报告卡片（已发布 + 已禁用），供智能体编辑弹窗启用/禁用
+ */
+router.get(
+  "/:agentId/hot-reports",
+  asyncHandler(async (req: Request, res: Response) => {
+    const service = await getAnalysisAgentService();
+    const domainId = (req as AuthenticatedRequest).domainId;
+    if (!(await service.getAgent(req.params.agentId, domainId))) {
+      throw new HttpError(404, t("api.analysisAgentNotFound"));
+    }
+    const cards = await listAgentHotReports({ agentId: req.params.agentId, domainId });
+    res.json({ success: true, data: cards });
+  })
+);
 
 /**
  * GET /api/analysis-agents/:agentId/dimensions

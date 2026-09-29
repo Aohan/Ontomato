@@ -9,6 +9,7 @@ import EmbeddingModelConfigCard from "../business-config/EmbeddingModelConfigCar
 import SkillDirConfigCard from "../business-config/SkillDirConfigCard.vue";
 import QuerySettingsCard from "../business-config/QuerySettingsCard.vue";
 import BusinessConfig from "../BusinessConfig.vue";
+import ModelConfig from "../ModelConfig.vue";
 import type { BackendModelConfig, EmbeddingModelConfig } from "../../types";
 import { agentKeys } from "../../types";
 import { adminApi } from "../../../admin";
@@ -263,8 +264,21 @@ function mountBackend(models: BackendModelConfig[], extra: Record<string, unknow
   );
 }
 
-async function mountPage() {
-  const wrapper = track(mount(BusinessConfig, { props: businessConfig, global }));
+/** 模型配置页：应用模型与问数引擎模型两个页签。 */
+async function mountModelPage() {
+  const wrapper = track(mount(ModelConfig, { global }));
+  await flushPromises();
+  return wrapper;
+}
+
+/** 系统配置页：问数设置、技能目录等其他配置；问数示例另有自己的接口，这里替身。 */
+async function mountSystemPage() {
+  const wrapper = track(
+    mount(BusinessConfig, {
+      props: businessConfig,
+      global: { ...global, stubs: { ...global.stubs, ExamplesManager: true } },
+    })
+  );
   await flushPromises();
   return wrapper;
 }
@@ -938,15 +952,10 @@ describe("password visibility with the real dialog", () => {
 });
 
 describe("business config page wiring", () => {
-  it("groups application and query engine models, embedding as a card, query settings under other", async () => {
-    const wrapper = await mountPage();
+  it("groups application and query engine models, embedding as a card, query settings on the system page", async () => {
+    const wrapper = await mountModelPage();
     const labels = wrapper.findAll(".el-tabs__item").map((item) => item.text());
-    expect(labels).toEqual([
-      t("admin.modelConfig"),
-      t("admin.otherSettings"),
-      t("admin.applicationModels"),
-      t("admin.queryEngineModels"),
-    ]);
+    expect(labels).toEqual([t("admin.applicationModels"), t("admin.queryEngineModels")]);
     expect(labels.join(" ")).not.toMatch(/Frontend|Backend|前端|后端|Embedding/);
 
     const modelPanes = wrapper.find(".model-type-tabs").findAll(".el-tab-pane");
@@ -958,7 +967,10 @@ describe("business config page wiring", () => {
     expect(queryEngine!.findComponent(BackendAgentConfigCard).exists()).toBe(true);
     expect(queryEngine!.findComponent(EmbeddingModelConfigCard).exists()).toBe(true);
 
-    const other = wrapper.findAll(".el-tab-pane").at(-1)!;
+    expect(wrapper.findComponent(QuerySettingsCard).exists()).toBe(false);
+    expect(wrapper.findComponent(SkillDirConfigCard).exists()).toBe(false);
+
+    const other = await mountSystemPage();
     expect(other.findComponent(QuerySettingsCard).exists()).toBe(true);
     expect(other.findComponent(SkillDirConfigCard).exists()).toBe(true);
     expect(other.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
@@ -966,9 +978,8 @@ describe("business config page wiring", () => {
   });
 
   it("saves application models and query settings as isolated partial updates", async () => {
-    const wrapper = await mountPage();
-    const application = wrapper.findComponent(SystemModelConfigCard);
-    const query = wrapper.findComponent(QuerySettingsCard);
+    const application = (await mountModelPage()).findComponent(SystemModelConfigCard);
+    const query = (await mountSystemPage()).findComponent(QuerySettingsCard);
     const timeout = query.find(".el-input-number input");
     await timeout.setValue("900");
     await button(application, t("common.delete"))!.trigger("click");
@@ -998,7 +1009,7 @@ describe("business config page wiring", () => {
   });
 
   it("offers roles only the saved models and never a draft model", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const roles = wrapper.findComponent(BackendAgentConfigCard);
     const roleIds = () => (roles.props("models") as Array<{ name: string }>).map((m) => m.name);
     expect(roleIds()).toEqual(["qwen-main", "qwen-lite"]);
@@ -1018,7 +1029,7 @@ describe("business config page wiring", () => {
   });
 
   it("renaming a display name keeps role references on the config ID", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const list = wrapper.findComponent(BackendModelListCard);
     await button(list, t("common.edit"))!.trigger("click");
     await list.findAll("section input")[1]!.setValue("Qwen Max");
@@ -1040,7 +1051,7 @@ describe("business config page wiring", () => {
   });
 
   it("saves the five role references in one request without actorCopies or skilldir", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     await button(
       wrapper.findComponent(BackendAgentConfigCard),
       t("admin.saveAgentModels")
@@ -1065,8 +1076,8 @@ describe("business config page wiring", () => {
     expect(savedPayload.models).toBeNull();
   });
 
-  it("saves the skill directory alone from the other settings pane", async () => {
-    const wrapper = await mountPage();
+  it("saves the skill directory alone from the system config page", async () => {
+    const wrapper = await mountSystemPage();
     const skill = wrapper.findComponent(SkillDirConfigCard);
     expect((skill.find("input").element as HTMLInputElement).value).toBe("skills/legacy");
     await button(skill, t("common.saveConfig"))!.trigger("click");
@@ -1076,7 +1087,7 @@ describe("business config page wiring", () => {
   });
 
   it("saves the embedding draft as a full snapshot", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
     await button(embedding, t("common.edit"))!.trigger("click");
     await embedding.findAll("section input")[1]!.setValue("sk-embed-2");
@@ -1094,7 +1105,7 @@ describe("business config page wiring", () => {
   });
 
   it("tests the embedding row through its own list entry", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     await button(wrapper.findComponent(EmbeddingModelConfigCard), t("common.testModel"))!.trigger(
       "click"
     );
@@ -1107,13 +1118,11 @@ describe("business config page wiring", () => {
     expect(tested.modelConfig.customHeaders).toEqual({ "X-Embed-Key": "keep" });
   });
 
-  it("keeps unsaved role, skill and embedding drafts when the model list is saved", async () => {
-    const wrapper = await mountPage();
+  it("keeps unsaved role and embedding drafts when the model list is saved", async () => {
+    const wrapper = await mountModelPage();
     const roles = wrapper.findComponent(BackendAgentConfigCard);
     const roleSelect = roles.findAllComponents({ name: "ElSelect" })[0]!;
     roleSelect.vm.$emit("update:modelValue", "qwen-lite");
-    const skill = wrapper.findComponent(SkillDirConfigCard);
-    await skill.find("input").setValue("skills/draft");
     const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
     await button(embedding, t("common.edit"))!.trigger("click");
     await embedding.findAll("section input")[0]!.setValue("https://draft.example/v1");
@@ -1127,14 +1136,13 @@ describe("business config page wiring", () => {
     // 保存后按服务端整理结果重读模型列表，未保存的其它区域草稿必须原样保留。
     expect(calls.getConfig).toBe(2);
     expect(roles.props("agents").normalChat.model).toBe("qwen-lite");
-    expect((skill.find("input").element as HTMLInputElement).value).toBe("skills/draft");
     expect((embedding.props("model") as EmbeddingModelConfig).baseUrl).toBe(
       "https://draft.example/v1"
     );
   });
 
   it("deletes keys as plain array items so re-read, test and save all use the same raw values", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const list = wrapper.findComponent(BackendModelListCard);
     await button(list, t("common.edit"))!.trigger("click");
     const trash = `.api-key-row button[aria-label="${t("common.delete") as string}"]`;
@@ -1161,7 +1169,7 @@ describe("business config page wiring", () => {
   });
 
   it("keeps an explicit error and blocks resubmission when the post-save re-read fails", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const roles = wrapper.findComponent(BackendAgentConfigCard);
     roles.findAllComponents({ name: "ElSelect" })[0]!.vm.$emit("update:modelValue", "qwen-lite");
     server.failNextRead = true;
@@ -1191,19 +1199,16 @@ describe("business config page wiring", () => {
   });
 
   it("keeps drafts when a role save fails", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     vi.mocked(adminApi.saveBackendAgentModels).mockResolvedValueOnce({
       success: false,
       message: "boom",
     });
-    const skill = wrapper.findComponent(SkillDirConfigCard);
-    await skill.find("input").setValue("skills/draft");
-    await button(
-      wrapper.findComponent(BackendAgentConfigCard),
-      t("admin.saveAgentModels")
-    )!.trigger("click");
+    const roles = wrapper.findComponent(BackendAgentConfigCard);
+    roles.findAllComponents({ name: "ElSelect" })[0]!.vm.$emit("update:modelValue", "qwen-lite");
+    await button(roles, t("admin.saveAgentModels"))!.trigger("click");
     await flushPromises();
-    expect((skill.find("input").element as HTMLInputElement).value).toBe("skills/draft");
+    expect(roles.props("agents").normalChat.model).toBe("qwen-lite");
     expect(calls.getConfig).toBe(1);
   });
 
@@ -1212,7 +1217,7 @@ describe("business config page wiring", () => {
       success: false,
       message: "legacy role params",
     });
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const list = wrapper.findComponent(BackendModelListCard);
     expect(list.text()).toContain("legacy role params");
     expect(button(list, t("admin.saveModelList"))!.attributes("disabled")).toBeDefined();
@@ -1221,32 +1226,35 @@ describe("business config page wiring", () => {
         "disabled"
       )
     ).toBeDefined();
-    expect(
-      button(wrapper.findComponent(SkillDirConfigCard), t("common.saveConfig"))!.attributes(
-        "disabled"
-      )
-    ).toBeDefined();
     const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
     expect(button(embedding, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
-    // 嵌入区与其它配置区都要有不依赖 toast 的错误说明和重试入口。
+    // 嵌入区与系统配置页的其它配置区都要有不依赖 toast 的错误说明和重试入口。
     expect(embedding.find(".load-error").text()).toContain("legacy role params");
     expect(embedding.findAll(".model-item")).toHaveLength(0);
-    const banner = wrapper.find(".config-load-error");
-    expect(banner.text()).toContain("legacy role params");
-    expect(button(banner, t("common.retry"))).toBeTruthy();
 
     await button(embedding, t("common.retry"))!.trigger("click");
     await flushPromises();
     expect(embedding.find(".load-error").exists()).toBe(false);
     expect(embedding.findAll(".model-item")).toHaveLength(1);
+
+    vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
+      success: false,
+      message: "legacy role params",
+    });
+    const system = await mountSystemPage();
+    expect(
+      button(system.findComponent(SkillDirConfigCard), t("common.saveConfig"))!.attributes(
+        "disabled"
+      )
+    ).toBeDefined();
+    const banner = system.find(".config-load-error");
+    expect(banner.text()).toContain("legacy role params");
+    expect(button(banner, t("common.retry"))).toBeTruthy();
   });
 
   it("does not save anything when switching navigation", async () => {
-    const wrapper = await mountPage();
-    const otherTab = wrapper
-      .findAll(".el-tabs__item")
-      .find((item) => item.text() === t("admin.otherSettings"))!;
-    await otherTab.trigger("click");
+    const wrapper = await mountModelPage();
+    await mountSystemPage();
     const queryEngineTab = wrapper
       .findAll(".el-tabs__item")
       .find((item) => item.text() === t("admin.queryEngineModels"))!;
@@ -1260,7 +1268,7 @@ describe("business config page wiring", () => {
   });
 
   it("titles every test dialog as a model test named after the selected entry", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const dialogs = () => wrapper.findAllComponents({ name: "ElDialog" });
     const title = () =>
       dialogs()
@@ -1288,7 +1296,7 @@ describe("business config page wiring", () => {
   });
 
   it("backend edit, save and test keep opaque customs, raw keys and untouched values", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const list = wrapper.findComponent(BackendModelListCard);
     expect(list.text()).toContain("qwen-main");
     await button(list, t("common.edit"))!.trigger("click");
@@ -1331,7 +1339,7 @@ describe("business config page wiring", () => {
   });
 
   it("edits context windows and saves distinct system and diagnosis references in the model section", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const application = wrapper.findComponent(SystemModelConfigCard);
     // 输入依次是配置 ID、显示名、连接地址、Key、API 模型标识、超时、重试、上下文窗口。
     await button(application, t("common.edit"))!.trigger("click");
@@ -1369,7 +1377,7 @@ describe("business config page wiring", () => {
   });
 
   it("frontend save and test keep the config ID, the renamed display name and opaque customs", async () => {
-    const wrapper = await mountPage();
+    const wrapper = await mountModelPage();
     const frontend = wrapper.findComponent(SystemModelConfigCard);
     await button(frontend, t("common.edit"))!.trigger("click");
     // 输入依次是配置 ID、显示名、连接地址。

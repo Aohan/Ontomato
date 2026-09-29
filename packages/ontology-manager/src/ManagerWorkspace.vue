@@ -5,6 +5,7 @@ import { provideManagerContext, type ManagerHostContext } from "./context";
 import { sharedText, type SharedKey } from "./i18n";
 import { provideManagerFeedback } from "./feedback";
 import ManagerConfirmDialog from "./ManagerConfirmDialog.vue";
+import BusinessKnowledge from "./components/BusinessKnowledge.vue";
 import DataBrowser from "./data-browser/DataBrowser.vue";
 import VisualModeling from "./visual-modeling/VisualModeling.vue";
 import OntologyAssetCatalog from "./components/OntologyAssetCatalog.vue";
@@ -153,6 +154,10 @@ function applyRouteState() {
     activeWorkspace.value = "visual-modeling";
     return;
   }
+  if (section === "knowledge") {
+    activeWorkspace.value = "knowledge";
+    return;
+  }
   if (section === "admin" && first === "ontology" && second === "visual-modeling") {
     activeWorkspace.value = "visual-modeling";
     navigate("/visual-modeling");
@@ -267,6 +272,10 @@ function openPlayground() {
   changeWorkspace("playground");
 }
 
+function openKnowledge() {
+  navigate("/knowledge");
+}
+
 function openModelingFocus(focus: "object" | "relation", id: string) {
   navigate(`/visual-modeling${queryString({ focus, id, back: "playground" })}`);
 }
@@ -327,7 +336,7 @@ onMounted(() => {
 
 <template>
   <main ref="shell" class="ontology-manager-shell">
-    <OntologyWorkspaceHeader @home="changeWorkspace('playground')" />
+    <OntologyWorkspaceHeader v-if="!context.embedded" @home="changeWorkspace('playground')" />
 
     <div class="workspace">
       <OntologyResourceSidebar
@@ -340,6 +349,7 @@ onMounted(() => {
         @asset="openAsset"
         @visual-modeling="openVisualModeling"
         @playground="openPlayground"
+        @knowledge="openKnowledge"
       />
 
       <section class="content-area">
@@ -412,6 +422,9 @@ onMounted(() => {
             @back="openPlayground"
           />
         </section>
+        <section v-else-if="activeWorkspace === 'knowledge'" class="knowledge-surface">
+          <BusinessKnowledge />
+        </section>
         <OntologyPlayground v-else class="playground-surface" @open-modeling="openModelingFocus" />
       </section>
     </div>
@@ -482,6 +495,12 @@ onMounted(() => {
 .visual-content {
   min-height: 0;
   flex: 1;
+  overflow: hidden;
+}
+.knowledge-surface {
+  min-height: 0;
+  flex: 1;
+  display: flex;
   overflow: hidden;
 }
 .visual-content :deep(.visual-modeling) {

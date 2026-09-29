@@ -34,6 +34,13 @@ export interface ManagerPresentation {
   readonly compactDialogs: boolean;
 }
 
+/** 业务知识三个标签的本版存储值：提交与落盘用这里的值，选项显示走 Manager 词条。 */
+export interface ManagerKnowledgeTagValues {
+  readonly general: string;
+  readonly business: string;
+  readonly tech: string;
+}
+
 /** 宿主传入的全部上下文；组件不读取宿主存储、document 主题类或全局路由。 */
 export interface ManagerHostContext {
   apiBase: string;
@@ -46,6 +53,12 @@ export interface ManagerHostContext {
   dataFallbacks: ManagerDataFallbacks;
   /** 宿主静态装配的展示原值，见 ManagerPresentation。 */
   presentation: ManagerPresentation;
+  /** 宿主静态装配的业务知识标签存储值，见 ManagerKnowledgeTagValues。 */
+  knowledgeTagValues: ManagerKnowledgeTagValues;
+  /** 嵌在宿主页面里：宿主已有 Ontology Manager 页签与返回，不再显示顶部品牌栏。 */
+  embedded: boolean;
+  /** 宿主给出的业务知识治理页地址（当前用户有治理权限时才有），业务知识页据此显示入口；没有为 null。 */
+  knowledgeGovernanceUrl: string | null;
 }
 
 const contextKey: InjectionKey<Readonly<ManagerHostContext>> = Symbol("ontology-manager-context");

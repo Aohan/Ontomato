@@ -135,5 +135,6 @@ export default {
     relationTypes: "關係類型",
     scheduledWriteTasks: "定時寫入任務",
     visualModeling: "視覺化建模",
+    businessKnowledge: "業務知識",
   },
 };
