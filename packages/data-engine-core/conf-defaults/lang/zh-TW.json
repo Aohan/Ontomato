@@ -338,5 +338,29 @@
   {
     "key": "WriteFunctionOperation.relationNotExist",
     "value": "關係不存在"
+  },
+  {
+    "key": "AgentRole.notConfigured",
+    "value": "角色『{0}』未配置模型，請在模型配置中選擇"
+  },
+  {
+    "key": "AgentRole.query",
+    "value": "問數"
+  },
+  {
+    "key": "AgentRole.coding",
+    "value": "代碼與計算"
+  },
+  {
+    "key": "AgentRole.general",
+    "value": "通用"
+  },
+  {
+    "key": "AgentRole.diagnosis",
+    "value": "維運 Agent"
+  },
+  {
+    "key": "AgentRole.knowledgeGovernance",
+    "value": "知識治理 Agent"
   }
 ]

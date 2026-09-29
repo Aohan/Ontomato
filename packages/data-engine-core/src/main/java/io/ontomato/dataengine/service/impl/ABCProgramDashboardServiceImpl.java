@@ -73,7 +73,7 @@ public class ABCProgramDashboardServiceImpl implements ABCProgramDashboardServic
 				originalQuestion,
 				sessionId,
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.CODING, langService),
 				domainId);
 		
 		// Deliveries come only from submission registration

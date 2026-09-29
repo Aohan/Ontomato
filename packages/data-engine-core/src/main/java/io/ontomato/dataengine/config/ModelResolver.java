@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.ontomato.dataengine.service.LangService;
+
 /**
  * The only read/write entry point of the model registry.
  * At runtime, parameters are fetched only through {@link #resolve}, and save validation only through {@link #validateForSave},
@@ -73,14 +75,23 @@ public final class ModelResolver {
         }
     }
 
-    public static ResolvedChatModel resolve(BusinessConfig config, String role) {
+    public static ResolvedChatModel resolve(BusinessConfig config, String role, LangService langService) {
         if (!AgentRole.ALL.contains(role)) {
             throw new IllegalArgumentException("Unknown model role: " + role);
         }
         Map<String, AgentConfig> agents = config.getAgents();
         AgentConfig agent = agents == null ? null : agents.get(role);
         if (agent == null || agent.getModel() == null || agent.getModel().isBlank()) {
-            throw new IllegalStateException("Role has no model reference configured: " + role);
+            String lang = config.getLang();
+            String roleName = langService != null ? langService.get(lang, "AgentRole." + role) : null;
+            if (roleName == null || roleName.isBlank()) {
+                roleName = role;
+            }
+            String template = langService != null ? langService.get(lang, "AgentRole.notConfigured") : null;
+            if (template == null || template.isBlank()) {
+                template = "No model is configured for role \"{0}\". Choose one in Model Configuration.";
+            }
+            throw new IllegalStateException(template.replace("{0}", roleName));
         }
         ModelConfig model = findModel(config, agent.getModel());
         if (model == null) {
@@ -90,7 +101,7 @@ public final class ModelResolver {
         return new ResolvedChatModel(role, model, agent);
     }
 
-    /** The only validation at the save boundary: the name is unique and non-empty, all five roles are present with existing references (deleting a referenced model is rejected). */
+    /** The only validation at the save boundary: name unique/non-empty, connections required for each model, all five roles present with existing or empty references. */
     public static void validateForSave(BusinessConfig config) {
         List<ModelConfig> models = config.getModels() == null ? List.of() : config.getModels();
         Set<String> names = new HashSet<>();
@@ -102,37 +113,52 @@ public final class ModelResolver {
                 throw new IllegalArgumentException("Duplicate model name: " + model.getName());
             }
         }
+        requireConnections(models);
         Map<String, AgentConfig> agents = config.getAgents() == null ? Map.of() : config.getAgents();
         for (String role : AgentRole.ALL) {
             AgentConfig agent = agents.get(role);
             if (agent == null) {
                 throw new IllegalArgumentException("Missing role configuration: " + role);
             }
-            if (agent.getModel() == null || agent.getModel().isBlank()) {
-                throw new IllegalArgumentException("Role does not reference a model: " + role);
-            }
-            if (!names.contains(agent.getModel())) {
-                throw new IllegalArgumentException(
-                        "Model referenced by role " + role + " does not exist: " + agent.getModel());
+            if (agent.getModel() != null && !agent.getModel().isBlank()) {
+                if (!names.contains(agent.getModel())) {
+                    throw new IllegalArgumentException(
+                            "Model referenced by role " + role + " does not exist: " + agent.getModel());
+                }
             }
         }
     }
 
     /**
+     * Checks whether a model entry has all three required connection components:
+     * baseUrl, at least one non-blank API key, and modelName.
+     */
+    public static boolean hasCompleteConnection(ModelConfig model) {
+        return model != null
+                && !isBlank(model.getBaseUrl())
+                && model.getApiKeys() != null
+                && model.getApiKeys().stream().anyMatch(key -> !isBlank(key))
+                && !isBlank(model.getModelName());
+    }
+
+    /**
      * Saving the model list requires every entry to carry its connection: base URL, at least one non-blank API key and the API model name.
-     * Only saveModels calls this; role saves and template seeding go through validateForSave alone, so a model still blank after migration does not block them.
      */
     public static void requireConnections(List<ModelConfig> models) {
         for (ModelConfig model : models) {
+            requireConnection(model);
+        }
+    }
+
+    public static void requireConnection(ModelConfig model) {
+        if (!hasCompleteConnection(model)) {
             if (isBlank(model.getBaseUrl())) {
                 throw new IllegalArgumentException("Model " + model.getName() + ": baseUrl must not be empty");
             }
             if (model.getApiKeys() == null || model.getApiKeys().stream().allMatch(ModelResolver::isBlank)) {
                 throw new IllegalArgumentException("Model " + model.getName() + ": at least one API key is required");
             }
-            if (isBlank(model.getModelName())) {
-                throw new IllegalArgumentException("Model " + model.getName() + ": modelName must not be empty");
-            }
+            throw new IllegalArgumentException("Model " + model.getName() + ": modelName must not be empty");
         }
     }
 
@@ -141,9 +167,7 @@ public final class ModelResolver {
     }
 
     /**
-     * Compatibility for legacy records at the read boundary: when the display name is missing it is initialized to the config ID (name), and a missing/null apiKeys is returned as an empty array meaning not configured.
-     * Neither the display name nor the keys take part in references; real strings (including empty strings) are kept as-is; nothing is written back to the database and no migration is added.
-     * A null models uses the same tolerance as validateForSave, so this normalization does not make legacy records fail to read.
+     * Normalization at read boundary: defaults displayName to name, apiKeys to empty list, maxTokens to 50000, contextWindow to 256000.
      */
     public static void normalizeForRead(List<ModelConfig> models) {
         if (models == null) {
@@ -155,6 +179,12 @@ public final class ModelResolver {
             }
             if (model.getApiKeys() == null) {
                 model.setApiKeys(new ArrayList<>());
+            }
+            if (model.getMaxTokens() == null) {
+                model.setMaxTokens(50000);
+            }
+            if (model.getContextWindow() == null) {
+                model.setContextWindow(256000);
             }
         }
     }

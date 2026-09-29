@@ -116,7 +116,7 @@ public class ABCHarnessServiceImpl implements ABCHarnessService {
 								originalQuestion,
 								sessionId,
 								userMessage,
-								ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+								ModelResolver.resolve(businessConfig, AgentRole.CODING, langService),
 								user.getDomainId());
 						ABCHarnessTaskMessage message = new ABCHarnessTaskMessage();
 						message.setSessionId(sessionId);

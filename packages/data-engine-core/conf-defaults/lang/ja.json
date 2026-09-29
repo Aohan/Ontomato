@@ -338,5 +338,29 @@
   {
     "key": "WriteFunctionOperation.relationNotExist",
     "value": "リレーションが存在しません"
+  },
+  {
+    "key": "AgentRole.notConfigured",
+    "value": "ロール「{0}」にモデルが設定されていません。モデル設定で選択してください。"
+  },
+  {
+    "key": "AgentRole.query",
+    "value": "データ検索"
+  },
+  {
+    "key": "AgentRole.coding",
+    "value": "コーディングと計算"
+  },
+  {
+    "key": "AgentRole.general",
+    "value": "汎用"
+  },
+  {
+    "key": "AgentRole.diagnosis",
+    "value": "運用 Agent"
+  },
+  {
+    "key": "AgentRole.knowledgeGovernance",
+    "value": "ナレッジガバナンス Agent"
   }
 ]
