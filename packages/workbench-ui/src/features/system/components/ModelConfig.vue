@@ -11,19 +11,22 @@ import { adminApi } from "../../admin";
 import { renderMarkdown } from "../../../utils/markdown";
 import { plainOuter } from "../utils/raw";
 import { useI18n } from "vue-i18n";
+import BackendAgentConfigCard from "./business-config/BackendAgentConfigCard.vue";
+import BackendModelListCard from "./business-config/BackendModelListCard.vue";
 import EmbeddingModelConfigCard from "./business-config/EmbeddingModelConfigCard.vue";
-import RoleReferencesCard from "./business-config/RoleReferencesCard.vue";
 import SystemModelConfigCard from "./business-config/SystemModelConfigCard.vue";
 import TestResultDialog from "./business-config/TestResultDialog.vue";
+import { useSystemModelConfig } from "../useSystemModelConfig";
 import {
   agentKeys,
-  formatTimeout,
   modelLabel,
   type AgentKey,
   type BackendAgentConfig,
   type BackendModelConfig,
+  type BusinessConfig,
 } from "../types";
 
+// 模型配置页：应用模型（Node）与问数引擎模型（DataRAG）两个页签；问数设置等其他配置在系统配置页。
 const { t } = useI18n();
 
 function emptyBackendAgent(): BackendAgentConfig {
@@ -49,30 +52,15 @@ function formatTestResponse(res: unknown): string {
 
 const loading = ref(false);
 const backendLoadError = ref("");
-const systemLoadError = ref("");
-const saving = ref(false);
+// 保存后端模型列表后的重读错误：保存已成功但本地视图尚未取得服务端规范化结果时的持久状态。
+const modelRefreshError = ref("");
+const refreshingModels = ref(false);
+const activeModelSection = ref("application");
+const backendListRef = ref<{ markSaved: () => void } | null>(null);
 const systemCardRef = ref<{ markSaved: () => void } | null>(null);
 
-// 单份模型库：以系统模型（SystemModelEntry）为唯一来源，所有角色引用同一列表。
-let systemModel = reactive<SystemModelConfig>({
+const config = reactive<Pick<BusinessConfig, "models" | "agents" | "embeddingModelProperties">>({
   models: [],
-  agents: { default: { model: "" }, diagnosis: { model: "" } },
-  abcQuestionMode: "harness",
-  queryTimeoutSeconds: 600,
-  hasCustomConfig: false,
-});
-
-// 问数引擎角色与 Embedding 仍落库在业务配置（DataRAG），由本页统一转发。
-let config = reactive<{
-  agents: Record<AgentKey, BackendAgentConfig>;
-  embeddingModelProperties: {
-    baseUrl: string;
-    apiKey: string;
-    modelName: string;
-    timeout: string;
-    customHeaders?: Record<string, string> | null;
-  } | null;
-}>({
   agents: {
     normalChat: emptyBackendAgent(),
     questionSpliter: emptyBackendAgent(),
@@ -83,54 +71,32 @@ let config = reactive<{
   embeddingModelProperties: null,
 });
 
-// 角色选择只认已保存的模型库；未选角色默认取第一个模型。
-const savedModels = computed(() =>
-  systemModel.models.map(({ name, displayName }) => ({ name, displayName }))
-);
+// 已保存模型：角色选项只认它，草稿里新增但未保存的模型不进入角色引用。
+const savedModels = ref<Pick<BackendModelConfig, "name" | "displayName">[]>([]);
 
-function ensureRoleDefaults() {
-  const first = systemModel.models[0]?.name;
-  if (!first) return;
-  if (!systemModel.agents.default.model) systemModel.agents.default.model = first;
-  if (!systemModel.agents.diagnosis.model) systemModel.agents.diagnosis.model = first;
-  for (const role of agentKeys) {
-    if (!config.agents[role].model) config.agents[role].model = first;
-  }
+function markModelsSaved() {
+  savedModels.value = config.models.map(({ name, displayName }) => ({ name, displayName }));
 }
 
-/** 单份模型库映射到问数引擎后端模型结构（单 Key → Key 数组、秒 → ISO 时长）。 */
-function toBackendModel(entry: SystemModelEntry): BackendModelConfig {
-  return {
-    name: entry.name,
-    displayName: entry.displayName,
-    baseUrl: entry.baseUrl,
-    apiKeys: entry.apiKey ? [entry.apiKey] : [],
-    modelName: entry.modelName,
-    timeout: formatTimeout(entry.timeoutSeconds),
-    maxRetries: entry.maxRetries,
-    temperature: null,
-    topP: null,
-    maxTokens: null,
-    maxCompletionTokens: null,
-    customRequestParameters: entry.customRequestParameters,
-  };
-}
+// 模型列表的错误态：既覆盖首次加载失败，也覆盖保存成功后的重读失败。
+const backendModelError = computed(() => backendLoadError.value || modelRefreshError.value);
 
 async function loadConfig() {
   loading.value = true;
   backendLoadError.value = "";
+  modelRefreshError.value = "";
   try {
     const res = await adminApi.getBusinessConfig();
     if (res?.success) {
-      const data = res.data as {
-        agents?: Record<AgentKey, BackendAgentConfig>;
-        embeddingModelProperties?: (typeof config)["embeddingModelProperties"];
-      };
+      const data = res.data as BusinessConfig;
+      config.models = data.models ?? [];
+      markModelsSaved();
       const savedAgents = data.agents;
       for (const role of agentKeys) {
         const saved = savedAgents?.[role];
         config.agents[role] = saved ? { ...emptyBackendAgent(), ...saved } : emptyBackendAgent();
       }
+      // 外部响应缺这项时保持“未配置”，不伪造一条默认模型行。
       config.embeddingModelProperties = data.embeddingModelProperties ?? null;
     } else {
       backendLoadError.value = res?.message || t("admin.loadConfigFailed");
@@ -143,88 +109,92 @@ async function loadConfig() {
   }
 }
 
-const loadingSystemModel = ref(false);
+const savingBackendModels = ref(false);
 
-async function loadSystemModelConfig() {
-  loadingSystemModel.value = true;
-  systemLoadError.value = "";
-  try {
-    const res = await adminApi.getSystemModelConfig();
-    if (res?.success) {
-      Object.assign(systemModel, res.data as SystemModelConfig);
-    } else {
-      systemLoadError.value = res?.message || t("admin.loadConfigFailed");
-    }
-  } catch (e: any) {
-    systemLoadError.value = e.message || t("admin.loadConfigFailed");
-    ElMessage.error(e.message || t("admin.loadConfigFailed"));
-  } finally {
-    loadingSystemModel.value = false;
-  }
-}
-
-// 合并展示后只有一个保存入口：模型列表 + 角色引用一起保存（系统模型配置落库 Node，问数引擎转发 DataRAG）。
-const saveDisabled = computed(
-  () =>
-    loading.value ||
-    loadingSystemModel.value ||
-    !!systemLoadError.value ||
-    !!backendLoadError.value
-);
-
-async function saveAll() {
-  if (saveDisabled.value) {
-    if (systemLoadError.value) ElMessage.error(systemLoadError.value);
-    else if (backendLoadError.value) ElMessage.error(backendLoadError.value);
+async function saveBackendModels() {
+  // C1：加载失败或尚未成功时阻止空快照覆盖保存。
+  if (loading.value || backendModelError.value || savingBackendModels.value) {
+    if (backendModelError.value) ElMessage.error(backendModelError.value);
     return;
   }
-  ensureRoleDefaults();
-  saving.value = true;
+  savingBackendModels.value = true;
   try {
-    // 1. 模型列表 + 系统角色（System model / Diagnosis model）落库系统模型配置。
-    const res = await adminApi.saveSystemModelConfig({
-      models: systemModel.models.map((entry) => plainOuter(entry)),
-      agents: systemModel.agents,
-    });
-    if (!res?.success) {
+    const res = await adminApi.saveBackendModels(config.models.map((entry) => plainOuter(entry)));
+    if (res?.success) {
+      backendListRef.value?.markSaved();
+      ElMessage.success(t("admin.modelSaveSuccess"));
+      // 保存响应不带模型列表，服务端还会规范化自定义参数，按服务端结果重读。
+      await refreshSavedModels();
+    } else {
       ElMessage.error(res?.message || t("admin.saveFailed"));
-      return;
     }
-    const saved = res.data as SystemModelConfig;
-    systemModel.models = saved.models;
-    systemModel.agents = saved.agents;
-    systemModel.hasCustomConfig = saved.hasCustomConfig;
-    systemCardRef.value?.markSaved();
-
-    // 2. 单份模型库转发给问数引擎模型列表。
-    try {
-      await adminApi.saveBackendModels(systemModel.models.map(toBackendModel));
-    } catch {
-      /* 问数引擎模型转发失败不阻断 */
-    }
-    // 3. 问数引擎五个角色落库业务配置。
-    try {
-      await adminApi.saveBackendAgentModels({
-        normalChat: config.agents.normalChat.model,
-        questionSpliter: config.agents.questionSpliter.model,
-        cleverNormalChat: config.agents.cleverNormalChat.model,
-        pythonChat: config.agents.pythonChat.model,
-        toolChat: config.agents.toolChat.model,
-      });
-    } catch {
-      /* 问数引擎角色转发失败不阻断 */
-    }
-    ElMessage.success(t("admin.modelSaveSuccess"));
   } catch (e: any) {
     ElMessage.error(e.message || t("admin.saveFailed"));
   } finally {
-    saving.value = false;
+    savingBackendModels.value = false;
+  }
+}
+
+// 只回填 models 与已保存名称，未保存的角色/Embedding 草稿不动。
+async function refreshSavedModels() {
+  refreshingModels.value = true;
+  modelRefreshError.value = "";
+  try {
+    const res = await adminApi.getBusinessConfig();
+    if (res?.success) {
+      config.models = (res.data as BusinessConfig).models ?? [];
+      markModelsSaved();
+      backendListRef.value?.markSaved();
+    } else {
+      modelRefreshError.value = res?.message || t("admin.modelRefreshFailed");
+    }
+  } catch (e: any) {
+    modelRefreshError.value = e.message || t("admin.modelRefreshFailed");
+  } finally {
+    refreshingModels.value = false;
+  }
+}
+
+function retryBackendModels() {
+  // 重读失败时只重读模型列表，不能回退到整页 loadConfig 冲掉其他草稿。
+  if (backendLoadError.value) return loadConfig();
+  return refreshSavedModels();
+}
+
+const savingAgentModels = ref(false);
+
+async function saveBackendAgentModels() {
+  if (loading.value || backendLoadError.value || savingAgentModels.value) {
+    if (backendLoadError.value) ElMessage.error(backendLoadError.value);
+    return;
+  }
+  savingAgentModels.value = true;
+  try {
+    // 五个角色一次提交，只带引用；actorCopies 与 skilldir 由服务端保留。
+    const modelsByRole: Record<AgentKey, string> = {
+      normalChat: config.agents.normalChat.model,
+      questionSpliter: config.agents.questionSpliter.model,
+      cleverNormalChat: config.agents.cleverNormalChat.model,
+      pythonChat: config.agents.pythonChat.model,
+      toolChat: config.agents.toolChat.model,
+    };
+    const res = await adminApi.saveBackendAgentModels(modelsByRole);
+    if (res?.success) {
+      ElMessage.success(t("admin.modelSaveSuccess"));
+    } else {
+      ElMessage.error(res?.message || t("admin.saveFailed"));
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || t("admin.saveFailed"));
+  } finally {
+    savingAgentModels.value = false;
   }
 }
 
 const savingEmbedding = ref(false);
 
 async function saveEmbeddingConfig() {
+  // C1：加载失败或尚未成功时阻止空快照覆盖保存。
   if (loading.value || backendLoadError.value || savingEmbedding.value) {
     if (backendLoadError.value) ElMessage.error(backendLoadError.value);
     return;
@@ -233,6 +203,7 @@ async function saveEmbeddingConfig() {
   if (!m) return;
   savingEmbedding.value = true;
   try {
+    // 整条快照提交：保留 customHeaders 等未在弹窗展示的字段。
     const res = await adminApi.saveEmbeddingModel(plainOuter(m));
     if (res?.success) {
       ElMessage.success(t("admin.embeddingSaveSuccess"));
@@ -243,6 +214,102 @@ async function saveEmbeddingConfig() {
     ElMessage.error(e.message || t("admin.saveFailed"));
   } finally {
     savingEmbedding.value = false;
+  }
+}
+
+const backendTestDialogVisible = ref(false);
+const backendTestModel = ref<BackendModelConfig | null>(null);
+const backendTestContent = ref("");
+const backendTestResult = ref("");
+const backendTestRunning = ref(false);
+const renderedBackendTestResult = computed(() => renderMarkdown(backendTestResult.value));
+
+function openBackendModelTest(model: BackendModelConfig) {
+  backendTestModel.value = model;
+  backendTestContent.value = "";
+  backendTestResult.value = "";
+  backendTestDialogVisible.value = true;
+}
+
+async function runBackendModelTest() {
+  if (!backendTestContent.value.trim()) {
+    ElMessage.warning(t("common.enterTestContent"));
+    return;
+  }
+  if (!backendTestModel.value) return;
+  backendTestRunning.value = true;
+  backendTestResult.value = "";
+  try {
+    const res = await adminApi.testBackendModel(
+      plainOuter(backendTestModel.value),
+      backendTestContent.value
+    );
+    backendTestResult.value = formatTestResponse(res);
+  } catch (e: any) {
+    backendTestResult.value = `${t("admin.testFailed")}: ${e.message || t("common.unknownError")}`;
+  } finally {
+    backendTestRunning.value = false;
+  }
+}
+
+const testEmbeddingDialogVisible = ref(false);
+const testEmbeddingContent = ref("");
+const testEmbeddingResult = ref("");
+const testEmbeddingRunning = ref(false);
+
+async function runEmbeddingTest() {
+  if (!testEmbeddingContent.value.trim()) {
+    ElMessage.warning(t("common.enterTestContent"));
+    return;
+  }
+  const m = config.embeddingModelProperties;
+  if (!m) return;
+  testEmbeddingRunning.value = true;
+  testEmbeddingResult.value = "";
+  try {
+    const res = await adminApi.testEmbeddingModel({
+      modelConfig: plainOuter(m),
+      userContent: testEmbeddingContent.value,
+    });
+    testEmbeddingResult.value = formatTestResponse(res);
+  } catch (e: any) {
+    testEmbeddingResult.value = `${t("admin.testFailed")}: ${e.message || t("common.unknownError")}`;
+  } finally {
+    testEmbeddingRunning.value = false;
+  }
+}
+
+const { systemModel, loadingSystemModel, systemLoadError, loadSystemModelConfig } =
+  useSystemModelConfig();
+const savingSystemModel = ref(false);
+
+async function saveSystemModelConfig() {
+  // C1：加载失败或尚未成功时阻止空快照覆盖保存。
+  if (loadingSystemModel.value || systemLoadError.value) {
+    if (systemLoadError.value) ElMessage.error(systemLoadError.value);
+    return;
+  }
+  savingSystemModel.value = true;
+  try {
+    // 部分更新：只提交本区字段，问数设置草稿不随应用模型保存。
+    const res = await adminApi.saveSystemModelConfig({
+      models: systemModel.models.map((entry) => plainOuter(entry)),
+      agents: systemModel.agents,
+    });
+    if (res?.success) {
+      const saved = res.data as SystemModelConfig;
+      systemModel.models = saved.models;
+      systemModel.agents = saved.agents;
+      systemModel.hasCustomConfig = saved.hasCustomConfig;
+      systemCardRef.value?.markSaved();
+      ElMessage.success(t("admin.systemModelSaveSuccess"));
+    } else {
+      ElMessage.error(res?.message || t("admin.saveFailed"));
+    }
+  } catch (e: any) {
+    ElMessage.error(e.message || t("admin.saveFailed"));
+  } finally {
+    savingSystemModel.value = false;
   }
 }
 
@@ -270,6 +337,7 @@ async function runSystemModelTest() {
   systemTestRunning.value = true;
   systemTestResult.value = "";
   try {
+    // 先整条解代理：含 __v_isRef 的用户对象经代理读会被当 ref 解包。
     const entry = plainOuter<SystemModelEntry>(systemTestEntry.value);
     const res = await adminApi.testSystemModelConfig({
       name: entry.name,
@@ -315,69 +383,58 @@ async function runSystemModelTest() {
   }
 }
 
-const testEmbeddingDialogVisible = ref(false);
-const testEmbeddingContent = ref("");
-const testEmbeddingResult = ref("");
-const testEmbeddingRunning = ref(false);
-
-async function runEmbeddingTest() {
-  if (!testEmbeddingContent.value.trim()) {
-    ElMessage.warning(t("common.enterTestContent"));
-    return;
-  }
-  const m = config.embeddingModelProperties;
-  if (!m) return;
-  testEmbeddingRunning.value = true;
-  testEmbeddingResult.value = "";
-  try {
-    const res = await adminApi.testEmbeddingModel({
-      modelConfig: plainOuter(m),
-      userContent: testEmbeddingContent.value,
-    });
-    testEmbeddingResult.value = formatTestResponse(res);
-  } catch (e: any) {
-    testEmbeddingResult.value = `${t("admin.testFailed")}: ${e.message || t("common.unknownError")}`;
-  } finally {
-    testEmbeddingRunning.value = false;
-  }
-}
-
-onMounted(async () => {
-  await Promise.all([loadConfig(), loadSystemModelConfig()]);
-  ensureRoleDefaults();
+onMounted(() => {
+  loadConfig();
+  loadSystemModelConfig();
 });
 </script>
 
 <template>
-  <div class="model-config-container">
-    <SystemModelConfigCard
-      ref="systemCardRef"
-      v-model:model="systemModel"
-      :loading="loadingSystemModel"
-      :saving="saving"
-      :load-error="systemLoadError"
-      @test="openSystemModelTest"
-      @retry="loadSystemModelConfig"
-    />
+  <div class="system-config-container">
+    <el-tabs v-model="activeModelSection" class="model-type-tabs">
+      <el-tab-pane :label="t('admin.applicationModels')" name="application">
+        <SystemModelConfigCard
+          ref="systemCardRef"
+          v-model:model="systemModel"
+          :loading="loadingSystemModel"
+          :saving="savingSystemModel"
+          :load-error="systemLoadError"
+          @save="saveSystemModelConfig"
+          @test="openSystemModelTest"
+          @retry="loadSystemModelConfig"
+        />
+      </el-tab-pane>
+      <el-tab-pane :label="t('admin.queryEngineModels')" name="queryEngine">
+        <BackendModelListCard
+          ref="backendListRef"
+          v-model:models="config.models"
+          :saving="savingBackendModels"
+          :loading="loading || refreshingModels"
+          :load-error="backendModelError"
+          @save="saveBackendModels"
+          @test="openBackendModelTest"
+          @retry="retryBackendModels"
+        />
 
-    <RoleReferencesCard
-      v-model:system-agents="systemModel.agents"
-      v-model:query-agents="config.agents"
-      :models="savedModels"
-      :saving="saving"
-      :disabled="saveDisabled"
-      @save="saveAll"
-    />
+        <BackendAgentConfigCard
+          v-model:agents="config.agents"
+          :models="savedModels"
+          :saving="savingAgentModels"
+          :disabled="loading || refreshingModels || !!backendLoadError"
+          @save="saveBackendAgentModels"
+        />
 
-    <EmbeddingModelConfigCard
-      v-model:model="config.embeddingModelProperties"
-      :loading="loading"
-      :saving="savingEmbedding"
-      :load-error="backendLoadError"
-      @save="saveEmbeddingConfig"
-      @test="testEmbeddingDialogVisible = true"
-      @retry="loadConfig"
-    />
+        <EmbeddingModelConfigCard
+          v-model:model="config.embeddingModelProperties"
+          :loading="loading"
+          :saving="savingEmbedding"
+          :load-error="backendLoadError"
+          @save="saveEmbeddingConfig"
+          @test="testEmbeddingDialogVisible = true"
+          @retry="loadConfig"
+        />
+      </el-tab-pane>
+    </el-tabs>
 
     <TestResultDialog
       v-model:visible="systemTestDialogVisible"
@@ -388,6 +445,17 @@ onMounted(async () => {
       :running="systemTestRunning"
       :placeholder="t('common.enterTestMessage')"
       @submit="runSystemModelTest"
+    />
+
+    <TestResultDialog
+      v-model:visible="backendTestDialogVisible"
+      v-model:content="backendTestContent"
+      :title="t('admin.testModelNamed', { name: backendTestModel && modelLabel(backendTestModel) })"
+      :result="backendTestResult"
+      :rendered-result="renderedBackendTestResult"
+      :running="backendTestRunning"
+      :placeholder="t('common.enterTestMessage')"
+      @submit="runBackendModelTest"
     />
 
     <TestResultDialog
@@ -404,14 +472,55 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.model-config-container {
+/* 宽度跟随后台主区；具体输入控件各自限宽。 */
+.system-config-container {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
   min-width: 0;
 }
 
-.model-config-container :deep(.config-card + .config-card) {
-  margin-top: 0;
+.model-type-tabs,
+.model-type-tabs :deep(.el-tabs__content) {
+  min-width: 0;
+}
+
+/* Element Plus 页签内容默认 overflow:hidden，会裁掉卡片阴影；本页不用页签切换动画。 */
+.model-type-tabs :deep(.el-tabs__content) {
+  overflow: visible;
+}
+
+.model-type-tabs :deep(.config-card + .config-card) {
+  margin-top: var(--spacing-lg);
+}
+
+/* 模型类型页签用分段样式。 */
+.model-type-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--spacing-lg);
+}
+
+.model-type-tabs :deep(.el-tabs__nav-wrap::after),
+.model-type-tabs :deep(.el-tabs__active-bar) {
+  display: none;
+}
+
+.model-type-tabs :deep(.el-tabs__nav) {
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-md);
+  background: var(--el-fill-color-light);
+}
+
+/* :nth-child(n) 压过 Element 对首尾页签清零左右内边距的规则。 */
+.model-type-tabs :deep(.el-tabs__header .el-tabs__item:nth-child(n)) {
+  height: 32px;
+  padding: 0 var(--spacing-lg);
+  border-radius: calc(var(--radius-md) - var(--spacing-xs));
+  color: var(--el-text-color-regular);
+}
+
+.model-type-tabs :deep(.el-tabs__header .el-tabs__item.is-active) {
+  background: var(--el-bg-color);
+  color: var(--el-color-primary);
 }
 </style>

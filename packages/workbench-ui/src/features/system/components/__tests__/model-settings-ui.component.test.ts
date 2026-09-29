@@ -4,14 +4,12 @@ import ElementPlus from "element-plus";
 import { reactive } from "vue";
 import BackendModelListCard from "../business-config/BackendModelListCard.vue";
 import SystemModelConfigCard from "../business-config/SystemModelConfigCard.vue";
-import RoleReferencesCard from "../business-config/RoleReferencesCard.vue";
 import BackendAgentConfigCard from "../business-config/BackendAgentConfigCard.vue";
 import EmbeddingModelConfigCard from "../business-config/EmbeddingModelConfigCard.vue";
 import SkillDirConfigCard from "../business-config/SkillDirConfigCard.vue";
 import QuerySettingsCard from "../business-config/QuerySettingsCard.vue";
 import BusinessConfig from "../BusinessConfig.vue";
 import ModelConfig from "../ModelConfig.vue";
-import ExamplesManager from "../../../admin/components/intelligence-engine/ExamplesManager.vue";
 import type { BackendModelConfig, EmbeddingModelConfig } from "../../types";
 import { agentKeys } from "../../types";
 import { adminApi } from "../../../admin";
@@ -266,14 +264,21 @@ function mountBackend(models: BackendModelConfig[], extra: Record<string, unknow
   );
 }
 
-async function mountPage() {
-  const wrapper = track(mount(BusinessConfig, { props: businessConfig, global }));
+/** 模型配置页：应用模型与问数引擎模型两个页签。 */
+async function mountModelPage() {
+  const wrapper = track(mount(ModelConfig, { global }));
   await flushPromises();
   return wrapper;
 }
 
-async function mountModelPage() {
-  const wrapper = track(mount(ModelConfig, { global }));
+/** 系统配置页：问数设置、技能目录等其他配置；问数示例另有自己的接口，这里替身。 */
+async function mountSystemPage() {
+  const wrapper = track(
+    mount(BusinessConfig, {
+      props: businessConfig,
+      global: { ...global, stubs: { ...global.stubs, ExamplesManager: true } },
+    })
+  );
   await flushPromises();
   return wrapper;
 }
@@ -479,16 +484,43 @@ describe("frontend system model card", () => {
     expect(empty.text()).toContain(t("admin.modelListEmpty"));
     const failed = mountSystem({ loadError: "down" });
     expect(failed.text()).toContain(t("admin.modelListLoadFailed"));
+    expect(button(failed, t("admin.saveApplicationModels"))?.attributes("disabled")).toBeDefined();
   });
 
-  it("shows the model list without role selects or query settings", () => {
+  it("offers the system and diagnosis model selects but no query settings", () => {
     const wrapper = mountSystem();
-    expect(wrapper.text()).toContain(t("admin.modelList"));
-    expect(wrapper.text()).not.toContain(t("admin.systemModel"));
-    expect(wrapper.text()).not.toContain(t("admin.diagnosisModel"));
+    expect(wrapper.text()).toContain(t("admin.systemModel"));
+    expect(wrapper.text()).toContain(t("admin.diagnosisModel"));
     expect(wrapper.text()).not.toContain(t("admin.queryMode"));
     expect(wrapper.text()).not.toContain(t("admin.queryTimeoutSec"));
-    expect(wrapper.findAllComponents({ name: "ElSelect" })).toHaveLength(0);
+    expect(wrapper.findAll(".el-input-number")).toHaveLength(0);
+  });
+
+  it("marks the section unsaved when either role reference changes", async () => {
+    const model = reactive({
+      models: [],
+      agents: { default: { model: "" }, diagnosis: { model: "" } },
+      abcQuestionMode: "harness" as const,
+      queryTimeoutSeconds: 600,
+      hasCustomConfig: false,
+    });
+    const wrapper = track(
+      mount(SystemModelConfigCard, {
+        props: { model, loading: false, saving: false, loadError: "" },
+        global,
+      })
+    );
+    expect(wrapper.find(".dirty-tag").exists()).toBe(false);
+    // The diagnosis reference is tracked on its own, not only the system one.
+    model.agents.diagnosis.model = "diag";
+    await flushPromises();
+    expect(wrapper.find(".dirty-tag").exists()).toBe(true);
+    model.agents.diagnosis.model = "";
+    await flushPromises();
+    expect(wrapper.find(".dirty-tag").exists()).toBe(false);
+    model.agents.default.model = "main";
+    await flushPromises();
+    expect(wrapper.find(".dirty-tag").exists()).toBe(true);
   });
 
   it("fixes the config ID, edits the display name and labels duplicate names by ID", async () => {
@@ -553,6 +585,17 @@ describe("frontend system model card", () => {
       "GPTbackup",
       "legacy",
     ]);
+    const options = () =>
+      wrapper
+        .findAllComponents({ name: "ElOption" })
+        .map((option) => [option.props("label"), option.props("value")]);
+    // 系统模型与诊断模型两个角色选择同一模型库。
+    const library = [
+      ["GPT (default)", "default"],
+      ["GPT (backup)", "backup"],
+      ["legacy", "legacy"],
+    ];
+    expect(options()).toEqual([...library, ...library]);
 
     await button(wrapper, t("common.edit"))!.trigger("click");
     const [idInput, displayInput] = wrapper.find("section").findAll("input");
@@ -564,6 +607,8 @@ describe("frontend system model card", () => {
       displayName: "GPT Main",
       apiKey: "sk-secret",
     });
+    expect(model.agents.default.model).toBe("default");
+    expect(options()[0]).toEqual(["GPT Main (default)", "default"]);
 
     // 新建时 ID 可填；ID、显示名与连接三项都填写后才能加入列表。
     await button(wrapper, t("admin.addModel"))!.trigger("click");
@@ -620,7 +665,7 @@ describe("query settings card", () => {
       })
     );
     expect(wrapper.find(".load-error").text()).toContain("node down");
-    expect(button(wrapper, t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(wrapper, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(wrapper, t("common.retry"))!.trigger("click");
     expect(wrapper.emitted("retry")).toHaveLength(1);
   });
@@ -747,7 +792,7 @@ describe("embedding model card", () => {
     expect(updated.timeout).toBe("PT300S");
     // 弹窗只覆盖展示的4个字段，customHeaders 等未展示字段必须原样保留。
     expect(updated.customHeaders).toEqual({ "X-Embed-Key": "keep" });
-    await button(wrapper, t("common.save"))!.trigger("click");
+    await button(wrapper, t("common.saveConfig"))!.trigger("click");
     expect(wrapper.emitted("save")).toHaveLength(1);
   });
 
@@ -763,7 +808,7 @@ describe("embedding model card", () => {
     const failed = mountEmbedding({ loadError: "down" });
     expect(failed.wrapper.findAll(".model-item")).toHaveLength(0);
     expect(failed.wrapper.text()).toContain("down");
-    expect(button(failed.wrapper, t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(failed.wrapper, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(failed.wrapper, t("common.retry"))!.trigger("click");
     expect(failed.wrapper.emitted("retry")).toHaveLength(1);
   });
@@ -772,7 +817,7 @@ describe("embedding model card", () => {
     const { wrapper } = mountEmbedding({ model: null });
     expect(wrapper.findAll(".model-item")).toHaveLength(0);
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
-    expect(button(wrapper, t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(wrapper, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     await wrapper.find("section").findAll("input")[0]!.setValue("https://new.example/v1");
     await button(wrapper, t("admin.doneEdit"))!.trigger("click");
@@ -793,7 +838,7 @@ describe("skill directory card", () => {
       })
     );
     await wrapper.find("input").setValue("skills/aftercalculate");
-    await button(wrapper, t("common.save"))!.trigger("click");
+    await button(wrapper, t("common.saveConfig"))!.trigger("click");
     expect(wrapper.emitted("save")).toHaveLength(1);
   });
 });
@@ -907,97 +952,135 @@ describe("password visibility with the real dialog", () => {
 });
 
 describe("business config page wiring", () => {
-  it("model config page shows a single model list with role references at the same level", async () => {
+  it("groups application and query engine models, embedding as a card, query settings on the system page", async () => {
     const wrapper = await mountModelPage();
-    expect(wrapper.findAll(".el-tabs__item")).toHaveLength(0);
-    expect(wrapper.findComponent(SystemModelConfigCard).exists()).toBe(true);
-    expect(wrapper.findComponent(BackendModelListCard).exists()).toBe(false);
-    expect(wrapper.findComponent(RoleReferencesCard).exists()).toBe(true);
-    expect(wrapper.findComponent(EmbeddingModelConfigCard).exists()).toBe(true);
+    const labels = wrapper.findAll(".el-tabs__item").map((item) => item.text());
+    expect(labels).toEqual([t("admin.applicationModels"), t("admin.queryEngineModels")]);
+    expect(labels.join(" ")).not.toMatch(/Frontend|Backend|前端|后端|Embedding/);
+
+    const modelPanes = wrapper.find(".model-type-tabs").findAll(".el-tab-pane");
+    expect(modelPanes).toHaveLength(2);
+    const [application, queryEngine] = modelPanes;
+    expect(application!.findComponent(SystemModelConfigCard).exists()).toBe(true);
+    expect(application!.findComponent(BackendModelListCard).exists()).toBe(false);
+    expect(queryEngine!.findComponent(BackendModelListCard).exists()).toBe(true);
+    expect(queryEngine!.findComponent(BackendAgentConfigCard).exists()).toBe(true);
+    expect(queryEngine!.findComponent(EmbeddingModelConfigCard).exists()).toBe(true);
+
     expect(wrapper.findComponent(QuerySettingsCard).exists()).toBe(false);
     expect(wrapper.findComponent(SkillDirConfigCard).exists()).toBe(false);
-    // 角色引用与模型列表平级：系统模型卡不再内嵌角色选择。
-    expect(
-      wrapper.findComponent(SystemModelConfigCard).findAllComponents({ name: "ElSelect" })
-    ).toHaveLength(0);
-    // 唯一的保存按钮在 Role model references 卡片里。
-    expect(
-      button(wrapper.findComponent(SystemModelConfigCard), t("common.save"))
-    ).toBeUndefined();
-    expect(
-      button(wrapper.findComponent(RoleReferencesCard), t("common.save"))
-    ).toBeTruthy();
+
+    const other = await mountSystemPage();
+    expect(other.findComponent(QuerySettingsCard).exists()).toBe(true);
+    expect(other.findComponent(SkillDirConfigCard).exists()).toBe(true);
+    expect(other.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
+    expect(other.findComponent(SystemModelConfigCard).exists()).toBe(false);
   });
 
-  it("system configuration page stacks settings cards and query examples without model cards", async () => {
-    const wrapper = await mountPage();
-    expect(wrapper.findComponent(QuerySettingsCard).exists()).toBe(true);
-    expect(wrapper.findComponent(SkillDirConfigCard).exists()).toBe(true);
-    expect(wrapper.findComponent(ExamplesManager).exists()).toBe(true);
-    expect(wrapper.findComponent(SystemModelConfigCard).exists()).toBe(false);
-    expect(wrapper.findComponent(BackendModelListCard).exists()).toBe(false);
-    expect(wrapper.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
-  });
+  it("saves application models and query settings as isolated partial updates", async () => {
+    const application = (await mountModelPage()).findComponent(SystemModelConfigCard);
+    const query = (await mountSystemPage()).findComponent(QuerySettingsCard);
+    const timeout = query.find(".el-input-number input");
+    await timeout.setValue("900");
+    await button(application, t("common.delete"))!.trigger("click");
+    expect(application.find(".dirty-tag").exists()).toBe(true);
+    expect(query.find(".dirty-tag").exists()).toBe(true);
 
-  it("defaults every unset role to the first configured model", async () => {
-    vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
-      success: true,
-      data: {
-        models: [],
-        agents: {
-          normalChat: { model: "" },
-          questionSpliter: { model: "" },
-          cleverNormalChat: { model: "" },
-          pythonChat: { model: "" },
-          toolChat: { model: "" },
-        },
-        embeddingModelProperties: fixtures.embedding,
-      },
-    });
-    const wrapper = await mountModelPage();
-    const roles = wrapper.findComponent(RoleReferencesCard);
-    const queryAgents = roles.props("queryAgents") as Record<string, { model: string }>;
-    expect(queryAgents.normalChat.model).toBe("default");
-    expect(queryAgents.questionSpliter.model).toBe("default");
-    expect(queryAgents.toolChat.model).toBe("default");
-    const systemAgents = roles.props("systemAgents") as Record<string, { model: string }>;
-    expect(systemAgents.default.model).toBe("default");
-    expect(systemAgents.diagnosis.model).toBe("default");
-  });
-
-  it("single save in role references persists models, roles and forwards to the query engine", async () => {
-    const wrapper = await mountModelPage();
-    await button(wrapper.findComponent(RoleReferencesCard), t("common.save"))!.trigger("click");
+    await button(application, t("admin.saveApplicationModels"))!.trigger("click");
     await flushPromises();
-    expect(Object.keys(savedPayload.system as object).sort()).toEqual(["agents", "models"]);
-    expect((savedPayload.models as Array<{ name: string }>).map((m) => m.name)).toEqual([
-      "default",
+    expect(Object.keys(savedPayload.system as object)).toEqual(["models", "agents"]);
+    // 问数设置草稿与未保存标记保留。
+    expect(application.find(".dirty-tag").exists()).toBe(false);
+    expect(query.find(".dirty-tag").exists()).toBe(true);
+    expect((timeout.element as HTMLInputElement).value).toBe("900");
+
+    await button(application, t("admin.addModel"))!.trigger("click");
+    await application.findAll("section input")[0]!.setValue("draft-app");
+    await application.findAll("section input")[1]!.setValue("Draft App");
+    await fillConnection(application.find("section"));
+    await button(application.find("section"), t("admin.addModel"))!.trigger("click");
+    await button(query, t("common.saveConfig"))!.trigger("click");
+    await flushPromises();
+    expect(savedPayload.system).toEqual({ abcQuestionMode: "harness", queryTimeoutSeconds: 900 });
+    expect(query.find(".dirty-tag").exists()).toBe(false);
+    // 应用模型草稿不被问数设置的保存响应覆盖。
+    expect(application.text()).toContain("draft-app");
+    expect(application.find(".dirty-tag").exists()).toBe(true);
+  });
+
+  it("offers roles only the saved models and never a draft model", async () => {
+    const wrapper = await mountModelPage();
+    const roles = wrapper.findComponent(BackendAgentConfigCard);
+    const roleIds = () => (roles.props("models") as Array<{ name: string }>).map((m) => m.name);
+    expect(roleIds()).toEqual(["qwen-main", "qwen-lite"]);
+
+    const list = wrapper.findComponent(BackendModelListCard);
+    await button(list, t("admin.addModel"))!.trigger("click");
+    const addDialog = list.find("section");
+    await addDialog.findAll("input")[0]!.setValue("draft-new");
+    await addDialog.findAll("input")[1]!.setValue("Draft");
+    await fillBackendConnection(addDialog);
+    await button(addDialog, t("admin.addModel"))!.trigger("click");
+    expect(roleIds()).toEqual(["qwen-main", "qwen-lite"]);
+
+    await button(list, t("admin.saveModelList"))!.trigger("click");
+    await flushPromises();
+    expect(roleIds()).toEqual(["qwen-main", "qwen-lite", "draft-new"]);
+  });
+
+  it("renaming a display name keeps role references on the config ID", async () => {
+    const wrapper = await mountModelPage();
+    const list = wrapper.findComponent(BackendModelListCard);
+    await button(list, t("common.edit"))!.trigger("click");
+    await list.findAll("section input")[1]!.setValue("Qwen Max");
+    await button(list, t("admin.doneEdit"))!.trigger("click");
+    await button(list, t("admin.saveModelList"))!.trigger("click");
+    await flushPromises();
+    expect((savedPayload.models as BackendModelConfig[])[0]).toMatchObject({
+      name: "qwen-main",
+      displayName: "Qwen Max",
+    });
+    const roles = wrapper.findComponent(BackendAgentConfigCard);
+    expect(roles.props("models")).toEqual([
+      { name: "qwen-main", displayName: "Qwen Max" },
+      { name: "qwen-lite", displayName: "Qwen" },
     ]);
-    expect(Object.keys(savedPayload.roleModels as object)).toEqual([
+    await button(roles, t("admin.saveAgentModels"))!.trigger("click");
+    await flushPromises();
+    expect((savedPayload.roleModels as Record<string, string>).normalChat).toBe("qwen-main");
+  });
+
+  it("saves the five role references in one request without actorCopies or skilldir", async () => {
+    const wrapper = await mountModelPage();
+    await button(
+      wrapper.findComponent(BackendAgentConfigCard),
+      t("admin.saveAgentModels")
+    )!.trigger("click");
+    await flushPromises();
+    const sent = savedPayload.roleModels as Record<string, string>;
+    expect(Object.keys(sent)).toEqual([
       "normalChat",
       "questionSpliter",
       "cleverNormalChat",
       "pythonChat",
       "toolChat",
     ]);
+    expect(sent).toEqual({
+      normalChat: "qwen-main",
+      questionSpliter: "qwen-main",
+      cleverNormalChat: "qwen-main",
+      pythonChat: "qwen-main",
+      toolChat: "qwen-main",
+    });
+    expect(JSON.stringify(sent)).not.toContain("actorCopies");
+    expect(savedPayload.models).toBeNull();
   });
 
-  it("saves query settings as an isolated partial update", async () => {
-    const wrapper = await mountPage();
-    const query = wrapper.findComponent(QuerySettingsCard);
-    const timeout = query.find(".el-input-number input");
-    await timeout.setValue("900");
-    await button(query, t("common.save"))!.trigger("click");
-    await flushPromises();
-    expect(savedPayload.system).toEqual({ abcQuestionMode: "harness", queryTimeoutSeconds: 900 });
-    expect(query.find(".dirty-tag").exists()).toBe(false);
-  });
-
-  it("saves the skill directory alone from the system configuration page", async () => {
-    const wrapper = await mountPage();
+  it("saves the skill directory alone from the system config page", async () => {
+    const wrapper = await mountSystemPage();
     const skill = wrapper.findComponent(SkillDirConfigCard);
     expect((skill.find("input").element as HTMLInputElement).value).toBe("skills/legacy");
-    await button(skill, t("common.save"))!.trigger("click");
+    await button(skill, t("common.saveConfig"))!.trigger("click");
     await flushPromises();
     expect(savedPayload.skilldir).toBe("skills/legacy");
     expect(savedPayload.roleModels).toBeNull();
@@ -1009,13 +1092,14 @@ describe("business config page wiring", () => {
     await button(embedding, t("common.edit"))!.trigger("click");
     await embedding.findAll("section input")[1]!.setValue("sk-embed-2");
     await button(embedding, t("admin.doneEdit"))!.trigger("click");
-    await button(embedding, t("common.save"))!.trigger("click");
+    await button(embedding, t("common.saveConfig"))!.trigger("click");
     await flushPromises();
     expect(savedPayload.embedding).toMatchObject({
       baseUrl: fixtures.embedding.baseUrl,
       apiKey: "sk-embed-2",
       modelName: "text-embedding-v3",
       timeout: "PT300S",
+      // 后端支持但弹窗不展示的字段不能在保存时丢失。
       customHeaders: { "X-Embed-Key": "keep" },
     });
   });
@@ -1034,16 +1118,117 @@ describe("business config page wiring", () => {
     expect(tested.modelConfig.customHeaders).toEqual({ "X-Embed-Key": "keep" });
   });
 
-  it("keeps a persistent embedding error with retry on the model config page", async () => {
+  it("keeps unsaved role and embedding drafts when the model list is saved", async () => {
+    const wrapper = await mountModelPage();
+    const roles = wrapper.findComponent(BackendAgentConfigCard);
+    const roleSelect = roles.findAllComponents({ name: "ElSelect" })[0]!;
+    roleSelect.vm.$emit("update:modelValue", "qwen-lite");
+    const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
+    await button(embedding, t("common.edit"))!.trigger("click");
+    await embedding.findAll("section input")[0]!.setValue("https://draft.example/v1");
+    await button(embedding, t("admin.doneEdit"))!.trigger("click");
+
+    await button(wrapper.findComponent(BackendModelListCard), t("admin.saveModelList"))!.trigger(
+      "click"
+    );
+    await flushPromises();
+
+    // 保存后按服务端整理结果重读模型列表，未保存的其它区域草稿必须原样保留。
+    expect(calls.getConfig).toBe(2);
+    expect(roles.props("agents").normalChat.model).toBe("qwen-lite");
+    expect((embedding.props("model") as EmbeddingModelConfig).baseUrl).toBe(
+      "https://draft.example/v1"
+    );
+  });
+
+  it("deletes keys as plain array items so re-read, test and save all use the same raw values", async () => {
+    const wrapper = await mountModelPage();
+    const list = wrapper.findComponent(BackendModelListCard);
+    await button(list, t("common.edit"))!.trigger("click");
+    const trash = `.api-key-row button[aria-label="${t("common.delete") as string}"]`;
+    await list.findAll(trash)[1]!.trigger("click");
+    await button(list, t("admin.doneEdit"))!.trigger("click");
+    await button(list, t("admin.saveModelList"))!.trigger("click");
+    await flushPromises();
+    expect((savedPayload.models as BackendModelConfig[])[0]!.apiKeys).toEqual(["", "sk-fake-cd34"]);
+    expect(calls.getConfig).toBe(2);
+    expect((list.props("models") as BackendModelConfig[])[0]!.apiKeys).toEqual([
+      "",
+      "sk-fake-cd34",
+    ]);
+
+    await button(list, t("common.testModel"))!.trigger("click");
+    const testDialog = wrapper.findAll("section").at(-1)!;
+    await testDialog.find("textarea").setValue("hello");
+    await button(testDialog, t("common.sendTest"))!.trigger("click");
+    await flushPromises();
+    expect((savedPayload.test as { model: BackendModelConfig }).model.apiKeys).toEqual([
+      "",
+      "sk-fake-cd34",
+    ]);
+  });
+
+  it("keeps an explicit error and blocks resubmission when the post-save re-read fails", async () => {
+    const wrapper = await mountModelPage();
+    const roles = wrapper.findComponent(BackendAgentConfigCard);
+    roles.findAllComponents({ name: "ElSelect" })[0]!.vm.$emit("update:modelValue", "qwen-lite");
+    server.failNextRead = true;
+    const list = wrapper.findComponent(BackendModelListCard);
+    await button(list, t("admin.saveModelList"))!.trigger("click");
+    await flushPromises();
+
+    expect(savedPayload.models).not.toBeNull();
+    expect(calls.getConfig).toBe(2);
+    // 持久错误说明，而不是只靠 toast。
+    expect(list.find(".load-error").text()).toContain("reread down");
+    // 重读失败时本地视图未与服务端对齐，不允许再提交。
+    savedPayload.models = null;
+    await button(list, t("admin.saveModelList"))!.trigger("click");
+    await flushPromises();
+    expect(savedPayload.models).toBeNull();
+    expect(button(list, t("admin.addModel"))!.attributes("disabled")).toBeDefined();
+    // 其它区域未保存草稿不受影响。
+    expect(roles.props("agents").normalChat.model).toBe("qwen-lite");
+
+    // 重试只重读模型列表；成功后才恢复可写，不静默当成功。
+    await button(list, t("common.retry"))!.trigger("click");
+    await flushPromises();
+    expect(calls.getConfig).toBe(3);
+    expect(list.find(".load-error").exists()).toBe(false);
+    expect(button(list, t("admin.saveModelList"))!.attributes("disabled")).toBeUndefined();
+  });
+
+  it("keeps drafts when a role save fails", async () => {
+    const wrapper = await mountModelPage();
+    vi.mocked(adminApi.saveBackendAgentModels).mockResolvedValueOnce({
+      success: false,
+      message: "boom",
+    });
+    const roles = wrapper.findComponent(BackendAgentConfigCard);
+    roles.findAllComponents({ name: "ElSelect" })[0]!.vm.$emit("update:modelValue", "qwen-lite");
+    await button(roles, t("admin.saveAgentModels"))!.trigger("click");
+    await flushPromises();
+    expect(roles.props("agents").normalChat.model).toBe("qwen-lite");
+    expect(calls.getConfig).toBe(1);
+  });
+
+  it("disables every write entry and keeps a persistent error when the config fails to load", async () => {
     vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
       success: false,
       message: "legacy role params",
     });
     const wrapper = await mountModelPage();
-    const roles = wrapper.findComponent(RoleReferencesCard);
-    expect(button(roles, t("common.save"))!.attributes("disabled")).toBeDefined();
+    const list = wrapper.findComponent(BackendModelListCard);
+    expect(list.text()).toContain("legacy role params");
+    expect(button(list, t("admin.saveModelList"))!.attributes("disabled")).toBeDefined();
+    expect(
+      button(wrapper.findComponent(BackendAgentConfigCard), t("admin.saveAgentModels"))!.attributes(
+        "disabled"
+      )
+    ).toBeDefined();
     const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
-    expect(button(embedding, t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(embedding, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
+    // 嵌入区与系统配置页的其它配置区都要有不依赖 toast 的错误说明和重试入口。
     expect(embedding.find(".load-error").text()).toContain("legacy role params");
     expect(embedding.findAll(".model-item")).toHaveLength(0);
 
@@ -1051,22 +1236,35 @@ describe("business config page wiring", () => {
     await flushPromises();
     expect(embedding.find(".load-error").exists()).toBe(false);
     expect(embedding.findAll(".model-item")).toHaveLength(1);
-  });
 
-  it("keeps a persistent config error banner on the system configuration page", async () => {
     vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
       success: false,
       message: "legacy role params",
     });
-    const wrapper = await mountPage();
+    const system = await mountSystemPage();
     expect(
-      button(wrapper.findComponent(SkillDirConfigCard), t("common.save"))!.attributes(
+      button(system.findComponent(SkillDirConfigCard), t("common.saveConfig"))!.attributes(
         "disabled"
       )
     ).toBeDefined();
-    const banner = wrapper.find(".config-load-error");
+    const banner = system.find(".config-load-error");
     expect(banner.text()).toContain("legacy role params");
     expect(button(banner, t("common.retry"))).toBeTruthy();
+  });
+
+  it("does not save anything when switching navigation", async () => {
+    const wrapper = await mountModelPage();
+    await mountSystemPage();
+    const queryEngineTab = wrapper
+      .findAll(".el-tabs__item")
+      .find((item) => item.text() === t("admin.queryEngineModels"))!;
+    await queryEngineTab.trigger("click");
+    await flushPromises();
+    expect(savedPayload.models).toBeNull();
+    expect(savedPayload.roleModels).toBeNull();
+    expect(savedPayload.skilldir).toBeNull();
+    expect(savedPayload.embedding).toBeNull();
+    expect(savedPayload.system).toBeNull();
   });
 
   it("titles every test dialog as a model test named after the selected entry", async () => {
@@ -1081,15 +1279,69 @@ describe("business config page wiring", () => {
     );
     expect(title()).toBe(t("admin.testModelNamed", { name: "GPT-4o (default)" }));
     await button(wrapper.findAll("section").at(-1)!, t("common.close"))!.trigger("click");
+    await button(wrapper.findComponent(BackendModelListCard), t("common.testModel"))!.trigger(
+      "click"
+    );
+    expect(title()).toBe(t("admin.testModelNamed", { name: "Qwen (qwen-main)" }));
+    await button(wrapper.findAll("section").at(-1)!, t("common.close"))!.trigger("click");
     await button(wrapper.findComponent(EmbeddingModelConfigCard), t("common.testModel"))!.trigger(
       "click"
     );
     expect(title()).toBe(t("admin.testModelNamed", { name: t("admin.embeddingModelConfig") }));
+    expect(
+      dialogs()
+        .map((d) => d.props("title") as string)
+        .join(" ")
+    ).not.toMatch(/后端|系统模型|Backend|System/);
   });
 
-  it("edits context windows and saves models and distinct role references in one save", async () => {
+  it("backend edit, save and test keep opaque customs, raw keys and untouched values", async () => {
+    const wrapper = await mountModelPage();
+    const list = wrapper.findComponent(BackendModelListCard);
+    expect(list.text()).toContain("qwen-main");
+    await button(list, t("common.edit"))!.trigger("click");
+    await button(list, t("admin.doneEdit"))!.trigger("click");
+    expect(list.find(".dirty-tag").exists()).toBe(false);
+    await button(list, t("common.edit"))!.trigger("click");
+    const dialog = list.find("section");
+    // 输入依次是配置 ID、显示名、连接地址。
+    await dialog.findAll("input")[2]?.setValue("https://new.example.com/v1");
+    // 存量 maxRetries 99 超出控件 max：加载与展示都不夹紧。
+    const numberInputs = dialog.findAll(".el-input-number input");
+    expect((numberInputs[1]?.element as HTMLInputElement).value).toBe("99");
+    // 删除即删项；未动的空字符串保留在原位。
+    const trash = `.api-key-row button[aria-label="${t("common.delete") as string}"]`;
+    await dialog.findAll(trash)[1]?.trigger("click");
+    await button(list, t("admin.doneEdit"))!.trigger("click");
+    await button(list, t("common.testModel"))!.trigger("click");
+    const testDialog = wrapper.findAll("section").at(-1)!;
+    await testDialog.find("textarea").setValue("hello");
+    await button(testDialog, t("common.sendTest"))!.trigger("click");
+    await flushPromises();
+    const tested = savedPayload.test as { model: Record<string, unknown> };
+    expect(tested.model.apiKeys).toEqual(["", "sk-fake-cd34"]);
+    expect(JSON.stringify(tested.model.customRequestParameters)).toBe(BACKEND_CUSTOMS);
+    await button(testDialog, t("common.close"))!.trigger("click");
+    await button(list, t("admin.saveModelList"))!.trigger("click");
+    await flushPromises();
+    const sent = (savedPayload.models as Array<Record<string, unknown>>)[0]!;
+    expect(sent.baseUrl).toBe("https://new.example.com/v1");
+    expect(sent.temperature).toBe(0.7);
+    expect(sent.maxRetries).toBe(99);
+    expect(sent.apiKeys).toEqual(["", "sk-fake-cd34"]);
+    expect(JSON.stringify(sent.customRequestParameters)).toBe(BACKEND_CUSTOMS);
+    expect(sent).toMatchObject({
+      organizationId: "org-existing",
+      projectId: "project-existing",
+      customHeaders: { "X-Provider-Test": "keep" },
+      logResponses: false,
+    });
+  });
+
+  it("edits context windows and saves distinct system and diagnosis references in the model section", async () => {
     const wrapper = await mountModelPage();
     const application = wrapper.findComponent(SystemModelConfigCard);
+    // 输入依次是配置 ID、显示名、连接地址、Key、API 模型标识、超时、重试、上下文窗口。
     await button(application, t("common.edit"))!.trigger("click");
     const editInputs = application.find("section").findAll("input");
     expect((editInputs[7]!.element as HTMLInputElement).value).toBe("256000");
@@ -1104,28 +1356,31 @@ describe("business config page wiring", () => {
     await addInputs[7]!.setValue("64000");
     await button(application.find("section"), t("admin.addModel"))!.trigger("click");
 
-    const roles = wrapper.findComponent(RoleReferencesCard);
-    const diagnosisRole = roles.findAllComponents({ name: "ElSelect" })[1]!;
-    diagnosisRole.vm.$emit("update:modelValue", "diag");
+    const [systemRole, diagnosisRole] = application.findAllComponents({ name: "ElSelect" });
+    diagnosisRole!.vm.$emit("update:modelValue", "diag");
     await flushPromises();
+    expect(systemRole!.props("modelValue")).toBe("default");
+    expect(application.find(".dirty-tag").exists()).toBe(true);
 
-    await button(roles, t("common.save"))!.trigger("click");
+    await button(application, t("admin.saveApplicationModels"))!.trigger("click");
     await flushPromises();
     const saved = savedPayload.system as {
       models: Array<Record<string, unknown>>;
-      agents: Record<string, { model: string }>;
+      agents: unknown;
     };
     expect(saved.models.map((entry) => [entry.name, entry.contextWindow])).toEqual([
       ["default", 200000],
       ["diag", 64000],
     ]);
     expect(saved.agents).toEqual({ default: { model: "default" }, diagnosis: { model: "diag" } });
+    expect(application.find(".dirty-tag").exists()).toBe(false);
   });
 
   it("frontend save and test keep the config ID, the renamed display name and opaque customs", async () => {
     const wrapper = await mountModelPage();
     const frontend = wrapper.findComponent(SystemModelConfigCard);
     await button(frontend, t("common.edit"))!.trigger("click");
+    // 输入依次是配置 ID、显示名、连接地址。
     await frontend.find("section").findAll("input")[1]!.setValue("GPT-4o Main");
     await frontend.find("section").findAll("input")[2]!.setValue("https://new.example/v1");
     const editedCustoms = JSON.stringify({
@@ -1139,16 +1394,21 @@ describe("business config page wiring", () => {
     await frontend.find("section textarea").setValue(editedCustoms);
     await button(frontend, t("admin.doneEdit"))!.trigger("click");
     expect(frontend.find(".dirty-tag").exists()).toBe(true);
-    await button(wrapper.findComponent(RoleReferencesCard), t("common.save"))!.trigger("click");
+    await button(frontend, t("admin.saveApplicationModels"))!.trigger("click");
     await flushPromises();
     expect(frontend.find(".dirty-tag").exists()).toBe(false);
     const saved = savedPayload.system as {
       models: Array<Record<string, unknown>>;
+      agents: unknown;
     };
     expect(saved.models[0]).toMatchObject({
       name: "default",
       displayName: "GPT-4o Main",
       baseUrl: "https://new.example/v1",
+    });
+    expect(saved.agents).toEqual({
+      default: { model: "default" },
+      diagnosis: { model: "default" },
     });
     expect(JSON.stringify(saved.models[0]!.customRequestParameters)).toBe(editedCustoms);
     await button(frontend, t("common.testModel"))!.trigger("click");

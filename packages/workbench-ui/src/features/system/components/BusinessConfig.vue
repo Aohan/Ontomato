@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import type {
-  SystemModelConfigResponse as SystemModelConfig,
-} from "@ontomato/contracts/system-model";
+import type { SystemModelConfigResponse as SystemModelConfig } from "@ontomato/contracts/system-model";
 
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
@@ -14,8 +12,8 @@ import GeneralConfigCard from "./business-config/GeneralConfigCard.vue";
 import QuerySettingsCard from "./business-config/QuerySettingsCard.vue";
 import SkillDirConfigCard from "./business-config/SkillDirConfigCard.vue";
 import ExamplesManager from "../../admin/components/intelligence-engine/ExamplesManager.vue";
+import { useSystemModelConfig } from "../useSystemModelConfig";
 import {
-  agentKeys,
   type BackendAgentConfig,
   type BusinessConfig,
   type DataAdapterInfo,
@@ -23,6 +21,7 @@ import {
 } from "../types";
 import type { BusinessConfigProps } from "../business-config";
 
+// 系统配置页：问数设置、技能目录、通用配置、数据适配器与问数示例；模型相关在模型配置页。
 const props = defineProps<BusinessConfigProps>();
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
@@ -33,9 +32,9 @@ function emptyBackendAgent(): BackendAgentConfig {
 
 const loading = ref(false);
 const backendLoadError = ref("");
-const systemLoadError = ref("");
 const querySettingsRef = ref<{ markSaved: () => void } | null>(null);
 
+// 卡片按整份业务配置双向绑定；本页只读写其中的通用配置、语言与数据适配器，模型与角色字段不用。
 let config = reactive<BusinessConfig>({
   models: [],
   agents: {
@@ -56,7 +55,9 @@ let config = reactive<BusinessConfig>({
   dataAdapter: "",
   dataAdapterConnections: {},
 });
+// 本版本后端已安装的数据适配器，随业务配置一起加载。
 const dataAdapters = ref<DataAdapterInfo[]>([]);
+// 技能目录草稿：加载失败或保存失败时保留，切导航不动它。
 const skilldir = ref("");
 
 async function loadConfig() {
@@ -70,14 +71,7 @@ async function loadConfig() {
     if (res?.success) {
       dataAdapters.value = adaptersRes.data;
       const data = res.data as BusinessConfig;
-      config.models = data.models ?? [];
-      const savedAgents = data.agents;
-      for (const role of agentKeys) {
-        const saved = savedAgents?.[role];
-        config.agents[role] = saved ? { ...emptyBackendAgent(), ...saved } : emptyBackendAgent();
-      }
-      skilldir.value = savedAgents?.toolChat?.skilldir ?? "";
-      config.embeddingModelProperties = data.embeddingModelProperties ?? null;
+      skilldir.value = data.agents?.toolChat?.skilldir ?? "";
       config.knowledgeMaxResult = data.knowledgeMaxResult ?? 10;
       config.toolAndPythonRetry = data.toolAndPythonRetry ?? 0;
       config.dslCookerTries = data.dslCookerTries ?? 1;
@@ -158,6 +152,7 @@ async function saveDataAdapter() {
   savingAdapter.value = true;
   try {
     const adapter = dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
+    // 只提交该类型声明的连接字段；有字段的类型其连接对象由卡片表单建立。
     const connection = config.dataAdapterConnections[adapter.type];
     await adminApi.useDataAdapter({
       type: adapter.type,
@@ -172,33 +167,8 @@ async function saveDataAdapter() {
   }
 }
 
-let systemModel = reactive<SystemModelConfig>({
-  models: [],
-  agents: { default: { model: "" }, diagnosis: { model: "" } },
-  abcQuestionMode: "harness",
-  queryTimeoutSeconds: 600,
-  hasCustomConfig: false,
-});
-
-const loadingSystemModel = ref(false);
-
-async function loadSystemModelConfig() {
-  loadingSystemModel.value = true;
-  systemLoadError.value = "";
-  try {
-    const res = await adminApi.getSystemModelConfig();
-    if (res?.success) {
-      Object.assign(systemModel, res.data as SystemModelConfig);
-    } else {
-      systemLoadError.value = res?.message || t("admin.loadConfigFailed");
-    }
-  } catch (e: any) {
-    systemLoadError.value = e.message || t("admin.loadConfigFailed");
-    ElMessage.error(e.message || t("admin.loadConfigFailed"));
-  } finally {
-    loadingSystemModel.value = false;
-  }
-}
+const { systemModel, loadingSystemModel, systemLoadError, loadSystemModelConfig } =
+  useSystemModelConfig();
 
 const savingQuerySettings = ref(false);
 
@@ -209,6 +179,7 @@ async function saveQuerySettings() {
   }
   savingQuerySettings.value = true;
   try {
+    // 部分更新：只提交问数设置，应用模型草稿不随之保存。
     const res = await adminApi.saveSystemModelConfig({
       abcQuestionMode: systemModel.abcQuestionMode,
       queryTimeoutSeconds: systemModel.queryTimeoutSeconds,

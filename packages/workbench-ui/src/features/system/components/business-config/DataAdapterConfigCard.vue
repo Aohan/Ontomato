@@ -92,7 +92,7 @@ function connection(type: string): DataAdapterConnection {
 
         <el-form-item class="form-actions">
           <el-button type="primary" :loading="saving" :disabled="disabled" @click="emit('save')">
-            {{ t("common.save") }}
+            {{ t("common.saveAdapterConfig") }}
           </el-button>
         </el-form-item>
       </el-form>

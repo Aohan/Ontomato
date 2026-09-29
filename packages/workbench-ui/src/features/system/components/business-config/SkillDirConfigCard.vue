@@ -40,7 +40,7 @@ const emit = defineEmits<{
             :disabled="props.disabled"
             @click="emit('save')"
           >
-            {{ t("common.save") }}
+            {{ t("common.saveConfig") }}
           </el-button>
         </el-form-item>
       </el-form>
