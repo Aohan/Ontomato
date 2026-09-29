@@ -6,7 +6,7 @@
 # pins the $BUILDPLATFORM reference, so assembly does not depend on the platform
 # recorded in the app image. The only architecture source is EXPECTED_ARCH.
 # APP_COMPONENT names the product (public datarag-opensource). An edition whose
-# checker owns a license mode rule may pass EXPECTED_LICENSE_MODE; the public
+# checker owns a license mode rule requires EXPECTED_LICENSE_MODE; the public
 # checker does not read it.
 ARG RUNTIME_IMAGE
 ARG APP_IMAGE

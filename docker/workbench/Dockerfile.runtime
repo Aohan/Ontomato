@@ -1,5 +1,5 @@
 # Workbench runtime image: Node 24 + Python 3.10, the third-party production
-# dependencies in a fixed virtual store, and the pairing preflight. The
+# dependencies in a fixed virtual store, and the assembly pairing check. The
 # application image is assembled into /app; this image never contains
 # application source, build output, default resources or installer inputs.
 #
@@ -42,9 +42,6 @@ ARG DEBIAN_SECURITY_MIRROR
 # Only the node binary and the runtime dependency tree.
 COPY --from=installer /usr/local/bin/node /usr/local/bin/node
 COPY --from=installer /opt/runtime/node_modules /opt/runtime/node_modules
-# The runtime tools' yaml link, resolved by the installer to the installed
-# third-party package; there is no hand-written pnpm directory name.
-COPY --from=installer /tmp/tool-links/node_modules /runtime/node_modules
 
 COPY runtime-requirements.txt /tmp/runtime-requirements.txt
 

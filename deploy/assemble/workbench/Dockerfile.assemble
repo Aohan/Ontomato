@@ -27,5 +27,6 @@ LABEL io.runtime.kind="composite" \
 # Copy application files into /app
 COPY --from=app-source / /app/
 
-# The runtime owns pairing: startup pairing plus the expected architecture.
+# The runtime owns pairing: compatibility fingerprint, family, the expected
+# architecture and no broken links under /app.
 RUN node /runtime/scripts/workbench/runtime-contract.mjs assemble "${EXPECTED_ARCH:?EXPECTED_ARCH is required}"

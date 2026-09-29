@@ -76,8 +76,9 @@ export function copyMember(from, to) {
   }
 }
 
-// Pure assembly: bindings plus the pnpm-reported members plus the runtime
-// index become stage directories, the link plan, and the member copies.
+// Pure assembly: bindings plus the pnpm-reported members plus the binding
+// index from this builder's own install become stage directories, the link
+// plan, and the member copies.
 export function stagePlan(graph, members, index) {
   const directories = Object.fromEntries(
     Object.keys(graph.bindings).map((importer) => [importer, stageDirectory(importer)]),

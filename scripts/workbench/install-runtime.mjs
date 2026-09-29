@@ -13,7 +13,6 @@ import {
   rmdirSync,
   rmSync,
   statSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -25,7 +24,6 @@ import { snapshotIndex } from "./runtime-layout.mjs";
 const SOURCES = "/src";
 const RUNTIME = "/opt/runtime";
 const STORE = join(RUNTIME, "node_modules/.pnpm");
-const TOOL_LINKS = "/tmp/tool-links/node_modules";
 // pnpm's license report of this installation, read by the runtime stage's
 // third-party notice generator; it never enters the runtime tree.
 const NPM_LICENSES = "/tmp/npm-licenses.json";
@@ -157,12 +155,6 @@ function main() {
     );
   const index = snapshotIndex(root, RUNTIME, graph);
   finalizeRuntime({ runtimeRoot: RUNTIME, members, index });
-  const binding = graph.bindings[server.path];
-  if (!binding) throw new Error(`${SERVER} is not in the production graph closure`);
-  const yamlKey = binding.dependencies.yaml;
-  if (!yamlKey) throw new Error(`${SERVER} has no production yaml dependency`);
-  mkdirSync(TOOL_LINKS, { recursive: true });
-  symlinkSync(join(RUNTIME, index[yamlKey]), join(TOOL_LINKS, "yaml"));
   console.log(
     `INSTALLED ${record.workspaceId} members=${members.length} selected=${selected.length} packages=${Object.keys(graph.packages).length}`,
   );
