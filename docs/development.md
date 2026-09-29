@@ -15,14 +15,15 @@
 | 命令 | 生成范围 |
 | --- | --- |
 | `make build` | workbench-runtime → workbench-app → data-engine → ontology-manager |
+| `make build-app` | workbench-app → data-engine-app → ontology-manager |
 | `make pack` | workbench-runtime-pack → workbench-app-pack → pack-data-engine → pack-ontology-manager |
 | `make pack-app` | workbench-app-pack → pack-data-engine-app → pack-ontology-manager |
 | `make pack-amd64` / `pack-arm64` | 以指定架构执行 `pack` |
 | `make pack-app-amd64` / `pack-app-arm64` | 以指定架构执行 `pack-app` |
 
-`pack-app` 只复用 Node 与 Java 已经导入的匹配 runtime，不重建 runtime；Manager 仍打独立镜像，没有 manager runtime。分服务目标（`workbench-runtime-pack`、`workbench-app-pack`、`pack-data-engine`、`pack-data-engine-app`、`pack-ontology-manager` 及其架构变体）仍可单独调用。
+`build-app` 与 `pack-app` 不重建 runtime，也不要求本机已有 runtime 镜像：构建脚本从源码算出兼容指纹，与 `runtime-lock.json` 比对，不一致就提示先重建 runtime。`build-app` 只构建镜像、不导出包，部署机日常更新用 `git pull` → `make build-app` → 在部署目录 `docker compose up -d`；`pack-app` 另外导出离线包。配套核对只在部署组装时做一次。Manager 仍打独立镜像，没有 manager runtime。分服务目标（`workbench-runtime-pack`、`workbench-app-pack`、`pack-data-engine`、`pack-data-engine-app`、`pack-ontology-manager` 及其架构变体）仍可单独调用。
 
-宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。基础镜像统一写官方地址 `docker.io/library/…` 并固定摘要，拉取走各机器自身的 Docker 加速配置；构建脚本不透传基础镜像环境变量，Dockerfile 默认值即唯一来源。`DEBIAN_MIRROR`、`DEBIAN_SECURITY_MIRROR`、`PIP_INDEX_URL` 保留环境变量覆盖作为机器级设置；`PNPM_VERSION` 覆盖 Node 镜像构建里安装的 pnpm 版本（Dockerfile 默认 9.15.9，runtime 安装与 app 构建须保持一致）。这 5 个应用制品不含 PostgreSQL：PostgreSQL 由部署流程另行提供；`make bundle` 把某一架构已构建或已导入的镜像、`deploy/` 模板与组装配方打成离线整包；当前也没有私有 Linux 实物或完整 CI 的验收结论，Windows 实机上的整栈运行同样尚未验证。Windows 打包不在本次范围内，镜像与离线大小包继续使用现有受验构建环境。
+宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。基础镜像统一写官方地址 `docker.io/library/…` 并固定摘要，拉取走各机器自身的 Docker 加速配置；构建脚本不透传基础镜像环境变量，Dockerfile 默认值即唯一来源。`DEBIAN_MIRROR`、`DEBIAN_SECURITY_MIRROR`、`PIP_INDEX_URL` 保留环境变量覆盖作为机器级设置。pnpm 版本同样只由 Dockerfile 声明（当前 9.15.9，runtime 安装与 app 构建两份须一致），它参与兼容指纹，不接受环境变量覆盖。这 5 个应用制品不含 PostgreSQL：PostgreSQL 由部署流程另行提供；`make bundle` 把某一架构已构建或已导入的镜像、`deploy/` 模板与组装配方打成离线整包；当前也没有私有 Linux 实物或完整 CI 的验收结论，Windows 实机上的整栈运行同样尚未验证。Windows 打包不在本次范围内，镜像与离线大小包继续使用现有受验构建环境。
 
 ## 本机开发（Node + 主网页 + Manager）
 

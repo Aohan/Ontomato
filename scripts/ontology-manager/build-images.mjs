@@ -74,7 +74,6 @@ export async function buildManagerImage(app, args) {
     "--provenance=false",
     "--platform",
     `linux/${arch}`,
-    ...(process.env.PNPM_VERSION ? ["--build-arg", `PNPM_VERSION=${process.env.PNPM_VERSION}`] : []),
     "--load",
     "--build-arg",
     `WORKSPACE=${record.workspaceId}`,
