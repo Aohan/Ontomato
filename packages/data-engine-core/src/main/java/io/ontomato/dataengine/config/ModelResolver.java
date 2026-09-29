@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import io.ontomato.dataengine.service.LangService;
+
 /**
  * The only read/write entry point of the model registry.
  * At runtime, parameters are fetched only through {@link #resolve}, and save validation only through {@link #validateForSave},
@@ -73,20 +75,23 @@ public final class ModelResolver {
         }
     }
 
-    public static ResolvedChatModel resolve(BusinessConfig config, String role) {
+    public static ResolvedChatModel resolve(BusinessConfig config, String role, LangService langService) {
         if (!AgentRole.ALL.contains(role)) {
             throw new IllegalArgumentException("Unknown model role: " + role);
         }
         Map<String, AgentConfig> agents = config.getAgents();
         AgentConfig agent = agents == null ? null : agents.get(role);
         if (agent == null || agent.getModel() == null || agent.getModel().isBlank()) {
-            boolean isEn = "en".equalsIgnoreCase(config.getLang());
-            String roleName = AgentRole.displayName(role, config.getLang());
-            if (isEn) {
-                throw new IllegalStateException(
-                        "No model is configured for role \"" + roleName + "\". Choose one in Model Configuration.");
+            String lang = config.getLang();
+            String roleName = langService != null ? langService.get(lang, "AgentRole." + role) : null;
+            if (roleName == null || roleName.isBlank()) {
+                roleName = role;
             }
-            throw new IllegalStateException("角色『" + roleName + "』未配置模型，请在模型配置中选择");
+            String template = langService != null ? langService.get(lang, "AgentRole.notConfigured") : null;
+            if (template == null || template.isBlank()) {
+                template = "No model is configured for role \"{0}\". Choose one in Model Configuration.";
+            }
+            throw new IllegalStateException(template.replace("{0}", roleName));
         }
         ModelConfig model = findModel(config, agent.getModel());
         if (model == null) {

@@ -90,7 +90,7 @@ public class PythonCalculatorServiceImpl implements PythonCalculatorService {
 			log.error(e.getMessage(), e);
 		}
 		try {
-        multiThreadAIChatService.chat(MultiThreadAIChatService.PYTHON_CALCULATOR,originalQuestion,pySessionid,userMessage,ModelResolver.resolve(businessConfig, AgentRole.CODING), domainId);
+        multiThreadAIChatService.chat(MultiThreadAIChatService.PYTHON_CALCULATOR,originalQuestion,pySessionid,userMessage,ModelResolver.resolve(businessConfig, AgentRole.CODING, langService), domainId);
 
         // Deliveries come only from submission registration
         String submitted = agentWorkspaceService.getSubmission(pySessionid);

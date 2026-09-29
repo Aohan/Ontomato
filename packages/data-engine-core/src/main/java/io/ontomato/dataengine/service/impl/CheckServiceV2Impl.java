@@ -175,7 +175,7 @@ public class CheckServiceV2Impl implements CheckServiceV2 {
 				originalQuestion,
 				BackendSessionEntrance.derive(sessionId, "program-describer-" + index),
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.QUERY),
+				ModelResolver.resolve(businessConfig, AgentRole.QUERY, langService),
 				domainId);
 		if (str.startsWith("```markdown")) {
 			str = str.substring(11);
@@ -213,7 +213,7 @@ public class CheckServiceV2Impl implements CheckServiceV2 {
 				originalQuestion,
 				BackendSessionEntrance.derive(check.getSessionId(), "question-checker"),
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.QUERY),
+				ModelResolver.resolve(businessConfig, AgentRole.QUERY, langService),
 				domainId);
 		if (str.startsWith("```markdown")) {
 			str = str.substring(11);

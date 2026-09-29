@@ -132,7 +132,7 @@ public class MetricViewServiceImpl implements MetricViewService {
 				originalQuestion,
 				sessionId,
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.CODING),
+				ModelResolver.resolve(businessConfig, AgentRole.CODING, langService),
 				domainId);
 		// Deliveries come only from submission registration
 		String submitted = agentWorkspaceService.getSubmission(sessionId);
@@ -364,7 +364,7 @@ public class MetricViewServiceImpl implements MetricViewService {
 					originalQuestion,
 					sessionId,
 					userMessage,
-					ModelResolver.resolve(businessConfig, AgentRole.CODING),
+					ModelResolver.resolve(businessConfig, AgentRole.CODING, langService),
 					user.getDomainId());
 			
 			if (retStr.indexOf("```json") >= 0) {
