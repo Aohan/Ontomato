@@ -76,8 +76,8 @@ describe("共享管理布局", () => {
     expect(el.querySelector(".lang-switch-wrapper")).toBeNull();
   });
 
-  it("首页型页签（Ontology Manager）隐藏左侧栏；无观测权限不显示观测入口；语言切换按应用开关", async () => {
-    const granted = new Set(["intelligence-engine"]);
+  it("首页型页签（Ontology Manager）按 ontology-modeling 显示且隐藏左侧栏；无观测权限不显示观测入口；语言切换按应用开关", async () => {
+    const granted = new Set(["ontology-modeling"]);
     const { el, tabs, menu } = await mountLayout(
       { ...base, access: { ready: true, can: (p) => granted.has(p) } },
       "/admin/ontology-manager",
@@ -88,6 +88,32 @@ describe("共享管理布局", () => {
     expect(el.querySelector(".admin-aside")).toBeNull();
     expect(el.querySelector(".icon-btn")).toBeNull();
     expect(el.querySelector(".lang-switch-wrapper")).not.toBeNull();
+  });
+
+  it("没有 ontology-modeling 时不显示 Ontology Manager 页签（旧分组权限 intelligence-engine 不再放行）", async () => {
+    const granted = new Set(["intelligence-engine", "audit-logs"]);
+    const { tabs } = await mountLayout(
+      { ...base, access: { ready: true, can: (p) => granted.has(p) } },
+      "/admin/audit-log"
+    );
+    expect(tabs()).toEqual(["System Management"]);
+  });
+
+  it("切组落点：首页型页签进入首页，菜单型页签进入组内第一个可见菜单项", async () => {
+    const { el, router } = await mountLayout(base, "/admin/audit-log");
+    const tab = (title: string) =>
+      [...el.querySelectorAll<HTMLElement>(".header-tabs .tab-item")].find(
+        (item) => item.textContent?.trim() === title
+      )!;
+    const settle = () => new Promise((resolve) => setTimeout(resolve));
+    tab("Ontology Manager").click();
+    await settle();
+    expect(router.currentRoute.value.path).toBe("/admin/ontology-manager");
+    expect(el.querySelector(".admin-aside")).toBeNull();
+    tab("System Management").click();
+    await settle();
+    expect(router.currentRoute.value.path).toBe("/admin/audit-log");
+    expect(el.querySelector(".admin-aside")).not.toBeNull();
   });
 
   it("权限未加载显示加载中，就绪后定位到当前路由所在组；全无权限显示空态", async () => {

@@ -1,4 +1,4 @@
-import type { Component } from "vue";
+import type { Component, InjectionKey } from "vue";
 import {
   Activity,
   Blocks,
@@ -12,13 +12,17 @@ import {
   ServerCog,
 } from "lucide-vue-next";
 
-/** 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。 */
+/**
+ * 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。
+ * 页签本身有权限或组内至少一个菜单项有权限时可见。
+ */
 export interface AdminGroup {
   key: string;
   titleKey: string;
+  /** 首页型页签即首页页面的权限：有它才可见、才落到首页。 */
   permission: string;
   icon: Component;
-  /** 选中页签时的默认落点（例如 Ontology Manager 直接展示 iframe，不占用左侧菜单项）。 */
+  /** 首页型页签：选中即进入该页，无左侧菜单项（Ontology Manager 直接展示 iframe）。 */
   homePath?: string;
 }
 
@@ -44,6 +48,9 @@ export interface AdminAccess {
   can(permission: string): boolean;
 }
 
+/** 管理布局把应用的访问判定交给其下页面（入口卡、Manager 入口按它决定显示什么）。 */
+export const adminAccessKey: InjectionKey<AdminAccess> = Symbol("admin-access");
+
 /** 已登录账号的头部显示与退出（企业）；开源无账号。 */
 export interface AdminAccount {
   readonly userName: string;
@@ -68,7 +75,7 @@ export const adminGroups = {
   dataAssets: {
     key: "data-assets",
     titleKey: "nav.ontologyManager",
-    permission: "intelligence-engine",
+    permission: "ontology-modeling",
     icon: Database,
     homePath: "/admin/ontology-manager",
   },

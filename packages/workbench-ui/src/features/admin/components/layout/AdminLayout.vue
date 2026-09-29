@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, provide } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import {
   PanelLeftClose,
@@ -15,9 +15,10 @@ import {
 import { useTheme } from "../../../../composables/useTheme";
 import { useLocale } from "../../../../composables/useLocale";
 import { workbenchLanguage } from "../../../../i18n";
-import type { AdminLayoutConfig } from "../../navigation";
+import { adminAccessKey, type AdminLayoutConfig } from "../../navigation";
 
 const props = defineProps<AdminLayoutConfig>();
+provide(adminAccessKey, props.access);
 
 const router = useRouter();
 const route = useRoute();
@@ -52,6 +53,7 @@ function openLangMenu() {
 const collapsed = ref(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1");
 
 // 页签可见：页签本身有权限，或组内至少一个菜单项有权限；菜单项逐项按权限过滤。
+// 切组落点：首页型页签是首页，其余是组内第一个可见菜单项。
 const navGroups = computed(() =>
   props.groups
     .filter(
@@ -65,7 +67,7 @@ const navGroups = computed(() =>
       const items = props.items
         .filter((item) => item.groupKey === group.key && props.access.can(item.permission))
         .map((item) => ({ path: item.path, title: t(item.titleKey), icon: item.icon }));
-      return { ...group, title: t(group.titleKey), items };
+      return { ...group, title: t(group.titleKey), items, landing: group.homePath ?? items[0]?.path };
     })
 );
 
@@ -80,7 +82,7 @@ const currentGroupItems = computed(() => {
   return group?.items || [];
 });
 
-// 仅首页型页签（有 homePath 且无菜单项）不显示左侧栏，内容直接占满。
+// 没有菜单项的页签（首页型页签）不显示左侧栏，内容直接占满。
 const showAside = computed(() => currentGroupItems.value.length > 0);
 
 const activeMenu = computed(() => {
@@ -134,13 +136,10 @@ watch(
 function handleGroupSelect(key: string) {
   activeGroup.value = key;
   const group = navGroups.value.find((g) => g.key === key);
-  if (!group) return;
-  const targetPath = group.homePath || group.items[0]?.path;
-  if (!targetPath) return;
-  const pathsInGroup = [group.homePath, ...group.items.map((item) => item.path)].filter(Boolean);
-  if (!pathsInGroup.includes(route.path)) {
-    router.push(targetPath);
-  }
+  if (!group?.landing) return;
+  const inGroup =
+    route.path === group.homePath || group.items.some((item) => item.path === route.path);
+  if (!inGroup) router.push(group.landing);
 }
 
 function handleMenuSelect(path: string) {
