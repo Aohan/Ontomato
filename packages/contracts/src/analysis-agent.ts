@@ -18,6 +18,8 @@ export interface AnalysisAgent {
   loopPrompt?: string;
   /** 是否挂载报告交付件；关闭时循环以最终回复与轨迹交付 */
   reportDeliverableEnabled: boolean;
+  /** 是否开启热报告匹配；关闭时分析链路跳过热报告复用，始终按当前配置重新分析 */
+  hotReportEnabled?: boolean;
   /** 分析维度提示词（用于拆分维度生成子问题） */
   analysisDimensionPrompt?: string;
   /** 维度报告生成提示词 */

@@ -16,6 +16,7 @@ type CardInput = Omit<AnalysisReportHotCard, "id" | "createdAt" | "updatedAt"> &
 type CardFilter = {
   domainId: string | undefined;
   status?: string;
+  statuses?: string[];
   question?: string;
   agentId?: string;
 };
@@ -63,6 +64,11 @@ function buildCardWhereClause(filter: CardFilter): {
   if (filter.status) {
     params.push(filter.status);
     conditions.push(`status = $${params.length}`);
+  }
+  if (filter.statuses && filter.statuses.length > 0) {
+    const placeholders = filter.statuses.map((_, i) => `$${params.length + i + 1}`);
+    params.push(...filter.statuses);
+    conditions.push(`status IN (${placeholders.join(", ")})`);
   }
   if (filter.question) {
     params.push(filter.question);
@@ -264,6 +270,16 @@ export async function getPublishedCardCandidates(filter: {
   return listCards(
     { domainId: filter.domainId, status: "PUBLISHED", agentId: filter.agentId },
     { projection: "matchCandidate" }
+  );
+}
+
+export async function listAgentHotReports(filter: {
+  agentId: string;
+  domainId?: string;
+}): Promise<AnalysisReportHotCardSummary[]> {
+  return listCards(
+    { domainId: filter.domainId, agentId: filter.agentId, statuses: ["PUBLISHED", "UNUSED"] },
+    { projection: "summary" }
   );
 }
 

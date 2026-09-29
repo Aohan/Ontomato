@@ -6,6 +6,7 @@ import type {
   LoopSubagentTrace,
 } from "@ontomato/contracts/analysis-task";
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
+import type { AnalysisReportHotCardSummary } from "@ontomato/contracts/analysis-report";
 import type { AnalysisStreamEvent } from "@ontomato/contracts/analysis-events";
 import { workbenchI18n } from "../../i18n";
 import { authHost } from "../../utils/auth";
@@ -49,6 +50,11 @@ export const analysisAgentApi = {
   async getAgent(id: string): Promise<AnalysisAgent> {
     const res = await nodeApiGet(`/analysis-agents/${id}`);
     return res.data?.data || res.data;
+  },
+  async listHotReports(id: string): Promise<AnalysisReportHotCardSummary[]> {
+    const res = await nodeApiGet(`/analysis-agents/${id}/hot-reports`);
+    const data = res.data ?? res;
+    return Array.isArray(data) ? data : [];
   },
   async createAgent(
     agent: Omit<AnalysisAgent, "id" | "createdAt" | "updatedAt">
