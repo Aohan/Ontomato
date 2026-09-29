@@ -129,7 +129,7 @@ export class DiagnosisSessionManager {
           maxTokens: entry.maxTokens,
           modelKwargs: entry.customRequestParameters,
         };
-        contextWindow = entry.contextWindow ?? 256000;
+        contextWindow = entry.contextWindow;
       } catch (error) {
         if (error instanceof ModelNotConfiguredError)
           return { ok: false, status: 400, code: "MODEL_NOT_CONFIGURED", error: error.message };
@@ -163,7 +163,7 @@ export class DiagnosisSessionManager {
         bindResponseAgent(managed, captured, run, async () => {
           const entry = await resolveModelForRole("diagnosis");
           return {
-            contextWindow: entry.contextWindow ?? 256000,
+            contextWindow: entry.contextWindow,
             config: {
               baseUrl: entry.baseUrl,
               apiKey: entry.apiKey,

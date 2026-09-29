@@ -17,10 +17,7 @@ import { buildHeaders, getApiConfig } from "@ontomato/workbench-server/config/da
 import { batchAppendChartFieldMapper } from "@ontomato/workbench-server/services/dashboard/planning/core/chart-recommender";
 import { datasetSchemaService } from "@ontomato/workbench-server/services/data-query/dataset-schema";
 import { runWithLogContext } from "@ontomato/workbench-server/logging/log-context";
-import {
-  clearSystemModelConfigCache,
-  getSystemModelConfig,
-} from "@ontomato/workbench-server/config/system-model";
+import { getSystemModelConfig } from "@ontomato/workbench-server/config/system-model";
 import { ossContentLayout } from "../content";
 import { configureOssI18n } from "../i18n";
 import { ossProduct } from "../product";
@@ -40,7 +37,6 @@ beforeAll(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  clearSystemModelConfigCache();
 });
 
 afterAll(() => fs.rmSync(runtimeRoot, { recursive: true, force: true }));

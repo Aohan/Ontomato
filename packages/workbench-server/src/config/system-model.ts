@@ -132,7 +132,3 @@ export function saveSystemModelConfig(
   writeConfig(configFile, normalized);
   return normalized;
 }
-
-export function clearSystemModelConfigCache(): void {
-  // Stateless file-based reads, no cache needed
-}
