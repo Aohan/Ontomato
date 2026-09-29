@@ -103,7 +103,12 @@ export function startAnalysisTaskRun(
   request: AnalysisTaskRunRequest
 ): Promise<AnalysisTaskRunHandle> {
   return runWithLogContext(
-    { taskId: request.task.id, domainId: request.task.domainId },
+    {
+      taskId: request.task.id,
+      domainId: request.task.domainId,
+      token: request.task.token || undefined,
+      apiKey: request.apiKey || undefined,
+    },
     async () => {
       const { task } = request;
       const entry: ActiveAnalysisRun = {

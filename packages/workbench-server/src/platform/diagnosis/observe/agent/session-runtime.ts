@@ -25,7 +25,7 @@ export interface ManagedSession {
 
 export function buildResponseTools(
   managed: ManagedSession,
-  resolveChildModel: () => { config: ModelConfig; contextWindow: number }
+  resolveChildModel: () => Promise<{ config: ModelConfig; contextWindow: number }> | { config: ModelConfig; contextWindow: number }
 ): AgentTool[] {
   if (managed.roles.length === 0) return managed.baseTools;
   return [
@@ -57,7 +57,7 @@ export function bindResponseAgent(
   managed: ManagedSession,
   config: ModelConfig,
   session: HarnessRun,
-  resolveChildModel: () => { config: ModelConfig; contextWindow: number }
+  resolveChildModel: () => Promise<{ config: ModelConfig; contextWindow: number }> | { config: ModelConfig; contextWindow: number }
 ): Agent {
   const agent = new Agent(config, {
     systemPrompt: sessionSystemPrompt(managed.skillsIndex, managed.context),

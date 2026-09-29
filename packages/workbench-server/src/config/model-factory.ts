@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ChatOpenAI } from "@langchain/openai";
 import { IterableReadableStream } from "@langchain/core/utils/stream";
+import type { ModelRole } from "@ontomato/contracts/model-settings";
 import { startLlmLog } from "../logging/llm-logger";
 import { createLogger } from "../logging/logger";
 import { tApp } from "../i18n";
@@ -9,19 +10,12 @@ import {
   createChatCompletionsOverrideFetch,
   createEmptyChatStreamError,
 } from "../utils/chat-completions-body-override.js";
-import {
-  resolveSystemModel,
-  SYSTEM_MODEL_MAX_TOKENS,
-  validateSystemModelApiKey,
-} from "./system-model";
+import { resolveModelForRole } from "./model-resolver";
 
 const logger = createLogger("model-factory");
 
-function getModelConfig() {
-  return resolveSystemModel();
-}
-
 export type ModelOptions = {
+  role?: ModelRole;
   baseURL?: string;
   modelName?: string;
   temperature?: number;
@@ -30,9 +24,9 @@ export type ModelOptions = {
   stream?: boolean;
 };
 
-export function createModel(opts?: number | ModelOptions): ChatOpenAI {
+export async function createModel(opts?: number | ModelOptions): Promise<ChatOpenAI> {
   const options: ModelOptions = typeof opts === "number" ? { temperature: opts } : (opts ?? {});
-  const entry = getModelConfig();
+  const entry = await resolveModelForRole(options.role ?? "general");
 
   const temperature = options.temperature ?? 0;
   const agentName = options.agentName;
@@ -41,8 +35,6 @@ export function createModel(opts?: number | ModelOptions): ChatOpenAI {
       ? options.agentRunId.trim()
       : randomUUID()
     : undefined;
-
-  validateSystemModelApiKey(entry.apiKey);
 
   // Custom parameters override the final Chat Completions body at the fetch
   // boundary, so they are never passed as modelKwargs for the SDK to reinterpret.
@@ -60,9 +52,9 @@ export function createModel(opts?: number | ModelOptions): ChatOpenAI {
         ...(overrideFetch ? { fetch: overrideFetch } : {}),
       },
       temperature,
-      maxTokens: SYSTEM_MODEL_MAX_TOKENS,
-      maxRetries: entry.maxRetries,
-      timeout: entry.timeoutSeconds * 1000,
+      maxTokens: entry.maxTokens,
+      ...(entry.maxRetries !== undefined ? { maxRetries: entry.maxRetries } : {}),
+      ...(entry.timeoutSeconds !== undefined ? { timeout: entry.timeoutSeconds * 1000 } : {}),
     })
   );
 
@@ -83,19 +75,6 @@ export function createModel(opts?: number | ModelOptions): ChatOpenAI {
       })()
     );
   };
-
-  if (
-    !(options.baseURL || entry.baseUrl).trim() ||
-    !entry.apiKey.trim() ||
-    !(options.modelName || entry.modelName).trim()
-  ) {
-    const throwNotConfigured = async () => {
-      throw new Error("System model is not configured");
-    };
-    model.invoke = throwNotConfigured as typeof model.invoke;
-    model.stream = throwNotConfigured as typeof model.stream;
-    return model;
-  }
 
   if (!agentName) {
     return model;

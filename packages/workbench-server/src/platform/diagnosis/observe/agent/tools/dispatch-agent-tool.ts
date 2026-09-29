@@ -21,7 +21,7 @@ export interface DispatchAgentToolOptions {
   context?: SessionContext;
   parentSessionId: string;
   /** Read at dispatch time, not when the parent response captured its model. */
-  resolveChildModel(): { config: ModelConfig; contextWindow: number };
+  resolveChildModel(): Promise<{ config: ModelConfig; contextWindow: number }> | { config: ModelConfig; contextWindow: number };
 }
 
 function lastAssistantMessage(messages: AgentMessage[]) {
@@ -105,7 +105,7 @@ export function createDispatchAgentTool(options: DispatchAgentToolOptions): Agen
       let terminal: Exclude<HarnessTurnStatus, "running"> = "failed";
       let child: Agent | undefined;
       try {
-        const resolved = options.resolveChildModel();
+        const resolved = await options.resolveChildModel();
         child = new Agent(resolved.config, {
           systemPrompt: roleSystemPrompt(role, options.skillsIndex, options.context),
           tools: role.tools.map((name) => baseTools.get(name)!),

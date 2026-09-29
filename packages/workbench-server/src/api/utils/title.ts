@@ -14,7 +14,7 @@ export async function generateTitleAsync(
   domainId: string
 ): Promise<string | null> {
   try {
-    const model = createModel({ temperature: 0.3, agentName: "API-TitleGenerator" });
+    const model = await createModel({ temperature: 0.3, agentName: "API-TitleGenerator" });
     const response = await model.invoke([
       {
         role: "system",

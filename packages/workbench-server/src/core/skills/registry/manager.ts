@@ -261,7 +261,7 @@ export class SkillRegistryManager {
     const prompt = renderPrompt("skills.executor.knowledge.user", { query, dataInfo, skillsInfo });
 
     try {
-      const model = createModel({ temperature: 0.3, agentName: "Skill-Executor" });
+      const model = await createModel({ temperature: 0.3, agentName: "Skill-Executor" });
 
       onEvent?.({ type: "thinking", content: tApp("skills.thinking.analyzing") });
 
