@@ -126,16 +126,10 @@ public class BusinessConfigController {
 			}
 
 			BusinessConfig stored = businessConfigService.get(user.getDomainId());
-			String existingSkillDir = "";
-			if (stored != null && stored.getAgents() != null && stored.getAgents().get(AgentRole.CODING) != null
-					&& stored.getAgents().get(AgentRole.CODING).getSkilldir() != null) {
-				existingSkillDir = stored.getAgents().get(AgentRole.CODING).getSkilldir();
-			}
+			String existingSkillDir = stored.getAgents().get(AgentRole.CODING).getSkilldir();
 
 			BusinessConfig candidate = new BusinessConfig();
-			if (stored != null) {
-				BeanUtils.copyProperties(stored, candidate);
-			}
+			BeanUtils.copyProperties(stored, candidate);
 			candidate.setModels(models);
 
 			Map<String, AgentConfig> newAgents = new LinkedHashMap<>();
@@ -188,12 +182,7 @@ public class BusinessConfigController {
 				throw new IllegalArgumentException("skilldir must be a string");
 			}
 			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-			AgentConfig codingAgent = businessConfig.getAgents().get(AgentRole.CODING);
-			if (codingAgent == null) {
-				codingAgent = new AgentConfig();
-				businessConfig.getAgents().put(AgentRole.CODING, codingAgent);
-			}
-			codingAgent.setSkilldir(skilldir);
+			businessConfig.getAgents().get(AgentRole.CODING).setSkilldir(skilldir);
 			businessConfigService.set(businessConfig, user.getDomainId());
 			ret.put("success", true);
 		} catch (Exception e) {

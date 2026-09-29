@@ -19,6 +19,10 @@ class ModelConfigRoleSimplificationTest {
     @Test
     void emptySeedIsReadableAndValid() {
         ModelDefaultsProperties defaults = new ModelDefaultsProperties();
+        AgentConfig codingTmpl = new AgentConfig();
+        codingTmpl.setSkilldir("");
+        defaults.getAgents().put(AgentRole.CODING, codingTmpl);
+
         EmbeddingModelProperties emb = new EmbeddingModelProperties();
         DataRagConfig dataRagConfig = new DataRagConfig();
 
@@ -55,6 +59,10 @@ class ModelConfigRoleSimplificationTest {
         seedModel.setModelName("gpt-4o");
         defaults.getModels().add(seedModel);
 
+        AgentConfig codingTmpl = new AgentConfig();
+        codingTmpl.setSkilldir("/path/to/skills");
+        defaults.getAgents().put(AgentRole.CODING, codingTmpl);
+
         EmbeddingModelProperties emb = new EmbeddingModelProperties();
         DataRagConfig dataRagConfig = new DataRagConfig();
 
@@ -68,7 +76,7 @@ class ModelConfigRoleSimplificationTest {
         for (String role : AgentRole.ALL) {
             assertEquals("default", config.getAgents().get(role).getModel());
         }
-        assertEquals("", config.getAgents().get(AgentRole.CODING).getSkilldir());
+        assertEquals("/path/to/skills", config.getAgents().get(AgentRole.CODING).getSkilldir());
 
         assertDoesNotThrow(() -> ModelResolver.validateForSave(config));
     }
@@ -84,6 +92,7 @@ class ModelConfigRoleSimplificationTest {
         }
         config.setAgents(agents);
 
+        // Chinese default
         IllegalStateException queryEx = assertThrows(
                 IllegalStateException.class,
                 () -> ModelResolver.resolve(config, AgentRole.QUERY));
@@ -93,6 +102,32 @@ class ModelConfigRoleSimplificationTest {
                 IllegalStateException.class,
                 () -> ModelResolver.resolve(config, AgentRole.CODING));
         assertEquals("角色『代码与计算』未配置模型，请在模型配置中选择", codingEx.getMessage());
+
+        // English when config.lang is "en"
+        config.setLang("en");
+        IllegalStateException queryExEn = assertThrows(
+                IllegalStateException.class,
+                () -> ModelResolver.resolve(config, AgentRole.QUERY));
+        assertEquals("No model is configured for role \"Query\". Choose one in Model Configuration.", queryExEn.getMessage());
+
+        IllegalStateException codingExEn = assertThrows(
+                IllegalStateException.class,
+                () -> ModelResolver.resolve(config, AgentRole.CODING));
+        assertEquals("No model is configured for role \"Coding and Computing\". Choose one in Model Configuration.", codingExEn.getMessage());
+    }
+
+    @Test
+    void hasCompleteConnectionValidatesConnectionTriad() {
+        ModelConfig m = new ModelConfig();
+        org.junit.jupiter.api.Assertions.assertFalse(ModelResolver.hasCompleteConnection(m));
+        m.setBaseUrl("http://localhost:8000/v1");
+        org.junit.jupiter.api.Assertions.assertFalse(ModelResolver.hasCompleteConnection(m));
+        m.setApiKeys(List.of("   "));
+        org.junit.jupiter.api.Assertions.assertFalse(ModelResolver.hasCompleteConnection(m));
+        m.setApiKeys(List.of("sk-key"));
+        org.junit.jupiter.api.Assertions.assertFalse(ModelResolver.hasCompleteConnection(m));
+        m.setModelName("model-test");
+        assertTrue(ModelResolver.hasCompleteConnection(m));
     }
 
     @Test

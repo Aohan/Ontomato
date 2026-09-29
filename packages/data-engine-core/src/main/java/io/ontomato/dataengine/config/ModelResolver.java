@@ -80,7 +80,13 @@ public final class ModelResolver {
         Map<String, AgentConfig> agents = config.getAgents();
         AgentConfig agent = agents == null ? null : agents.get(role);
         if (agent == null || agent.getModel() == null || agent.getModel().isBlank()) {
-            throw new IllegalStateException("角色『" + AgentRole.displayName(role) + "』未配置模型，请在模型配置中选择");
+            boolean isEn = "en".equalsIgnoreCase(config.getLang());
+            String roleName = AgentRole.displayName(role, config.getLang());
+            if (isEn) {
+                throw new IllegalStateException(
+                        "No model is configured for role \"" + roleName + "\". Choose one in Model Configuration.");
+            }
+            throw new IllegalStateException("角色『" + roleName + "』未配置模型，请在模型配置中选择");
         }
         ModelConfig model = findModel(config, agent.getModel());
         if (model == null) {
@@ -119,19 +125,35 @@ public final class ModelResolver {
     }
 
     /**
+     * Checks whether a model entry has all three required connection components:
+     * baseUrl, at least one non-blank API key, and modelName.
+     */
+    public static boolean hasCompleteConnection(ModelConfig model) {
+        return model != null
+                && !isBlank(model.getBaseUrl())
+                && model.getApiKeys() != null
+                && model.getApiKeys().stream().anyMatch(key -> !isBlank(key))
+                && !isBlank(model.getModelName());
+    }
+
+    /**
      * Saving the model list requires every entry to carry its connection: base URL, at least one non-blank API key and the API model name.
      */
     public static void requireConnections(List<ModelConfig> models) {
         for (ModelConfig model : models) {
+            requireConnection(model);
+        }
+    }
+
+    public static void requireConnection(ModelConfig model) {
+        if (!hasCompleteConnection(model)) {
             if (isBlank(model.getBaseUrl())) {
                 throw new IllegalArgumentException("Model " + model.getName() + ": baseUrl must not be empty");
             }
             if (model.getApiKeys() == null || model.getApiKeys().stream().allMatch(ModelResolver::isBlank)) {
                 throw new IllegalArgumentException("Model " + model.getName() + ": at least one API key is required");
             }
-            if (isBlank(model.getModelName())) {
-                throw new IllegalArgumentException("Model " + model.getName() + ": modelName must not be empty");
-            }
+            throw new IllegalArgumentException("Model " + model.getName() + ": modelName must not be empty");
         }
     }
 

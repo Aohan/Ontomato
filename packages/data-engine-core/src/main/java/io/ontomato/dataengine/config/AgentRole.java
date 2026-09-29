@@ -20,24 +20,14 @@ public final class AgentRole {
             DIAGNOSIS,
             KNOWLEDGE_GOVERNANCE);
 
-    public static String displayName(String role) {
+    public static String displayName(String role, String lang) {
+        boolean isEn = "en".equalsIgnoreCase(lang);
         return switch (role) {
-            case QUERY -> "问数";
-            case CODING -> "代码与计算";
-            case GENERAL -> "通用";
-            case DIAGNOSIS -> "运维 Agent";
-            case KNOWLEDGE_GOVERNANCE -> "知识治理 Agent";
-            default -> role;
-        };
-    }
-
-    public static String displayNameEn(String role) {
-        return switch (role) {
-            case QUERY -> "Query";
-            case CODING -> "Coding and Computing";
-            case GENERAL -> "General";
-            case DIAGNOSIS -> "Operations Agent";
-            case KNOWLEDGE_GOVERNANCE -> "Knowledge Governance Agent";
+            case QUERY -> isEn ? "Query" : "问数";
+            case CODING -> isEn ? "Coding and Computing" : "代码与计算";
+            case GENERAL -> isEn ? "General" : "通用";
+            case DIAGNOSIS -> isEn ? "Operations Agent" : "运维 Agent";
+            case KNOWLEDGE_GOVERNANCE -> isEn ? "Knowledge Governance Agent" : "知识治理 Agent";
             default -> role;
         };
     }

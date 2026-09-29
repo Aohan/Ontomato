@@ -57,38 +57,19 @@ public class BusinessConfig {
 		BusinessConfig businessConfig = new BusinessConfig();
 		List<ModelConfig> models = new ArrayList<>();
 		ModelConfig defaultSeed = null;
-		if (modelDefaultsProperties != null && modelDefaultsProperties.getModels() != null) {
-			for (ModelConfig m : modelDefaultsProperties.getModels()) {
-				if ("default".equals(m.getName()) || defaultSeed == null) {
-					defaultSeed = m;
-					if ("default".equals(m.getName())) {
-						break;
-					}
-				}
+		for (ModelConfig m : modelDefaultsProperties.getModels()) {
+			if ("default".equals(m.getName())) {
+				defaultSeed = m;
+				break;
 			}
 		}
 
-		boolean hasCompleteConnection = false;
-		if (defaultSeed != null && defaultSeed.getBaseUrl() != null && !defaultSeed.getBaseUrl().isBlank()
-				&& defaultSeed.getModelName() != null && !defaultSeed.getModelName().isBlank()
-				&& defaultSeed.getApiKeys() != null) {
-			for (String key : defaultSeed.getApiKeys()) {
-				if (key != null && !key.isBlank()) {
-					hasCompleteConnection = true;
-					break;
-				}
-			}
-		}
+		boolean hasCompleteConnection = ModelResolver.hasCompleteConnection(defaultSeed);
+
+		AgentConfig templateCoding = modelDefaultsProperties.getAgents().get(AgentRole.CODING);
+		String codingSkillDir = templateCoding != null ? templateCoding.getSkilldir() : null;
 
 		Map<String, AgentConfig> agents = new LinkedHashMap<>();
-		String codingSkillDir = "";
-		if (modelDefaultsProperties != null && modelDefaultsProperties.getAgents() != null) {
-			AgentConfig codingDefaults = modelDefaultsProperties.getAgents().get(AgentRole.CODING);
-			if (codingDefaults != null && codingDefaults.getSkilldir() != null) {
-				codingSkillDir = codingDefaults.getSkilldir();
-			}
-		}
-
 		if (hasCompleteConnection) {
 			ModelConfig model = new ModelConfig();
 			BeanUtils.copyProperties(defaultSeed, model);
