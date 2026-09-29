@@ -14,7 +14,7 @@
 #   tools/                  the installer/contract scripts this stage needs
 #   launch.sh               the single app launcher owned by this recipe
 #   LICENSE, NOTICE         the public repository's own license files
-ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:20.3.0@sha256:fc738db1cbb81214be1719436605e9d7d84746e5eaf0629762aeba114aa0c28d
+ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:24.21.0@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
 ARG WORKSPACE=ontomato
 ARG APP_META_JSON
 

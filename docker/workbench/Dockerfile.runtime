@@ -1,4 +1,4 @@
-# Workbench runtime image: Node 20.3 + Python 3.10, the third-party production
+# Workbench runtime image: Node 24 + Python 3.10, the third-party production
 # dependencies in a fixed virtual store, and the pairing preflight. The
 # application image is assembled into /app; this image never contains
 # application source, build output, default resources or installer inputs.
@@ -11,7 +11,7 @@
 #   runtime-requirements.txt  public docker/workbench/requirements.txt
 #   LICENSE, NOTICE           the public repository's own license files
 # The entrypoint and the runtime contract tools are copied out of tools/.
-ARG NODE_RUNTIME_IMAGE=docker.1ms.run/library/node:20.3.0-slim@sha256:bffbb1bf1a3afd6fbdd822bda7f1e7cb07eb407f3dc02bbef1bf414cbaa92afd
+ARG NODE_RUNTIME_IMAGE=docker.1ms.run/library/node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 ARG PYTHON_RUNTIME_IMAGE=docker.1ms.run/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG DEBIAN_MIRROR=https://deb.debian.org/debian
@@ -147,7 +147,5 @@ RUN test -n "$RUNTIME_META_JSON" \
 
 WORKDIR /app
 ENTRYPOINT ["/runtime/container-entrypoint.sh"]
-# The tsx CLI selects a loader that also works on Node 20.3 (module.register
-# only exists from Node 20.6, so --import tsx is not enough here). The app
-# package owns this script.
+# The app package owns this launcher.
 CMD ["/app/launch.sh"]

@@ -33,7 +33,7 @@
 - `pnpm dev:web`：主网页 Vite 开发服务（端口 5173，`/api` 与 `/config.js` 代理到 3000）；
 - `pnpm dev:ontology-manager`：本体管理器 Vite 开发服务（端口 5174，`/api/data-query` 代理到 `DATARAG_ORIGIN`）。
 
-需要 Node 20+、pnpm 9+。执行 `pnpm install` 后用 `pnpm dev`。依赖一律写精确版本，不用 `^`、`~` 范围；根 `.npmrc` 设了 `save-exact=true`，`pnpm add` 会自动写精确版本。
+需要 Node 24+、pnpm 9+。执行 `pnpm install` 后用 `pnpm dev`。依赖一律写精确版本，不用 `^`、`~` 范围；根 `.npmrc` 设了 `save-exact=true`，`pnpm add` 会自动写精确版本。
 
 Node 服务读取产品根 `.env`（进程环境优先），运行数据写在产品根 `data/`。本体管理器的 `DATARAG_ORIGIN` 在公共版没有默认值，未配置时启动报错，需在 `.env` 或环境变量中给出 DataRAG 根地址。Java 数据引擎、PostgreSQL 和 Python MCP 需要另行准备；本入口只有上述三个进程，不是全栈启动。
 

@@ -1,5 +1,5 @@
 // 产品根整栈开发入口：PG → 本机 Python MCP → Java 就绪 → 前台 Node 三进程。
-// 只依赖 Node 20 内建、docker，以及各平台的进程/监听查询（Unix 用 ps/lsof/kill，Windows 用
+// 只依赖 Node 24 内建、docker，以及各平台的进程/监听查询（Unix 用 ps/lsof/kill，Windows 用
 // 内置 PowerShell/CIM）；产品差异全部来自各产品自己的 dev/postgres.compose.yml、
 // apps/data-engine/.env 与 .dev/conf，本工具不认识 edition。
 // yaml 由调用方产品根自我声明并按该根解析，工具没有固定依赖位置。

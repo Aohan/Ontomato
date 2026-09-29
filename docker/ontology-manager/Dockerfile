@@ -13,7 +13,7 @@
 #                           the public notice generator
 # WORKSPACE (source id of the workspace root) and APPLICATION (the selected
 # app's package name) always come from the builder; they have no default.
-ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:20.3.0@sha256:fc738db1cbb81214be1719436605e9d7d84746e5eaf0629762aeba114aa0c28d
+ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:24.21.0@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
 
 # Builder runs on the build host: frozen install of the selected application
 # and its workspace dependencies (dev included: the web build needs Vite),
