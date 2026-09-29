@@ -89,6 +89,8 @@ const messages = {
     objectDescriptionPlaceholder: "说明该业务对象的含义",
     fillApiAndDisplayName: "请填写 API 名称和显示名称",
     invalidApiName: "API 名称只能包含字母、数字、下划线，且不能以数字开头",
+    fillPrimaryKeyName: "请填写主键字段名",
+    examplePrimaryKey: "例如 code；M3 数据源固定为 id",
     objectApiExists: "对象类型 API 名称已存在",
     objectCreated: "对象类型已创建",
     objectCreateFailed: "创建对象类型失败",
@@ -394,6 +396,8 @@ const messages = {
     exampleDevice: "e.g. Device",
     objectDescriptionPlaceholder: "Describe what this business object means",
     fillApiAndDisplayName: "Enter an API name and display name",
+    fillPrimaryKeyName: "Enter the primary key field name",
+    examplePrimaryKey: "e.g. code; always id on M3",
     invalidApiName:
       "API name can contain only letters, numbers, and underscores, and cannot start with a number",
     objectApiExists: "Object type API name already exists",

@@ -11,15 +11,16 @@ const { createOntologyObject, loadOntology } = useManagerClient();
 const visible = defineModel<boolean>({ required: true });
 const emit = defineEmits<{ created: [className: string] }>();
 const saving = ref(false);
-const form = reactive({ className: "", showName: "", classDesc: "" });
+const form = reactive({ className: "", primaryKeyName: "", showName: "", classDesc: "" });
 const apiNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 watch(visible, (open) => {
-  if (open) Object.assign(form, { className: "", showName: "", classDesc: "" });
+  if (open) Object.assign(form, { className: "", primaryKeyName: "", showName: "", classDesc: "" });
 });
 
 async function create() {
   const className = form.className.trim();
+  const primaryKeyName = form.primaryKeyName.trim();
   const showName = form.showName.trim();
   if (!className || !showName) {
     message.warning(ot("fillApiAndDisplayName"));
@@ -29,6 +30,14 @@ async function create() {
     message.warning(ot("invalidApiName"));
     return;
   }
+  if (!primaryKeyName) {
+    message.warning(ot("fillPrimaryKeyName"));
+    return;
+  }
+  if (!apiNamePattern.test(primaryKeyName)) {
+    message.warning(ot("invalidAttributeName"));
+    return;
+  }
   saving.value = true;
   try {
     const ontology = await loadOntology();
@@ -36,7 +45,12 @@ async function create() {
       message.warning(ot("objectApiExists"));
       return;
     }
-    await createOntologyObject({ className, showName, classDesc: form.classDesc.trim() });
+    await createOntologyObject({
+      className,
+      primaryKeyName,
+      showName,
+      classDesc: form.classDesc.trim(),
+    });
     message.success(ot("objectCreated"));
     visible.value = false;
     emit("created", className);
@@ -61,6 +75,14 @@ async function create() {
         <el-input
           v-model="form.className"
           :placeholder="ot('exampleEquipment')"
+          maxlength="80"
+          show-word-limit
+        />
+      </el-form-item>
+      <el-form-item :label="ot('primaryKey')" required>
+        <el-input
+          v-model="form.primaryKeyName"
+          :placeholder="ot('examplePrimaryKey')"
           maxlength="80"
           show-word-limit
         />

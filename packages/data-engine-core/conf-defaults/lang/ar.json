@@ -68,6 +68,26 @@
     "value": "تنسيق السمة غير صالح"
   },
   {
+    "key": "Admin.class.nameRequired",
+    "value": "اسم فئة الكائن واسم العرض مطلوبان"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "يجب تحديد اسم حقل المفتاح الأساسي لفئة الكائن الجديدة"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "يجب أن يكون حقل المفتاح الأساسي لفئة كائن M3 هو id"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "لا يمكن حذف المفتاح الأساسي الحالي أو تعطيله؛ انقل المفتاح الأساسي إلى حقل آخر أولاً"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "يجب أن يكون المفتاح الأساسي حقلاً مفعّلاً من نوع varchar"
+  },
+  {
     "key": "Admin.attr.typeError",
     "value": "نوع السمة غير صالح"
   },

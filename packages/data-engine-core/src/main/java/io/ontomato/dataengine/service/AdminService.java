@@ -17,7 +17,7 @@ public interface AdminService {
 
 	public void setRelationshipDesc(String relationship, String desc, User user);
 	
-	public void addClass(String className, String showName, String classDesc, boolean classToCard, boolean instanceToCard, boolean inStarChart, String lang, User user) throws Exception;
+	public void addClass(String className, String primaryKeyName, String showName, String classDesc, boolean classToCard, boolean instanceToCard, boolean inStarChart, String lang, User user) throws Exception;
 	
 	public void delClass(String className, User user);
 	
@@ -29,9 +29,9 @@ public interface AdminService {
 	
 	public void addClassAttr(String className, String attrName, String showName, String attrDesc, String type, boolean bizzKey, boolean enable, String lang, User user) throws Exception;
 	
-	public void delClassAttr(String className, String attrName, User user);
+	public void delClassAttr(String className, String attrName, String lang, User user) throws Exception;
 	
-	public void setClassAttrDesc(String className, String attr, String desc, String enable, User user);
+	public void setClassAttrDesc(String className, String attr, String desc, String enable, String lang, User user) throws Exception;
 	
 	public void setClassAttrShowName(String className, String attr, String showName, User user);
 	
@@ -41,7 +41,7 @@ public interface AdminService {
 
 	public void setClassAttrPermissionField(String className, String attr, boolean permissionField, User user);
 	
-	public void setClassAttrPrimaryKey(String className, String attr, User user) throws Exception;
+	public void setClassAttrPrimaryKey(String className, String attr, String lang, User user) throws Exception;
 	
 	public void addBucketIndicator(String className, String attrName, String indicatorName, String indicatorDesc, String indicatorUnit, String lang, User user) throws Exception;
 	

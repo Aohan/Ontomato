@@ -68,6 +68,26 @@
     "value": "属性格式错误"
   },
   {
+    "key": "Admin.class.nameRequired",
+    "value": "对象类名称和显示名称不能为空"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "新建对象类必须填写主键字段名"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "M3 对象类的主键字段必须是 id"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "不能删除或禁用当前主键，请先将主键切换到其他字段"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "主键只能设置为已启用的 varchar 字段"
+  },
+  {
     "key": "Admin.attr.typeError",
     "value": "属性类型错误"
   },

@@ -22,6 +22,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.IdentityService;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.config.ControllerConst;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -38,6 +39,9 @@ public class AdminController {
 
 	@Autowired
 	private IdentityService identityService;
+
+	@Autowired
+	private LangService langService;
 
 	@PostMapping("/admin/editdatasetdesc")
 	@ResponseBody
@@ -123,15 +127,18 @@ public class AdminController {
 		JSONObject ret = new JSONObject();
 		try {
 			String className = param.getString("className").trim();
+			String primaryKeyName = param.getString("primaryKeyName");
 			String showName = param.getString("showName").trim();
 			String classDesc = param.getString("classDesc").trim();
-			boolean classToCard = param.getBoolean("classToCard");
-			boolean instanceToCard = param.getBoolean("instanceToCard");
-			boolean inStarChart = param.getBoolean("inStarChart");
-			if (!"".equals(className) && !"".equals(showName) && !"".equals(classDesc)) {
-				User user = SystemUtils.getCurUser();
-				adminService.addClass(className, showName, classDesc, classToCard, instanceToCard, inStarChart, lang, user);
+			// The card and star-chart flags are optional in the API and default to false; the description may be empty.
+			boolean classToCard = param.getBooleanValue("classToCard");
+			boolean instanceToCard = param.getBooleanValue("instanceToCard");
+			boolean inStarChart = param.getBooleanValue("inStarChart");
+			if ("".equals(className) || "".equals(showName)) {
+				throw new Exception(langService.get(lang, "Admin.class.nameRequired"));
 			}
+			User user = SystemUtils.getCurUser();
+			adminService.addClass(className, primaryKeyName, showName, classDesc, classToCard, instanceToCard, inStarChart, lang, user);
 			ret.put("success", true);
 		} catch (Exception e) {
 			ret.put("success", false);
@@ -241,14 +248,14 @@ public class AdminController {
 	
 	@PostMapping("/admin/delClassAttr")
     @ResponseBody
-    public JSONObject delClassAttr(@RequestBody JSONObject param) {
+    public JSONObject delClassAttr(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
 		JSONObject ret = new JSONObject();
 		try {
 			String className = param.getString("className").trim();
 			String attrName = param.getString("attrName").trim();
 			if (!"".equals(className) && !"".equals(attrName)) {
 				User user = SystemUtils.getCurUser();
-				adminService.delClassAttr(className, attrName, user);
+				adminService.delClassAttr(className, attrName, lang, user);
 			}
 			ret.put("success", true);
 		} catch (Exception e) {
@@ -260,16 +267,17 @@ public class AdminController {
 	
 	@PostMapping("/admin/editClassAttrDesc")
     @ResponseBody
-    public JSONObject editClassAttrDesc(@RequestBody JSONObject param) {
+    public JSONObject editClassAttrDesc(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
 		JSONObject ret = new JSONObject();
 		try {
 			String className = param.getString("className").trim();
 			String attr = param.getString("attr").trim();
 			String desc = param.getString("desc").trim();
 			String enable = param.getString("enable").trim();
-			if (!"".equals(className) && !"".equals(attr) && !"".equals(desc)) {
+			// An empty description is a valid value (a new primary key is saved with one).
+			if (!"".equals(className) && !"".equals(attr)) {
 				User user = SystemUtils.getCurUser();
-				adminService.setClassAttrDesc(className, attr, desc, enable, user);
+				adminService.setClassAttrDesc(className, attr, desc, enable, lang, user);
 			}
 			ret.put("success", true);
 		} catch (Exception e) {
@@ -359,14 +367,14 @@ public class AdminController {
 	
 	@PostMapping("/admin/editClassAttrPrimaryKey")
     @ResponseBody
-    public JSONObject editClassAttrPrimaryKey(@RequestBody JSONObject param) {
+    public JSONObject editClassAttrPrimaryKey(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
 		JSONObject ret = new JSONObject();
 		try {
 			String className = param.getString("className").trim();
 			String attr = param.getString("attr").trim();
 			if (!"".equals(className) && !"".equals(attr)) {
 				User user = SystemUtils.getCurUser();
-				adminService.setClassAttrPrimaryKey(className, attr, user);
+				adminService.setClassAttrPrimaryKey(className, attr, lang, user);
 			}
 			ret.put("success", true);
 		} catch (Exception e) {

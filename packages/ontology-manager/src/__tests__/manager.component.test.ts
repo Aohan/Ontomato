@@ -678,6 +678,67 @@ describe("OntologyManager 根组件与真实页面", () => {
     });
   });
 
+  it.each([
+    ["对象模型目录", "/objects", "New Object Type", ".object-create-dialog", "Create"],
+    ["可视化建模", "/visual-modeling", "Add Class", ".el-dialog", "Add"],
+  ])("%s新建类：缺主键不提交；带主键提交后显示后端保存的主键", async (_name, view, open, selector, submit) => {
+    // 新建后重新读取的元数据才含新类与其主键：页面必须显示后端保存结果，而不是本地拼装的空属性。
+    metasFor = () => {
+      const saved = metas(["Order", "Item"]);
+      if (requests.some((request) => request.url.endsWith("/admin/addClass"))) {
+        saved.data.classDef.push({
+          className: "Pump",
+          showName: "Pump-label",
+          classDesc: "Pump desc",
+          attrs: [
+            { name: "pump_no", showName: "pump_no", type: "varchar", enable: true, primaryKey: true },
+          ] as never,
+        });
+      }
+      return saved;
+    };
+    const { root } = mountHost({ ...base, view });
+    await settle();
+    clickButton(open);
+    await settle();
+    const dialog = [...document.querySelectorAll<HTMLElement>(selector)].find(
+      (item) => item.style.display !== "none" && item.querySelector("input")
+    )!;
+    const [className, primaryKey, showName] = [...dialog.querySelectorAll("input")];
+    const fill = (input: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+    };
+    fill(className, "Pump");
+    fill(showName, "Pump-label");
+    fill(dialog.querySelector("textarea")!, "Pump desc");
+    await settle();
+    const create = () =>
+      [...dialog.querySelectorAll("button")].find((b) => b.textContent?.trim() === submit)!.click();
+
+    create();
+    await settle();
+    expect(paths()).not.toContain("/admin/addClass");
+
+    fill(primaryKey, "pump_no");
+    await settle();
+    create();
+    await settle();
+    expect(requests.find((request) => request.url.endsWith("/admin/addClass"))?.body).toMatchObject({
+      className: "Pump",
+      primaryKeyName: "pump_no",
+      showName: "Pump-label",
+      classDesc: "Pump desc",
+    });
+    if (view === "/objects") {
+      expect(root().textContent).toContain("Primary key attribute: pump_no");
+    } else {
+      const panel = root().querySelector(".attr-item")!;
+      expect(panel.textContent).toContain("pump_no");
+      expect(panel.textContent).toContain("Primary Key");
+    }
+  });
+
   it("编辑对话框挂在本实例根内的弹层容器，打开关闭都不改 body", async () => {
     const { root } = mountHost({ ...base, view: "/objects/Order" });
     await settle();

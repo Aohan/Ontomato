@@ -68,6 +68,26 @@
     "value": "Invalid attribute format"
   },
   {
+    "key": "Admin.class.nameRequired",
+    "value": "The object class name and display name are required"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "A new object class needs a primary key field name"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "The primary key field of an M3 object class must be id"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "The current primary key cannot be deleted or disabled; switch the primary key to another field first"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "The primary key must be an enabled varchar field"
+  },
+  {
     "key": "Admin.attr.typeError",
     "value": "Invalid attribute type"
   },

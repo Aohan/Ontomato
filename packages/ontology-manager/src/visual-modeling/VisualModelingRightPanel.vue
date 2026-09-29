@@ -11,6 +11,7 @@ interface AttrDef {
   enable: boolean;
   bizzkey: string;
   bizzkeyBool: boolean;
+  primaryKey: boolean;
 }
 
 interface ClassDef {
@@ -114,6 +115,9 @@ const { t } = useSharedText();
             <div class="attr-title">
               <strong>{{ prop.showName || prop.name }}</strong>
               <code>{{ prop.name }}</code>
+              <el-tag v-if="prop.primaryKey" size="small" type="warning" effect="plain">
+                {{ t("hotData.primaryKey") }}
+              </el-tag>
             </div>
             <el-tag size="small" effect="plain">{{ prop.type }}</el-tag>
           </div>

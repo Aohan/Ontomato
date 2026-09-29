@@ -68,6 +68,26 @@
     "value": "属性の形式が無効です"
   },
   {
+    "key": "Admin.class.nameRequired",
+    "value": "オブジェクトクラス名と表示名は必須です"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "新しいオブジェクトクラスには主キーのフィールド名が必要です"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "M3 オブジェクトクラスの主キーフィールドは id である必要があります"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "現在の主キーは削除・無効化できません。先に主キーを別のフィールドに切り替えてください"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "主キーには有効な varchar フィールドのみ設定できます"
+  },
+  {
     "key": "Admin.attr.typeError",
     "value": "属性の型が無効です"
   },

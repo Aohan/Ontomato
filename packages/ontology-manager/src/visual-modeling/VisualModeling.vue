@@ -47,6 +47,7 @@ interface AttrDef {
   enable: boolean;
   bizzkey: string;
   bizzkeyBool: boolean;
+  primaryKey: boolean;
   isNew?: boolean;
 }
 
@@ -179,6 +180,8 @@ const rightPanelVisible = ref(false);
 const newNodeName = ref("");
 const newNodeShowName = ref("");
 const newNodeDesc = ref("");
+const newNodePrimaryKey = ref("");
+const apiNamePattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 const newEdgeDesc = ref("");
 const newEdgeFromField = ref("");
@@ -756,6 +759,7 @@ async function loadData() {
           enable: toBoolean(a.enable, true),
           bizzkey: a.bizzkey ?? "",
           bizzkeyBool: toBoolean(raw),
+          primaryKey: toBoolean(a.primaryKey),
         };
       }),
       isNew: false,
@@ -788,6 +792,7 @@ function openAddNodeDialog() {
   newNodeName.value = "";
   newNodeShowName.value = "";
   newNodeDesc.value = "";
+  newNodePrimaryKey.value = "";
   editingNode.value = null;
   nodeDialogVisible.value = true;
 }
@@ -865,33 +870,35 @@ async function handleAddNode() {
     message.warning(t("hotData.enterClassDesc"));
     return;
   }
+  const primaryKeyName = newNodePrimaryKey.value.trim();
+  if (!primaryKeyName) {
+    message.warning(ot("fillPrimaryKeyName"));
+    return;
+  }
+  if (!apiNamePattern.test(primaryKeyName)) {
+    message.warning(ot("invalidAttributeName"));
+    return;
+  }
   if (classList.value.some((c) => c.className === newNodeName.value.trim())) {
     message.warning(t("hotData.classNameExists"));
     return;
   }
 
   try {
+    const className = newNodeName.value.trim();
     await createOntologyObject({
-      className: newNodeName.value.trim(),
-      showName: newNodeShowName.value.trim() || newNodeName.value.trim(),
+      className,
+      primaryKeyName,
+      showName: newNodeShowName.value.trim() || className,
       classDesc: newNodeDesc.value.trim(),
       classToCard: false,
       instanceToCard: false,
       inStarChart: false,
     });
-
-    const newClass: ClassDef = {
-      className: newNodeName.value.trim(),
-      showName: newNodeShowName.value.trim() || newNodeName.value.trim(),
-      classDesc: newNodeDesc.value.trim(),
-      attrs: [],
-      isNew: false,
-    };
-
-    classList.value.push(newClass);
-    selectedNode.value = newClass;
-    renderNodes();
     nodeDialogVisible.value = false;
+    // 后端保存结果（含主键属性）是事实源：重新读取后选中新类。
+    await loadData();
+    selectNodeByClassName(className);
     message.success(t("hotData.classCreated"));
   } catch (e: any) {
     message.error(e.message || t("hotData.classCreateFailed"));
@@ -1416,6 +1423,7 @@ async function saveClassDesc(cls: ClassDef) {
       v-model:new-node-name="newNodeName"
       v-model:new-node-show-name="newNodeShowName"
       v-model:new-node-desc="newNodeDesc"
+      v-model:new-node-primary-key="newNodePrimaryKey"
       v-model:new-edge-desc="newEdgeDesc"
       v-model:new-edge-from-field="newEdgeFromField"
       v-model:new-edge-to-field="newEdgeToField"

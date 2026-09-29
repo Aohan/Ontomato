@@ -68,6 +68,26 @@
     "value": "屬性格式錯誤"
   },
   {
+    "key": "Admin.class.nameRequired",
+    "value": "物件類名稱和顯示名稱不能為空"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "新建物件類必須填寫主鍵欄位名"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "M3 物件類的主鍵欄位必須是 id"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "不能刪除或停用目前主鍵，請先將主鍵切換到其他欄位"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "主鍵只能設定為已啟用的 varchar 欄位"
+  },
+  {
     "key": "Admin.attr.typeError",
     "value": "屬性型別錯誤"
   },

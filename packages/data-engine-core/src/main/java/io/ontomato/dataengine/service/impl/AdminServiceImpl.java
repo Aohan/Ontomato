@@ -125,6 +125,7 @@ public class AdminServiceImpl implements AdminService {
 				throw new Exception(langService.get(lang, "Admin.relationship.toClassNotFound"));
 			}
 			
+			validatePrimaryKey(jsonRule);
 			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 			DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 			if (adapter.useM3()) {
@@ -213,13 +214,26 @@ public class AdminServiceImpl implements AdminService {
 	}
 	
 	@Override
-	public void addClass(String className, String showName, String classDesc, boolean classToCard, boolean instanceToCard, boolean inStarChart, String lang, User user) throws Exception {
+	public void addClass(String className, String primaryKeyName, String showName, String classDesc, boolean classToCard, boolean instanceToCard, boolean inStarChart, String lang, User user) throws Exception {
 		className = className.trim();
+		if (primaryKeyName == null || primaryKeyName.isBlank()) {
+			throw new Exception(langService.get(lang, "Admin.class.primaryKeyRequired"));
+		}
+		// strip() drops only whitespace, like the Manager's trim(); control characters stay and fail the rule below.
+		primaryKeyName = primaryKeyName.strip();
+		// Same rule as the Manager's attribute names; the name is written into the model and, on M3, into DDL.
+		if (!primaryKeyName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+			throw new Exception(langService.get(lang, "Admin.attr.formatError"));
+		}
 		
 		Map<String, Object> jsonRule = getJSONRule(user.getDomainId());
 		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		adapter.validateClassNameFormat(className);
+		// An M3 object is keyed by its id field (key=manu); the model must not name another field as the key.
+		if (adapter.useM3() && !"id".equals(primaryKeyName)) {
+			throw new Exception(langService.get(lang, "Admin.class.m3PrimaryKeyId"));
+		}
 		
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		boolean exist = false;
@@ -230,10 +244,17 @@ public class AdminServiceImpl implements AdminService {
 			}
 		}
 		if (!exist) {
-			if (adapter.useM3()) {
-				String mql = "create class if not exists " + className + " () with autosearch=true, version=false, key=manu, alias='" + classDesc + "' , nickname='" + className.substring(1).replace("/", "_") + "';";
-				HttpRequestUtil.getExecMQL(dataRagConfig, mql);
-			}
+			Map<String, Object> primaryKey = new HashMap<String, Object>();
+			primaryKey.put("name", primaryKeyName);
+			primaryKey.put("showName", primaryKeyName);
+			primaryKey.put("attrDesc", "");
+			primaryKey.put("type", "varchar");
+			primaryKey.put("bizzkey", false);
+			primaryKey.put("enable", true);
+			primaryKey.put("permissionField", false);
+			primaryKey.put("primaryKey", true);
+			List<Map<String, Object>> attrs = new ArrayList<Map<String, Object>>();
+			attrs.add(primaryKey);
 			
 			Map<String, Object> classDef = new HashMap<String, Object>();
 			classDef.put("className", className);
@@ -242,11 +263,16 @@ public class AdminServiceImpl implements AdminService {
 			classDef.put("classToCard", classToCard);
 			classDef.put("instanceToCard", instanceToCard);
 			classDef.put("inStarChart", inStarChart);
-			classDef.put("attrs", new ArrayList<Map<String, Object>>());
+			classDef.put("attrs", attrs);
 			classDefs.add(classDef);
 			List<String> classList = (List<String>)jsonRule.get("classlist");
 			if (!classList.contains(className)) {
 				classList.add(className);
+			}
+			validatePrimaryKey(jsonRule);
+			if (adapter.useM3()) {
+				String mql = "create class if not exists " + className + " ( id varchar ) with autosearch=true, version=false, key=manu, alias='" + classDesc + "' , nickname='" + className.substring(1).replace("/", "_") + "';";
+				HttpRequestUtil.getExecMQL(dataRagConfig, mql);
 			}
 			writeJSONRule(jsonRule, user.getDomainId());
 			
@@ -281,6 +307,10 @@ public class AdminServiceImpl implements AdminService {
 			}
 		}
 		if (removeIndex >= 0) {
+			classDefs.remove(removeIndex);
+			List<String> classList = (List<String>)jsonRule.get("classlist");
+			classList.remove(className);
+			validatePrimaryKey(jsonRule);
 			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 			DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 			if (adapter.useM3()) {
@@ -295,9 +325,6 @@ public class AdminServiceImpl implements AdminService {
 				}
 			}
 			
-			classDefs.remove(removeIndex);
-			List<String> classList = (List<String>)jsonRule.get("classlist");
-			classList.remove(className);
 			writeJSONRule(jsonRule, user.getDomainId());
 			
 			AuditLog auditLog = new AuditLog();
@@ -421,6 +448,8 @@ public class AdminServiceImpl implements AdminService {
 				if (attrName.indexOf(" ") >= 0) {
 					throw new Exception(langService.get(lang, "Admin.attr.formatError"));
 				}
+				// Adding a field never changes the primary key; a rule already breaking it is refused before the DDL.
+				validatePrimaryKey(jsonRule);
 				BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 				DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 				if (adapter.useM3()) {
@@ -492,7 +521,7 @@ public class AdminServiceImpl implements AdminService {
 	}
 	
 	@Override
-	public void delClassAttr(String className, String attrName, User user) {
+	public void delClassAttr(String className, String attrName, String lang, User user) throws Exception {
 		attrName = attrName.trim();
 		className = className.trim();
 		Map<String, Object> jsonRule = getJSONRule(user.getDomainId());
@@ -515,6 +544,11 @@ public class AdminServiceImpl implements AdminService {
 				}
 			}
 			if (removeIndex >= 0) {
+				if (Boolean.TRUE.equals(attrs.get(removeIndex).get("primaryKey"))) {
+					throw new Exception(langService.get(lang, "Admin.attr.primaryKeyLocked"));
+				}
+				attrs.remove(removeIndex);
+				validatePrimaryKey(jsonRule);
 				BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 				DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 				if (adapter.useM3()) {
@@ -539,7 +573,6 @@ public class AdminServiceImpl implements AdminService {
 					}
 				}
 				
-				attrs.remove(removeIndex);
 				writeJSONRule(jsonRule, user.getDomainId());
 				
 				AuditLog auditLog = new AuditLog();
@@ -559,7 +592,7 @@ public class AdminServiceImpl implements AdminService {
 	}
 
 	@Override
-	public void setClassAttrDesc(String className, String attr, String desc, String enable, User user) {
+	public void setClassAttrDesc(String className, String attr, String desc, String enable, String lang, User user) throws Exception {
 		Map<String, Object> jsonRule = getJSONRule(user.getDomainId());
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		for (Map<String, Object> classDef : classDefs) {
@@ -567,6 +600,9 @@ public class AdminServiceImpl implements AdminService {
 				List<Map<String, Object>> attrs = (List<Map<String, Object>>)classDef.get("attrs");
 				for (Map<String, Object> attrDef : attrs) {
 					if (attrDef.get("name").equals(attr)) {
+						if (!Boolean.valueOf(enable) && Boolean.TRUE.equals(attrDef.get("primaryKey"))) {
+							throw new Exception(langService.get(lang, "Admin.attr.primaryKeyLocked"));
+						}
 						attrDef.put("attrDesc", desc);
 						attrDef.put("enable", Boolean.valueOf(enable));
 						writeJSONRule(jsonRule, user.getDomainId());
@@ -712,26 +748,24 @@ public class AdminServiceImpl implements AdminService {
 	}
 	
 	@Override
-	public void setClassAttrPrimaryKey(String className, String attr, User user) throws Exception {
+	public void setClassAttrPrimaryKey(String className, String attr, String lang, User user) throws Exception {
 		Map<String, Object> jsonRule = getJSONRule(user.getDomainId());
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		for (Map<String, Object> classDef : classDefs) {
 			if (classDef.get("className").equals(className)) {
 				List<Map<String, Object>> attrs = (List<Map<String, Object>>)classDef.get("attrs");
-				List<String> primaryKeys = new ArrayList<String>();
+				Map<String, Object> target = attrs.stream().filter(attrDef -> attrDef.get("name").equals(attr)).findFirst().orElse(null);
+				if (target == null || !"varchar".equals(target.get("type")) || Boolean.FALSE.equals(target.get("enable"))) {
+					throw new Exception(langService.get(lang, "Admin.attr.primaryKeyInvalid"));
+				}
+				// M3 objects are keyed by id (key=manu, insert and query by id); the model key must stay id there.
+				if (!"id".equals(attr) && dataAdapterRegistry.create(businessConfigService.get(user.getDomainId()), null).useM3()) {
+					throw new Exception(langService.get(lang, "Admin.class.m3PrimaryKeyId"));
+				}
 				for (Map<String, Object> attrDef : attrs) {
-					if (attrDef.get("name").equals(attr)) {
-						attrDef.put("primaryKey", true);
-						primaryKeys.add((String)attrDef.get("name"));
-					} else {
-						attrDef.put("primaryKey", false);
-					}
+					attrDef.put("primaryKey", attrDef == target);
 				}
-				if (primaryKeys.size() == 1) {
-					writeJSONRule(jsonRule, user.getDomainId());
-				} else {
-					throw new Exception("The object class must have one primary key");
-				}
+				writeJSONRule(jsonRule, user.getDomainId());
 				break;
 			}
 		}
@@ -1148,7 +1182,40 @@ public class AdminServiceImpl implements AdminService {
 	}
 	
 	private void writeJSONRule(Map<String, Object> jsonRule, String domainId) {
+		validatePrimaryKey(jsonRule);
 		jsonRuleDao.save(jsonRule, domainId);
+	}
+
+	/**
+	 * Enforce the primary-key invariant that lets vector/row-permission DSL rewriting use a single
+	 * primary-key field name across M3 and relational adapters:
+	 * every class has exactly one enabled {@code primaryKey=true} attribute, and its type is {@code varchar}.
+	 * Operations with external DDL also call this on the changed rule before the DDL.
+	 */
+	private void validatePrimaryKey(Map<String, Object> jsonRule) {
+		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
+		for (Map<String, Object> classDef : classDefs) {
+			String className = (String)classDef.get("className");
+			List<Map<String, Object>> attrs = (List<Map<String, Object>>)classDef.get("attrs");
+			int pkCount = 0;
+			String pkName = null;
+			String pkType = null;
+			for (Map<String, Object> attr : attrs) {
+				if (attr.get("enable") == null || (Boolean)attr.get("enable")) {
+					if (attr.get("primaryKey") != null && (Boolean)attr.get("primaryKey")) {
+						pkCount++;
+						pkName = (String)attr.get("name");
+						pkType = (String)attr.get("type");
+					}
+				}
+			}
+			if (pkCount != 1) {
+				throw new IllegalArgumentException("Class [" + className + "] must have exactly one primaryKey attribute, but found " + pkCount);
+			}
+			if (!"varchar".equals(pkType)) {
+				throw new IllegalArgumentException("Primary key [" + pkName + "] of class [" + className + "] must be of type varchar, but was " + pkType);
+			}
+		}
 	}
 	
 	@Override

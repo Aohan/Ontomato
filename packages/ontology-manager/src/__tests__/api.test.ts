@@ -325,6 +325,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
     const { client } = setup({ type: "token", token: "t" });
     await client.createOntologyObject({
       className: "Order",
+      primaryKeyName: "order_no",
       showName: "订单",
       classDesc: "d",
       classToCard: false,
@@ -353,6 +354,7 @@ describe("数据浏览与可视化建模所需的请求", () => {
         "/admin/addClass",
         {
           className: "Order",
+          primaryKeyName: "order_no",
           showName: "订单",
           classDesc: "d",
           classToCard: false,

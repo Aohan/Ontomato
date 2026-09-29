@@ -96,6 +96,8 @@ export interface OntologyRelation {
 
 export interface CreateOntologyObjectInput {
   className: string;
+  /** 后端随类一并保存的主键属性（启用的 varchar）；M3 数据源须为 id。 */
+  primaryKeyName: string;
   showName: string;
   classDesc: string;
   /** 可视化建模新建类时显式提交 false。 */

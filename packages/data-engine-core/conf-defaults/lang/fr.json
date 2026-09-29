@@ -68,6 +68,26 @@
     "value": "Format d'attribut invalide"
   },
   {
+    "key": "Admin.class.nameRequired",
+    "value": "Le nom de la classe d'objets et le nom d'affichage sont obligatoires"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "Une nouvelle classe d'objets nécessite un nom de champ de clé primaire"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "Le champ de clé primaire d'une classe d'objets M3 doit être id"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "La clé primaire actuelle ne peut pas être supprimée ni désactivée ; basculez d'abord la clé primaire vers un autre champ"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "La clé primaire doit être un champ varchar activé"
+  },
+  {
     "key": "Admin.attr.typeError",
     "value": "Type d'attribut invalide"
   },

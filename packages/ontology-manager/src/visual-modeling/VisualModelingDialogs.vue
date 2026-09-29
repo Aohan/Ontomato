@@ -12,7 +12,7 @@ import {
   ElTooltip,
 } from "element-plus";
 import { CircleHelp } from "lucide-vue-next";
-import { useSharedText } from "../context";
+import { useOntologyText, useSharedText } from "../context";
 
 interface ClassDef {
   className: string;
@@ -40,6 +40,7 @@ const props = defineProps<{
   newNodeName: string;
   newNodeShowName: string;
   newNodeDesc: string;
+  newNodePrimaryKey: string;
   newEdgeDesc: string;
   newEdgeFromField: string;
   newEdgeToField: string;
@@ -51,6 +52,7 @@ const emit = defineEmits<{
   "update:newNodeName": [value: string];
   "update:newNodeShowName": [value: string];
   "update:newNodeDesc": [value: string];
+  "update:newNodePrimaryKey": [value: string];
   "update:newEdgeDesc": [value: string];
   "update:newEdgeFromField": [value: string];
   "update:newEdgeToField": [value: string];
@@ -63,6 +65,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useSharedText();
+const { ot } = useOntologyText();
 
 const nodeVisibleModel = computed({
   get: () => props.nodeVisible,
@@ -95,6 +98,11 @@ const newNodeDescModel = computed({
   set: (value: string) => emit("update:newNodeDesc", value),
 });
 
+const newNodePrimaryKeyModel = computed({
+  get: () => props.newNodePrimaryKey,
+  set: (value: string) => emit("update:newNodePrimaryKey", value),
+});
+
 const newEdgeDescModel = computed({
   get: () => props.newEdgeDesc,
   set: (value: string) => emit("update:newEdgeDesc", value),
@@ -125,6 +133,9 @@ const newEdgeToFieldModel = computed({
           :disabled="editingNode !== null"
           :placeholder="t('hotData.uniqueId')"
         />
+      </el-form-item>
+      <el-form-item v-if="editingNode === null" :label="t('hotData.primaryKey')" required>
+        <el-input v-model="newNodePrimaryKeyModel" :placeholder="ot('examplePrimaryKey')" />
       </el-form-item>
       <el-form-item :label="t('admin.displayName')" required>
         <el-input v-model="newNodeShowNameModel" :placeholder="t('hotData.chineseDisplayName')" />
