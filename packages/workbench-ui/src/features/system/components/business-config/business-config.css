@@ -3,8 +3,7 @@
 }
 
 .config-form :deep(.el-form-item__label),
-.model-editor-form :deep(.el-form-item__label),
-.call-settings :deep(.el-form-item__label) {
+.model-editor-form :deep(.el-form-item__label) {
   flex: 0 0 auto;
   white-space: nowrap;
   word-break: keep-all;
@@ -12,10 +11,6 @@
 
 .config-form :deep(.el-form-item__label) {
   min-width: 160px;
-}
-
-.config-form :deep(.el-form-item__label),
-.call-settings :deep(.el-form-item__label) {
   flex-shrink: 0;
 }
 
@@ -161,16 +156,6 @@
   max-width: 480px;
 }
 
-/* The system model is selected from the list above and saved together with the list. */
-.call-settings {
-  margin-top: var(--spacing-lg);
-}
-
-.system-model-select {
-  width: 320px;
-  max-width: 100%;
-}
-
 .dialog-section {
   margin: 0 0 var(--spacing-md);
   font-size: var(--text-sm);
@@ -243,7 +228,6 @@
   }
 
   .model-editor-form :deep(.el-form-item__content),
-  .call-settings :deep(.el-form-item__content),
   .config-form :deep(.el-form-item__content) {
     margin-left: 0 !important;
   }
@@ -440,13 +424,11 @@
 }
 
 @media (max-width: 640px) {
-  .call-settings :deep(.el-form-item),
   .config-form :deep(.el-form-item) {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .call-settings :deep(.el-form-item__label),
   .config-form :deep(.el-form-item__label) {
     align-self: flex-start;
     width: max-content !important;
@@ -458,7 +440,6 @@
     line-height: 1.5;
   }
 
-  .call-settings :deep(.el-form-item__content),
   .config-form :deep(.el-form-item__content) {
     width: 100%;
     margin-left: 0 !important;

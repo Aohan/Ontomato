@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
 import { computed, reactive, ref } from "vue";
 import { BarChart3 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import { formatTimeout, parseTimeoutSeconds, type EmbeddingModelConfig } from "../../types";
+import { formatTimeout, type EmbeddingModelConfig } from "../../types";
 import { workbenchContent } from "../../../../content";
 
 const { t } = useI18n();
@@ -43,7 +44,7 @@ function openEditDialog() {
           baseUrl: current.baseUrl,
           apiKey: current.apiKey,
           modelName: current.modelName,
-          timeoutSeconds: parseTimeoutSeconds(current.timeout),
+          timeoutSeconds: parseIsoDurationSeconds(current.timeout),
         }
       : emptyDraft()
   );
@@ -90,7 +91,7 @@ function confirmDialog() {
                 {{ model.apiKey ? t("admin.keyCountConfigured", { n: 1 }) : t("admin.keyMissing") }}
               </span>
               <span class="model-keys">
-                {{ t("common.timeoutSec") }}{{ businessConfigSeparator }}{{ parseTimeoutSeconds(model.timeout) }}
+                {{ t("common.timeoutSec") }}{{ businessConfigSeparator }}{{ parseIsoDurationSeconds(model.timeout) }}
               </span>
             </div>
             <div class="model-actions">
