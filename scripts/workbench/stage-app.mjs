@@ -1,8 +1,9 @@
 // Container-side app stager for the workbench app image. Runs in web-builder
 // against the real workspace after the full frozen install and the web build:
-// it preflights the production closure against the locked runtime contract,
+// it checks pnpm's production selection against the graph closure,
 // materializes /stage (selected own members as real dirs, third-party as
-// absolute /opt/runtime links from the runtime index), copies the built web
+// absolute /opt/runtime links whose store paths come from this builder's own
+// install of the same lock), copies the built web
 // output, and writes .image-meta.json. The launch script and the empty data
 // mount point are placed by the recipe, not here.
 import {

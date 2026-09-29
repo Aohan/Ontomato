@@ -459,7 +459,7 @@ for (const lang of ["zh", "en"])
     assert.equal(Object.keys(staged).filter((p) => /^payload\/conf-defaults\/lang\/[^/]+\.json$/.test(p)).length, 8);
   });
 
-test("app-only: a missing lock fails before settings or export; with a lock the imported runtime is never rebuilt", async (t) => {
+test("app-only: a missing lock fails before settings or export; with a lock no runtime is ever built", async (t) => {
   const fx = fixture(t);
   rmSync(fx.settings);
   const docker = fakeDocker(t, fx.dir);

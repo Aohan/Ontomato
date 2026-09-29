@@ -252,7 +252,7 @@ test("pair rejects schema, kind, family, arch and fingerprint mismatches", () =>
   );
 });
 
-test("assemble pairs like startup and then requires the expected architecture", () => {
+test("assemble pairs the images and then requires the expected architecture", () => {
   const base = productionClosure(bundle(), lock(), "linux/arm64");
   const contract = buildContract(base, observed());
   const fp = fingerprint(contract);

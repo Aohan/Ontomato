@@ -2,7 +2,7 @@
 // only its product name, sources and work roots; family, contract interface,
 // recipes, tools and requirements are this builder's shared facts. The
 // runtime subcommand builds and locks the shared dependency runtime; the app
-// subcommand consumes an already locked runtime and never rebuilds it.
+// subcommand checks the sources against the runtime lock and never builds a runtime.
 import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -224,7 +224,7 @@ function assertWorkbenchImage(tag, arch, fp) {
 export async function buildWorkbenchApp(app, args) {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(
-      "Use make workbench-runtime [ARCH=amd64|arm64], make workbench-runtime-pack,\nmake workbench-app [ARCH=amd64|arm64] or make workbench-app-pack.\nThe app command consumes the locked runtime and never rebuilds it.",
+      "Use make workbench-runtime [ARCH=amd64|arm64], make workbench-runtime-pack,\nmake workbench-app [ARCH=amd64|arm64] or make workbench-app-pack.\nThe app command checks the sources against the runtime lock and never builds a runtime.",
     );
     return;
   }

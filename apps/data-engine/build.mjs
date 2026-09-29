@@ -7,7 +7,7 @@ const repoRoot = resolve(appRoot, "../..");
 // Every public adapter module is in the reactor (the root pom lists them all); this app installs postgresql only.
 const PUBLIC_ADAPTERS = ["postgresql", "mysql", "oracle", "sqlserver", "db2", "gaussdb", "duckdb"];
 const HELP =
-  "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=zh|en], make pack-data-engine, or make pack-data-engine-app.\npack-data-engine-app uses the locked, imported runtime and never rebuilds it.";
+  "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=zh|en], make data-engine-app, make pack-data-engine, or make pack-data-engine-app.\ndata-engine-app and pack-data-engine-app compare the sources with the runtime lock and never build a runtime.";
 
 export const app = {
   repoRoot,

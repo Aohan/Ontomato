@@ -146,8 +146,6 @@ if (args[0] === "version") {
   process.stdout.write(JSON.stringify([{ Os: "linux", Architecture: "arm64", Config: { Labels: labels } }]));
 } else if (args[0] === "save") {
   process.stdout.write("fake-app-image-bytes");
-} else if (args[0] === "tag") {
-  // recorded above; re-tagging an existing image
 } else {
   process.stderr.write("unknown docker call\\n");
   process.exit(1);

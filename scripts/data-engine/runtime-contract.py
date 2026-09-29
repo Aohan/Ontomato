@@ -1,4 +1,4 @@
-"""Runtime contract inspection/checks inside Linux images; no host Python needed."""
+"""Runtime self-checks and assembly pairing inside Linux images; no host Python needed."""
 import hashlib
 import json
 import os
