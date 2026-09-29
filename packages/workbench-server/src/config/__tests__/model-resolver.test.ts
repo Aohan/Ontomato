@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelSettingsData } from "@ontomato/contracts/model-settings";
+import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
 import { runWithLogContext } from "../../logging/log-context";
+import { configureI18n } from "../../i18n";
+import { appTextEn } from "../../i18n/app-text-en";
+import { en, enLocaleMeta } from "../../i18n/locales/en";
+import { zhCN, zhCNLocaleMeta } from "../../i18n/locales/zh-CN";
 import {
   ModelNotConfiguredError,
-  parseTimeoutSeconds,
+  getRoleNotConfiguredMessage,
   resolveModelForRole,
-  validateSystemModelApiKey,
 } from "../model-resolver";
 
 const mockBackendGet = vi.fn();
@@ -15,38 +19,50 @@ vi.mock("../../utils/backend-client", () => ({
 }));
 
 describe("model-resolver", () => {
+  beforeAll(() => {
+    configureI18n({
+      defaultLocale: "zh-CN",
+      languageSwitchEnabled: true,
+      appTextLocale: "en",
+      packs: {
+        en: { messages: { ...en, ...appTextEn }, ...enLocaleMeta },
+        "zh-CN": { messages: zhCN, ...zhCNLocaleMeta },
+      },
+    });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe("parseTimeoutSeconds", () => {
-    it("returns numbers as rounded values", () => {
-      expect(parseTimeoutSeconds(60)).toBe(60);
-      expect(parseTimeoutSeconds(45.6)).toBe(46);
+  describe("parseIsoDurationSeconds", () => {
+    it("parses valid ISO-8601 duration combinations", () => {
+      expect(parseIsoDurationSeconds("PT5M")).toBe(300);
+      expect(parseIsoDurationSeconds("PT300S")).toBe(300);
+      expect(parseIsoDurationSeconds("PT1H")).toBe(3600);
+      expect(parseIsoDurationSeconds("PT1H30M")).toBe(5400);
+      expect(parseIsoDurationSeconds("PT0.5S")).toBe(0.5);
+      expect(parseIsoDurationSeconds("PT1H2M3.5S")).toBe(3723.5);
+      expect(parseIsoDurationSeconds("PT0S")).toBe(0);
     });
 
-    it("parses ISO duration format PT{seconds}S", () => {
-      expect(parseTimeoutSeconds("PT120S")).toBe(120);
-      expect(parseTimeoutSeconds("PT0S")).toBe(0);
-      expect(parseTimeoutSeconds("PT3600S")).toBe(3600);
-    });
-
-    it("falls back to 300 for missing or invalid formats", () => {
-      expect(parseTimeoutSeconds(undefined)).toBe(300);
-      expect(parseTimeoutSeconds("invalid")).toBe(300);
-      expect(parseTimeoutSeconds(-5)).toBe(300);
+    it("throws error for invalid formats", () => {
+      expect(() => parseIsoDurationSeconds("")).toThrow("Invalid ISO-8601 duration");
+      expect(() => parseIsoDurationSeconds("300")).toThrow("Invalid ISO-8601 duration");
+      expect(() => parseIsoDurationSeconds("PT")).toThrow("Invalid ISO-8601 duration");
+      expect(() => parseIsoDurationSeconds("invalid")).toThrow("Invalid ISO-8601 duration");
+      expect(() => parseIsoDurationSeconds("PT5X")).toThrow("Invalid ISO-8601 duration");
     });
   });
 
-  describe("validateSystemModelApiKey", () => {
-    it("passes for non-empty string", () => {
-      expect(() => validateSystemModelApiKey("key-123")).not.toThrow();
-    });
-
-    it("throws ModelNotConfiguredError for empty, whitespace, or undefined", () => {
-      expect(() => validateSystemModelApiKey(undefined)).toThrow(ModelNotConfiguredError);
-      expect(() => validateSystemModelApiKey("")).toThrow(ModelNotConfiguredError);
-      expect(() => validateSystemModelApiKey("   ")).toThrow(ModelNotConfiguredError);
+  describe("getRoleNotConfiguredMessage", () => {
+    it("returns formatted message via i18n", () => {
+      expect(getRoleNotConfiguredMessage("general")).toBe(
+        "角色『通用』未配置模型，请在模型配置中选择"
+      );
+      expect(getRoleNotConfiguredMessage("query")).toBe(
+        "角色『问数』未配置模型，请在模型配置中选择"
+      );
     });
   });
 
@@ -58,7 +74,7 @@ describe("model-resolver", () => {
           baseUrl: "https://llm.example.com/v1",
           apiKeys: ["key-gen-1", "key-gen-2"],
           modelName: "gpt-4o",
-          timeout: "PT180S",
+          timeout: "PT5M",
           maxRetries: 2,
           maxTokens: 4096,
           contextWindow: 128000,
@@ -69,8 +85,6 @@ describe("model-resolver", () => {
           baseUrl: "https://diag.example.com/v1",
           apiKeys: ["key-diag-1"],
           modelName: "diag-model",
-          timeout: "PT60S",
-          maxRetries: 1,
           maxTokens: 8192,
           contextWindow: 64000,
         },
@@ -84,10 +98,12 @@ describe("model-resolver", () => {
       },
     };
 
-    it("fetches settings from Java using credentials and domainId from LogContext", async () => {
+    it("fetches settings from Java using credentials from LogContext and parses JSON text", async () => {
       mockBackendGet.mockResolvedValueOnce({
-        success: true,
-        data: validSettings,
+        text: JSON.stringify({
+          success: true,
+          data: validSettings,
+        }),
       });
 
       const resolved = await runWithLogContext(
@@ -108,7 +124,7 @@ describe("model-resolver", () => {
         baseUrl: "https://llm.example.com/v1",
         apiKey: "key-gen-1",
         modelName: "gpt-4o",
-        timeoutSeconds: 180,
+        timeoutSeconds: 300,
         maxRetries: 2,
         maxTokens: 4096,
         contextWindow: 128000,
@@ -116,10 +132,12 @@ describe("model-resolver", () => {
       });
     });
 
-    it("resolves diagnosis role correctly", async () => {
+    it("does not invent default timeout or maxRetries when missing", async () => {
       mockBackendGet.mockResolvedValueOnce({
-        success: true,
-        data: validSettings,
+        text: JSON.stringify({
+          success: true,
+          data: validSettings,
+        }),
       });
 
       const resolved = await runWithLogContext(
@@ -127,26 +145,20 @@ describe("model-resolver", () => {
         () => resolveModelForRole("diagnosis")
       );
 
-      expect(mockBackendGet).toHaveBeenCalledWith(
-        "/businessConfig/getModelSettings",
-        "/businessConfig/getModelSettings",
-        {
-          token: undefined,
-          apiKey: "datarag-api-key",
-        }
-      );
-
       expect(resolved.modelName).toBe("diag-model");
       expect(resolved.apiKey).toBe("key-diag-1");
-      expect(resolved.timeoutSeconds).toBe(60);
+      expect(resolved.timeoutSeconds).toBeUndefined();
+      expect(resolved.maxRetries).toBeUndefined();
       expect(resolved.maxTokens).toBe(8192);
       expect(resolved.contextWindow).toBe(64000);
     });
 
     it("throws ModelNotConfiguredError when role has model null", async () => {
       mockBackendGet.mockResolvedValueOnce({
-        success: true,
-        data: validSettings,
+        text: JSON.stringify({
+          success: true,
+          data: validSettings,
+        }),
       });
 
       await expect(
@@ -154,42 +166,36 @@ describe("model-resolver", () => {
       ).rejects.toThrow(ModelNotConfiguredError);
     });
 
-    it("throws ModelNotConfiguredError when role references nonexistent model ID", async () => {
+    it("throws standard error on data inconsistency when referenced model not found in list", async () => {
       mockBackendGet.mockResolvedValueOnce({
-        success: true,
-        data: {
-          ...validSettings,
-          agents: {
-            ...validSettings.agents,
-            general: { model: "nonexistent-id" },
+        text: JSON.stringify({
+          success: true,
+          data: {
+            ...validSettings,
+            agents: {
+              ...validSettings.agents,
+              general: { model: "nonexistent-id" },
+            },
           },
-        },
+        }),
       });
 
       await expect(
         runWithLogContext({ domainId: "d1" }, () => resolveModelForRole("general"))
-      ).rejects.toThrow(ModelNotConfiguredError);
+      ).rejects.toThrow("模型配置数据不一致");
     });
 
-    it("throws ModelNotConfiguredError when model apiKeys array is empty", async () => {
+    it("throws error with Java message when backend returns success false", async () => {
       mockBackendGet.mockResolvedValueOnce({
-        success: true,
-        data: {
-          ...validSettings,
-          models: [
-            {
-              name: "m-general",
-              baseUrl: "https://llm.example.com/v1",
-              apiKeys: [],
-              modelName: "gpt-4o",
-            },
-          ],
-        },
+        text: JSON.stringify({
+          success: false,
+          message: "Internal Java error",
+        }),
       });
 
       await expect(
         runWithLogContext({ domainId: "d1" }, () => resolveModelForRole("general"))
-      ).rejects.toThrow(ModelNotConfiguredError);
+      ).rejects.toThrow("Internal Java error");
     });
   });
 });

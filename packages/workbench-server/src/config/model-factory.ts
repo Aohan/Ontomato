@@ -43,7 +43,6 @@ export async function createModel(opts?: number | ModelOptions): Promise<ChatOpe
   const model = useApproximateTokenCounter(
     new ChatOpenAI({
       model: options.modelName || entry.modelName,
-      modelName: options.modelName || entry.modelName,
       configuration: {
         baseURL: options.baseURL || entry.baseUrl,
         apiKey: entry.apiKey,
@@ -54,8 +53,8 @@ export async function createModel(opts?: number | ModelOptions): Promise<ChatOpe
       },
       temperature,
       maxTokens: entry.maxTokens,
-      maxRetries: entry.maxRetries,
-      timeout: entry.timeoutSeconds * 1000,
+      ...(entry.maxRetries !== undefined ? { maxRetries: entry.maxRetries } : {}),
+      ...(entry.timeoutSeconds !== undefined ? { timeout: entry.timeoutSeconds * 1000 } : {}),
     })
   );
 
@@ -76,19 +75,6 @@ export async function createModel(opts?: number | ModelOptions): Promise<ChatOpe
       })()
     );
   };
-
-  if (
-    !(options.baseURL || entry.baseUrl).trim() ||
-    !entry.apiKey.trim() ||
-    !(options.modelName || entry.modelName).trim()
-  ) {
-    const throwNotConfigured = async () => {
-      throw new Error("System model is not configured");
-    };
-    model.invoke = throwNotConfigured as typeof model.invoke;
-    model.stream = throwNotConfigured as typeof model.stream;
-    return model;
-  }
 
   if (!agentName) {
     return model;

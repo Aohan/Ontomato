@@ -213,7 +213,7 @@ export const en = {
   "api.modelTestFailed": "Model test failed",
   "model.roleNotConfigured": "No model configured for role '{role}', please configure it in model settings",
   "model.role.query": "Query",
-  "model.role.coding": "Coding & Calculation",
+  "model.role.coding": "Coding and Computing",
   "model.role.general": "General",
   "model.role.diagnosis": "Operations Agent",
   "model.role.knowledgeGovernance": "Knowledge Governance Agent",

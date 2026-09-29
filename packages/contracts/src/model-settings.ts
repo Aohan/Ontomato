@@ -34,3 +34,30 @@ export interface ModelSettingsData {
   models: BackendModelConfig[];
   agents: Record<ModelRole, BackendAgentConfig>;
 }
+
+/**
+ * Parses an ISO-8601 duration string (time part, e.g. PT5M, PT300S, PT1H30M, PT0.5S) into seconds.
+ * Throws an error for invalid format.
+ */
+export function parseIsoDurationSeconds(isoDuration: string): number {
+  if (typeof isoDuration !== "string" || !isoDuration.trim()) {
+    throw new Error(`Invalid ISO-8601 duration: "${isoDuration}"`);
+  }
+  const trimmed = isoDuration.trim();
+  const match = trimmed.match(
+    /^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/
+  );
+  if (
+    !match ||
+    (match[1] === undefined && match[2] === undefined && match[3] === undefined)
+  ) {
+    throw new Error(`Invalid ISO-8601 duration: "${isoDuration}"`);
+  }
+  const hours = match[1] ? parseFloat(match[1]) : 0;
+  const minutes = match[2] ? parseFloat(match[2]) : 0;
+  const seconds = match[3] ? parseFloat(match[3]) : 0;
+
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+export const parseIsoDuration = parseIsoDurationSeconds;
