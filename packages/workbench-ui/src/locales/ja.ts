@@ -1,6 +1,10 @@
 // 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
 export default {
   "admin": {
+    "systemAgents": "システムエージェント",
+    "opsAgent": "運用エージェント",
+    "opsAgentDescription": "ログと実行記録から問い合わせと分析の問題を診断し、対処方法を提案します。",
+    "openEntry": "開く",
     "requestFailed": "リクエスト失敗",
     "skillLoadFailed": "スキルの読み込みに失敗",
     "noAvailableSkills": "利用可能なスキルはありません",

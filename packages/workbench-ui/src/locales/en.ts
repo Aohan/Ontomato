@@ -1,6 +1,10 @@
 // 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
 export default {
   "admin": {
+    "systemAgents": "System Agents",
+    "opsAgent": "Operations Agent",
+    "opsAgentDescription": "Diagnoses issues in queries and analyses from logs and runtime records, and suggests fixes.",
+    "openEntry": "Open",
     "requestFailed": "Request failed",
     "skillLoadFailed": "Failed to load skills",
     "noAvailableSkills": "No available skills",

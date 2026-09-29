@@ -1,6 +1,10 @@
 // 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
 export default {
   "admin": {
+    "systemAgents": "وكلاء النظام",
+    "opsAgent": "وكيل العمليات",
+    "opsAgentDescription": "يشخّص مشكلات الاستعلامات والتحليلات من السجلات وسجلات التشغيل ويقترح حلولًا.",
+    "openEntry": "فتح",
     "requestFailed": "فشل الطلب",
     "skillLoadFailed": "فشل تحميل المهارات",
     "noAvailableSkills": "لا توجد مهارات متاحة",

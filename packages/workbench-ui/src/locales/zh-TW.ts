@@ -1,6 +1,10 @@
 // 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
 export default {
   "admin": {
+    "systemAgents": "系統智慧體",
+    "opsAgent": "維運智慧體",
+    "opsAgentDescription": "依據日誌與執行紀錄診斷問數和分析中的問題，並提供處理建議。",
+    "openEntry": "開啟",
     "requestFailed": "請求失敗",
     "skillLoadFailed": "載入技能失敗",
     "noAvailableSkills": "暫無可用的技能",

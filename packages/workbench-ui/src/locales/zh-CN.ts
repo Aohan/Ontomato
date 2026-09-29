@@ -1,6 +1,10 @@
 // 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
 export default {
   "admin": {
+    "systemAgents": "系统智能体",
+    "opsAgent": "运维智能体",
+    "opsAgentDescription": "依据日志与运行记录诊断问数和分析中的问题，并给出处理建议。",
+    "openEntry": "打开",
     "requestFailed": "请求失败",
     "skillLoadFailed": "加载技能失败",
     "noAvailableSkills": "暂无可用的技能",

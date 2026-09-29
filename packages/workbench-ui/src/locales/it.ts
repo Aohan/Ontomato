@@ -1,6 +1,10 @@
 // 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
 export default {
   "admin": {
+    "systemAgents": "Agenti di sistema",
+    "opsAgent": "Agente operativo",
+    "opsAgentDescription": "Diagnostica i problemi di interrogazioni e analisi a partire da log e registrazioni di esecuzione e suggerisce correzioni.",
+    "openEntry": "Apri",
     "requestFailed": "Richiesta fallita",
     "skillLoadFailed": "Caricamento skill fallito",
     "noAvailableSkills": "Nessuna skill disponibile",
