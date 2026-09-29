@@ -138,3 +138,19 @@ WORKDIR /app
 ENTRYPOINT ["/runtime/container-entrypoint.sh"]
 # The app package owns this launcher.
 CMD ["/app/launch.sh"]
+
+# Compatibility contract, computed from the staged sources only (lock file,
+# workspace manifests, both workbench recipes, Python requirements). Both host
+# builders read it before building an image; it needs a YAML parser, which the
+# build host does not have to install. It runs on the build host's platform and
+# names the target architecture itself.
+FROM --platform=$BUILDPLATFORM ${NODE_RUNTIME_IMAGE} AS compat-contract
+ARG TARGETARCH
+ARG YAML_VERSION=2.8.3
+WORKDIR /contract
+RUN npm install --no-save --no-audit --no-fund --no-package-lock yaml@${YAML_VERSION}
+COPY . /contract/
+RUN node /contract/tools/workbench/runtime-contract.mjs contract /contract "${TARGETARCH}" > /contract.json
+
+FROM scratch AS compat-contract-export
+COPY --from=compat-contract /contract.json /contract.json

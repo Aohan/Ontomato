@@ -12,10 +12,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { buildStamp, fingerprint, sampleSources } from "../build-support.mjs";
 import { buildWorkbenchApp } from "./build-images.mjs";
 
+// The contract command resolves its YAML parser from this checkout's install.
+const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const VERSION = "9.9.9-test";
 const LOCK_EXCLUDE = "apps/workbench/runtime-lock.json";
 const AMD64_FP = "a".repeat(64);
@@ -110,8 +113,9 @@ function writeLock(dir, arm64) {
 // calls. Succeeds through the runtime build; FAKE_MODE selects the late stage
 // that fails (ok | bad-family | bad-readback).
 const FAKE = `#!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const args = process.argv.slice(2);
 const dir = process.env.FAKE_DIR;
@@ -132,7 +136,18 @@ if (args[0] === "version") {
   process.stdout.write("25.0.0\\n");
 } else if (args[0] === "buildx") {
   const target = args[args.indexOf("--target") + 1];
-  if (target === "runtime") {
+  if (target === "compat-contract-export") {
+    // The contract stage runs the real contract command on the staged context.
+    // Real path: the tool's entry guard compares it with import.meta.url, and
+    // macOS temp directories sit behind the /var -> /private/var link.
+    const context = realpathSync(args[args.length - 1]);
+    const out = args[args.indexOf("--output") + 1].replace("type=local,dest=", "");
+    mkdirSync(out, { recursive: true });
+    const contract = execFileSync(process.execPath, [join(context, "tools/workbench/runtime-contract.mjs"), "contract", context, arch], {
+      env: { ...process.env, NODE_PATH: process.env.FAKE_NODE_PATH },
+    });
+    writeFileSync(join(out, "contract.json"), contract);
+  } else if (target === "runtime") {
     appendFileSync(dir + "/args.jsonl", JSON.stringify(args) + "\\n");
     const labels = {};
     for (let i = 0; i < args.length; i++) {
@@ -168,8 +183,9 @@ function fakeDocker(t, root) {
 async function withDocker(env, fn) {
   const savedPath = process.env.PATH;
   const saved = {};
-  for (const key of ["FAKE_DIR", "FAKE_MODE"]) saved[key] = process.env[key];
+  for (const key of ["FAKE_DIR", "FAKE_MODE", "FAKE_NODE_PATH"]) saved[key] = process.env[key];
   process.env.PATH = `${env.bin}${delimiter}${savedPath}`;
+  process.env.FAKE_NODE_PATH = join(REPO_ROOT, "node_modules");
   process.env.FAKE_DIR = env.state;
   if (env.mode) process.env.FAKE_MODE = env.mode;
   try {

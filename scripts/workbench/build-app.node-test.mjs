@@ -127,10 +127,14 @@ mkdirSync(dir, { recursive: true });
 appendFileSync(dir + "/args.jsonl", JSON.stringify(args) + "\\n");
 if (args[0] === "version") {
   process.stdout.write("25.0.0\\n");
-} else if (args[0] === "run") {
-  process.stdout.write(JSON.stringify(contract));
 } else if (args[0] === "buildx") {
-  if (mode === "fail-build") process.exit(1);
+  const target = args.includes("--target") ? args[args.indexOf("--target") + 1] : undefined;
+  if (target === "compat-contract-export") {
+    // The contract stage's output: this fixture's contract for the lock's arch.
+    const out = args[args.indexOf("--output") + 1].replace("type=local,dest=", "");
+    mkdirSync(out, { recursive: true });
+    writeFileSync(out + "/contract.json", JSON.stringify(contract));
+  } else if (mode === "fail-build") process.exit(1);
 } else if (args[0] === "image") {
   if (mode === "no-image") { process.stderr.write("Error: No such image\\n"); process.exit(1); }
   const tag = args[args.length - 1];
@@ -273,8 +277,10 @@ test("success packs and keeps the runtime lock, writing only the pairing metadat
     assert.equal(meta.platform, "linux/arm64");
     assert.equal(meta.runtimeCompatFingerprint, fingerprint(CONTRACT));
     const argv = calls(docker.state);
-    assert.equal(argv.filter((call) => call[0] === "buildx").length, 1);
-    assert.equal(argv.some((call) => call.includes("--target")), false);
+    const builds = argv.filter((call) => call[0] === "buildx");
+    assert.equal(builds.length, 2);
+    assert.equal(builds[0][builds[0].indexOf("--target") + 1], "compat-contract-export");
+    assert.equal(builds[1].includes("--target"), false);
   }
 });
 

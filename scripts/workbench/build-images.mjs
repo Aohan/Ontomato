@@ -23,12 +23,7 @@ import {
   stagingDirectory,
 } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
-import {
-  computeWorkbenchContract,
-  INTERFACE,
-  parseLock,
-  productionClosure,
-} from "./runtime-contract.mjs";
+import { INTERFACE } from "./runtime-contract.mjs";
 
 // Family authority is N3 runtime-contract.mjs (not exported there, and N3 is
 // frozen); the interface version is imported from it directly.
@@ -121,43 +116,46 @@ function assertAppImage(tag, arch, component, fp) {
     throw new Error(`Built image identity mismatch: ${tag}`);
 }
 
-function readWorkspaceManifests(context, record) {
-  const manifests = {};
-  for (const source of record.sources) {
-    for (const candidate of source.candidates) {
-      if (candidate.path.endsWith("/package.json") || candidate.path === "package.json") {
-        const file = join(context, "sources", source.id, candidate.path);
-        let relDir = candidate.path === "package.json" ? "." : dirname(candidate.path);
-        if (source.id !== record.workspaceId) {
-          relDir = candidate.path === "package.json" ? `../${source.id}` : `../${source.id}/${dirname(candidate.path)}`;
-        }
-        manifests[relDir] = JSON.parse(readFileSync(file, "utf8"));
-      }
-    }
-  }
-  return manifests;
-}
+// The contract stage's own inputs: the metadata context plus the contract tool
+// and what it reads. Only this stage parses the lock file.
+const CONTRACT_TOOLS = ["workbench/runtime-contract.mjs", "workbench/production-graph.mjs", "build-support.mjs"];
+const CONTRACT_INPUTS = ["Dockerfile.runtime", "Dockerfile.app", "requirements.txt"];
 
 // The one computation of the runtime compatibility contract, from sources only:
 // the runtime command locks it, the app command compares it with the lock.
-function workbenchContract(app, context, record, arch) {
-  const lock = parseLock(readFileSync(join(app.repoRoot, "pnpm-lock.yaml"), "utf8"));
-  const graph = productionClosure(
-    { importer: record.appImporter, manifests: readWorkspaceManifests(context, record) },
-    lock,
-    `linux/${arch}`,
-  );
-  return computeWorkbenchContract({
-    dockerfileRuntimeText: readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.runtime"), "utf8"),
-    dockerfileAppText: readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.app"), "utf8"),
-    requirementsText: readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8"),
-    graph,
-    arch,
+function workbenchContract(app, arch) {
+  const context = stagingDirectory(app.repoRoot, "workbench", arch, "contract");
+  collectMetadataContext({
+    sources: app.sources,
+    workspaceId: app.workspaceId,
+    appImporter: app.appImporter,
+    destination: context,
   });
+  for (const rel of CONTRACT_TOOLS) cpSync(join(SCRIPTS, rel), join(context, "tools", rel));
+  for (const name of CONTRACT_INPUTS)
+    cpSync(join(app.publicRoot, "docker/workbench", name), join(context, "contract-inputs", name));
+  const out = join(context, "out");
+  docker([
+    ...baseBuild(arch),
+    "-f",
+    join(app.publicRoot, "docker/workbench/Dockerfile.runtime"),
+    "--target",
+    "compat-contract-export",
+    "--output",
+    `type=local,dest=${out}`,
+    context,
+  ]);
+  return JSON.parse(readFileSync(join(out, "contract.json"), "utf8"));
 }
 
 async function buildWorkbenchAppImage(app, parsed, version, arch) {
   const lockedFp = loadRuntimeLock(app.lockRoot, FAMILY, arch);
+  const currentFp = fingerprint(workbenchContract(app, arch));
+  if (currentFp !== lockedFp) {
+    throw new Error(
+      `Runtime dependencies or contract changed (expected ${lockedFp}, current ${currentFp}); rebuild runtime first with make workbench-runtime ARCH=${arch}. No app build was started.`,
+    );
+  }
   const entries = sampleSources(app);
   const context = stagingDirectory(app.repoRoot, "workbench", arch, "app");
   const record = collectMetadataContext({
@@ -169,12 +167,6 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
   copyWorkspace(app, context, record);
   await copyAppTools(app, context);
   copyLicenses(app, context);
-  const currentFp = fingerprint(workbenchContract(app, context, record, arch));
-  if (currentFp !== lockedFp) {
-    throw new Error(
-      `Runtime dependencies or contract changed (expected ${lockedFp}, current ${currentFp}); rebuild runtime first with make workbench-runtime ARCH=${arch}. No app build was started.`,
-    );
-  }
   const meta = {
     schema: 3,
     family: FAMILY,
@@ -263,7 +255,7 @@ export async function buildWorkbenchApp(app, args) {
     join(context, "runtime-requirements.txt"),
     readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt")),
   );
-  const contract = workbenchContract(app, context, record, arch);
+  const contract = workbenchContract(app, arch);
   const fp = fingerprint(contract);
   const meta = {
     schema: 3,

@@ -5,7 +5,7 @@ import {
   readFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { canonical, fingerprint, parsePythonRequirements } from "../build-support.mjs";
 import { productionGraph } from "./production-graph.mjs";
@@ -151,9 +151,49 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+// Every workspace manifest of the staged metadata context, keyed by its
+// directory relative to the workspace root (other sources sit beside it).
+function contextManifests(root, record) {
+  const manifests = {};
+  for (const source of record.sources)
+    for (const candidate of source.candidates) {
+      if (candidate.path !== "package.json" && !candidate.path.endsWith("/package.json")) continue;
+      const dir = candidate.path === "package.json" ? "." : dirname(candidate.path);
+      const key = source.id === record.workspaceId ? dir : dir === "." ? `../${source.id}` : `../${source.id}/${dir}`;
+      manifests[key] = readJson(join(root, "sources", source.id, candidate.path));
+    }
+  return manifests;
+}
+
+// The compatibility contract of one target architecture, from the staged
+// sources only: the metadata context, both workbench recipes and the Python
+// requirements. It needs the yaml parser, so it runs in the recipe's contract
+// stage and never on the build host.
+export function contractFromContext(root, arch) {
+  const record = readJson(join(root, "inputs.json"));
+  const lock = parseLock(readFileSync(join(root, "sources", record.workspaceId, "pnpm-lock.yaml"), "utf8"));
+  const graph = productionClosure(
+    { importer: record.appImporter, manifests: contextManifests(root, record) },
+    lock,
+    `linux/${arch}`,
+  );
+  const input = (name) => readFileSync(join(root, "contract-inputs", name), "utf8");
+  return computeWorkbenchContract({
+    dockerfileRuntimeText: input("Dockerfile.runtime"),
+    dockerfileAppText: input("Dockerfile.app"),
+    requirementsText: input("requirements.txt"),
+    graph,
+    arch,
+  });
+}
+
 async function main() {
   const [command, ...args] = process.argv.slice(2);
-  if (command === "assemble") {
+  if (command === "contract") {
+    if (args.length !== 2 || !["amd64", "arm64"].includes(args[1]))
+      throw new Error("contract requires the context root and the architecture amd64|arm64");
+    process.stdout.write(canonical(contractFromContext(args[0], args[1])));
+  } else if (command === "assemble") {
     if (args.length !== 1 || !["amd64", "arm64"].includes(args[0]))
       throw new Error("assemble requires the expected architecture amd64|arm64");
     assembleMetadata(
