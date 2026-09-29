@@ -19,7 +19,6 @@ import { fileURLToPath } from "node:url";
 import { buildWorkbenchApp } from "./build-images.mjs";
 import { fingerprint } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
-import { productionClosure, productionFingerprint } from "./runtime-contract.mjs";
 import { assembleAppStage, stageDirectory } from "./stage-app.mjs";
 
 const VERSION = "9.9.9-test";
@@ -503,28 +502,16 @@ test("assemble writes own packages, resources, links, web and meta from a real g
   linkDep(join(ent, "packages/ent-lib"), "@probe/native", nativeDir);
   linkDep(join(pub, "packages/shared"), "express", expressDir);
 
-  const fullIndex = {
-    "express@4.22.1": "node_modules/.pnpm/express@4.22.1/node_modules/express",
-    "@probe/native@1.0.0": "node_modules/.pnpm/@probe+native@1.0.0/node_modules/@probe/native",
-  };
   const record = { workspaceId: "enterprise", appImporter: "apps/workbench", application: "@enterprise/workbench" };
   // Mirrors pnpm --filter-prod <app>... : only closure members are selected.
   const selected = members.filter((member) => member.name !== "@ontomato/workbench");
-  const contractFor = (platform, graph, index) => ({
-    family: "node-app",
-    interfaceVersion: 3,
-    platform,
-    productionDependencies: productionFingerprint(graph),
-    snapshotPaths: index,
-  });
-  const metaFor = (contract) => ({ platform: contract.platform, runtimeCompatFingerprint: fingerprint(contract) });
-
-  const armGraph = productionClosure({ importer: record.appImporter, manifests }, lock, "linux/arm64");
-  const armContract = contractFor("linux/arm64", armGraph, fullIndex);
+  // The stager reads only the target platform from the metadata and copies the
+  // rest through; link paths come from its own install (bindingIndex).
+  const metaFor = (platform) => ({ platform, runtimeCompatFingerprint: "c".repeat(64) });
   const armStage = join(dir, "stage-arm64");
   const assembled = assembleAppStage({
     root: ent, stageRoot: armStage, storeRoot: store, record,
-    meta: metaFor(armContract), lock, members, selected,
+    meta: metaFor("linux/arm64"), lock, members, selected,
   });
   assert.equal(assembled.copies.length, 3);
   assert.equal(readFileSync(join(armStage, "apps/workbench/src/index.ts"), "utf8"), "enterprise\n");
@@ -542,7 +529,7 @@ test("assemble writes own packages, resources, links, web and meta from a real g
   assert.equal(existsSync(join(armStage, "packages/ent-lib/data/.env")), false);
   assert.equal(existsSync(join(armStage, "packages/ent-lib/src/node_modules")), false);
   assert.equal(existsSync(join(armStage, "dist/web/index.html")), true);
-  assert.deepEqual(JSON.parse(readFileSync(join(armStage, ".image-meta.json"), "utf8")), metaFor(armContract));
+  assert.deepEqual(JSON.parse(readFileSync(join(armStage, ".image-meta.json"), "utf8")), metaFor("linux/arm64"));
   assert.equal(
     realpathSync(join(armStage, "apps/workbench/node_modules/express")),
     realpathSync(expressDir),
@@ -557,13 +544,10 @@ test("assemble writes own packages, resources, links, web and meta from a real g
   );
 
   // Opposite target: the optional arm64-only native is skipped, the rest holds.
-  const amdIndex = { "express@4.22.1": fullIndex["express@4.22.1"] };
-  const amdGraph = productionClosure({ importer: record.appImporter, manifests }, lock, "linux/amd64");
-  const amdContract = contractFor("linux/amd64", amdGraph, amdIndex);
   const amdStage = join(dir, "stage-amd64");
   assembleAppStage({
     root: ent, stageRoot: amdStage, storeRoot: store, record,
-    meta: metaFor(amdContract), lock, members, selected,
+    meta: metaFor("linux/amd64"), lock, members, selected,
   });
   assert.equal(existsSync(join(amdStage, "apps/workbench/node_modules/express")), true);
   assert.equal(existsSync(join(amdStage, "packages/ent-lib/node_modules/@probe/native")), false);

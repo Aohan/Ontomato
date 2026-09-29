@@ -109,7 +109,7 @@ test("successful runtime builds refresh locks; unchanged contracts do not rewrit
     assert.equal(loadRuntimeLock(dir, FAMILY, "amd64"), refreshed);
     assert.equal(loadRuntimeLock(dir, FAMILY, "arm64"), arm);
   }));
-test("lock and imported-contract boundaries reject old schema, bad fingerprints, family and platform mismatches", () =>
+test("lock and contract boundaries reject old schema, bad fingerprints, family and platform mismatches", () =>
   temporary((dir) => {
     const file = join(dir, "runtime-lock.json");
     assert.throws(() => loadRuntimeLock(dir, FAMILY, "amd64"), /missing/);
