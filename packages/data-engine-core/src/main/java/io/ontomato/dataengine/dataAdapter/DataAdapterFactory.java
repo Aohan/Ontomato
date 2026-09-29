@@ -18,6 +18,18 @@ public class DataAdapterFactory {
 	public static final String GAUSSDB = "gaussdb";
 	public static final String DUCKDB = "duckdb";
 
+	/**
+	 * Whether the configured data adapter is the M3 engine (default).
+	 *
+	 * <p>Any value that is not one of the known relational adapters falls through to M3 in {@link #getAdapter}.
+	 * Keeping this in one place avoids duplicating the adapter-selection branch when only the "is M3" fact is needed.</p>
+	 */
+	public static boolean isM3(BusinessConfig businessConfig) {
+		String da = businessConfig == null ? null : businessConfig.getDataAdapter();
+		return !(MYSQL.equals(da) || POSTGRESQL.equals(da) || ORACLE.equals(da) || SQL_SERVER.equals(da)
+				|| DB2.equals(da) || DM.equals(da) || GAUSSDB.equals(da) || DUCKDB.equals(da));
+	}
+
 	public static DataAdapter getAdapter(DataRagConfig dataRagConfig, BusinessConfig businessConfig, Map<String, Object> jsonRule) {
 		DataAdapter adapter = null;
 		if (MYSQL.equals(businessConfig.getDataAdapter())) {

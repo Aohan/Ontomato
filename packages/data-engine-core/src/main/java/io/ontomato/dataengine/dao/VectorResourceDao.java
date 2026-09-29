@@ -200,6 +200,25 @@ public class VectorResourceDao extends BaseDao {
 		return new File("conf/" + dirName + "/" + indexName + "/" + fileName);
 	}
 
+	/**
+	 * Delete a vector resource record (by object id + path) from the vector table and remove its file.
+	 *
+	 * @param path the stored relative path ({@code indexName/id.suffix}), matching {@link VectorResource#getPath()}
+	 */
+	public void delete(String className, String attrName, String objectId, String path, String domainId) {
+		String indexName = this.generateIndexName(className, attrName, domainId);
+		String tableName = quotedTable(indexName);
+		try {
+			jdbcTemplate.update("DELETE FROM " + tableName + " WHERE object_id = ? AND path = ?", objectId, path);
+			File file = new File("conf/" + dirName + "/" + path);
+			if (file.exists() && file.isFile()) {
+				file.delete();
+			}
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+		}
+	}
+
 	public void rebuildIndex(String className, String attrName, String domainId) {
 		String indexName = this.generateIndexName(className, attrName, domainId);
 		String tableName = quotedTable(indexName);

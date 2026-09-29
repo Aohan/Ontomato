@@ -1145,7 +1145,44 @@ public class AdminServiceImpl implements AdminService {
 	}
 	
 	private void writeJSONRule(Map<String, Object> jsonRule, String domainId) {
+		validatePrimaryKey(jsonRule);
 		jsonRuleDao.save(jsonRule, domainId);
+	}
+
+	/**
+	 * Enforce the primary-key invariant that lets vector/row-permission DSL rewriting use a single
+	 * primary-key field name across M3 and relational adapters:
+	 * every class has exactly one {@code primaryKey=true} attribute, and its type is {@code varchar}.
+	 */
+	private void validatePrimaryKey(Map<String, Object> jsonRule) {
+		if (jsonRule == null || jsonRule.get("classDef") == null) {
+			return;
+		}
+		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
+		for (Map<String, Object> classDef : classDefs) {
+			String className = (String)classDef.get("className");
+			List<Map<String, Object>> attrs = (List<Map<String, Object>>)classDef.get("attrs");
+			int pkCount = 0;
+			String pkName = null;
+			String pkType = null;
+			if (attrs != null) {
+				for (Map<String, Object> attr : attrs) {
+					if (attr.get("enable") == null || (Boolean)attr.get("enable")) {
+						if (attr.get("primaryKey") != null && (Boolean)attr.get("primaryKey")) {
+							pkCount++;
+							pkName = (String)attr.get("name");
+							pkType = (String)attr.get("type");
+						}
+					}
+				}
+			}
+			if (pkCount != 1) {
+				throw new IllegalArgumentException("Class [" + className + "] must have exactly one primaryKey attribute, but found " + pkCount);
+			}
+			if (!"varchar".equals(pkType)) {
+				throw new IllegalArgumentException("Primary key [" + pkName + "] of class [" + className + "] must be of type varchar, but was " + pkType);
+			}
+		}
 	}
 	
 	@Override

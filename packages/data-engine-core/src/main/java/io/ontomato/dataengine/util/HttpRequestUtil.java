@@ -65,7 +65,8 @@ public class HttpRequestUtil {
     	
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		queryJson = DslUtil.normalizeClassNames(queryJson, classDefs);
-		Object[] addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId);
+		boolean useM3 = DataAdapterFactory.isM3(businessConfig);
+		Object[] addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId, useM3);
     	JSONObject originDsl = addVectorAndRowPermissionResult[0] == null ? null : (JSONObject)addVectorAndRowPermissionResult[0];
     	Map<String, List<String>> selectAsFilePathsMap = addVectorAndRowPermissionResult[1] == null ? null : (Map<String, List<String>>)addVectorAndRowPermissionResult[1];
     	Set<String> vectorResourceAsSet = addVectorAndRowPermissionResult[2] == null ? null : (Set<String>)addVectorAndRowPermissionResult[2];
@@ -97,7 +98,8 @@ public class HttpRequestUtil {
     	
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		queryJson = DslUtil.normalizeClassNames(queryJson, classDefs);
-		Object[] addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId);
+		boolean useM3 = DataAdapterFactory.isM3(businessConfig);
+		Object[] addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId, useM3);
     	JSONObject rowPermissionDsl = addVectorAndRowPermissionResult[3] == null ? null : (JSONObject)addVectorAndRowPermissionResult[3];
     	
     	Set<String> nodeIds = new HashSet<String>();
@@ -137,14 +139,15 @@ public class HttpRequestUtil {
     		List<Map<String, Object>> classDefs,
     		VectorResourceDao vectorResourceDao,
     		UserDataPermission permission,
-    		String domainId
+    		String domainId,
+    		boolean useM3
     		) {
     	// original DSL
     	List<JSONObject> dsls = JSON.parseArray(queryJson, JSONObject.class);
         JSONObject originDsl = dsls.get(0);
 
         //3. Call M3 to obtain data
-        Object[] dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId);
+        Object[] dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId, useM3);
         JSONObject vectorDsl = null;
         Map<String, List<String>> selectAsFilePathsMap = null;
         Set<String> vectorResourceAsSet = new HashSet<String>();
@@ -200,7 +203,7 @@ public class HttpRequestUtil {
                             			JSONArray array = (JSONArray)mapAnswer.get(as);
                             			JSONArray newArray = new JSONArray();
                             			for (int i = 0; i < array.size(); i++) {
-                            				JSONObject row = JSONObject.parseObject(array.getString(i));
+                            				JSONObject row = array.getJSONObject(i);
                             				String path = row.getString("path");
                             				if (paths.contains(path)) {
                             					row.put("path", dataRagConfig.getCardBaseUrl() + "/vectorResource/resource/" + path);
@@ -214,7 +217,7 @@ public class HttpRequestUtil {
                             			JSONArray array = (JSONArray)mapAnswer.get(as);
                             			JSONArray newArray = new JSONArray();
                             			for (int i = 0; i < array.size(); i++) {
-                            				JSONObject row = JSONObject.parseObject(array.getString(i));
+                            				JSONObject row = array.getJSONObject(i);
                             				String path = row.getString("path");
                             				row.put("path", dataRagConfig.getCardBaseUrl() + "/vectorResource/resource/" + path);
                             				newArray.add(row);

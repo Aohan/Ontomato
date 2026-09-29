@@ -23,6 +23,7 @@ import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.BusinessConfig.OracleDataAdapterProperties;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
+import io.ontomato.dataengine.util.DslUtil;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 
 import lombok.extern.slf4j.Slf4j;
@@ -588,6 +589,16 @@ public class OracleAdapter implements DataAdapter {
 			String targetClassName, String targetObjId) throws Exception {
 		// TODO Auto-generated method stub
 		
+	}
+
+	@Override
+	public JSONArray queryVectorAttr(Map<String, Object> classDef, String attrName, String objectId) throws Exception {
+		String fullClassName = (String) classDef.get("className");
+		String pk = DslUtil.getPrimaryKey(classDef);
+		String sql = "select " + attrName + " from " + fullClassName + " where " + pk + " = '" + objectId + "'";
+		JSONArray rows = executeSql(oracleDataAdapterProperties, sql);
+		Object value = (rows != null && rows.size() > 0) ? rows.getJSONObject(0).get(attrName) : null;
+		return DslUtil.parseVectorAttr(value);
 	}
 
 	@Override

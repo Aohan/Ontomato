@@ -43,6 +43,26 @@ public class VectorResourceController {
 		return ret;
 	}
 	
+	@PostMapping("/vectorResource/delete")
+	@ResponseBody
+	public JSONObject delete(@RequestBody JSONObject param) {
+		JSONObject ret = new JSONObject();
+		try {
+			User user = SystemUtils.getCurUser();
+			String className = param.getString("className");
+			String attrName = param.getString("attrName");
+			String objectId = param.getString("objectId");
+			String path = param.getString("path");
+			vectorResourceService.deleteAndDetach(className, attrName, objectId, path, user.getDomainId());
+			ret.put("success", true);
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+			ret.put("success", false);
+			ret.put("message", e.getMessage());
+		}
+		return ret;
+	}
+	
 	@PostMapping("/vectorResource/upload")
 	@ResponseBody
 	public JSONObject upload(
@@ -62,7 +82,7 @@ public class VectorResourceController {
 			resource.setAttrName(attrName);
 			resource.setObjectId(objectId);
 			is = file.getInputStream();
-			VectorResource save = vectorResourceService.save(resource, is, suffix, user.getDomainId());
+			VectorResource save = vectorResourceService.saveAndAttach(resource, is, suffix, user.getDomainId());
 			if (save != null) {
 				ret.put("success", true);
 				ret.put("data", save);
