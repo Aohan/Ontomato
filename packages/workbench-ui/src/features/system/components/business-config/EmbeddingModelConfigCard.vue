@@ -112,7 +112,7 @@ function confirmDialog() {
           :disabled="!writable || !model"
           @click="emit('save')"
         >
-          {{ t("common.saveConfig") }}
+          {{ t("common.save") }}
         </el-button>
       </el-form-item>
 

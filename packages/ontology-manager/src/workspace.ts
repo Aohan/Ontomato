@@ -1,4 +1,10 @@
-export type Workspace = "model" | "browser" | "assets" | "playground" | "visual-modeling";
+export type Workspace =
+  | "model"
+  | "browser"
+  | "assets"
+  | "playground"
+  | "visual-modeling"
+  | "knowledge";
 export type AssetTab = "metrics" | "actions" | "tasks" | "functions";
 export type ModelResource = "objects" | "attributes" | "relations";
 

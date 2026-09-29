@@ -2,7 +2,6 @@
 import type {
   SystemModelConfigResponse,
   SystemModelEntry,
-  SystemModelRole,
 } from "@ontomato/contracts/system-model";
 
 import { computed, reactive, ref, shallowRef, watch } from "vue";
@@ -11,7 +10,6 @@ import { useI18n } from "vue-i18n";
 import type { JsonObject } from "@ontomato/contracts/system-model";
 
 import CustomRequestParametersEditor from "./CustomRequestParametersEditor.vue";
-import { modelLabel } from "../../types";
 import { plainOuter } from "../../utils/raw";
 import { workbenchContent } from "../../../../content";
 const { t } = useI18n();
@@ -26,7 +24,6 @@ const props = defineProps<{
 const model = defineModel<SystemModelConfigResponse>("model", { required: true });
 
 const emit = defineEmits<{
-  save: [];
   test: [entry: SystemModelEntry];
   retry: [];
 }>();
@@ -35,11 +32,10 @@ const dialogVisible = ref(false);
 const editingIndex = ref(-1);
 const customRequestParametersValid = ref(true);
 const savedSignature = ref("");
-// 只比较本区保存的 models 与两个角色引用；问数设置在其他配置里单独保存。
+// 只比较本区保存的模型库；角色引用在独立的 Role model references 卡片里维护。
 function modelSignature(): string {
   return JSON.stringify({
     models: model.value.models.map((entry) => plainOuter(entry)),
-    agents: model.value.agents,
   });
 }
 const dirty = computed(
@@ -76,11 +72,6 @@ function updateCustomParameters(value: JsonObject) {
   // 显式写入 ref，避免模板将含 __v_isRef 的普通 JSON 当成新的 ref 绑定。
   customParams.value = value;
 }
-
-const roles: { key: SystemModelRole; label: string }[] = [
-  { key: "default", label: "admin.systemModel" },
-  { key: "diagnosis", label: "admin.diagnosisModel" },
-];
 
 const isNew = computed(() => editingIndex.value < 0);
 const dialogTitle = computed(() => (isNew.value ? t("admin.addModel") : t("admin.editModel")));
@@ -239,36 +230,7 @@ defineExpose({ markSaved });
             </div>
           </li>
         </ul>
-        <el-form
-          class="call-settings"
-          :disabled="props.saving"
-          label-width="120px"
-          label-position="left"
-          size="default"
-        >
-          <el-form-item v-for="role in roles" :key="role.key" :label="t(role.label)">
-            <el-select v-model="model.agents[role.key].model" class="system-model-select">
-              <el-option
-                v-for="entry in model.models"
-                :key="entry.name"
-                :label="modelLabel(entry)"
-                :value="entry.name"
-              />
-            </el-select>
-          </el-form-item>
-        </el-form>
       </template>
-
-      <el-form-item class="form-actions">
-        <el-button
-          type="primary"
-          :loading="props.saving"
-          :disabled="!!props.loadError || props.loading"
-          @click="emit('save')"
-        >
-          {{ t("admin.saveApplicationModels") }}
-        </el-button>
-      </el-form-item>
 
       <el-dialog
         v-model="dialogVisible"

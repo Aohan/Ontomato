@@ -1,10 +1,12 @@
 import type { Component } from "vue";
 import {
+  Activity,
   Blocks,
+  Cpu,
   Database,
+  MessageSquare,
   Monitor,
   Network,
-  Orbit,
   Puzzle,
   ScrollText,
   ServerCog,
@@ -16,6 +18,8 @@ export interface AdminGroup {
   titleKey: string;
   permission: string;
   icon: Component;
+  /** 选中页签时的默认落点（例如 Ontology Manager 直接展示 iframe，不占用左侧菜单项）。 */
+  homePath?: string;
 }
 
 export interface AdminMenuItem {
@@ -63,36 +67,30 @@ export interface AdminLayoutConfig {
 export const adminGroups = {
   dataAssets: {
     key: "data-assets",
-    titleKey: "nav.dataAssets",
+    titleKey: "nav.ontologyManager",
     permission: "intelligence-engine",
     icon: Database,
+    homePath: "/admin/ontology-manager",
   },
   appCapabilities: {
     key: "app-capabilities",
-    titleKey: "nav.appAndCapabilities",
+    titleKey: "nav.agentsAndSkills",
     permission: "application-management",
     icon: Blocks,
   },
   platformManagement: {
     key: "platform-management",
-    titleKey: "nav.platformManagement",
+    titleKey: "nav.systemManagement",
     permission: "system-management",
     icon: Monitor,
   },
 } satisfies Record<string, AdminGroup>;
 
 export const adminMenuItems = {
-  ontologyManager: {
-    permission: "ontology-modeling",
-    path: "/admin/ontology-manager",
-    titleKey: "nav.ontologyAssets",
-    icon: Orbit,
-    groupKey: "data-assets",
-  },
   analysis: {
     permission: "analysis-agent",
     path: "/admin/analysis",
-    titleKey: "nav.analysisApplications",
+    titleKey: "nav.analysisAgents",
     icon: Blocks,
     groupKey: "app-capabilities",
   },
@@ -106,22 +104,43 @@ export const adminMenuItems = {
   skills: {
     permission: "skill-management",
     path: "/admin/skills",
-    titleKey: "nav.skillAndKnowledge",
+    titleKey: "nav.skills",
     icon: Puzzle,
     groupKey: "app-capabilities",
   },
-  businessConfig: {
+  modelConfig: {
+    permission: "system-config",
+    path: "/admin/model-config",
+    titleKey: "nav.modelConfig",
+    icon: Cpu,
+    groupKey: "platform-management",
+  },
+  systemConfig: {
     permission: "system-config",
     path: "/admin/system-config",
     titleKey: "nav.systemConfig",
     icon: ServerCog,
     groupKey: "platform-management",
   },
-  operations: {
-    permission: "system-management",
-    path: "/admin/operations",
-    titleKey: "nav.operationsCenter",
+  auditLog: {
+    permission: "audit-logs",
+    path: "/admin/audit-log",
+    titleKey: "nav.auditLogs",
     icon: ScrollText,
+    groupKey: "platform-management",
+  },
+  feedbackRecords: {
+    permission: "audit-logs",
+    path: "/admin/feedback-records",
+    titleKey: "nav.feedbackRecords",
+    icon: MessageSquare,
+    groupKey: "platform-management",
+  },
+  systemMonitor: {
+    permission: "system-monitoring",
+    path: "/admin/system-monitor",
+    titleKey: "nav.systemMonitoring",
+    icon: Activity,
     groupKey: "platform-management",
   },
 } satisfies Record<string, AdminMenuItem>;

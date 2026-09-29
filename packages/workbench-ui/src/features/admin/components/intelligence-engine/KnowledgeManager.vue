@@ -2,14 +2,12 @@
 import { onMounted } from "vue";
 import { Plus, Pencil, Trash2, Grid3x3, List } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
 import { useCrudAdmin } from "../../composables/useCrudAdmin";
 import { adminApi } from "../../api";
 import type { Knowledge, KnowledgeManagerProps } from "./knowledge-manager";
 
 const props = defineProps<KnowledgeManagerProps>();
 const { t } = useI18n();
-const router = useRouter();
 
 const {
   loading,
@@ -79,9 +77,6 @@ onMounted(() => {
         {{ t("hotData.batchDelete") }}
       </el-button>
       <div class="toolbar-actions">
-        <el-button @click="router.push({ name: 'KnowledgeGovernance' })">
-          {{ t("governance.title") }}
-        </el-button>
         <el-button-group>
           <el-button
             :type="viewMode === 'table' ? 'primary' : 'default'"

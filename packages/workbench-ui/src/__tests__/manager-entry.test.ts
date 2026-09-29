@@ -80,6 +80,7 @@ describe("Manager 入口", () => {
       back: "playground",
       theme: "light",
       locale: "en",
+      embedded: "1",
       tk: "tok",
     });
     expect(url.hash).toBe("");
@@ -91,6 +92,6 @@ describe("Manager 入口", () => {
     expect(withKey.url.searchParams.get("tk")).toBeNull();
 
     const oss = await managerFrameUrl("/admin/ontology-manager?view=data-browser", ossEntry, null, null);
-    expect(Object.fromEntries(oss.url.searchParams)).toEqual({ view: "data-browser", theme: "light" });
+    expect(Object.fromEntries(oss.url.searchParams)).toEqual({ view: "data-browser", theme: "light", embedded: "1" });
   });
 });

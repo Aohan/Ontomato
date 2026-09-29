@@ -27,6 +27,7 @@ const managerUrl = computed(() => {
   }
   url.searchParams.set("theme", initialTheme);
   if (config.localeMessage) url.searchParams.set("locale", initialLocale);
+  url.searchParams.set("embedded", "1");
   const token = authHost().getToken();
   if (token) {
     url.searchParams.set("tk", token);

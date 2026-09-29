@@ -17,16 +17,14 @@ import {
 } from "@ontomato/workbench-ui";
 import { anonymousAuthHost } from "./auth";
 import { businessConfig } from "./business-config";
-import { knowledgeManager } from "./knowledge-manager";
 import { workbenchContent } from "./workbench-content";
 
 /*
- * 开源网页入口。装配 /chat 工作台布局、/observe 与开源全部管理后台页面（/admin 布局、Manager 入口、热点报告、知识治理、业务知识、问数示例、系统配置、反馈记录、系统监控、
- * 分析智能体、MCP 服务、两类技能、审计日志与 Manager 旧入口重定向）；
+ * 开源网页入口。装配 /chat 工作台布局、/observe 与开源全部管理后台页面（/admin 布局、Manager 入口、知识、热点报告、知识治理、系统监控、
+ * 分析智能体、MCP 服务、两类技能、模型配置、系统配置、审计日志、反馈记录与 Manager 旧入口重定向）；
  * 界面已在本机合成接口下完成浏览器验收，真实整栈集成尚未验证，这一构建不能替换现网前端。
- * 原完整菜单顺序：data-engine: ontology-manager；intelligence-engine: hot-data, knowledge, examples；
- * application: analysis, mcp-service；skills: skills/analysis, skills/visualization；
- * platform-governance: system-config, audit-log, feedback-records, system-monitor。
+ * 菜单顺序：ontology-manager 组（home 直达 iframe，无左侧菜单）；agents-and-skills 组：analysis, skills, mcp-service；
+ * system-management 组：model-config, system-config, audit-log, feedback-records, system-monitor。
  */
 const adminLayout: AdminLayoutConfig = {
   access: { ready: true, can: () => true },
@@ -36,12 +34,14 @@ const adminLayout: AdminLayoutConfig = {
     adminGroups.platformManagement,
   ],
   items: [
-    adminMenuItems.ontologyManager,
     adminMenuItems.analysis,
-    adminMenuItems.mcpService,
     adminMenuItems.skills,
-    adminMenuItems.businessConfig,
-    adminMenuItems.operations,
+    adminMenuItems.mcpService,
+    adminMenuItems.modelConfig,
+    adminMenuItems.systemConfig,
+    adminMenuItems.auditLog,
+    adminMenuItems.feedbackRecords,
+    adminMenuItems.systemMonitor,
   ],
   actionTabs: [],
   account: null,
@@ -93,11 +93,11 @@ startWorkbenchWeb({
         adminRoutes.writeTasks,
         adminRoutes.analysis,
         adminRoutes.mcpService,
-        { ...adminRoutes.skills, props: { knowledgeManager } },
+        adminRoutes.skills,
         adminRoutes.skillsAnalysis,
         adminRoutes.skillsVisualization,
+        adminRoutes.modelConfig,
         { ...adminRoutes.businessConfig, props: businessConfig },
-        adminRoutes.operations,
         adminRoutes.auditLog,
         adminRoutes.feedbackRecords,
         adminRoutes.systemMonitor,

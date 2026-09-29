@@ -136,5 +136,6 @@ export default {
     relationTypes: "関係タイプ",
     scheduledWriteTasks: "定期書き込みタスク",
     visualModeling: "ビジュアルモデリング",
+    businessKnowledge: "ビジネス知識",
   },
 };
