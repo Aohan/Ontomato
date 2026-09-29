@@ -476,7 +476,8 @@ class SkillManager {
 
       try {
         fs.mkdirSync(path.dirname(skillDir), { recursive: true });
-        fs.cpSync(packageRoot, skillDir, { recursive: true, errorOnExist: true, force: false });
+        // Node 24 的原生目录拷贝在 Docker Desktop 绑定挂载上报 EACCES，传 filter 会走 JS 实现
+        fs.cpSync(packageRoot, skillDir, { recursive: true, errorOnExist: true, force: false, filter: () => true });
         logger.info(tApp("skills.mgr.importedInfo", { id: manifest.name, dir: skillDir }));
 
         registry.clearCache();

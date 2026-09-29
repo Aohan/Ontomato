@@ -64,7 +64,8 @@ function ensureRuntimePrompts(): void {
   for (const { from, to } of sources) {
     const target = path.join(runtimeDir, to);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.cpSync(from, target, { recursive: true, force: true, errorOnExist: false });
+    // Node 24 的原生目录拷贝在 Docker Desktop 绑定挂载上报 EACCES，传 filter 会走 JS 实现
+    fs.cpSync(from, target, { recursive: true, force: true, errorOnExist: false, filter: () => true });
   }
   logger.info(tApp("foundation.log.prompts.synced"), { runtimeDir });
 
