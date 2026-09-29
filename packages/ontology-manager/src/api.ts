@@ -127,6 +127,15 @@ export interface CreateOntologyRelationInput {
   toField?: string;
 }
 
+/** 业务知识条目（DataRAG KnowledgeEntity 中页面读写的字段）；status 0 待审核、1 已通过。 */
+export interface BusinessKnowledge {
+  knowledgeID: string;
+  knowledgeTitle: string;
+  knowledgeText: string;
+  knowledgeTags: string[];
+  status: number;
+}
+
 export interface SmartAsset {
   id?: string;
   name: string;
@@ -412,17 +421,28 @@ export function createManagerClient(
     return send("/businessConfig/dataAdapters", { method: "GET" });
   }
 
-  /** 业务知识（DataRAG /admin/getBussinessKnowledge 等），供本体管理器内嵌的业务知识页使用。 */
-  function listKnowledge() {
-    return post("/admin/getBussinessKnowledge", {});
+  /** 业务知识列表：DataRAG 返回以 knowledgeID 为键的对象；旧条目可能不带标签。 */
+  async function listKnowledge(): Promise<BusinessKnowledge[]> {
+    const response = await post("/admin/getBussinessKnowledge", {});
+    const entries = response.data as Record<
+      string,
+      Omit<BusinessKnowledge, "knowledgeTags"> & { knowledgeTags?: string[] }
+    >;
+    return Object.values(entries).map((item) => ({
+      knowledgeID: item.knowledgeID,
+      knowledgeTitle: item.knowledgeTitle,
+      knowledgeText: item.knowledgeText,
+      knowledgeTags: item.knowledgeTags ?? [],
+      status: item.status,
+    }));
   }
 
-  function addKnowledge(payload: Record<string, unknown>) {
-    return post("/admin/addBussinessKnowledge", payload);
-  }
-
-  function editKnowledge(payload: Record<string, unknown>) {
-    return post("/admin/editBussinessKnowledge", payload);
+  /** 新增（knowledgeID 为空）或编辑业务知识。 */
+  function saveKnowledge(knowledge: BusinessKnowledge) {
+    return post(
+      knowledge.knowledgeID ? "/admin/editBussinessKnowledge" : "/admin/addBussinessKnowledge",
+      { ...knowledge }
+    );
   }
 
   function deleteKnowledge(knowledgeID: string) {
@@ -450,8 +470,7 @@ export function createManagerClient(
     getBusinessConfig,
     listDataAdapters,
     listKnowledge,
-    addKnowledge,
-    editKnowledge,
+    saveKnowledge,
     deleteKnowledge,
   };
 }

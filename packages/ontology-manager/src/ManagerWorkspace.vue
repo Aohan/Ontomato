@@ -326,9 +326,6 @@ const workspaceTitle = computed(() => {
   if (activeWorkspace.value === "visual-modeling") {
     return { title: t("nav.visualModeling"), description: "" };
   }
-  if (activeWorkspace.value === "knowledge") {
-    return { title: t("nav.businessKnowledge"), description: "" };
-  }
   return { title: t("nav.ontologyModeling"), description: "" };
 });
 
@@ -339,10 +336,7 @@ onMounted(() => {
 
 <template>
   <main ref="shell" class="ontology-manager-shell">
-    <OntologyWorkspaceHeader
-      v-if="context.presentation.showWorkspaceHeader !== false"
-      @home="changeWorkspace('playground')"
-    />
+    <OntologyWorkspaceHeader v-if="!context.embedded" @home="changeWorkspace('playground')" />
 
     <div class="workspace">
       <OntologyResourceSidebar

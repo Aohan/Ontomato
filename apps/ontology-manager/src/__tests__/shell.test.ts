@@ -19,6 +19,9 @@ vi.mock("@ontomato/ontology-manager", async () => {
       view: { type: String, required: true },
       dataFallbacks: { type: Object, required: true },
       presentation: { type: Object, required: true },
+      knowledgeTagValues: { type: Object, required: true },
+      embedded: { type: Boolean, required: true },
+      knowledgeGovernanceUrl: { type: String, default: null },
     },
     emits: ["update:view", "auth-failure"],
     setup(props, { emit }) {
@@ -68,6 +71,13 @@ describe("开源独立外壳", () => {
         unnamedAsset: "Unnamed asset",
       },
     });
+    expect(host.props?.knowledgeTagValues).toEqual({
+      general: "General",
+      business: "Business",
+      tech: "Tech",
+    });
+    expect(host.props?.embedded).toBe(false);
+    expect(host.props?.knowledgeGovernanceUrl).toBeNull();
     // 开源展示原值（b6437c86）：同一静态对象交给组件。
     expect(host.props?.presentation).toBe(ossPresentation);
     expect(ossPresentation).toMatchObject({
@@ -79,6 +89,14 @@ describe("开源独立外壳", () => {
     expect(ossPresentation.dataBrowserDescription("Order")).toBe(
       "Browse and inspect data records for the current object type."
     );
+  });
+
+  it("宿主嵌入参数：embedded=1 与 http(s) 治理地址交给组件，其他协议的地址当作没有", () => {
+    start("/?embedded=1&knowledgeGovernanceUrl=http%3A%2F%2Fhost.test%2Fadmin%2Fknowledge-governance");
+    expect(host.props?.embedded).toBe(true);
+    expect(host.props?.knowledgeGovernanceUrl).toBe("http://host.test/admin/knowledge-governance");
+    start("/?embedded=1&knowledgeGovernanceUrl=javascript%3Aalert(1)");
+    expect(host.props?.knowledgeGovernanceUrl).toBeNull();
   });
 
   it("显式 tk / apiKey 启动时使用该凭据并从地址移除", () => {

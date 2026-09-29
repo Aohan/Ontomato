@@ -28,10 +28,6 @@ export { observeRoutes } from "./router/observe-routes";
 export { ObserveLayout } from "./features/diagnosis";
 export type { ObserveAccount } from "./features/diagnosis/components/layout/types";
 export type {
-  Knowledge,
-  KnowledgeManagerProps,
-} from "./features/admin/components/intelligence-engine/knowledge-manager";
-export type {
   BusinessConfigAdapterDisplay,
   BusinessConfigLanguageLabels,
   BusinessConfigProps,

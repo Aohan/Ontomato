@@ -33,11 +33,6 @@ export const adminApi = {
   queryAuditLogs: (params: unknown) => apiPost("/auditLog/queryPage", params),
   getServiceInfo: () => apiGet("/maintenance/getserviceinfo"),
   runServiceAction: (payload: unknown) => apiPost("/maintenance/serviceaction", payload),
-  listKnowledge: () => apiPost("/admin/getBussinessKnowledge", {}),
-  addKnowledge: (payload: unknown) => apiPost("/admin/addBussinessKnowledge", payload),
-  editKnowledge: (payload: unknown) => apiPost("/admin/editBussinessKnowledge", payload),
-  deleteKnowledge: (knowledgeID: unknown) =>
-    apiPost("/admin/delBussinessKnowledge", { knowledgeID }),
   editClassDescription: (payload: unknown) => apiPost("/admin/editClassDesc", payload),
   editClassShowName: (payload: unknown) => apiPost("/admin/editClassShowName", payload),
   editClassAttributeDescription: (payload: unknown) => apiPost("/admin/editClassAttrDesc", payload),

@@ -7,6 +7,7 @@ import {
   type ManagerAuthFailureStatus,
   type ManagerCredential,
   type ManagerDataFallbacks,
+  type ManagerKnowledgeTagValues,
   type ManagerPresentation,
 } from "@ontomato/ontology-manager";
 import { readRuntimeConfig } from "./config";
@@ -30,6 +31,30 @@ export interface ManagerShellProfile {
   dataFallbacks: ManagerDataFallbacks;
   /** 本产品 Manager 的展示原值（主题取值、节点色板、图谱交互与窄屏对话框等）。 */
   presentation: ManagerPresentation;
+  /** 本产品业务知识标签的存储值。 */
+  knowledgeTagValues: ManagerKnowledgeTagValues;
+}
+
+/**
+ * 宿主嵌入时经启动地址给出的信息：embedded=1 表示嵌在宿主页面里；knowledgeGovernanceUrl 是宿主的业务知识治理页，
+ * 地址来自 URL 参数，只接受 http/https，其余当作没有。
+ */
+function readHostLaunch() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    embedded: params.get("embedded") === "1",
+    knowledgeGovernanceUrl: httpUrl(params.get("knowledgeGovernanceUrl")),
+  };
+}
+
+function httpUrl(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value, window.location.href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 export function startManagerShell(profile: ManagerShellProfile) {
@@ -43,11 +68,7 @@ export function startManagerShell(profile: ManagerShellProfile) {
   const { apiBase, initialRoute } = readRuntimeConfig();
   const { view, replaceView } = syncView(initialRoute);
 
-  // 嵌入宿主时隐藏顶部品牌栏：宿主已提供“Ontology Manager”页签与返回，Manager 不再重复展示。
-  const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
-  const presentation: ManagerPresentation = embedded
-    ? { ...profile.presentation, showWorkspaceHeader: false }
-    : profile.presentation;
+  const { embedded, knowledgeGovernanceUrl } = readHostLaunch();
 
   // 401 认证失效：清除本标签页凭据并停止请求；402 License 失败保留凭据，错误由组件显示。
   function onAuthFailure(status: ManagerAuthFailureStatus) {
@@ -67,7 +88,10 @@ export function startManagerShell(profile: ManagerShellProfile) {
             theme: theme.value,
             view: view.value,
             dataFallbacks: profile.dataFallbacks,
-            presentation,
+            presentation: profile.presentation,
+            knowledgeTagValues: profile.knowledgeTagValues,
+            embedded,
+            knowledgeGovernanceUrl,
             "onUpdate:view": replaceView,
             onAuthFailure,
           })

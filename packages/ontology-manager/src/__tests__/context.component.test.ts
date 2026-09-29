@@ -88,6 +88,9 @@ const base: ManagerHostContext = {
     dataBrowserDescription: () => "",
     compactDialogs: false,
   },
+  knowledgeTagValues: { general: "通用", business: "业务", tech: "技术" },
+  embedded: false,
+  knowledgeGovernanceUrl: null,
 };
 
 describe("宿主上下文注入", () => {
