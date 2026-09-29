@@ -8,7 +8,7 @@ export async function analyzeChartWithLlm(payload: any) {
     ? payloadRows.filter((row: unknown) => row && typeof row === "object" && !Array.isArray(row))
     : [];
 
-  const model = createModel({ agentName: "Dashboard-ChartAnalyzer" });
+  const model = await createModel({ agentName: "Dashboard-ChartAnalyzer" });
   const prompt = renderPrompt("dashboard.chart-analyzer.user", {
     payload: JSON.stringify(promptPayload, null, 2),
     dataEvidence: JSON.stringify(buildModelDataView(rows)),

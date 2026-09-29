@@ -66,7 +66,7 @@ function buildRequest(
 async function planChartFields(
   requests: FieldMappingRequest[]
 ): Promise<Map<string, Record<string, any>>> {
-  const llm = createModel({ temperature: 0.1, agentName: "Dashboard-ChartFieldPlanner" });
+  const llm = await createModel({ temperature: 0.1, agentName: "Dashboard-ChartFieldPlanner" });
   const systemPrompt = buildChartFieldPlannerSystemPrompt();
   const mappings = new Map<string, Record<string, any>>();
   for (const req of requests) {
@@ -98,7 +98,7 @@ export async function recommendAppendDatasetPlan(
       existingChartTypes: existingChartTypes ?? [],
       datasets: profiles.map(({ sourceRows: _sourceRows, ...profile }) => profile),
     });
-    const llm = createModel({ temperature: 0.1, agentName: "Dashboard-AppendPlanner" });
+    const llm = await createModel({ temperature: 0.1, agentName: "Dashboard-AppendPlanner" });
     const res = await llm.invoke([new SystemMessage(systemPrompt), new HumanMessage(userPrompt)]);
     const raw = String((res as any)?.content ?? "").trim();
     const jsonText = cleanJsonBlock(raw);
@@ -130,7 +130,7 @@ export async function recommendDashboardDatasetPlan(profiles: DatasetProfile[]) 
         dataType: p.dataType,
       })),
     });
-    const llm = createModel({ temperature: 0.1, agentName: "Dashboard-DashboardPlanner" });
+    const llm = await createModel({ temperature: 0.1, agentName: "Dashboard-DashboardPlanner" });
     const res = await llm.invoke([new SystemMessage(systemPrompt), new HumanMessage(userPrompt)]);
     const raw = String((res as any)?.content ?? "").trim();
     const jsonText = cleanJsonBlock(raw);

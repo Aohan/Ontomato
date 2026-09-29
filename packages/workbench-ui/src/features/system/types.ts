@@ -1,45 +1,28 @@
-import type { JsonObject } from "@ontomato/contracts/system-model";
+import type {
+  BackendAgentConfig,
+  BackendModelConfig,
+  ModelRole,
+} from "@ontomato/contracts/model-settings";
 
-export interface BackendModelConfig {
-  name: string;
-  displayName: string;
-  baseUrl: string;
-  apiKeys: string[];
-  organizationId?: string | null;
-  projectId?: string | null;
-  modelName: string;
-  timeout: string;
-  maxRetries: number;
-  temperature: number | null;
-  topP: number | null;
-  stop?: string[] | null;
+/**
+ * 模型配置页编辑的模型条目：以 getModelSettings 读取的条目为底，未上控件的字段（organizationId 等）随快照原样往返。
+ * 读取时未设置的可选项可能为 null；新建或清空的 maxTokens / contextWindow 以 null 提交，默认值由 Java 读取归一化补上。
+ */
+export type ModelEntry = Omit<
+  BackendModelConfig,
+  "maxTokens" | "contextWindow" | "timeout" | "maxRetries" | "temperature" | "topP"
+> & {
   maxTokens: number | null;
-  maxCompletionTokens: number | null;
-  presencePenalty?: number | null;
-  frequencyPenalty?: number | null;
-  logitBias?: Record<string, number> | null;
-  responseFormat?: string | null;
-  strictJsonSchema?: boolean | null;
-  seed?: number | null;
-  user?: string | null;
-  strictTools?: boolean | null;
-  parallelToolCalls?: boolean | null;
-  store?: boolean | null;
-  metadata?: Record<string, string> | null;
-  serviceTier?: string | null;
-  reasoningEffort?: string | null;
-  logRequests?: boolean | null;
-  logResponses?: boolean | null;
-  customRequestParameters: JsonObject;
-  customHeaders?: Record<string, string> | null;
-  supportedCapabilities?: string[] | null;
-}
+  contextWindow: number | null;
+  timeout?: string | null;
+  maxRetries?: number | null;
+  temperature?: number | null;
+  topP?: number | null;
+  maxCompletionTokens?: number | null;
+};
 
-export interface BackendAgentConfig {
-  model: string;
-  actorCopies: number;
-  skilldir?: string;
-}
+/** 五个角色的模型引用草稿：配置 ID，或未配置（null）；与 saveModelSettings 请求的 agents 同形。 */
+export type RoleModels = Record<ModelRole, string | null>;
 
 export interface EmbeddingModelConfig {
   baseUrl: string;
@@ -65,10 +48,8 @@ export interface DataAdapterInfo {
   examples: Partial<Record<DataAdapterField, string>>;
 }
 
-export interface BusinessConfig {
-  models: BackendModelConfig[];
-  agents: Record<AgentKey, BackendAgentConfig>;
-  embeddingModelProperties: EmbeddingModelConfig | null;
+/** 系统配置页编辑的通用参数、语言与数据适配器。 */
+export interface SystemSettings {
   knowledgeMaxResult: number;
   toolAndPythonRetry: number;
   dslCookerTries: number;
@@ -80,15 +61,11 @@ export interface BusinessConfig {
   dataAdapterConnections: Record<string, DataAdapterConnection>;
 }
 
-export const agentKeys = [
-  "normalChat",
-  "questionSpliter",
-  "cleverNormalChat",
-  "pythonChat",
-  "toolChat",
-] as const;
-
-export type AgentKey = (typeof agentKeys)[number];
+/** GET /businessConfig/getConfig 中两页读取的部分：系统配置页读取通用设置与技能目录，模型配置页读取 Embedding。 */
+export interface BusinessConfig extends SystemSettings {
+  agents: Record<ModelRole, BackendAgentConfig>;
+  embeddingModelProperties: EmbeddingModelConfig | null;
+}
 
 export type GeneralConfigKey =
   | "knowledgeMaxResult"
@@ -99,15 +76,10 @@ export type GeneralConfigKey =
   | "questionSpliterTimeout"
   | "lang";
 
-// Shared identity for application and query engine models: name is the fixed config ID and
-// displayName may be duplicated; append the ID when they differ, show it once when they match.
+// Model identity: name is the fixed config ID and displayName may be duplicated;
+// append the ID when they differ, show it once when they match.
 export function modelLabel(model: { name: string; displayName: string }): string {
   return model.displayName === model.name ? model.name : `${model.displayName} (${model.name})`;
-}
-
-export function parseTimeoutSeconds(timeout: string): number {
-  const match = timeout?.match(/^PT(\d+)S$/);
-  return match ? parseInt(match[1], 10) : 300;
 }
 
 export function formatTimeout(seconds: number): string {

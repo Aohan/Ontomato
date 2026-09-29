@@ -32,6 +32,7 @@ public class ModelConfig {
     private List<String> stop;
     private Integer maxTokens;
     private Integer maxCompletionTokens;
+    private Integer contextWindow;
     private Double presencePenalty;
     private Double frequencyPenalty;
     private Map<String, Integer> logitBias;
@@ -39,7 +40,6 @@ public class ModelConfig {
     private Boolean strictJsonSchema;
     private Integer seed;
     private String user;
-    private Boolean strictTools;
     private Boolean parallelToolCalls;
     private Boolean store;
     private Map<String, String> metadata;

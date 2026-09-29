@@ -76,76 +76,18 @@ public class BusinessConfigController {
 		return ret;
 	}
 
-	@PostMapping("/businessConfig/saveModels")
-    @ResponseBody
-    public JSONObject saveModels(@RequestBody JSONObject input) {
-    	JSONObject ret = new JSONObject();
-    	try {
-    		User user = SystemUtils.getCurUser();
-    		if (input.getJSONArray("models") == null) {
-    			throw new IllegalArgumentException("models must not be empty");
-    		}
-			List<ModelConfig> models = input.getJSONArray("models").toJavaList(
-					ModelConfig.class, JSONReader.Feature.DisableReferenceDetect);
-			if (models == null) {
-				models = new ArrayList<>();
-			}
-			for (ModelConfig model : models) {
-				model.setCustomRequestParameters(CustomRequestParameters.normalize(
-						model.getCustomRequestParameters()));
-			}
-    		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-    		businessConfig.setModels(models);
-    		ModelResolver.requireConnections(models);
-    		ModelResolver.validateForSave(businessConfig);
-    		businessConfigService.set(businessConfig, user.getDomainId());
-    		ret.put("success", true);
-    	} catch (Exception e) {
-    		log.error(e.getMessage(), e);
-    		ret.put("success", false);
-    		ret.put("message", e.getMessage());
-    	}
-		return ret;
-	}
-
-	/**
-	 * Model references of the five roles are saved in one call: the input first goes through boundary checks on object, key set and string types,
-	 * then ModelResolver.validateForSave validates the candidate config once; on failure the stored object stays unchanged, on success the candidate is persisted only once.
-	 */
-	@PostMapping("/businessConfig/saveAgentModels")
-    @ResponseBody
-    public JSONObject saveAgentModels(@RequestBody JSONObject input) {
+	@GetMapping("/businessConfig/getModelSettings")
+	@ResponseBody
+	public JSONObject getModelSettings() {
 		JSONObject ret = new JSONObject();
 		try {
 			User user = SystemUtils.getCurUser();
-			Object raw = input.get("modelsByRole");
-			if (!(raw instanceof Map<?, ?> modelsByRole)) {
-				throw new IllegalArgumentException("modelsByRole must be an object");
-			}
-			if (!modelsByRole.keySet().equals(AgentRole.ALL)) {
-				throw new IllegalArgumentException(
-						"modelsByRole must contain all five roles and no unknown roles: " + modelsByRole.keySet());
-			}
-			for (String role : AgentRole.ALL) {
-				if (!(modelsByRole.get(role) instanceof String)) {
-					throw new IllegalArgumentException("The model reference of role " + role + " must be a string");
-				}
-			}
-			BusinessConfig stored = businessConfigService.get(user.getDomainId());
-			// The candidate config replaces only the five changed roles with independent copies, while other fields share the stored object;
-			// if validation fails the stored object stays unchanged, and on success the candidate is persisted only once.
-			BusinessConfig candidate = new BusinessConfig();
-			BeanUtils.copyProperties(stored, candidate);
-			Map<String, AgentConfig> agents = new LinkedHashMap<>();
-			for (String role : AgentRole.ALL) {
-				AgentConfig agent = new AgentConfig();
-				BeanUtils.copyProperties(stored.getAgents().get(role), agent);
-				agent.setModel((String) modelsByRole.get(role));
-				agents.put(role, agent);
-			}
-			candidate.setAgents(agents);
-			ModelResolver.validateForSave(candidate);
-			businessConfigService.set(candidate, user.getDomainId());
+			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
+			ModelResolver.normalizeForRead(businessConfig.getModels());
+			JSONObject data = new JSONObject();
+			data.put("models", businessConfig.getModels());
+			data.put("agents", businessConfig.getAgents());
+			ret.put("data", data);
 			ret.put("success", true);
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
@@ -155,10 +97,83 @@ public class BusinessConfigController {
 		return ret;
 	}
 
-	/** The skill directory hangs only on the execution field of toolChat; changing it touches no model reference. */
+	@PostMapping("/businessConfig/saveModelSettings")
+	@ResponseBody
+	public JSONObject saveModelSettings(@RequestBody JSONObject input) {
+		JSONObject ret = new JSONObject();
+		try {
+			User user = SystemUtils.getCurUser();
+			if (input.getJSONArray("models") == null) {
+				throw new IllegalArgumentException("models must not be null");
+			}
+			List<ModelConfig> models = input.getJSONArray("models").toJavaList(
+					ModelConfig.class, JSONReader.Feature.DisableReferenceDetect);
+			if (models == null) {
+				models = new ArrayList<>();
+			}
+			for (ModelConfig model : models) {
+				model.setCustomRequestParameters(CustomRequestParameters.normalize(
+						model.getCustomRequestParameters()));
+			}
+
+			Object rawAgents = input.get("agents");
+			if (!(rawAgents instanceof Map<?, ?> agentsMap)) {
+				throw new IllegalArgumentException("agents must be an object");
+			}
+			if (!agentsMap.keySet().equals(AgentRole.ALL)) {
+				throw new IllegalArgumentException(
+						"agents must contain all five roles and no unknown roles: " + agentsMap.keySet());
+			}
+
+			BusinessConfig stored = businessConfigService.get(user.getDomainId());
+			String existingSkillDir = stored.getAgents().get(AgentRole.CODING).getSkilldir();
+
+			BusinessConfig candidate = new BusinessConfig();
+			BeanUtils.copyProperties(stored, candidate);
+			candidate.setModels(models);
+
+			Map<String, AgentConfig> newAgents = new LinkedHashMap<>();
+			for (String role : AgentRole.ALL) {
+				Object rawModelRef = agentsMap.get(role);
+				String modelRef = null;
+				if (rawModelRef != null) {
+					if (!(rawModelRef instanceof String)) {
+						throw new IllegalArgumentException("The model reference of role " + role + " must be a string or null");
+					}
+					String str = ((String) rawModelRef).trim();
+					if (!str.isEmpty()) {
+						modelRef = str;
+					}
+				}
+				AgentConfig agent = new AgentConfig();
+				agent.setModel(modelRef);
+				if (AgentRole.CODING.equals(role)) {
+					agent.setSkilldir(existingSkillDir);
+				}
+				newAgents.put(role, agent);
+			}
+			candidate.setAgents(newAgents);
+
+			ModelResolver.validateForSave(candidate);
+			businessConfigService.set(candidate, user.getDomainId());
+
+			ModelResolver.normalizeForRead(candidate.getModels());
+			JSONObject data = new JSONObject();
+			data.put("models", candidate.getModels());
+			data.put("agents", candidate.getAgents());
+			ret.put("data", data);
+			ret.put("success", true);
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+			ret.put("success", false);
+			ret.put("message", e.getMessage());
+		}
+		return ret;
+	}
+
 	@PostMapping("/businessConfig/saveToolSkillDir")
-    @ResponseBody
-    public JSONObject saveToolSkillDir(@RequestBody JSONObject input) {
+	@ResponseBody
+	public JSONObject saveToolSkillDir(@RequestBody JSONObject input) {
 		JSONObject ret = new JSONObject();
 		try {
 			User user = SystemUtils.getCurUser();
@@ -167,7 +182,7 @@ public class BusinessConfigController {
 				throw new IllegalArgumentException("skilldir must be a string");
 			}
 			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-			businessConfig.getAgents().get(AgentRole.TOOL_CHAT).setSkilldir(skilldir);
+			businessConfig.getAgents().get(AgentRole.CODING).setSkilldir(skilldir);
 			businessConfigService.set(businessConfig, user.getDomainId());
 			ret.put("success", true);
 		} catch (Exception e) {

@@ -30,7 +30,7 @@ export async function streamAbcAnalysis(
   transitionText?: string
 ): Promise<string> {
   try {
-    const model = createModel({ temperature: 0.3, agentName: modelAgentName("abcDescription") });
+    const model = await createModel({ temperature: 0.3, agentName: modelAgentName("abcDescription") });
 
     const prompt = renderPrompt("data-query.abc-description.user", {
       originalQuestion,

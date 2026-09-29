@@ -15,6 +15,8 @@ export interface LogContext {
   turn?: TurnIdentity;
   taskId?: string;
   domainId?: string;
+  token?: string;
+  apiKey?: string;
 }
 
 const TURN_KEY_PREFIX = "turn";

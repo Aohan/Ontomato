@@ -338,5 +338,29 @@
   {
     "key": "WriteFunctionOperation.relationNotExist",
     "value": "Relazione inesistente"
+  },
+  {
+    "key": "AgentRole.notConfigured",
+    "value": "Nessun modello configurato per il ruolo \"{0}\". Selezionane uno nella configurazione del modello."
+  },
+  {
+    "key": "AgentRole.query",
+    "value": "Query"
+  },
+  {
+    "key": "AgentRole.coding",
+    "value": "Codifica e calcolo"
+  },
+  {
+    "key": "AgentRole.general",
+    "value": "Generale"
+  },
+  {
+    "key": "AgentRole.diagnosis",
+    "value": "Agente operativo"
+  },
+  {
+    "key": "AgentRole.knowledgeGovernance",
+    "value": "Agente di governance della conoscenza"
   }
 ]

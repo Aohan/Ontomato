@@ -220,6 +220,12 @@ export const fr = {
   "api.feedbackSubmitted": "Commentaire soumis",
   "api.loadConfigFailed": "Échec du chargement de la configuration",
   "api.saveConfigFailed": "Échec de l'enregistrement de la configuration",
+  "model.roleNotConfigured": "Aucun modèle configuré pour le rôle '{role}', veuillez le configurer dans les paramètres du modèle",
+  "model.role.query": "Requête",
+  "model.role.coding": "Code et calcul",
+  "model.role.general": "Général",
+  "model.role.diagnosis": "Agent d'opérations",
+  "model.role.knowledgeGovernance": "Agent de gouvernance des connaissances",
   "api.modelTestFailed": "Échec du test du modèle",
   "api.noAvailableDashboardData":
     "Aucune donnée disponible dans les résultats d'analyse actuels. Veuillez vérifier que les résultats de requête contiennent des données tabulaires avant de réessayer.",

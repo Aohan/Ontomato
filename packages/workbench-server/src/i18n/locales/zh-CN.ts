@@ -193,6 +193,12 @@ export const zhCN = {
   "api.loadConfigFailed": "获取配置失败",
   "api.saveConfigFailed": "保存配置失败",
   "api.modelTestFailed": "模型测试失败",
+  "model.roleNotConfigured": "角色『{role}』未配置模型，请在模型配置中选择",
+  "model.role.query": "问数",
+  "model.role.coding": "代码与计算",
+  "model.role.general": "通用",
+  "model.role.diagnosis": "运维 Agent",
+  "model.role.knowledgeGovernance": "知识治理 Agent",
   "api.noAvailableDashboardData":
     "当前分析结果暂无可用数据。请先确认查询结果中有表格数据后再重试。",
   "api.dashboardNotFound": "仪表盘不存在",

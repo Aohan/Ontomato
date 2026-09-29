@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SystemModelConfigResponse } from "@ontomato/contracts/system-model";
+import type { SystemModelConfig } from "@ontomato/contracts/system-model";
 
 import { computed, ref, watch } from "vue";
 import { MessageSquareText } from "lucide-vue-next";
@@ -21,14 +21,13 @@ const props = defineProps<{
   loadError: string;
 }>();
 
-const model = defineModel<SystemModelConfigResponse>("model", { required: true });
+const model = defineModel<SystemModelConfig>("model", { required: true });
 
 const emit = defineEmits<{
   save: [];
   retry: [];
 }>();
 
-// 只比较本区的两个字段；应用模型草稿在模型配置里单独保存。
 const savedSignature = ref("");
 const signature = () =>
   JSON.stringify([model.value.abcQuestionMode, model.value.queryTimeoutSeconds]);

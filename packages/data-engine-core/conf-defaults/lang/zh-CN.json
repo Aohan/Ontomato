@@ -338,5 +338,29 @@
   {
     "key": "WriteFunctionOperation.relationNotExist",
     "value": "关系不存在"
+  },
+  {
+    "key": "AgentRole.notConfigured",
+    "value": "角色『{0}』未配置模型，请在模型配置中选择"
+  },
+  {
+    "key": "AgentRole.query",
+    "value": "问数"
+  },
+  {
+    "key": "AgentRole.coding",
+    "value": "代码与计算"
+  },
+  {
+    "key": "AgentRole.general",
+    "value": "通用"
+  },
+  {
+    "key": "AgentRole.diagnosis",
+    "value": "运维 Agent"
+  },
+  {
+    "key": "AgentRole.knowledgeGovernance",
+    "value": "知识治理 Agent"
   }
 ]

@@ -231,9 +231,6 @@
     <logger name="io.ontomato.dataengine.service.impl.PythonCalculatorServiceImpl" level="debug" additivity="false">
       <AppenderRef ref="calculator-log"/>
     </logger>
-    <logger name="io.ontomato.dataengine.service.impl.ToolsCalculatorServiceImpl" level="debug" additivity="false">
-      <AppenderRef ref="calculator-log"/>
-    </logger>
     <logger name="io.ontomato.dataengine.service.impl.AfterCalculateServiceImpl" level="debug" additivity="false">
       <AppenderRef ref="calculator-log"/>
     </logger>

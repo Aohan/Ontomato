@@ -213,6 +213,12 @@ export const de = {
   "api.feedbackSubmitted": "Feedback eingereicht",
   "api.loadConfigFailed": "Konfiguration konnte nicht geladen werden",
   "api.saveConfigFailed": "Konfiguration konnte nicht gespeichert werden",
+  "model.roleNotConfigured": "Kein Modell für Rolle '{role}' konfiguriert, bitte in den Modelleinstellungen auswählen",
+  "model.role.query": "Abfrage",
+  "model.role.coding": "Code & Berechnung",
+  "model.role.general": "Allgemein",
+  "model.role.diagnosis": "Betriebs-Agent",
+  "model.role.knowledgeGovernance": "Knowledge-Governance-Agent",
   "api.modelTestFailed": "Modelltest fehlgeschlagen",
   "api.noAvailableDashboardData":
     "Keine verfügbaren Daten in den aktuellen Analyseergebnissen. Bitte stellen Sie sicher, dass die Abfrageergebnisse Tabellendaten enthalten, bevor Sie es erneut versuchen.",

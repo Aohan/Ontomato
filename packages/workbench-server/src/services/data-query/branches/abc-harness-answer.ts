@@ -71,7 +71,7 @@ export async function polishHarnessAnswer(params: {
   );
 
   try {
-    const model = createModel({ temperature: 0.2, agentName: modelAgentName("abcHarnessAnswer") });
+    const model = await createModel({ temperature: 0.2, agentName: modelAgentName("abcHarnessAnswer") });
     const stream = await model.stream([{ role: "user", content: prompt }], { signal });
     let polished = "";
     let lastPushedStablePrefix = "";

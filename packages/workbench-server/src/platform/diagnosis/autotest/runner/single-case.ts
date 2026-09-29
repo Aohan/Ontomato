@@ -27,6 +27,7 @@ import { buildTurnEvidenceWorkspace } from "../../observe/workspaces/turn-eviden
 
 import { writeEvaluationReport } from "../artifact-writer";
 import { withRunArtifactWrite } from "../results/store";
+import { runWithLogContext } from "../../../../logging/log-context";
 import { tApp } from "../../../../i18n";
 
 
@@ -53,7 +54,8 @@ export interface SingleCaseOptions {
 
 export async function executeSingleCase(options: SingleCaseOptions): Promise<CaseResult> {
   const { runId, testCase, userId, domainId, tk, signal, caseTimeoutMs, onStep } = options;
-  const threadId = `autotest-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+  return runWithLogContext({ domainId, token: tk }, async () => {
+    const threadId = `autotest-${randomUUID().replace(/-/g, "").slice(0, 16)}`;
 
   const reportStep = (label: string): void => {
     if (!onStep) return;
@@ -178,6 +180,7 @@ export async function executeSingleCase(options: SingleCaseOptions): Promise<Cas
       error: errorMessage,
     };
   }
+  });
 }
 
 function mapExecutionStatus(execStatus: "success" | "error" | "cancelled"): CaseStatus {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SystemModelConfigResponse as SystemModelConfig } from "@ontomato/contracts/system-model";
+import type { SystemModelConfig } from "@ontomato/contracts/system-model";
 
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
@@ -12,12 +12,11 @@ import GeneralConfigCard from "./business-config/GeneralConfigCard.vue";
 import QuerySettingsCard from "./business-config/QuerySettingsCard.vue";
 import SkillDirConfigCard from "./business-config/SkillDirConfigCard.vue";
 import ExamplesManager from "../../admin/components/intelligence-engine/ExamplesManager.vue";
-import { useSystemModelConfig } from "../useSystemModelConfig";
 import {
-  type BackendAgentConfig,
   type BusinessConfig,
   type DataAdapterInfo,
   type GeneralConfigKey,
+  type SystemSettings,
 } from "../types";
 import type { BusinessConfigProps } from "../business-config";
 
@@ -26,25 +25,12 @@ const props = defineProps<BusinessConfigProps>();
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
 
-function emptyBackendAgent(): BackendAgentConfig {
-  return { model: "", actorCopies: 1 };
-}
-
 const loading = ref(false);
 const backendLoadError = ref("");
 const querySettingsRef = ref<{ markSaved: () => void } | null>(null);
 
-// 卡片按整份业务配置双向绑定；本页只读写其中的通用配置、语言与数据适配器，模型与角色字段不用。
-let config = reactive<BusinessConfig>({
-  models: [],
-  agents: {
-    normalChat: emptyBackendAgent(),
-    questionSpliter: emptyBackendAgent(),
-    cleverNormalChat: emptyBackendAgent(),
-    pythonChat: emptyBackendAgent(),
-    toolChat: emptyBackendAgent(),
-  },
-  embeddingModelProperties: null,
+// 通用配置、语言与数据适配器的草稿，卡片双向绑定。
+const config = reactive<SystemSettings>({
   knowledgeMaxResult: 10,
   toolAndPythonRetry: 0,
   dslCookerTries: 1,
@@ -71,7 +57,8 @@ async function loadConfig() {
     if (res?.success) {
       dataAdapters.value = adaptersRes.data;
       const data = res.data as BusinessConfig;
-      skilldir.value = data.agents?.toolChat?.skilldir ?? "";
+      // 技能目录挂在代码与计算角色上，未设置时为空。
+      skilldir.value = data.agents.coding.skilldir ?? "";
       config.knowledgeMaxResult = data.knowledgeMaxResult ?? 10;
       config.toolAndPythonRetry = data.toolAndPythonRetry ?? 0;
       config.dslCookerTries = data.dslCookerTries ?? 1;
@@ -167,31 +154,47 @@ async function saveDataAdapter() {
   }
 }
 
-const { systemModel, loadingSystemModel, systemLoadError, loadSystemModelConfig } =
-  useSystemModelConfig();
-
+// 问数设置存于 Node 系统模型文件，只有问数模式与总时限两项。
+const querySettings = reactive<SystemModelConfig>({
+  abcQuestionMode: "harness",
+  queryTimeoutSeconds: 600,
+});
+const loadingQuerySettings = ref(false);
+const querySettingsLoadError = ref("");
 const savingQuerySettings = ref(false);
 
-async function saveQuerySettings() {
-  if (loadingSystemModel.value || systemLoadError.value) {
-    if (systemLoadError.value) ElMessage.error(systemLoadError.value);
-    return;
+function applyQuerySettings(data: SystemModelConfig) {
+  querySettings.abcQuestionMode = data.abcQuestionMode;
+  querySettings.queryTimeoutSeconds = data.queryTimeoutSeconds;
+}
+
+async function loadQuerySettings() {
+  loadingQuerySettings.value = true;
+  querySettingsLoadError.value = "";
+  try {
+    const res = await adminApi.getSystemModelConfig();
+    if (res.success) {
+      applyQuerySettings(res.data as SystemModelConfig);
+    } else {
+      querySettingsLoadError.value = res.message || t("admin.loadConfigFailed");
+    }
+  } catch (e: any) {
+    querySettingsLoadError.value = e.message || t("admin.loadConfigFailed");
+  } finally {
+    loadingQuerySettings.value = false;
   }
+}
+
+async function saveQuerySettings() {
   savingQuerySettings.value = true;
   try {
-    // 部分更新：只提交问数设置，应用模型草稿不随之保存。
-    const res = await adminApi.saveSystemModelConfig({
-      abcQuestionMode: systemModel.abcQuestionMode,
-      queryTimeoutSeconds: systemModel.queryTimeoutSeconds,
-    });
-    if (res?.success) {
-      const saved = res.data as SystemModelConfig;
-      systemModel.abcQuestionMode = saved.abcQuestionMode;
-      systemModel.queryTimeoutSeconds = saved.queryTimeoutSeconds;
+    const res = await adminApi.saveSystemModelConfig({ ...querySettings });
+    if (res.success) {
+      applyQuerySettings(res.data as SystemModelConfig);
       querySettingsRef.value?.markSaved();
       ElMessage.success(t("admin.configSaveSuccess"));
     } else {
-      ElMessage.error(res?.message || t("admin.saveFailed"));
+      ElMessage.error(res.message || t("admin.saveFailed"));
     }
   } catch (e: any) {
     ElMessage.error(e.message || t("admin.saveFailed"));
@@ -202,7 +205,7 @@ async function saveQuerySettings() {
 
 onMounted(() => {
   loadConfig();
-  loadSystemModelConfig();
+  loadQuerySettings();
 });
 </script>
 
@@ -210,12 +213,12 @@ onMounted(() => {
   <div class="system-config-container">
     <QuerySettingsCard
       ref="querySettingsRef"
-      v-model:model="systemModel"
-      :loading="loadingSystemModel"
+      v-model:model="querySettings"
+      :loading="loadingQuerySettings"
       :saving="savingQuerySettings"
-      :load-error="systemLoadError"
+      :load-error="querySettingsLoadError"
       @save="saveQuerySettings"
-      @retry="loadSystemModelConfig"
+      @retry="loadQuerySettings"
     />
 
     <div v-if="backendLoadError" class="config-load-error" role="alert">

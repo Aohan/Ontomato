@@ -1,5 +1,6 @@
-import { apiGet, apiPost, nodeApiFetch, nodeApiGet, nodeApiPost } from "../../utils/api";
-import type { AgentKey, DataAdapterConnection, GeneralConfigKey } from "../system";
+import { apiGet, apiPost, nodeApiGet, nodeApiPost } from "../../utils/api";
+import type { SystemModelConfig } from "@ontomato/contracts/system-model";
+import type { DataAdapterConnection, GeneralConfigKey, ModelEntry, RoleModels } from "../system";
 
 const generalConfigSaveEndpoints: Record<GeneralConfigKey, string> = {
   knowledgeMaxResult: "/businessConfig/saveKnowledgeMaxResult",
@@ -13,11 +14,11 @@ const generalConfigSaveEndpoints: Record<GeneralConfigKey, string> = {
 
 export const adminApi = {
   getBusinessConfig: () => apiGet("/businessConfig/getConfig"),
-  saveBackendModels: (models: unknown) => apiPost("/businessConfig/saveModels", { models }),
-  saveBackendAgentModels: (modelsByRole: Record<AgentKey, string>) =>
-    apiPost("/businessConfig/saveAgentModels", { modelsByRole }),
+  getModelSettings: () => apiGet("/businessConfig/getModelSettings"),
+  saveModelSettings: (payload: { models: ModelEntry[]; agents: RoleModels }) =>
+    apiPost("/businessConfig/saveModelSettings", payload),
   saveToolSkillDir: (skilldir: string) => apiPost("/businessConfig/saveToolSkillDir", { skilldir }),
-  testBackendModel: (model: unknown, prompt: string) =>
+  testModel: (model: ModelEntry, prompt: string) =>
     apiPost("/businessConfig/testModel", { model, prompt }),
   saveEmbeddingModel: (payload: unknown) => apiPost("/businessConfig/saveEmbeddingModel", payload),
   saveGeneralConfig: (key: GeneralConfigKey, value: unknown) =>
@@ -27,9 +28,8 @@ export const adminApi = {
     apiPost("/businessConfig/useDataAdapter", payload),
   testEmbeddingModel: (payload: unknown) => apiPost("/businessConfig/testEmbeddingModel", payload),
   getSystemModelConfig: () => nodeApiGet("/system-model-config"),
-  saveSystemModelConfig: (payload: unknown) => nodeApiPost("/system-model-config/save", payload),
-  testSystemModelConfig: (payload: unknown) =>
-    nodeApiFetch("/system-model-config/test", "POST", payload),
+  saveSystemModelConfig: (payload: SystemModelConfig) =>
+    nodeApiPost("/system-model-config/save", payload),
   queryAuditLogs: (params: unknown) => apiPost("/auditLog/queryPage", params),
   getServiceInfo: () => apiGet("/maintenance/getserviceinfo"),
   runServiceAction: (payload: unknown) => apiPost("/maintenance/serviceaction", payload),
