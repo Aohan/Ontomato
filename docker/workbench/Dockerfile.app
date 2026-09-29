@@ -17,7 +17,7 @@ ARG WORKSPACE=ontomato
 ARG APP_META_JSON
 
 # Builder runs on the build host: full frozen install (dev included, unlike
-# the runtime --filter-prod selection), the N3 closure preflight, the web
+# the runtime --filter-prod selection), the closure check, the web
 # build and the /stage assembly. Only the final scratch stage ships.
 FROM --platform=$BUILDPLATFORM ${NODE_BUILDER_IMAGE} AS web-builder
 

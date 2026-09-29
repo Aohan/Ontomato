@@ -102,7 +102,7 @@ test("revision is the single concrete public POM property", () => {
   );
   assert.equal(live, "4.0.0-dev");
 });
-test("pack-app rejects a missing lock before it can inspect a runtime", () =>
+test("pack-app rejects a missing lock before any export or build", () =>
   temporary((dir) => {
     assert.throws(
       () => loadRuntimeLock(dir, "java-app", "arm64"),

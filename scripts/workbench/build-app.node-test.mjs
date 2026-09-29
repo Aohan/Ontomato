@@ -107,7 +107,7 @@ function writeLock(dir, arm64Fp = fingerprint(CONTRACT)) {
 
 // Fixture Docker for the app command. Every invocation is recorded; an
 // unknown subcommand fails instead of silently succeeding. FAKE_MODE selects
-// ok | no-image | bad-fp | fail-build | fail-inspect.
+// ok | fail-build | fail-inspect.
 const FAKE = `#!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -136,13 +136,11 @@ if (args[0] === "version") {
     writeFileSync(out + "/contract.json", JSON.stringify(contract));
   } else if (mode === "fail-build") process.exit(1);
 } else if (args[0] === "image") {
-  if (mode === "no-image") { process.stderr.write("Error: No such image\\n"); process.exit(1); }
+  // The app command inspects only the app image it built.
   const tag = args[args.length - 1];
-  const appTag = tag.match(/^(.*)-app:/);
-  const broken = mode === "bad-fp" || (mode === "fail-inspect" && appTag);
-  const labels = appTag
-    ? { "io.runtime.component": appTag[1], "io.runtime.kind": "app", "io.runtime.family": broken ? "java-app" : "node-app", "io.runtime.compat-fingerprint": broken ? "0".repeat(64) : fp }
-    : { "io.runtime.component": "node-app", "io.runtime.kind": "runtime", "io.runtime.family": mode === "bad-fp" ? "java-app" : "node-app", "io.runtime.compat-fingerprint": mode === "bad-fp" ? "0".repeat(64) : fp };
+  const component = tag.match(/^(.*)-app:/)[1];
+  const broken = mode === "fail-inspect";
+  const labels = { "io.runtime.component": component, "io.runtime.kind": "app", "io.runtime.family": broken ? "java-app" : "node-app", "io.runtime.compat-fingerprint": broken ? "0".repeat(64) : fp };
   process.stdout.write(JSON.stringify([{ Os: "linux", Architecture: "arm64", Config: { Labels: labels } }]));
 } else if (args[0] === "save") {
   process.stdout.write("fake-app-image-bytes");
