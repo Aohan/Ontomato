@@ -182,7 +182,7 @@ function fakeDocker(t, dir, env = {}) {
   chmodSync(join(bin, "docker"), 0o755);
   const saved = {};
   const set = { PATH: `${bin}${delimiter}${process.env.PATH}`, FAKE_STATE: state, ...env };
-  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "FAKE_COMMIT_REPO", "NODE_BUILDER_IMAGE", "DOCKER_API_VERSION"]) {
+  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "FAKE_COMMIT_REPO", "DOCKER_API_VERSION"]) {
     saved[key] = process.env[key];
     if (set[key] === undefined) delete process.env[key];
     else process.env[key] = set[key];
@@ -283,7 +283,6 @@ test("the public entry builds ontomato-ontology-manager from its two owners and 
   assert.deepEqual(build.slice(0, 5), ["buildx", "build", "--provenance=false", "--platform", "linux/arm64"]);
   assert.equal(build.includes("--load"), true);
   assert.equal(build.includes("--push"), false);
-  assert.deepEqual(buildArg(build, "NODE_BUILDER_IMAGE"), []);
   assert.deepEqual(buildArg(build, "WORKSPACE"), ["ontomato"]);
   assert.deepEqual(buildArg(build, "APPLICATION"), ["@ontomato/ontology-manager-app"]);
   assert.deepEqual(calls[3], ["save", `ontomato-ontology-manager:${image[1]}`, "ontomato-ontology-manager:deploy-arm64"]);
@@ -342,7 +341,7 @@ test("an enterprise build takes its own app plus the public owners; identity is 
   const repos = fixture(t);
   const { dir, publicRoot, privateRoot } = repos;
   text(join(publicRoot, "apps/ontology-manager/src/draft.ts"), "export {};\n");
-  const docker = fakeDocker(t, dir, { NODE_BUILDER_IMAGE: "registry.example.invalid/node:20.3.0@sha256:" + "c".repeat(64) });
+  const docker = fakeDocker(t, dir);
   const logs = [];
   t.mock.method(console, "log", (line) => logs.push(line));
   await buildManagerImage(enterpriseApp(repos), ["--arch", "amd64"]);
@@ -351,7 +350,6 @@ test("an enterprise build takes its own app plus the public owners; identity is 
   const build = docker.calls()[0];
   assert.deepEqual(buildArg(build, "WORKSPACE"), ["enterprise"]);
   assert.deepEqual(buildArg(build, "APPLICATION"), ["@enterprise/ontology-manager-app"]);
-  assert.deepEqual(buildArg(build, "NODE_BUILDER_IMAGE"), [process.env.NODE_BUILDER_IMAGE]);
   const listing = docker.context();
   assert.equal(dirname(listing.context), join(privateRoot, ".build/contexts/ontology-manager/amd64"));
   assert.deepEqual(

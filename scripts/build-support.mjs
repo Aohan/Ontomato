@@ -29,6 +29,19 @@ export function canonical(value) {
 export const fingerprint = (contract) =>
   createHash("sha256").update(canonical(contract)).digest("hex");
 export const readJson = (path) => JSON.parse(readFileSync(path, "utf8"));
+export function parsePythonRequirements(text) {
+  const packages = {};
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/\s*#.*$/, "").trim();
+    if (!line) continue;
+    const match = /^([A-Za-z0-9_.-]+)==([^\s;]+)$/.exec(line);
+    if (!match)
+      throw new Error(`Runtime Python requirements must use exact name==version pins: ${line}`);
+    const name = match[1].toLowerCase().replace(/[-_.]+/g, "-");
+    packages[name] = match[2];
+  }
+  return packages;
+}
 export function readRevision(text) {
   const found = [...text.matchAll(/<revision>([^<]*)<\/revision>/g)].map(
     (match) => match[1],
@@ -166,26 +179,6 @@ export function saveRuntimeLock(
   writeFileSync(temporary, text);
   renameSync(temporary, file);
   return fp;
-}
-export function requireRuntime(family, arch, fp) {
-  const image = runtimeTag(family, fp, arch);
-  const inspected = inspectImage(image, `linux/${arch}`);
-  if (!inspected)
-    throw new Error(
-      `Missing ${image}. Import the published matching runtime with docker load -i <runtime.tar.gz>, then rerun make pack-app ARCH=${arch}. No runtime build was started.`,
-    );
-  const labels = inspected.Config.Labels || {};
-  if (
-    inspected.Os !== "linux" ||
-    inspected.Architecture !== arch ||
-    labels["io.runtime.family"] !== family ||
-    labels["io.runtime.kind"] !== "runtime" ||
-    labels[COMPAT_LABEL] !== fp
-  )
-    throw new Error(
-      `Runtime image ${image} has the wrong family, kind, architecture or compatibility fingerprint. Import the matching runtime; it will not be rebuilt by pack-app.`,
-    );
-  return image;
 }
 // lockPath is the service's own runtime lock (Node/Java); a builder without a
 // runtime lock (Manager) omits it and the whole source state counts as dirty.

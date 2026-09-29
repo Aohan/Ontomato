@@ -17,7 +17,7 @@ import {
   fingerprint,
   loadRuntimeLock,
   parseOptions,
-  requireRuntime,
+  parsePythonRequirements,
   runtimeTag,
   saveRuntimeLock,
   sourceIdentity,
@@ -227,9 +227,13 @@ test("without a runtime lock the whole source state counts", () =>
     writeFileSync(join(dir, "apps/data-engine/runtime-lock.json"), "{}\n");
     assert.equal(sourceIdentity("4.0.0-dev", dir).dirty, true);
   }));
-test("a missing runtime image is an inspect failure and does not build", () => {
-  assert.throws(
-    () => requireRuntime(FAMILY, "arm64", "a".repeat(64)),
-    /No runtime build was started/,
+test("parsePythonRequirements parses pinned requirements correctly and rejects non-pinned", () => {
+  const parsed = parsePythonRequirements(
+    "# comment\nNumPy==2.2.6\npython_dateutil==2.9.0.post0 # note\n",
   );
+  assert.deepEqual(parsed, {
+    numpy: "2.2.6",
+    "python-dateutil": "2.9.0.post0",
+  });
+  assert.throws(() => parsePythonRequirements("numpy>=1.0"), /exact.*pin/i);
 });

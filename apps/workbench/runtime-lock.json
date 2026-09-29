@@ -3,6 +3,6 @@
   "family": "node-app",
   "runtimes": {
     "linux/amd64": "1f19aac0566cd3e7aba449d5e22cdc3dfd926770737db0ceecab8f98a343d0ce",
-    "linux/arm64": "9da3414946f986246bc65e9334a796ea5995780ed337743ff0398fa56a162131"
+    "linux/arm64": "e6afda52039a80adb5b732c6be6ce53fd4b6f7c1dbdb21ca7e5164ee7db24a4f"
   }
 }

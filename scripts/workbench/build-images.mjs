@@ -27,14 +27,18 @@ import {
   parseOptions,
   readJson,
   readRevision,
-  requireRuntime,
   runtimeTag,
   sampleSources,
   saveRuntimeLock,
   validateContract,
 } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
-import { checkPythonRequirements, INTERFACE } from "./runtime-contract.mjs";
+import {
+  computeWorkbenchContract,
+  INTERFACE,
+  parseLock,
+  productionClosure,
+} from "./runtime-contract.mjs";
 
 // Family authority is N3 runtime-contract.mjs (not exported there, and N3 is
 // frozen); the interface version is imported from it directly.
@@ -51,7 +55,6 @@ const TOOLS = [
   "workbench/runtime-contract.mjs",
   "workbench/container-entrypoint.sh",
   "build-support.mjs",
-  "data-engine/runtime_dependencies.py",
   "third_party_notices.py",
 ];
 // The app container needs only the stager and its real dependencies: the
@@ -67,8 +70,6 @@ const APP_TOOLS = [
 // Only arguments the old Node entry supported; recipe defaults already pin the
 // images, mirrors and index, so these pass through only when the env sets them.
 const BUILD_ARG_NAMES = [
-  "NODE_RUNTIME_IMAGE",
-  "PYTHON_RUNTIME_IMAGE",
   "PIP_INDEX_URL",
   "DEBIAN_MIRROR",
   "DEBIAN_SECURITY_MIRROR",
@@ -121,26 +122,6 @@ async function copyAppTools(app, context) {
   await import(pathToFileURL(join(context, "tools/workbench/stage-app.mjs")).href);
 }
 
-// The locked runtime is consumed read-only: a missing image fails with the
-// import instructions, it is never pulled or rebuilt, and its lock is never
-// written by the app command.
-function existingRuntime(app, arch) {
-  const fp = loadRuntimeLock(app.lockRoot, FAMILY, arch);
-  const tag = requireRuntime(FAMILY, arch, fp);
-  const contract = validateContract(
-    FAMILY,
-    `linux/${arch}`,
-    readImageContract(tag, arch),
-    fp,
-    INTERFACE,
-  );
-  checkPythonRequirements(
-    readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8"),
-    contract.python.packages,
-  );
-  return { tag, fp, contract };
-}
-
 function assertAppImage(tag, arch, component, fp) {
   const inspected = inspectImage(tag, `linux/${arch}`);
   const labels = inspected && inspected.Config.Labels ? inspected.Config.Labels : {};
@@ -156,7 +137,25 @@ function assertAppImage(tag, arch, component, fp) {
     throw new Error(`Built image identity mismatch: ${tag}`);
 }
 
+function readWorkspaceManifests(context, record) {
+  const manifests = {};
+  for (const source of record.sources) {
+    for (const candidate of source.candidates) {
+      if (candidate.path.endsWith("/package.json") || candidate.path === "package.json") {
+        const file = join(context, "sources", source.id, candidate.path);
+        let relDir = candidate.path === "package.json" ? "." : dirname(candidate.path);
+        if (source.id !== record.workspaceId) {
+          relDir = candidate.path === "package.json" ? `../${source.id}` : `../${source.id}/${dirname(candidate.path)}`;
+        }
+        manifests[relDir] = JSON.parse(readFileSync(file, "utf8"));
+      }
+    }
+  }
+  return manifests;
+}
+
 async function buildWorkbenchAppImage(app, parsed, version, arch) {
+  const lockedFp = loadRuntimeLock(app.lockRoot, FAMILY, arch);
   const entries = sampleSources(app, version);
   const context = stageContext(app, arch);
   const record = collectMetadataContext({
@@ -167,14 +166,34 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
   });
   assertFreshRecord(entries, record);
   copyWorkspace(app, context, record);
-  // The live tree was copied file by file after sampling: the recorded HEADs
-  // must still hold. This is a change check, not an atomic snapshot of dirty
-  // worktree edits, and it never resamples.
   assertEntriesCurrent(entries, "staging");
   await copyAppTools(app, context);
   copyLicenses(app, context);
-  const runtime = existingRuntime(app, arch);
-  writeFileSync(join(context, "runtime-contract.json"), `${JSON.stringify(runtime.contract)}\n`);
+
+  const lock = parseLock(readFileSync(join(app.repoRoot, "pnpm-lock.yaml"), "utf8"));
+  const manifests = readWorkspaceManifests(context, record);
+  const graph = productionClosure(
+    { importer: record.appImporter, manifests },
+    lock,
+    `linux/${arch}`,
+  );
+  const dockerfileRuntimeText = readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.runtime"), "utf8");
+  const dockerfileAppText = readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.app"), "utf8");
+  const requirementsText = readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8");
+  const currentContract = computeWorkbenchContract({
+    dockerfileRuntimeText,
+    requirementsText,
+    graph,
+    arch,
+    dockerfileAppText,
+  });
+  const currentFp = fingerprint(currentContract);
+  if (currentFp !== lockedFp) {
+    throw new Error(
+      `Runtime dependencies or contract changed (expected ${lockedFp}, current ${currentFp}); rebuild runtime first with make workbench-runtime ARCH=${arch}. No app build was started.`,
+    );
+  }
+
   const combined = combineIdentity(version, app.repoRoot, entries);
   const meta = {
     schema: 3,
@@ -189,7 +208,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     stamp: combined.stamp,
     arch,
     platform: `linux/${arch}`,
-    runtimeCompatFingerprint: runtime.fp,
+    runtimeCompatFingerprint: lockedFp,
     sources: combined.sources,
   };
   const tag = `${app.component}-app:${combined.stamp}-${arch}`;
@@ -198,7 +217,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
   console.log(`[build] app ${tag}`);
   docker([
     ...baseBuild(arch),
-    ...imageBuildArgs([...BUILD_ARG_NAMES, "NODE_BUILDER_IMAGE"]),
+    ...imageBuildArgs(BUILD_ARG_NAMES),
     "--load",
     "--build-arg",
     `WORKSPACE=${record.workspaceId}`,
@@ -206,7 +225,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     `APPLICATION=${record.application}`,
     "--build-arg",
     `APP_META_JSON=${JSON.stringify(meta)}`,
-    ...imageLabels(app.component, "app", combined, runtime.fp, FAMILY),
+    ...imageLabels(app.component, "app", combined, lockedFp, FAMILY),
     "-t",
     tag,
     "-t",
@@ -215,13 +234,9 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     dockerfile,
     context,
   ]);
-  assertAppImage(tag, arch, app.component, runtime.fp);
-  // Same sampled HEADs as staging; no resampling. Only then is the locked,
-  // already imported runtime re-tagged to this product's alias (never rebuilt).
+  assertAppImage(tag, arch, app.component, lockedFp);
   assertEntriesCurrent(entries, "the build");
-  const deployRuntime = runtimeAlias(app, arch);
-  docker(["tag", runtime.tag, deployRuntime]);
-  console.log(`RUNTIME_IMAGE=${runtime.tag}\nRUNTIME_DEPLOY_IMAGE=${deployRuntime}\nRUNTIME_COMPAT_FINGERPRINT=${runtime.fp}`);
+  console.log(`RUNTIME_COMPAT_FINGERPRINT=${lockedFp}`);
   console.log(`APP_IMAGE=${tag}\nAPP_DEPLOY_IMAGE=${alias}`);
   if (parsed["--pack-app"])
     await exportImage(
@@ -245,21 +260,6 @@ function assertWorkbenchImage(tag, arch, fp) {
     throw new Error(`Built image identity mismatch: ${tag}`);
 }
 
-function readImageContract(tag, arch) {
-  return JSON.parse(
-    output("docker", [
-      "run",
-      "--rm",
-      "--platform",
-      `linux/${arch}`,
-      "--entrypoint",
-      "cat",
-      tag,
-      "/runtime/contract.json",
-    ]),
-  );
-}
-
 export async function buildWorkbenchApp(app, args) {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(
@@ -281,9 +281,6 @@ export async function buildWorkbenchApp(app, args) {
     await buildWorkbenchAppImage(app, parsed, version, arch);
     return;
   }
-  // Each source's identity is captured once, up front: a later read would
-  // silently relabel this build's inputs with a newer revision after a long
-  // build, and the N4a snapshot must not gain a second authority.
   const entries = sampleSources(app, version);
   const context = stageContext(app, arch);
   const record = collectMetadataContext({
@@ -303,19 +300,27 @@ export async function buildWorkbenchApp(app, args) {
   const dockerfile = join(app.publicRoot, "docker/workbench/Dockerfile.runtime");
   const common = [...baseBuild(arch), ...imageBuildArgs(), "-f", dockerfile];
   output("docker", ["version", "--format", "{{.Server.Version}}"]);
-  const directory = join(context, "contract");
-  mkdirSync(directory, { recursive: true });
-  docker([
-    ...common,
-    "--target",
-    "contract-export",
-    "--output",
-    `type=local,dest=${directory}`,
-    context,
-  ]);
-  const contract = readJson(join(directory, "contract.json"));
+
+  const lock = parseLock(readFileSync(join(app.repoRoot, "pnpm-lock.yaml"), "utf8"));
+  const manifests = readWorkspaceManifests(context, record);
+  const graph = productionClosure(
+    { importer: record.appImporter, manifests },
+    lock,
+    platform,
+  );
+  const dockerfileRuntimeText = readFileSync(dockerfile, "utf8");
+  const dockerfileAppText = readFileSync(join(app.publicRoot, "docker/workbench/Dockerfile.app"), "utf8");
+  const requirementsText = readFileSync(join(app.publicRoot, "docker/workbench/requirements.txt"), "utf8");
+  const contract = computeWorkbenchContract({
+    dockerfileRuntimeText,
+    requirementsText,
+    graph,
+    arch,
+    dockerfileAppText,
+  });
   const fp = fingerprint(contract);
   validateContract(FAMILY, platform, contract, fp, INTERFACE);
+
   const combined = combineIdentity(version, app.repoRoot, entries);
   const meta = {
     schema: 3,
@@ -350,11 +355,6 @@ export async function buildWorkbenchApp(app, args) {
     context,
   ]);
   assertWorkbenchImage(tag, arch, fp);
-  if (fingerprint(readImageContract(tag, arch)) !== fp)
-    throw new Error("Built runtime contract differs from the exported contract");
-  // The lock must describe this build's inputs: a source that moved since the
-  // start fails instead of being relabeled or retried. This reads HEAD only;
-  // it never saves a new dirty identity.
   assertEntriesCurrent(entries, "the build");
   saveRuntimeLock(app.lockRoot, FAMILY, arch, contract, INTERFACE);
   console.log(`RUNTIME_IMAGE=${tag}\nRUNTIME_DEPLOY_IMAGE=${alias}\nRUNTIME_COMPAT_FINGERPRINT=${fp}`);

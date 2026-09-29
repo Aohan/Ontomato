@@ -11,8 +11,8 @@
 #   runtime-requirements.txt  public docker/workbench/requirements.txt
 #   LICENSE, NOTICE           the public repository's own license files
 # The entrypoint and the runtime contract tools are copied out of tools/.
-ARG NODE_RUNTIME_IMAGE=docker.1ms.run/library/node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
-ARG PYTHON_RUNTIME_IMAGE=docker.1ms.run/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
+ARG NODE_RUNTIME_IMAGE=docker.io/library/node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG DEBIAN_MIRROR=https://deb.debian.org/debian
 ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
@@ -122,24 +122,10 @@ RUN ln -s /opt/runtime/node_modules /node_modules
 COPY tools/build-support.mjs /runtime/scripts/build-support.mjs
 COPY tools/workbench/runtime-contract.mjs /runtime/scripts/workbench/runtime-contract.mjs
 COPY tools/workbench/production-graph.mjs /runtime/scripts/workbench/production-graph.mjs
-COPY tools/data-engine/runtime_dependencies.py /runtime/runtime_dependencies.py
 COPY tools/workbench/container-entrypoint.sh /runtime/container-entrypoint.sh
 RUN chmod 0755 /runtime/container-entrypoint.sh
 
-# The real N3 inspect runs against this installed environment. Only the
-# packages projection enters this stage; the full graph, which carries the
-# enterprise bindings and app paths, stays in the installer and never reaches
-# an image layer.
-FROM runtime-files AS contract
-COPY --from=installer /tmp/packages.json /tmp/packages.json
-COPY --from=installer /tmp/snapshot-paths.json /tmp/snapshot-paths.json
-RUN node /runtime/scripts/workbench/runtime-contract.mjs inspect /tmp/packages.json /tmp/snapshot-paths.json > /runtime/contract.json
-
-FROM scratch AS contract-export
-COPY --from=contract /runtime/contract.json /contract.json
-
 FROM runtime-files AS runtime
-COPY --from=contract /runtime/contract.json /runtime/contract.json
 # Build metadata is traceability only, outside the compatibility contract.
 ARG RUNTIME_META_JSON
 RUN test -n "$RUNTIME_META_JSON" \

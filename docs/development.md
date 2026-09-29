@@ -22,7 +22,7 @@
 
 `pack-app` 只复用 Node 与 Java 已经导入的匹配 runtime，不重建 runtime；Manager 仍打独立镜像，没有 manager runtime。分服务目标（`workbench-runtime-pack`、`workbench-app-pack`、`pack-data-engine`、`pack-data-engine-app`、`pack-ontology-manager` 及其架构变体）仍可单独调用。
 
-宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。`JDK_IMAGE`、`JRE_IMAGE`、`PYTHON_RUNTIME_IMAGE` 只在环境变量有值时传给构建，用来覆盖 Dockerfile 里的镜像源；`PNPM_VERSION` 同理，覆盖 Node 镜像构建里安装的 pnpm 版本（Dockerfile 默认 9.15.9，其他版本的镜像构建尚未验证）；脚本不保存第二套默认镜像。这 5 个应用制品不含 PostgreSQL：PostgreSQL 由部署流程另行提供；`make bundle` 把某一架构已构建或已导入的镜像、`deploy/` 模板与组装配方打成离线整包；当前也没有私有 Linux 实物或完整 CI 的验收结论，Windows 实机上的整栈运行同样尚未验证。Windows 打包不在本次范围内，镜像与离线大小包继续使用现有受验构建环境。
+宿主需要 Node、Git、Docker 和 GNU Make；`ARCH` 默认本机架构，`PROMPT_LANG` 只控制 Java 提示词语言（默认 `en`）。基础镜像统一写官方地址 `docker.io/library/…` 并固定摘要，拉取走各机器自身的 Docker 加速配置；构建脚本不透传基础镜像环境变量，Dockerfile 默认值即唯一来源。`DEBIAN_MIRROR`、`DEBIAN_SECURITY_MIRROR`、`PIP_INDEX_URL` 保留环境变量覆盖作为机器级设置；`PNPM_VERSION` 覆盖 Node 镜像构建里安装的 pnpm 版本（Dockerfile 默认 9.15.9，runtime 安装与 app 构建须保持一致）。这 5 个应用制品不含 PostgreSQL：PostgreSQL 由部署流程另行提供；`make bundle` 把某一架构已构建或已导入的镜像、`deploy/` 模板与组装配方打成离线整包；当前也没有私有 Linux 实物或完整 CI 的验收结论，Windows 实机上的整栈运行同样尚未验证。Windows 打包不在本次范围内，镜像与离线大小包继续使用现有受验构建环境。
 
 ## 本机开发（Node + 主网页 + Manager）
 

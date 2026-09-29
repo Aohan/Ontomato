@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
   chmodSync,
@@ -18,12 +19,11 @@ import { fileURLToPath } from "node:url";
 import {
   buildJavaApp,
   checkPythonRequirements,
-  importedRuntime,
   JAVA_FLAGS,
   parseJavaArgs,
   selectPromptLanguage,
 } from "./build-images.mjs";
-import { fingerprint, readRevision } from "../build-support.mjs";
+import { fingerprint, loadRuntimeLock, readRevision } from "../build-support.mjs";
 import { app as publicEntry } from "../../apps/data-engine/build.mjs";
 
 function temporary(fn) {
@@ -84,7 +84,7 @@ test("revision is the single concrete public POM property", () => {
 test("pack-app rejects a missing lock before it can inspect a runtime", () =>
   temporary((dir) => {
     assert.throws(
-      () => importedRuntime({ lockRoot: dir, family: "java-app" }, "arm64"),
+      () => loadRuntimeLock(dir, "java-app", "arm64"),
       /missing/,
     );
   }));
@@ -138,7 +138,6 @@ function fixture(t) {
     "apps/data-engine/src/main/java/App.java": "class App {}\n",
     "scripts/data-engine/container-entrypoint.sh": "#!/bin/bash\n",
     "scripts/data-engine/runtime-contract.py": "# public checker\n",
-    "scripts/data-engine/runtime_dependencies.py": "# deps\n",
   });
   repository(ent, {
     "pom.xml": "<project/>\n",
@@ -167,12 +166,11 @@ function publicApp({ pub }) {
     secretExport: null,
     requirements: { root: pub, path: "packages/data-engine-core/requirements-py310.txt" },
     mcp: { root: pub, path: "packages/data-engine-core/mcp/mcpserver.py" },
-    bin: [[pub, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"], [pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"], [pub, "scripts/data-engine/runtime_dependencies.py", "bin/runtime_dependencies.py"]],
+    bin: [[pub, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"], [pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"]],
     pairContract: "/opt/datarag/bin/runtime-contract.py", runtimeTarget: "runtime",
     resources: [[pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"], [pub, "packages/data-engine-core/skills", "payload/skills"]],
     requiredSkill: "payload/skills/aftercalculate/trend-forecaster/SKILL.md",
     payloadFiles: {}, appLabels: {}, appTagSuffix: "",
-    exportImages: ["JDK_IMAGE"], runtimeImages: ["JRE_IMAGE", "PYTHON_RUNTIME_IMAGE"],
   };
 }
 // Enterprise-shaped description with the same fields as the private entry's.
@@ -238,9 +236,6 @@ else if (args[0] === "buildx") {
     writeFileSync(join(dest, "runtime-lib/dep.jar"), "dep");
     writeFileSync(join(dest, "maven-licenses.json"), "[]");
     if (buildArg("KEEP_NATIVE")) writeFileSync(join(dest, "runtime-lib", buildArg("KEEP_NATIVE")), "so");
-  } else if (target === "contract-export") {
-    mkdirSync(dest, { recursive: true });
-    writeFileSync(join(dest, "contract.json"), JSON.stringify(contract));
   } else {
     commit(target);
     const labels = {};
@@ -253,9 +248,7 @@ else if (args[0] === "buildx") {
   const labels = images[args[args.length - 1]];
   if (!labels) { process.stderr.write("Error: No such image\\n"); process.exit(1); }
   process.stdout.write(JSON.stringify([{ Os: "linux", Architecture: "arm64", Config: { Labels: labels } }]));
-} else if (args[0] === "run") process.stdout.write(JSON.stringify(contract));
-else if (args[0] === "tag") { images[args[2]] = images[args[1]]; save(); }
-else { process.stderr.write("unexpected docker call " + args.join(" ") + "\\n"); process.exit(2); }
+} else { process.stderr.write("unexpected docker call " + args.join(" ") + "\\n"); process.exit(2); }
 `;
 function fakeDocker(t, dir, env = {}) {
   const bin = join(dir, "fakebin");
@@ -265,7 +258,7 @@ function fakeDocker(t, dir, env = {}) {
   chmodSync(join(bin, "docker"), 0o755);
   const set = { PATH: `${bin}${delimiter}${process.env.PATH}`, FAKE_STATE: state, ...env };
   const saved = {};
-  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "FAKE_COMMIT_AT", "FAKE_COMMIT_REPO", "DOCKER_API_VERSION", "JDK_IMAGE", "JRE_IMAGE", "PYTHON_RUNTIME_IMAGE"]) {
+  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "FAKE_COMMIT_AT", "FAKE_COMMIT_REPO", "DOCKER_API_VERSION"]) {
     saved[key] = process.env[key];
     if (set[key] === undefined) delete process.env[key];
     else process.env[key] = set[key];
@@ -317,7 +310,7 @@ test("public build: central export of the public tree only, runtime target, one-
   assert.deepEqual(argOf(exp.args, "APP_LIB_MODULES"), ["packages/data-engine-core apps/data-engine"]);
   const runtime = docker.build("runtime");
   assert.ok(runtime && !docker.build("runtime-native"));
-  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/container-entrypoint.sh", "bin/runtime-contract.py", "bin/runtime_dependencies.py"]);
+  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/container-entrypoint.sh", "bin/runtime-contract.py"]);
   assert.equal(runtime.context["requirements-py310.txt"], "numpy==2.2.6\n");
   // Third-party notice inputs; the public LICENSE and NOTICE go to both images.
   const shipped = (name) => readFileSync(join(RECIPES, "../..", name), "utf8");
@@ -431,11 +424,18 @@ test("app-only: a missing lock fails before settings or export; with a lock the 
   const docker = fakeDocker(t, fx.dir);
   await assert.rejects(() => run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override", "--pack-app"]), /runtime-lock.json missing/);
   assert.deepEqual(docker.builds(), []);
-  const contract = { family: "java-app", interfaceVersion: 3, platform: "linux/arm64", java: { version: "21", classVersion: 65 }, runtimeDependencies: { jars: "a", native: "b" }, python: { version: "3.10", packages: { numpy: "2.2.6" } } };
+  const depHash = createHash("sha256").update("dep").digest("hex");
+  const contract = {
+    family: "java-app",
+    interfaceVersion: 3,
+    platform: "linux/arm64",
+    java: { classVersion: 65 },
+    runtimeDependencies: { jars: fingerprint({ "dep.jar": depHash }) },
+    python: { version: "3.10", packages: { numpy: "2.2.6" } },
+  };
   const fp = fingerprint(contract);
   put(fx.ent, { [LOCK]: `${JSON.stringify({ schema: 3, family: "java-app", runtimes: { "linux/arm64": fp } }, null, 2)}\n` });
   const lock = readFileSync(join(fx.ent, LOCK), "utf8");
-  docker.importRuntime(`java-app-runtime:compat-${fp.slice(0, 16)}-arm64`, { "io.runtime.family": "java-app", "io.runtime.kind": "runtime", "io.runtime.compat-fingerprint": fp });
   await assert.rejects(() => run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override"]), /Missing Maven settings/);
   assert.deepEqual(docker.builds(), []);
   put(fx.dir, { "home/.m2/settings.xml": "<settings/>\n" });

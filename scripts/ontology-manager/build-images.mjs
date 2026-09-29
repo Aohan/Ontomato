@@ -91,10 +91,6 @@ export async function buildManagerImage(app, args) {
     "--provenance=false",
     "--platform",
     `linux/${arch}`,
-    // The recipe pins the default builder image; the env only overrides it.
-    ...(process.env.NODE_BUILDER_IMAGE
-      ? ["--build-arg", `NODE_BUILDER_IMAGE=${process.env.NODE_BUILDER_IMAGE}`]
-      : []),
     ...(process.env.PNPM_VERSION ? ["--build-arg", `PNPM_VERSION=${process.env.PNPM_VERSION}`] : []),
     "--load",
     "--build-arg",

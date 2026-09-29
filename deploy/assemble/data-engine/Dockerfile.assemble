@@ -35,6 +35,5 @@ LABEL io.runtime.kind="composite" \
 # Everything at the root of the app image is copied into /app: future new directories in the app image need no change to this Dockerfile.
 COPY --from=app_source / /app/
 
-# The runtime owns pairing through its PAIR_CONTRACT; require the target architecture at this boundary.
 RUN EXPECTED_ARCH="${EXPECTED_ARCH:?EXPECTED_ARCH is required}" \
-    python "$PAIR_CONTRACT" pair
+    python "$PAIR_CONTRACT" assemble

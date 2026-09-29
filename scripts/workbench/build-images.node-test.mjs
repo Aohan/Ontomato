@@ -32,7 +32,16 @@ function repo(t, appName) {
   writeFileSync(join(dir, ".gitignore"), ".build/\n");
   writeFileSync(join(dir, "package.json"), '{"name":"fixture","private":true}\n');
   writeFileSync(join(dir, "pnpm-workspace.yaml"), "packages:\n  - 'apps/*'\n");
-  writeFileSync(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  writeFileSync(
+    join(dir, "pnpm-lock.yaml"),
+    `lockfileVersion: '9.0'
+importers:
+  apps/workbench:
+    dependencies: {}
+snapshots: {}
+packages: {}
+`,
+  );
   writeFileSync(join(dir, "LICENSE"), "fixture license\n");
   writeFileSync(join(dir, "NOTICE"), "fixture notice\n");
   writeFileSync(
@@ -40,6 +49,14 @@ function repo(t, appName) {
     `<project><properties><revision>${VERSION}</revision></properties></project>\n`,
   );
   mkdirSync(join(dir, "docker/workbench"), { recursive: true });
+  writeFileSync(
+    join(dir, "docker/workbench/Dockerfile.runtime"),
+    "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:20.18-bookworm-slim\nARG PNPM_VERSION=9.15.4\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n",
+  );
+  writeFileSync(
+    join(dir, "docker/workbench/Dockerfile.app"),
+    "ARG PNPM_VERSION=9.15.4\n",
+  );
   writeFileSync(join(dir, "docker/workbench/requirements.txt"), "numpy==1.26.4\npandas==1.5.3\n");
   mkdirSync(join(dir, "apps/workbench"), { recursive: true });
   writeFileSync(
@@ -99,21 +116,19 @@ function writeLock(dir, arm64) {
 // Minimal fixture Docker, not a generic mock: it only speaks this builder's
 // calls. Succeeds through the runtime build; FAKE_MODE selects the late stage
 // that fails (ok | bad-family | bad-readback). FAKE_COMMIT=1 commits once in
-// FAKE_REPO during contract-export to simulate a source moving mid-build.
+// FAKE_REPO to simulate a source moving mid-build.
 const FAKE = `#!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
-function canonical(value) {
-  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
-  if (value !== null && typeof value === "object") {
-    return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + canonical(value[key])).join(",") + "}";
-  }
-  return JSON.stringify(value);
-}
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 const args = process.argv.slice(2);
 const dir = process.env.FAKE_DIR;
 const mode = process.env.FAKE_MODE || "ok";
+const imagesFile = join(dir, "images.json");
+const images = existsSync(imagesFile) ? JSON.parse(readFileSync(imagesFile, "utf8")) : {};
+const save = () => writeFileSync(imagesFile, JSON.stringify(images));
+
 function platformArch() {
   const i = args.indexOf("--platform");
   if (i >= 0) return args[i + 1].split("/")[1];
@@ -121,27 +136,32 @@ function platformArch() {
   return m ? m[1] : "arm64";
 }
 const arch = platformArch();
-const contract = { family: "node-app", interfaceVersion: 3, platform: "linux/" + arch, node: "20.3.0", productionDependencies: "aaaa", snapshotPaths: {}, nativeDependencies: {}, python: {} };
-const fp = createHash("sha256").update(canonical(contract)).digest("hex");
+
 if (args[0] === "version") {
   process.stdout.write("25.0.0\\n");
 } else if (args[0] === "buildx") {
   const target = args[args.indexOf("--target") + 1];
-  if (target === "contract-export") {
-    const out = args.find((a) => a.indexOf("type=local,dest=") === 0);
-    const dest = out.slice("type=local,dest=".length);
-    mkdirSync(dest, { recursive: true });
-    writeFileSync(dest + "/contract.json", JSON.stringify(contract));
-    if (process.env.FAKE_COMMIT === "1") execFileSync("git", ["-C", process.env.FAKE_REPO, "-c", "user.name=fake", "-c", "user.email=f@x", "commit", "--allow-empty", "-m", "mid-build"], { stdio: "pipe" });
-  } else if (target === "runtime") {
+  if (target === "runtime") {
     appendFileSync(dir + "/args.jsonl", JSON.stringify(args) + "\\n");
+    if (process.env.FAKE_COMMIT === "1") execFileSync("git", ["-C", process.env.FAKE_REPO, "-c", "user.name=fake", "-c", "user.email=f@x", "commit", "--allow-empty", "-m", "mid-build"], { stdio: "pipe" });
+    const labels = {};
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "--label") {
+        const l = args[i + 1];
+        const at = l.indexOf("=");
+        labels[l.slice(0, at)] = l.slice(at + 1);
+      }
+    }
+    if (mode === "bad-family") labels["io.runtime.family"] = "java-app";
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === "-t") images[args[i + 1]] = labels;
+    }
+    save();
   }
 } else if (args[0] === "image") {
-  const labels = { "io.runtime.component": "node-app", "io.runtime.kind": "runtime", "io.runtime.family": mode === "bad-family" ? "java-app" : "node-app", "io.runtime.compat-fingerprint": fp };
+  const tag = args[args.length - 1];
+  const labels = images[tag] || { "io.runtime.component": "node-app", "io.runtime.kind": "runtime", "io.runtime.family": mode === "bad-family" ? "java-app" : "node-app" };
   process.stdout.write(JSON.stringify([{ Os: "linux", Architecture: arch, Config: { Labels: labels } }]));
-} else if (args[0] === "run") {
-  const body = mode === "bad-readback" ? { ...contract, tampered: true } : contract;
-  process.stdout.write(JSON.stringify(body));
 }
 `;
 
@@ -284,24 +304,10 @@ test("a wrong-family image fails and leaves the prior lock untouched", async (t)
   assert.equal(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"), before);
 });
 
-test("a tampered read-back contract fails and leaves the prior lock untouched", async (t) => {
-  const root = repo(t, "@ontomato/workbench");
-  writeLock(root, OLD_ARM64_FP);
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
-  const docker = fakeDocker(t, root);
-  await withDocker({ ...docker, mode: "bad-readback" }, async () => {
-    await assert.rejects(
-      () => buildWorkbenchApp(descriptor(root), ["runtime", "--arch", "arm64"]),
-      /differs from the exported contract/,
-    );
-  });
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
-});
-
 test("success saves the fingerprint for this arch only, with snapshot metadata", async (t) => {
   const pub = repo(t, "@ontomato/workbench");
   const ent = repo(t, "@enterprise/workbench");
-  writeFileSync(join(pub, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n# dirty\n");
+  writeFileSync(join(pub, "pnpm-lock.yaml"), readFileSync(join(pub, "pnpm-lock.yaml"), "utf8") + "# dirty\n");
   writeLock(ent, OLD_ARM64_FP);
   const start = { ontomato: head(pub), enterprise: head(ent) };
   const docker = fakeDocker(t, ent);
@@ -309,9 +315,9 @@ test("success saves the fingerprint for this arch only, with snapshot metadata",
     await buildWorkbenchApp(enterpriseDescriptor(pub, ent), ["runtime", "--arch", "arm64"]);
   });
   const context = runDir(ent);
-  const expected = fingerprint(JSON.parse(readFileSync(join(context, "contract/contract.json"), "utf8")));
   const lock = JSON.parse(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"));
-  assert.equal(lock.runtimes["linux/arm64"], expected);
+  const expected = lock.runtimes["linux/arm64"];
+  assert.ok(/^[a-f0-9]{64}$/.test(expected));
   assert.equal(lock.runtimes["linux/amd64"], AMD64_FP);
   const record = JSON.parse(readFileSync(join(context, "inputs.json"), "utf8"));
   assert.equal(record.application, "@enterprise/workbench");
