@@ -575,7 +575,7 @@ test("assemble writes own packages, resources, links, web and meta from a real g
           stageRoot: join(dir, `s${stageNo}`),
           storeRoot: store,
           record,
-          meta: metaFor(armContract),
+          meta: metaFor("linux/arm64"),
           lock,
           members,
           selected,
