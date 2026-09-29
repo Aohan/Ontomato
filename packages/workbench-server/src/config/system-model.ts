@@ -85,12 +85,6 @@ function normalizeConfig(raw: unknown): SystemModelConfig {
   };
 }
 
-export function hasCustomConfig(domainId?: string): boolean {
-  const resolved = resolveDomainId(domainId);
-  const configFile = getDomainConfigFile(resolved);
-  return fs.existsSync(configFile);
-}
-
 export function getSystemModelConfig(domainId?: string): SystemModelConfig {
   const resolved = resolveDomainId(domainId);
   const configFile = getDomainConfigFile(resolved);

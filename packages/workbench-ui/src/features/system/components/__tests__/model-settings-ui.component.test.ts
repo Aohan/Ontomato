@@ -152,11 +152,11 @@ vi.mock("../../../admin", () => ({
     })),
     getSystemModelConfig: vi.fn(async () => ({
       success: true,
-      data: { abcQuestionMode: "harness", queryTimeoutSeconds: 600, hasCustomConfig: false },
+      data: { abcQuestionMode: "harness", queryTimeoutSeconds: 600 },
     })),
     saveSystemModelConfig: vi.fn(async (payload: Record<string, unknown>) => {
       sent.system = JSON.parse(JSON.stringify(payload));
-      return { success: true, data: { ...payload, hasCustomConfig: true } };
+      return { success: true, data: { ...payload } };
     }),
     saveToolSkillDir: vi.fn(async (skilldir: string) => {
       sent.skilldir = skilldir;

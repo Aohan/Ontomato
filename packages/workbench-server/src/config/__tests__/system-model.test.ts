@@ -9,7 +9,6 @@ import {
   DEFAULT_QUERY_TIMEOUT_SECONDS,
   SystemModelConfigError,
   getSystemModelConfig,
-  hasCustomConfig,
   saveSystemModelConfig,
 } from "../system-model";
 
@@ -36,7 +35,6 @@ describe("system-model configuration", () => {
       abcQuestionMode: DEFAULT_ABC_QUESTION_MODE,
       queryTimeoutSeconds: DEFAULT_QUERY_TIMEOUT_SECONDS,
     });
-    expect(hasCustomConfig("domain-new")).toBe(false);
   });
 
   it("saves and reads configuration containing only abcQuestionMode and queryTimeoutSeconds", () => {
@@ -48,7 +46,6 @@ describe("system-model configuration", () => {
       abcQuestionMode: "tool_fixed",
       queryTimeoutSeconds: 60,
     });
-    expect(hasCustomConfig("domain-1")).toBe(true);
 
     const loaded = getSystemModelConfig("domain-1");
     expect(loaded).toEqual({

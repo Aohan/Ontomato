@@ -5,7 +5,3 @@ export interface SystemModelConfig {
   queryTimeoutSeconds: number;
 }
 
-export interface SystemModelConfigResponse extends SystemModelConfig {
-  hasCustomConfig: boolean;
-}
-
