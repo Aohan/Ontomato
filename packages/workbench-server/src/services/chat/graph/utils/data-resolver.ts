@@ -26,7 +26,7 @@ async function parseUserProvidedData(query: string): Promise<Record<string, unkn
   const truncatedQuery = query.length > 4000 ? query.slice(0, 4000) + tApp("queryFixed.104") : query;
 
   try {
-    const model = createModel({ agentName: modelAgentName("dataResolver") });
+    const model = await createModel({ agentName: modelAgentName("dataResolver") });
     const response = await model.invoke([
       {
         role: "system",
@@ -54,7 +54,7 @@ async function parseUserProvidedData(query: string): Promise<Record<string, unkn
 
 async function generateMockData(query: string): Promise<Record<string, unknown>[] | null> {
   try {
-    const model = createModel({ temperature: 0.7, agentName: modelAgentName("dataResolver") });
+    const model = await createModel({ temperature: 0.7, agentName: modelAgentName("dataResolver") });
     const response = await model.invoke([
       {
         role: "system",

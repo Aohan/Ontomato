@@ -193,6 +193,12 @@ export const zhTW = {
   "api.loadConfigFailed": "獲取配置失败",
   "api.saveConfigFailed": "保存配置失败",
   "api.modelTestFailed": "模型測試失败",
+  "model.roleNotConfigured": "角色『{role}』未配置模型，請在模型配置中選擇",
+  "model.role.query": "問數",
+  "model.role.coding": "代碼與計算",
+  "model.role.general": "通用",
+  "model.role.diagnosis": "運維 Agent",
+  "model.role.knowledgeGovernance": "知識治理 Agent",
   "api.noAvailableDashboardData":
     "當前分析結果暂無可用數據。請先確認查詢結果中有錶格數據後再重試。",
   "api.dashboardNotFound": "儀錶盤不存在",

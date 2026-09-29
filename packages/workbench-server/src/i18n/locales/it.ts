@@ -217,6 +217,12 @@ export const it = {
   "api.feedbackSubmitted": "Feedback inviato",
   "api.loadConfigFailed": "Caricamento configurazione fallito",
   "api.saveConfigFailed": "Salvataggio configurazione fallito",
+  "model.roleNotConfigured": "Nessun modello configurato per il ruolo '{role}', configurarlo nelle impostazioni del modello",
+  "model.role.query": "Query",
+  "model.role.coding": "Codice e calcolo",
+  "model.role.general": "Generale",
+  "model.role.diagnosis": "Agente operazioni",
+  "model.role.knowledgeGovernance": "Agente governance della conoscenza",
   "api.modelTestFailed": "Test del modello fallito",
   "api.noAvailableDashboardData":
     "Nessun dato disponibile nei risultati di analisi correnti. Verificare che i risultati della query contengano dati tabellari prima di riprovare.",

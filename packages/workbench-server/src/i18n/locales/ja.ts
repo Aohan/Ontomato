@@ -159,6 +159,12 @@ export const ja = {
   "api.feedbackSubmitted": "フィードバック送信済み",
   "api.loadConfigFailed": "設定の取得に失敗",
   "api.saveConfigFailed": "設定の保存に失敗",
+  "model.roleNotConfigured": "ロール「{role}」のモデルが設定されていません。モデル設定で選択してください",
+  "model.role.query": "データ分析",
+  "model.role.coding": "コードと計算",
+  "model.role.general": "汎用",
+  "model.role.diagnosis": "運用エージェント",
+  "model.role.knowledgeGovernance": "ナレッジガバナンスエージェント",
   "api.modelTestFailed": "モデルテスト失敗",
   "api.noAvailableDashboardData":
     "現在の分析結果に利用可能なデータがありません。クエリ結果にテーブルデータが含まれていることを確認してから再試行してください。",
