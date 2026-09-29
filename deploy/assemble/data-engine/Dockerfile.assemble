@@ -22,15 +22,11 @@ ARG EXPECTED_LICENSE_MODE
 ARG APP_COMPONENT
 
 # A composite of two separately built images: clear the inherited image
-# version/revision/created and source labels instead of reporting the runtime's.
+# version label instead of reporting the runtime's.
 LABEL io.runtime.kind="composite" \
       io.runtime.component="${APP_COMPONENT}" \
       org.opencontainers.image.title="${APP_COMPONENT}" \
-      org.opencontainers.image.version="" \
-      org.opencontainers.image.revision="" \
-      org.opencontainers.image.created="" \
-      io.runtime.source.dirty="" \
-      io.runtime.sources=""
+      org.opencontainers.image.version=""
 
 # Everything at the root of the app image is copied into /app: future new directories in the app image need no change to this Dockerfile.
 COPY --from=app_source / /app/
