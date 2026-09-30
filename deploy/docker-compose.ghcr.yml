@@ -1,10 +1,10 @@
 name: ${COMPOSE_PROJECT_NAME:-ontomato}
 
-# Online stack: the same services as docker-compose.yml, with the published images
-# pulled from GitHub Container Registry instead of assembled from loaded images.
-# Everything except the image source is inherited from docker-compose.yml. ARCH in
-# .env is read only by that file's offline image names, which are replaced here, so
-# its value does not matter: the published images are multi-architecture.
+# Online stack: the same services and the same on-site assembly as docker-compose.yml,
+# with the runtime, app and Ontology Manager images pulled from GitHub Container
+# Registry instead of loaded from an offline bundle. Everything except the image source
+# is inherited from docker-compose.yml. ARCH in .env must name this machine's
+# architecture (amd64 or arm64): the assembly checks the images against it.
 
 services:
   postgres:
@@ -17,17 +17,19 @@ services:
     extends:
       file: docker-compose.yml
       service: datarag
-    image: ghcr.io/aohan/ontomato-data-engine:${ONTOMATO_VERSION:-latest}
-    pull_policy: missing
-    build: !reset null
+    build:
+      args:
+        RUNTIME_IMAGE: ghcr.io/aohan/ontomato-data-engine-runtime:${ONTOMATO_VERSION:-latest}
+        APP_IMAGE: ghcr.io/aohan/ontomato-data-engine-app:${ONTOMATO_VERSION:-latest}
 
   ontomato:
     extends:
       file: docker-compose.yml
       service: ontomato
-    image: ghcr.io/aohan/ontomato:${ONTOMATO_VERSION:-latest}
-    pull_policy: missing
-    build: !reset null
+    build:
+      args:
+        RUNTIME_IMAGE: ghcr.io/aohan/ontomato-workbench-runtime:${ONTOMATO_VERSION:-latest}
+        APP_IMAGE: ghcr.io/aohan/ontomato-workbench-app:${ONTOMATO_VERSION:-latest}
 
   ontology-manager:
     extends:
@@ -35,7 +37,6 @@ services:
       service: ontology-manager
     image: ghcr.io/aohan/ontomato-ontology-manager:${ONTOMATO_VERSION:-latest}
     pull_policy: missing
-    platform: !reset null
 
 volumes:
   postgres18_data:
