@@ -97,9 +97,6 @@ const activeMenu = computed(() => {
   if (path.startsWith("/admin/intelligence-assets/")) {
     return "/admin/intelligence-assets/metric-views";
   }
-  if (path === "/admin/skills/analysis" || path === "/admin/skills/visualization") {
-    return "/admin/skills";
-  }
   return path;
 });
 

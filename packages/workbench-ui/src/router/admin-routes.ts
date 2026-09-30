@@ -17,8 +17,7 @@ const managerMeta = { group: "data-assets", permissions: ["ontology-modeling"] }
 /*
  * Shared /admin child route records. Each app lists them explicitly in the original order (its own pages go between the
  * shared ones), with no registration or ordering framework. meta keeps only fields with consumers: group (layout tab
- * lookup), permissions (app guards; any one of them grants access) and category (skill page category); the original
- * title/icon/hidden had no reader.
+ * lookup) and permissions (app guards; any one of them grants access); the original title/icon/hidden had no reader.
  */
 export const adminRoutes = {
   root: { path: "", name: "AdminRoot", redirect: "/admin/ontology-manager" },
@@ -114,19 +113,19 @@ export const adminRoutes = {
   },
   skills: {
     path: "skills",
-    name: "SkillLibrary",
-    component: () => import("../features/skills/components/SkillLibrary.vue"),
+    name: "Skills",
+    component: () => import("../features/skills/components/SkillManager.vue"),
     meta: { group: "app-capabilities", permissions: ["skill-management"] },
   },
   skillsAnalysis: {
     path: "skills/analysis",
-    redirect: "/admin/skills?tab=analysis",
-    meta: { group: "app-capabilities", category: "analysis", permissions: ["analytical-skills"] },
+    redirect: "/admin/skills",
+    meta: { group: "app-capabilities", permissions: ["analytical-skills"] },
   },
   skillsVisualization: {
     path: "skills/visualization",
-    redirect: "/admin/skills?tab=visualization",
-    meta: { group: "app-capabilities", category: "visualization", permissions: ["visualization-skills"] },
+    redirect: "/admin/skills",
+    meta: { group: "app-capabilities", permissions: ["visualization-skills"] },
   },
   modelConfig: {
     path: "model-config",
