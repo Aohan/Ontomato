@@ -16,11 +16,13 @@ import io.ontomato.dataengine.bean.action.BusinessMeaning;
 final class ActionCodeExplanationValidator {
 
 	private static final Set<String> KINDS = Set.of("QUERY", "CREATE_OBJECT", "UPDATE_OBJECT", "DELETE_OBJECT",
-			"CREATE_EDGE", "DELETE_EDGE", "COMPUTE", "EXTERNAL_CALL", "BRANCH", "LOOP", "TRY_CATCH", "ERROR_HANDLING",
+			"CREATE_EDGE", "DELETE_EDGE", "APPEND_VECTOR", "UPDATE_VECTOR", "DELETE_VECTOR",
+			"COMPUTE", "EXTERNAL_CALL", "BRANCH", "LOOP", "TRY_CATCH", "ERROR_HANDLING",
 			"CUSTOM");
 
 	private static final List<String> TEXT_DETAILS = List.of("narrative", "class", "relation", "sourceClass",
-			"sourceObjectIdFrom", "targetClass", "targetObjectIdFrom");
+			"sourceObjectIdFrom", "targetClass", "targetObjectIdFrom", "attrName", "objectIdFrom", "fileIdFrom",
+			"textFrom");
 
 	private ActionCodeExplanationValidator() {
 	}

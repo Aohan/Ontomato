@@ -70,7 +70,18 @@ public class WriteFunctionMakerSkillTools {
 			List<Parameter> parameterDefList = DBSchemaUtil.buildParameters(parameterDefs, classDefs);
 			JSONObject parameters = new JSONObject();
 			for (Parameter parameterDef : parameterDefList) {
-				parameters.put(parameterDef.getName(), parameterDef.getValue());
+				Object value = parameterDef.getValue();
+				if (Parameter.TYPE_VECTOR.equals(parameterDef.getType()) && value != null) {
+					JSONObject vectorValue = value instanceof JSONObject ? (JSONObject) value : JSONObject.parseObject(JSON.toJSONString(value));
+					String text = vectorValue.getString("text");
+					if (text != null && !"".equals(text.trim())) {
+						Path uploaded = saveVectorText(sandboxId, text);
+						vectorValue.put("uploadFilePath", uploaded.toAbsolutePath().toString());
+					}
+					parameters.put(parameterDef.getName(), vectorValue);
+				} else {
+					parameters.put(parameterDef.getName(), value);
+				}
 			}
 			Path parameterFile = file.resolveSibling(file.getFileName() + ".params.json");
 			Files.writeString(parameterFile, JSON.toJSONString(parameters, Feature.WriteMapNullValue));
@@ -112,6 +123,15 @@ public class WriteFunctionMakerSkillTools {
 			ret = "Execution error: " + e.getMessage();
 		}
 		return ret;
+	}
+	
+	/** Write a vector parameter's text into the workspace as a pending upload file and return its absolute path. */
+	private Path saveVectorText(String sandboxId, String text) throws Exception {
+		Path root = workspaceService.workspaceRoot(sandboxId);
+		Files.createDirectories(root);
+		Path file = root.resolve("vector_" + UUID.randomUUID().toString() + ".txt");
+		Files.writeString(file, text);
+		return file;
 	}
 	
 }
