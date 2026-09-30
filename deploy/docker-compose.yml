@@ -1,0 +1,128 @@
+name: ${COMPOSE_PROJECT_NAME:-ontomato}
+
+# Offline stack. Composite tags stay off the single-component tags
+# ontomato:assemble-<ARCH> and datarag-opensource:<project>-assemble-<ARCH>.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      # Published on the loopback address only.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: ontomato
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - postgres18_data:/var/lib/postgresql
+      - ./initdb.sql:/docker-entrypoint-initdb.d/create-databases.sql:ro
+    # TCP: the image init server does not listen on 127.0.0.1, so this stays
+    # down until initdb, including the CREATE DATABASE script, has finished.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ontomato -d datarag"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  datarag:
+    image: datarag-opensource:${COMPOSE_PROJECT_NAME:-ontomato}-unified-${ARCH:?ARCH not set}
+    pull_policy: build
+    build:
+      context: ./assemble/data-engine
+      dockerfile: Dockerfile.assemble
+      pull: false
+      network: none
+      args:
+        APP_COMPONENT: datarag-opensource
+        EXPECTED_ARCH: ${ARCH:?ARCH not set}
+        RUNTIME_IMAGE: ${DATARAG_RUNTIME_IMAGE:-datarag-opensource-runtime:deploy-${ARCH:?ARCH not set}}
+        APP_IMAGE: ${DATARAG_APP_IMAGE:-datarag-opensource-app:deploy}
+    restart: unless-stopped
+    ports:
+      - "${DATARAG_PORT:-18087}:18087"
+    env_file:
+      - .env
+    # env_file keeps unset and empty BACKEND_* distinct. These keys are the
+    # internal database connection and override the same names in .env.
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      POSTGRE_JDBC_URL: jdbc:postgresql://postgres:5432/datarag
+      POSTGRE_USER_NAME: ontomato
+      POSTGRE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set}
+    volumes:
+      - ./backend_data:/deploy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json, urllib.request; req=urllib.request.Request('http://127.0.0.1:18087/getABCTaskCountInQueue', headers={'Accept-Language':'en'}); r=urllib.request.urlopen(req, timeout=3); body=json.load(r); assert r.status == 200 and body.get('success') is True and type(body.get('data')) is int and body['data'] >= 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ontomato:
+    image: ontomato:${COMPOSE_PROJECT_NAME:-ontomato}-unified-${ARCH:?ARCH not set}
+    pull_policy: build
+    build:
+      context: ./assemble/workbench
+      dockerfile: Dockerfile.assemble
+      pull: false
+      network: none
+      args:
+        APP_COMPONENT: ontomato
+        EXPECTED_ARCH: ${ARCH:?ARCH not set}
+        RUNTIME_IMAGE: ${ONTOMATO_RUNTIME_IMAGE:-node-app-runtime:deploy-${ARCH:?ARCH not set}}
+        APP_IMAGE: ${ONTOMATO_APP_IMAGE:-ontomato-app:deploy}
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://ontomato:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set}@postgres:5432/ontomato
+      DATA_QUERY_BASE_URL: http://datarag:18087
+      PORT: "3000"
+      NODE_ENV: production
+      TZ: ${TZ:-Asia/Shanghai}
+      ONTOLOGY_MANAGER_URL: ${ONTOLOGY_MANAGER_URL:-http://${PUBLIC_HOST:?PUBLIC_HOST not set}:${ONTOLOGY_MANAGER_PORT:-3005}}
+    shm_size: "1gb"
+    volumes:
+      - ./frontend_data:/app/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      datarag:
+        condition: service_healthy
+
+  ontology-manager:
+    image: ontomato-ontology-manager:deploy-${ARCH:?ARCH not set}
+    platform: linux/${ARCH:?ARCH not set}
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      - "${ONTOLOGY_MANAGER_PORT:-3005}:80"
+    environment:
+      DATARAG_ORIGIN: http://datarag:18087
+      ONTOLOGY_INITIAL_ROUTE: ${ONTOLOGY_INITIAL_ROUTE:-/playground}
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+    depends_on:
+      datarag:
+        condition: service_healthy
+
+volumes:
+  postgres18_data:

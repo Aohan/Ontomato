@@ -1,0 +1,1 @@
+Please begin business knowledge governance for this domain. First read the existing business knowledge and related ontology, and save the inventory progress and findings; after the initial full-domain inventory, explain to me the issues that need confirmation and clarify them item by item, forming a recommendation report that a person can act on.

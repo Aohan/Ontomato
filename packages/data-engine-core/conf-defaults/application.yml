@@ -1,0 +1,76 @@
+# DataEngine product default configuration. This file is the only source template and is not placed inside the jar.
+# On-site values always come from the BACKEND_* / POSTGRE_* environment variables (see the environment variable table in BUILD.md);
+# If conf/application.yml is missing, startup copies this template; an existing site file is kept and read on restart.
+server:
+  port: 18087
+  max-http-post-size: 10MB
+
+spring:
+  config:
+    # Resolved from the classpath: inside the container /deploy/conf comes first on the classpath, while locally
+    # conf-defaults comes first for the JVM (see the dev-override profile in pom.xml); both can resolve it.
+    import: classpath:mcp-clients.yml
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+langchain4j:
+  open-ai:
+    embedding-model:
+      base-url: ${BACKEND_EMBEDDING_BASE_URL:}
+      api-key: ${BACKEND_EMBEDDING_API_KEY:}
+      model-name: ${BACKEND_EMBEDDING_MODEL:}
+      dimensions: ${BACKEND_EMBEDDING_DIMENSIONS:2048}
+      timeout: PT300S
+      log-requests: true
+      log-responses: false
+
+ontomato:
+  data-engine:
+    service-id: ${BACKEND_SERVICE_ID:}
+    node-id: ${BACKEND_NODE_ID:}
+    ragchatrootpath: /opt/frontend
+    namespace: ${BACKEND_NAMESPACE:}
+    cardBase-url: ${BACKEND_CARD_BASE_URL:}
+    knowledge_maxResult: 10
+    toolsdatamaxsize: 20
+    toolAndPythonRetry: 3
+    data-adapter: ${BACKEND_DATA_ADAPTER:postgresql}
+    production-env-url: ${BACKEND_PRODUCTION_ENV_URL:}
+    production-env-user: ${BACKEND_PRODUCTION_ENV_USER:}
+    production-env-pwd: ${BACKEND_PRODUCTION_ENV_PASSWORD:}
+    pythonpath: /usr/local/bin/python3
+    python-charset: UTF-8
+    jdbc:
+      url: ${POSTGRE_JDBC_URL:}
+      username: ${POSTGRE_USER_NAME:}
+      password: ${POSTGRE_PASSWORD:}
+      driver-class-name: ${POSTGRE_DRIVER_CLASS:org.postgresql.Driver}
+    models:
+      - name: default
+        base-url: ${BACKEND_LLM_BASE_URL:}
+        api-keys: ${BACKEND_LLM_API_KEY:}
+        model-name: ${BACKEND_LLM_MODEL:}
+        timeout: PT300S
+        temperature: 0.0
+        top-p: 0.1
+        log-requests: true
+        log-responses: true
+    agents:
+      query:
+        model: default
+      coding:
+        model: default
+        skill-dir: ""
+      general:
+        model: default
+      diagnosis:
+        model: default
+      knowledgeGovernance:
+        model: default
+
+logging:
+  level:
+    dev.langchain4j: DEBUG
+    org.springframework: WARN

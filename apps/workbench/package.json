@@ -1,0 +1,36 @@
+{
+  "name": "@ontomato/workbench",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build:web": "vite build --config web/vite.config.ts",
+    "typecheck:web": "vue-tsc --noEmit -p web/tsconfig.json"
+  },
+  "dependencies": {
+    "@ontomato/workbench-server": "workspace:*",
+    "dotenv": "16.6.1",
+    "tsx": "4.21.0"
+  },
+  "devDependencies": {
+    "@ontomato/contracts": "workspace:*",
+    "@ontomato/workbench-ui": "workspace:*",
+    "@types/express": "4.17.25",
+    "@types/node": "22.19.15",
+    "@vitejs/plugin-vue": "5.2.4",
+    "element-plus": "2.13.6",
+    "happy-dom": "20.14.3",
+    "lucide-vue-next": "1.0.0",
+    "pinia": "3.0.4",
+    "typescript": "5.9.3",
+    "vite": "5.4.21",
+    "vitest": "1.6.0",
+    "vue": "3.5.30",
+    "vue-router": "5.0.4",
+    "vue-tsc": "3.2.6"
+  }
+}

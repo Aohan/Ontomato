@@ -1,0 +1,158 @@
+# Workbench runtime image: Node 24 + Python 3.10, the third-party production
+# dependencies in a fixed virtual store, and the assembly pairing check. The
+# application image is assembled into /app; this image never contains
+# application source, build output, default resources or installer inputs.
+#
+# The host entry prepares one build context. Every path below is part of that
+# contract; the driver only copies these entries and never redesigns them.
+#   sources/<source id>/      metadata-only trees from the N4a collector
+#   inputs.json               N4a build input record
+#   tools/                    the public scripts/ root
+#   runtime-requirements.txt  public docker/workbench/requirements.txt
+#   LICENSE, NOTICE           the public repository's own license files
+# The entrypoint and the runtime contract tools are copied out of tools/.
+ARG NODE_RUNTIME_IMAGE=docker.io/library/node:24.21.0-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
+ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG DEBIAN_MIRROR=https://deb.debian.org/debian
+ARG DEBIAN_SECURITY_MIRROR=https://deb.debian.org/debian-security
+
+# Install stage (has npm/pnpm): installs only the production selection of the
+# app importer, at the fixed virtual store, then removes pnpm's own workspace
+# links and installation locks. The runtime stage does not inherit this stage:
+# npm, pnpm, corepack and the C++ headers under /usr/local/include stay out.
+FROM ${NODE_RUNTIME_IMAGE} AS installer
+
+ARG PNPM_VERSION=9.15.9
+RUN npm install -g pnpm@${PNPM_VERSION}
+# pnpm's package store persists on the build machine across builds (a BuildKit
+# cache mount): packages are downloaded once and still installed exactly by the
+# frozen lock with integrity checks, so image contents do not depend on it.
+# The installer installs and reports licenses in one step, under the mount.
+ENV npm_config_store_dir=/pnpm/store
+# Playwright's browsers come from apt in the runtime stage (verified in N1).
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+COPY sources/ /src/
+COPY inputs.json /inputs.json
+COPY tools/ /tmp/tools/
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store node /tmp/tools/workbench/install-runtime.mjs
+
+FROM ${PYTHON_RUNTIME_IMAGE} AS runtime-files
+
+ARG PIP_INDEX_URL
+ARG DEBIAN_MIRROR
+ARG DEBIAN_SECURITY_MIRROR
+
+# Only the node binary and the runtime dependency tree.
+COPY --from=installer /usr/local/bin/node /usr/local/bin/node
+COPY --from=installer /opt/runtime/node_modules /opt/runtime/node_modules
+
+COPY runtime-requirements.txt /tmp/runtime-requirements.txt
+
+# pip installs exactly the pinned list with --no-deps (it is part of the
+# compatibility fingerprint) and pip check fails if the list misses a dependency.
+RUN echo 'Acquire::Retries "5"; Acquire::http::Timeout "120";' > /etc/apt/apt.conf.d/99retries && \
+    sed -i -E \
+      -e "s#https?://deb.debian.org/debian-security#${DEBIAN_SECURITY_MIRROR}#g" \
+      -e "s#https?://deb.debian.org/debian#${DEBIAN_MIRROR}#g" \
+      /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    chromium \
+    fontconfig \
+    fonts-wqy-microhei \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libgbm1 \
+    libglib2.0-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxcb1 \
+ && test -x /usr/bin/chromium \
+ && node --version \
+ && python3 --version | grep -E '^Python 3\.10\.' \
+ && python3 -m pip install --no-cache-dir --only-binary=:all: --no-deps --index-url "$PIP_INDEX_URL" \
+    -r /tmp/runtime-requirements.txt \
+ && python3 -m pip check \
+ && python3 -c "import pandas, sys; assert sys.version_info[:2] == (3, 10); print('pandas', pandas.__version__)" \
+ && rm -rf /usr/local/lib/python3.10/site-packages/pip* /usr/local/lib/python3.10/site-packages/setuptools* /usr/local/lib/python3.10/site-packages/pkg_resources /usr/local/bin/pip* \
+ && python3 -c "import pandas, numpy" \
+ && rm -rf /usr/local/include \
+ && rm -f /etc/apt/apt.conf.d/99retries && rm -rf /var/lib/apt/lists/*
+# pip/setuptools are used only during the build above: at runtime python only
+# execs scripts (numpy/pandas stay importable, pip does not).
+RUN if python3 -m pip --version >/dev/null 2>&1; then echo "pip still present, must be removed from runtime" >&2; exit 1; fi
+
+# Third-party notices of what this image installs, under /licenses, outside
+# every runtime contract input: the production node_modules from the
+# installer's pnpm report (the same store paths are copied above), the
+# distributions pip left installed, and the license of the node binary, which
+# is copied alone. The system section names where the base keeps its own.
+COPY LICENSE NOTICE /licenses/
+COPY --from=installer /usr/local/LICENSE /licenses/nodejs/LICENSE
+RUN --mount=type=bind,from=installer,source=/tmp/npm-licenses.json,target=/tmp/npm-licenses.json \
+    --mount=type=bind,source=tools/third_party_notices.py,target=/tmp/third_party_notices.py \
+    python3 /tmp/third_party_notices.py /licenses/THIRD_PARTY_NOTICES.txt --npm /tmp/npm-licenses.json --python <<'EOF'
+Debian packages of the python:3.10-slim-bookworm base and the apt-installed
+Chromium, fonts and libraries: /usr/share/doc/<package>/copyright
+Python 3.10 interpreter and standard library: /usr/local/lib/python3.10/LICENSE.txt
+Node.js binary (copied alone from the installer stage's Node image): /licenses/nodejs/LICENSE
+EOF
+
+ENV ABC_REPLAY_PYTHON_COMMAND=python3.10 \
+    HOT_REPORT_PYTHON_COMMAND=python3.10 \
+    CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+
+# Node resolves bare imports by walking ancestors of the importing file, so /app
+# reaches this directory without owning node_modules itself.
+WORKDIR /opt/runtime
+RUN ln -s /opt/runtime/node_modules /node_modules
+
+# Runtime tools: the N3 contract CLI, its N2 module and the shared build
+# support. The installer and the N4a collector are build-time only and are not
+# copied here; the single Python helper is the public one, not a second copy.
+COPY tools/build-support.mjs /runtime/scripts/build-support.mjs
+COPY tools/workbench/runtime-contract.mjs /runtime/scripts/workbench/runtime-contract.mjs
+COPY tools/workbench/production-graph.mjs /runtime/scripts/workbench/production-graph.mjs
+COPY tools/workbench/container-entrypoint.sh /runtime/container-entrypoint.sh
+RUN chmod 0755 /runtime/container-entrypoint.sh
+
+FROM runtime-files AS runtime
+# Build metadata is traceability only, outside the compatibility contract.
+ARG RUNTIME_META_JSON
+RUN test -n "$RUNTIME_META_JSON" \
+ && printf '%s' "$RUNTIME_META_JSON" > /runtime/.image-meta.json
+
+WORKDIR /app
+ENTRYPOINT ["/runtime/container-entrypoint.sh"]
+# The app package owns this launcher.
+CMD ["/app/launch.sh"]
+
+# Compatibility contract, computed from the staged sources only (lock file,
+# workspace manifests, both workbench recipes, Python requirements). Both host
+# builders read it before building an image; it needs a YAML parser, which the
+# build host does not have to install. It runs on the build host's platform and
+# names the target architecture itself.
+FROM --platform=$BUILDPLATFORM ${NODE_RUNTIME_IMAGE} AS compat-contract
+ARG TARGETARCH
+ARG YAML_VERSION=2.8.3
+WORKDIR /contract
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm npm install --no-save --no-audit --no-fund --no-package-lock yaml@${YAML_VERSION}
+COPY . /contract/
+RUN node /contract/tools/workbench/runtime-contract.mjs contract /contract "${TARGETARCH}" > /contract.json
+
+FROM scratch AS compat-contract-export
+COPY --from=compat-contract /contract.json /contract.json

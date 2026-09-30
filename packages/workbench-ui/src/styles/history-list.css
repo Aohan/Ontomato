@@ -1,0 +1,83 @@
+.history-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--el-text-color-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.history-list-marker {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--el-color-success);
+}
+
+.history-list-item {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 16px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: var(--el-bg-color);
+  box-shadow: var(--shadow-card);
+  color: var(--el-text-color-primary);
+  font: inherit;
+  line-height: 1.5;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.history-list-item:hover {
+  border-color: var(--el-border-color);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.history-list-item.active {
+  border-color: color-mix(in srgb, var(--el-color-primary) 38%, transparent);
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--el-color-primary) 8%, transparent),
+    var(--shadow-card);
+}
+
+.history-list-item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.history-list-title {
+  display: block;
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.history-list-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .history-list-item {
+    transition: none;
+  }
+}

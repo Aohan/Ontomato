@@ -1,0 +1,366 @@
+[
+  {
+    "key": "lang",
+    "value": "English"
+  },
+  {
+    "key": "Abc.notInService",
+    "value": "ABC is temporarily unavailable"
+  },
+  {
+    "key": "Auth.register.success",
+    "value": "Authorization activated successfully"
+  },
+  {
+    "key": "Maintenance.action.paramError",
+    "value": "Invalid request parameters"
+  },
+  {
+    "key": "Data.queryM3.error",
+    "value": "Failed to query M3 database"
+  },
+  {
+    "key": "Data.remoteDB.notSupport",
+    "value": "Non-M3 mode does not support this feature"
+  },
+  {
+    "key": "Data.dataPermission.noPermission",
+    "value": "You do not have data permission"
+  },
+  {
+    "key": "Data.object.notExist",
+    "value": "Object not found"
+  },
+  {
+    "key": "Dashboard.data.error",
+    "value": "Failed to retrieve data"
+  },
+  {
+    "key": "Dashboard.param.error",
+    "value": "Invalid custom parameters"
+  },
+  {
+    "key": "Admin.relationship.nameError",
+    "value": "Invalid relationship name format"
+  },
+  {
+    "key": "Admin.relationship.fromClassNotFound",
+    "value": "Source class not found"
+  },
+  {
+    "key": "Admin.relationship.toClassNotFound",
+    "value": "Target class not found"
+  },
+  {
+    "key": "Admin.relationship.exist",
+    "value": "Relationship already exists"
+  },
+  {
+    "key": "Admin.class.exist",
+    "value": "Class already exists"
+  },
+  {
+    "key": "Admin.class.notFound",
+    "value": "Class not found"
+  },
+  {
+    "key": "Admin.attr.formatError",
+    "value": "Invalid attribute format"
+  },
+  {
+    "key": "Admin.class.nameRequired",
+    "value": "The object class name and display name are required"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "A new object class needs a primary key field name"
+  },
+  {
+    "key": "Admin.class.m3PrimaryKeyId",
+    "value": "The primary key field of an M3 object class must be id"
+  },
+  {
+    "key": "Admin.attr.primaryKeyLocked",
+    "value": "The current primary key cannot be deleted or disabled; switch the primary key to another field first"
+  },
+  {
+    "key": "Admin.attr.primaryKeyInvalid",
+    "value": "The primary key must be an enabled varchar field"
+  },
+  {
+    "key": "Admin.attr.typeError",
+    "value": "Invalid attribute type"
+  },
+  {
+    "key": "Admin.attr.exist",
+    "value": "Attribute already exists"
+  },
+  {
+    "key": "Admin.attr.notFound",
+    "value": "Attribute not found"
+  },
+  {
+    "key": "Admin.indicator.exist",
+    "value": "Indicator already exists"
+  },
+  {
+    "key": "PythonExecutor.execute.timeout",
+    "value": "Python execution timeout (minutes)"
+  },
+  {
+    "key": "QuestionCard.originCondition",
+    "value": "Original condition"
+  },
+  {
+    "key": "QuestionCard.replaceTo",
+    "value": "Replaced with"
+  },
+  {
+    "key": "QuestionCard.totalNum",
+    "value": "Total records"
+  },
+  {
+    "key": "QuestionCard.showNum",
+    "value": "Showing records"
+  },
+  {
+    "key": "QuestionCard.canGetByUrl",
+    "value": "All data can be accessed via query link"
+  },
+  {
+    "key": "AuditLog.datasetDesc.upd",
+    "value": "Modified dataset description"
+  },
+  {
+    "key": "AuditLog.relationship.add",
+    "value": "Added relationship type"
+  },
+  {
+    "key": "AuditLog.relationship.del",
+    "value": "Deleted relationship type"
+  },
+  {
+    "key": "AuditLog.relationship.upd",
+    "value": "Modified relationship type"
+  },
+  {
+    "key": "AuditLog.class.add",
+    "value": "Added object class"
+  },
+  {
+    "key": "AuditLog.class.del",
+    "value": "Deleted object class"
+  },
+  {
+    "key": "AuditLog.class.upd",
+    "value": "Modified object class"
+  },
+  {
+    "key": "AuditLog.class",
+    "value": "Object class"
+  },
+  {
+    "key": "AuditLog.attr.add",
+    "value": "Added attribute"
+  },
+  {
+    "key": "AuditLog.attr.del",
+    "value": "Deleted attribute"
+  },
+  {
+    "key": "AuditLog.attr.upd",
+    "value": "Modified attribute"
+  },
+  {
+    "key": "AuditLog.attr",
+    "value": "Attribute"
+  },
+  {
+    "key": "AuditLog.indicator.add",
+    "value": "Added indicator"
+  },
+  {
+    "key": "AuditLog.indicator.del",
+    "value": "Deleted indicator"
+  },
+  {
+    "key": "AuditLog.indicator.upd",
+    "value": "Modified indicator"
+  },
+  {
+    "key": "AuditLog.businessExample.add",
+    "value": "Added business example"
+  },
+  {
+    "key": "AuditLog.businessExample.upd",
+    "value": "Modified business example"
+  },
+  {
+    "key": "AuditLog.businessExample.del",
+    "value": "Deleted business example"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.add",
+    "value": "Added business knowledge"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.upd",
+    "value": "Modified business knowledge"
+  },
+  {
+    "key": "AuditLog.businessKnowledge.del",
+    "value": "Deleted business knowledge"
+  },
+  {
+    "key": "Action.notGenerated",
+    "value": "Action not generated"
+  },
+  {
+    "key": "Action.notFound",
+    "value": "Action does not exist"
+  },
+  {
+    "key": "Action.cannotModifySystem",
+    "value": "System action cannot be modified"
+  },
+  {
+    "key": "Action.cannotDeleteSystem",
+    "value": "System action cannot be deleted"
+  },
+  {
+    "key": "Action.domainMismatch",
+    "value": "Action domain mismatch"
+  },
+  {
+    "key": "Action.notPublished",
+    "value": "Action not published"
+  },
+  {
+    "key": "Action.parseCodeExplainFailed",
+    "value": "Failed to parse code explanation result"
+  },
+  {
+    "key": "Function.notFound",
+    "value": "Function does not exist"
+  },
+  {
+    "key": "Function.cannotBeEmpty",
+    "value": "Function cannot be empty"
+  },
+  {
+    "key": "Function.notWrite",
+    "value": "Function is not a write function"
+  },
+  {
+    "key": "Function.notRead",
+    "value": "Function is not a read function"
+  },
+  {
+    "key": "Function.cannotModifySystem",
+    "value": "System function cannot be modified"
+  },
+  {
+    "key": "Function.cannotDeleteSystem",
+    "value": "System function cannot be deleted"
+  },
+  {
+    "key": "Function.domainMismatch",
+    "value": "Function domain mismatch"
+  },
+  {
+    "key": "Function.referencedByMetricView",
+    "value": "Function referenced by MetricView cannot be modified or deleted"
+  },
+  {
+    "key": "Function.referencedByAction",
+    "value": "Function referenced by Action cannot be modified or deleted"
+  },
+  {
+    "key": "Function.referencedByWriteTask",
+    "value": "Function referenced by WriteTask cannot be modified or deleted"
+  },
+  {
+    "key": "MetricView.notGenerated",
+    "value": "MetricView not generated"
+  },
+  {
+    "key": "MetricView.notFound",
+    "value": "MetricView does not exist"
+  },
+  {
+    "key": "MetricView.cannotModifySystem",
+    "value": "System MetricView cannot be modified"
+  },
+  {
+    "key": "MetricView.cannotDeleteSystem",
+    "value": "System MetricView cannot be deleted"
+  },
+  {
+    "key": "MetricView.domainMismatch",
+    "value": "MetricView domain mismatch"
+  },
+  {
+    "key": "MetricView.notPublished",
+    "value": "MetricView not published"
+  },
+  {
+    "key": "MetricView.snapshotNotFound",
+    "value": "Hot data result snapshot does not exist or has expired"
+  },
+  {
+    "key": "MetricView.snapshotUnreadable",
+    "value": "Failed to read hot data result snapshot"
+  },
+  {
+    "key": "WriteTask.notFound",
+    "value": "WriteTask does not exist"
+  },
+  {
+    "key": "WriteTask.domainMismatch",
+    "value": "WriteTask domain mismatch"
+  },
+  {
+    "key": "WriteTask.functionMustBeNoParam",
+    "value": "Function must have no parameters"
+  },
+  {
+    "key": "WriteTask.invalidStatus",
+    "value": "Invalid WriteTask status"
+  },
+  {
+    "key": "WriteTask.invalidCrontab",
+    "value": "Invalid WriteTask crontab expression"
+  },
+  {
+    "key": "WriteFunctionOperation.classNotExist",
+    "value": "Class does not exist"
+  },
+  {
+    "key": "WriteFunctionOperation.relationNotExist",
+    "value": "Relation does not exist"
+  },
+  {
+    "key": "AgentRole.notConfigured",
+    "value": "No model is configured for role \"{0}\". Choose one in Model Configuration."
+  },
+  {
+    "key": "AgentRole.query",
+    "value": "Query"
+  },
+  {
+    "key": "AgentRole.coding",
+    "value": "Coding and Computing"
+  },
+  {
+    "key": "AgentRole.general",
+    "value": "General"
+  },
+  {
+    "key": "AgentRole.diagnosis",
+    "value": "Operations Agent"
+  },
+  {
+    "key": "AgentRole.knowledgeGovernance",
+    "value": "Knowledge Governance Agent"
+  }
+]

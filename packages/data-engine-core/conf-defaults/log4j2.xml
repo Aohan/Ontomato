@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--The status after Configuration sets log4j2's own internal information output; it may be omitted. When set to trace you will see all kinds of detailed log4j2 internal output-->
+<!--monitorInterval: Log4j can automatically detect configuration file changes and reconfigure itself; sets the interval in seconds-->
+<configuration monitorInterval="5">
+  <!--Log levels in priority order: OFF > FATAL > ERROR > WARN > INFO > DEBUG > TRACE > ALL -->
+
+  <!--Variable configuration-->
+  <Properties>
+    <!-- Formatted output: %date is the date, %thread is the thread name, %-5level: the level padded to 5 characters from the left, %msg: the log message, %n is the line separator-->
+    <!-- %logger{36} means the Logger name is at most 36 characters -->
+    <property name="LOG_PATTERN" value="%date{UNIX_MILLIS} %date{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n" />
+    <!-- Define the log storage path -->
+    <property name="FILE_PATH" value="./logs" />
+    <property name="FILE_NAME" value="datarag" />
+  </Properties>
+
+  <appenders>
+
+    <console name="Console" target="SYSTEM_OUT">
+      <!--Output log format-->
+      <PatternLayout pattern="${LOG_PATTERN}"/>
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
+    </console>
+
+    <console name="Langchain4jConsole" target="SYSTEM_OUT">
+      <!--Output log format-->
+      <PatternLayout pattern="%msg"/>
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY"/>
+    </console>
+
+    <!-- Total archives: when filePattern contains a date, the max of DefaultRolloverStrategy only limits the %i sequence within the same day, not the total number of archives.
+         The total is controlled by each appender's Delete: after every roll, keep the most recent N archives by modification time, with N equal to max.-->
+    <!-- This prints all info-and-below level information; whenever the size exceeds size, the log of that size is automatically stored into and compressed under year-month folders as an archive-->
+    <RollingFile name="RollingFileInfo" fileName="${FILE_PATH}/${FILE_NAME}-info.log" filePattern="${FILE_PATH}/${FILE_NAME}-INFO-%d{yyyy-MM-dd}_%i.log.gz">
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="info" onMatch="ACCEPT" onMismatch="DENY"/>
+      <PatternLayout pattern="${LOG_PATTERN}"/>
+      <Policies>
+        <!--The interval attribute specifies how often to roll; the default is 1 hour-->
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="10MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="15">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="${FILE_NAME}-INFO-*.log.gz">
+            <IfAccumulatedFileCount exceeds="15"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+
+    <!-- This prints all warn-and-below level information; whenever the size exceeds size, the log of that size is automatically stored into and compressed under year-month folders as an archive-->
+    <RollingFile name="RollingFileWarn" fileName="${FILE_PATH}/${FILE_NAME}-warn.log" filePattern="${FILE_PATH}/${FILE_NAME}-WARN-%d{yyyy-MM-dd}_%i.log.gz">
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="warn" onMatch="ACCEPT" onMismatch="DENY"/>
+      <PatternLayout pattern="${LOG_PATTERN}"/>
+      <Policies>
+        <!--The interval attribute specifies how often to roll; the default is 1 hour-->
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="10MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="15">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="${FILE_NAME}-WARN-*.log.gz">
+            <IfAccumulatedFileCount exceeds="15"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+
+    <!-- This prints all error-and-below level information; whenever the size exceeds size, the log of that size is automatically stored into and compressed under year-month folders as an archive-->
+    <RollingFile name="RollingFileError" fileName="${FILE_PATH}/${FILE_NAME}-error.log" filePattern="${FILE_PATH}/${FILE_NAME}-ERROR-%d{yyyy-MM-dd}_%i.log.gz">
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="error" onMatch="ACCEPT" onMismatch="DENY"/>
+      <PatternLayout pattern="${LOG_PATTERN}"/>
+      <Policies>
+        <!--The interval attribute specifies how often to roll; the default is 1 hour-->
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="10MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="15">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="${FILE_NAME}-ERROR-*.log.gz">
+            <IfAccumulatedFileCount exceeds="15"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+    
+    <!-- Dedicated log output for the LogHelper class -->
+    <RollingFile name="LogHelperFile" 
+                 fileName="${FILE_PATH}/${FILE_NAME}-chaterr.log" 
+                 filePattern="${FILE_PATH}/${FILE_NAME}-chaterr-%d{yyyy-MM-dd}_%i.log.gz">
+        <PatternLayout pattern="${LOG_PATTERN}"/>
+        <Policies>
+            <TimeBasedTriggeringPolicy interval="1"/>
+            <SizeBasedTriggeringPolicy size="10MB"/>
+        </Policies>
+        <DefaultRolloverStrategy max="15">
+          <Delete basePath="${FILE_PATH}">
+            <IfFileName glob="${FILE_NAME}-chaterr-*.log.gz">
+              <IfAccumulatedFileCount exceeds="15"/>
+            </IfFileName>
+          </Delete>
+        </DefaultRolloverStrategy>
+    </RollingFile>
+
+    <RollingFile name="usermessage" fileName="${FILE_PATH}/${FILE_NAME}-usermessage.log" filePattern="${FILE_PATH}/${FILE_NAME}-usermessage-%d{yyyy-MM-dd}_%i.log.gz">
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
+      <PatternLayout pattern="${LOG_PATTERN}"/>
+      <Policies>
+        <!--The interval attribute specifies how often to roll; the default is 1 hour-->
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="10MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="15">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="${FILE_NAME}-usermessage-*.log.gz">
+            <IfAccumulatedFileCount exceeds="15"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+
+    <RollingFile name="calculator-log" fileName="${FILE_PATH}/${FILE_NAME}-calculator.log" filePattern="${FILE_PATH}/${FILE_NAME}-calculator-%d{yyyy-MM-dd}_%i.log.gz">
+      <!--The console outputs only level and above (onMatch); everything else is denied (onMismatch)-->
+      <ThresholdFilter level="debug" onMatch="ACCEPT" onMismatch="DENY"/>
+      <PatternLayout pattern="${LOG_PATTERN}"/>
+      <Policies>
+        <!--The interval attribute specifies how often to roll; the default is 1 hour-->
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="10MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="15">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="${FILE_NAME}-calculator-*.log.gz">
+            <IfAccumulatedFileCount exceeds="15"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+
+
+    <RollingFile name="agent-llm-log" fileName="${FILE_PATH}/agent-llm.jsonl" filePattern="${FILE_PATH}/agent-llm-%d{yyyy-MM-dd}_%i.jsonl.gz">
+      <PatternLayout pattern="%m%n"/>
+      <Policies>
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="50MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="30">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="agent-llm-*.jsonl.gz">
+            <IfAccumulatedFileCount exceeds="30"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+
+    <RollingFile name="diagnostic-events-log" fileName="${FILE_PATH}/diagnostic-events.jsonl" filePattern="${FILE_PATH}/diagnostic-events-%d{yyyy-MM-dd}_%i.jsonl.gz">
+      <PatternLayout pattern="%m%n"/>
+      <Policies>
+        <TimeBasedTriggeringPolicy interval="1"/>
+        <SizeBasedTriggeringPolicy size="50MB"/>
+      </Policies>
+      <DefaultRolloverStrategy max="30">
+        <Delete basePath="${FILE_PATH}">
+          <IfFileName glob="diagnostic-events-*.jsonl.gz">
+            <IfAccumulatedFileCount exceeds="30"/>
+          </IfFileName>
+        </Delete>
+      </DefaultRolloverStrategy>
+    </RollingFile>
+
+  </appenders>
+
+  <!--The Logger node specifies log behavior individually, for example setting a different log level for classes under a given package.-->
+  <!--Then define loggers; an appender takes effect only when a logger is defined and references it-->
+  <loggers>
+
+    <!--langchain4j logs output only logs-->
+    <logger name="dev.langchain4j.http.client.log" level="info" additivity="false">
+      <AppenderRef ref="RollingFileInfo"/>
+      <AppenderRef ref="Langchain4jConsole"/>
+    </logger>
+
+    <!--langchain4j logs output only logs-->
+    <logger name="io.ontomato.dataengine.service.ai.AIChatService" level="info" additivity="false">
+      <AppenderRef ref="RollingFileInfo"/>
+      <AppenderRef ref="Langchain4jConsole"/>
+    </logger>
+
+    <!--Filter out some useless DEBUG information from spring and mybatis-->
+    <logger name="org.mybatis" level="info" additivity="false">
+      <AppenderRef ref="Console"/>
+    </logger>
+    <!--Monitor system information-->
+    <!--If additivity is set to false, the child Logger outputs only to its own appenders and not to those of the parent Logger.-->
+    <Logger name="org.springframework" level="info" additivity="false">
+      <AppenderRef ref="Console"/>
+    </Logger>
+    
+    <!-- Output LogHelper logs to a dedicated file separately -->
+    <logger name="io.ontomato.dataengine.util.LogHelper" level="debug" additivity="false">
+        <AppenderRef ref="LogHelperFile"/>
+    </logger>
+
+    <logger name="io.ontomato.dataengine.util.UserMessageUtil" level="debug" additivity="false">
+      <AppenderRef ref="usermessage"/>
+    </logger>
+
+    <logger name="io.ontomato.dataengine.service.impl.PythonCalculatorServiceImpl" level="debug" additivity="false">
+      <AppenderRef ref="calculator-log"/>
+    </logger>
+    <logger name="io.ontomato.dataengine.service.impl.AfterCalculateServiceImpl" level="debug" additivity="false">
+      <AppenderRef ref="calculator-log"/>
+    </logger>
+    <logger name="AGENT_LLM_LOG" level="info" additivity="false">
+      <AppenderRef ref="agent-llm-log"/>
+    </logger>
+    <logger name="DIAGNOSTIC_EVENT_LOG" level="info" additivity="false">
+      <AppenderRef ref="diagnostic-events-log"/>
+    </logger>
+    <root level="info">
+      <appender-ref ref="Console"/>
+      <appender-ref ref="RollingFileInfo"/>
+      <appender-ref ref="RollingFileWarn"/>
+      <appender-ref ref="RollingFileError"/>
+    </root>
+  </loggers>
+
+</configuration>

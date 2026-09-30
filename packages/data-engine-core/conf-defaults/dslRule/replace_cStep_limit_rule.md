@@ -1,0 +1,1 @@
+	6.5 limit represents from which position to start and how many rows of data to take at most, and consists of offset and count; offset represents from which position to start, and count represents how many rows of data to take at most.

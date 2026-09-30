@@ -1,0 +1,4 @@
+[{
+	"as": "area_ratio",
+	"expr": "(temp01.area / temp01.total_area) * 100"
+}]

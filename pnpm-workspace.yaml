@@ -1,0 +1,10 @@
+packages:
+  - "packages/*"
+  - "apps/*"
+
+# esbuild's install script: pnpm 9 runs it by default; from pnpm 10 it must be allowed
+# explicitly (10 reads onlyBuiltDependencies, 11 and later read allowBuilds).
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true

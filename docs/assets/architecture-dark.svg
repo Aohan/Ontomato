@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" width="960" height="640" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="960" height="640" rx="14" fill="#0f130e"/>
+<rect x="12" y="20" width="936" height="160" rx="12" fill="#141a12"/>
+<text x="24" y="46" font-size="13" font-weight="700" letter-spacing="1.5" fill="#9aa792">USE</text>
+<text x="24" y="65" font-size="12" fill="#9aa792">People and agents</text>
+<text x="24" y="81" font-size="12" fill="#9aa792">work on one model</text>
+<text x="150" y="46" font-size="12" font-weight="600" letter-spacing="1" fill="#9aa792">PEOPLE</text>
+<text x="512" y="46" font-size="12" font-weight="600" letter-spacing="1" fill="#9aa792">AGENTS</text>
+<rect x="150.0" y="60" width="168.0" height="104" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="164.0" y="86" font-size="14" font-weight="600" fill="#e7eee0">Workbench</text>
+<text x="164.0" y="106" font-size="12" fill="#9aa792">Ask questions, run</text>
+<text x="164.0" y="123" font-size="12" fill="#9aa792">deep analyses, read</text>
+<text x="164.0" y="140" font-size="12" fill="#9aa792">traced answers</text>
+<rect x="328.0" y="60" width="168.0" height="104" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="342.0" y="86" font-size="14" font-weight="600" fill="#e7eee0">Ontology Manager</text>
+<text x="342.0" y="106" font-size="12" fill="#9aa792">Model object types</text>
+<text x="342.0" y="123" font-size="12" fill="#9aa792">and relationships,</text>
+<text x="342.0" y="140" font-size="12" fill="#9aa792">browse the data</text>
+<rect x="512.0" y="60" width="134.66666666666666" height="104" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="526.0" y="86" font-size="14" font-weight="600" fill="#e7eee0">Agent skills</text>
+<text x="526.0" y="106" font-size="12" fill="#9aa792">Claude Code,</text>
+<text x="526.0" y="123" font-size="12" fill="#9aa792">Codex and other</text>
+<text x="526.0" y="140" font-size="12" fill="#9aa792">coding agents</text>
+<rect x="656.6666666666666" y="60" width="134.66666666666666" height="104" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="670.6666666666666" y="86" font-size="14" font-weight="600" fill="#e7eee0">REST API · MCP</text>
+<text x="670.6666666666666" y="106" font-size="12" fill="#9aa792">Tool calls and</text>
+<text x="670.6666666666666" y="123" font-size="12" fill="#9aa792">analysis reports</text>
+<rect x="801.3333333333333" y="60" width="134.66666666666666" height="104" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="815.3333333333333" y="86" font-size="14" font-weight="600" fill="#e7eee0">Your apps</text>
+<text x="815.3333333333333" y="106" font-size="12" fill="#9aa792">Pages built on</text>
+<text x="815.3333333333333" y="123" font-size="12" fill="#9aa792">MetricViews and</text>
+<text x="815.3333333333333" y="140" font-size="12" fill="#9aa792">Actions</text>
+<line x1="480.0" y1="180" x2="480.0" y2="196" stroke="#9aa792" stroke-width="1.5"/>
+<path d="M475.0 194 L480.0 202 L485.0 194 Z" fill="#9aa792"/>
+<rect x="12" y="202" width="936" height="270" rx="12" fill="#18240f" stroke="#78b43c" stroke-width="1.5"/>
+<text x="24" y="228" font-size="13" font-weight="700" letter-spacing="1.5" fill="#9fd46a">ONTOLOGY</text>
+<text x="24" y="247" font-size="12" fill="#9aa792">Your business,</text>
+<text x="24" y="263" font-size="12" fill="#9aa792">in its own terms</text>
+<text x="150" y="249" font-size="13" font-weight="700" fill="#9fd46a">Semantic</text>
+<text x="150" y="267" font-size="12" fill="#9aa792">what exists</text>
+<rect x="256.0" y="216" width="161.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="270.0" y="242" font-size="14" font-weight="600" fill="#e7eee0">Object types</text>
+<text x="270.0" y="262" font-size="12" fill="#9aa792">Supplier, Order,</text>
+<text x="270.0" y="279" font-size="12" fill="#9aa792">Product …</text>
+<rect x="427.0" y="216" width="161.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="441.0" y="242" font-size="14" font-weight="600" fill="#e7eee0">Properties</text>
+<text x="441.0" y="262" font-size="12" fill="#9aa792">Typed fields with</text>
+<text x="441.0" y="279" font-size="12" fill="#9aa792">meaning and units</text>
+<rect x="598.0" y="216" width="161.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="612.0" y="242" font-size="14" font-weight="600" fill="#e7eee0">Relationships</text>
+<text x="612.0" y="262" font-size="12" fill="#9aa792">Named links that</text>
+<text x="612.0" y="279" font-size="12" fill="#9aa792">join the objects</text>
+<rect x="769.0" y="216" width="161.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="783.0" y="242" font-size="14" font-weight="600" fill="#e7eee0">Descriptions</text>
+<text x="783.0" y="262" font-size="12" fill="#9aa792">Business meaning,</text>
+<text x="783.0" y="279" font-size="12" fill="#9aa792">codes and values</text>
+<text x="150" y="335" font-size="13" font-weight="700" fill="#9fd46a">Kinetic</text>
+<text x="150" y="353" font-size="12" fill="#9aa792">what you can do</text>
+<rect x="256.0" y="302" width="332.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="270.0" y="328" font-size="14" font-weight="600" fill="#e7eee0">MetricViews</text>
+<text x="270.0" y="348" font-size="12" fill="#9aa792">Named, parameterized reads</text>
+<rect x="598.0" y="302" width="332.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="612.0" y="328" font-size="14" font-weight="600" fill="#e7eee0">Actions</text>
+<text x="612.0" y="348" font-size="12" fill="#9aa792">Named, parameterized writes to the data</text>
+<text x="150" y="421" font-size="13" font-weight="700" fill="#9fd46a">Reasoning</text>
+<text x="150" y="439" font-size="12" fill="#9aa792">how it answers</text>
+<rect x="256.0" y="388" width="218.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="270.0" y="414" font-size="14" font-weight="600" fill="#e7eee0">Question planning</text>
+<text x="270.0" y="434" font-size="12" fill="#9aa792">Split, scope, plan</text>
+<rect x="484.0" y="388" width="218.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="498.0" y="414" font-size="14" font-weight="600" fill="#e7eee0">Ontology DSL → SQL</text>
+<text x="498.0" y="434" font-size="12" fill="#9aa792">Compiled per adapter</text>
+<rect x="712.0" y="388" width="218.0" height="76" rx="8" fill="#1c2a14" stroke="#34402f"/>
+<text x="726.0" y="414" font-size="14" font-weight="600" fill="#e7eee0">Source evidence</text>
+<text x="726.0" y="434" font-size="12" fill="#9aa792">Trace to the records</text>
+<line x1="480.0" y1="518" x2="480.0" y2="480" stroke="#9aa792" stroke-width="1.5"/>
+<path d="M475.0 482 L480.0 474 L485.0 482 Z" fill="#9aa792"/>
+<text x="494.0" y="502" font-size="12" fill="#9aa792">Source mapping: tables and columns → object types and properties</text>
+<rect x="12" y="520" width="936" height="110" rx="12" fill="#141a12"/>
+<text x="24" y="546" font-size="13" font-weight="700" letter-spacing="1.5" fill="#9aa792">SOURCES</text>
+<text x="24" y="565" font-size="12" fill="#9aa792">Your data and</text>
+<text x="24" y="581" font-size="12" fill="#9aa792">model endpoints</text>
+<rect x="150.0" y="536" width="255.33333333333334" height="78" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="164.0" y="562" font-size="14" font-weight="600" fill="#e7eee0">Business database</text>
+<text x="164.0" y="582" font-size="12" fill="#9aa792">PostgreSQL, through a data adapter</text>
+<rect x="415.33333333333337" y="536" width="255.33333333333334" height="78" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="429.33333333333337" y="562" font-size="14" font-weight="600" fill="#e7eee0">Documents</text>
+<text x="429.33333333333337" y="582" font-size="12" fill="#9aa792">Text and files on vector properties</text>
+<rect x="680.6666666666667" y="536" width="255.33333333333334" height="78" rx="8" fill="#171d15" stroke="#34402f"/>
+<text x="694.6666666666667" y="562" font-size="14" font-weight="600" fill="#e7eee0">Models</text>
+<text x="694.6666666666667" y="582" font-size="12" fill="#9aa792">OpenAI-compatible chat + embedding</text>
+</svg>

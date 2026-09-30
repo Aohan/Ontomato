@@ -1,0 +1,1 @@
+			5.2.5.2 text represents full-text search and consists of fields, query, operator and boost; fields represents the list of target attributes for the search, query represents the full-text search keywords, operator represents the query operation and can be match, phrase or fuzzy, and boost represents the weight value.

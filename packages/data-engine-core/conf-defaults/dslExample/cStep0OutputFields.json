@@ -1,0 +1,11 @@
+[{
+		"as": "area",
+		"variable": "suspect",
+		"field": "area"
+	},
+	{
+		"as": "total_area",
+		"variable": "suspect",
+		"field": "total_area"
+	}
+]

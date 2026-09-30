@@ -1,0 +1,9 @@
+{
+	"patterns": [{
+		"objects": [{
+			"class": "/temp01",
+			"variable": "temp01"
+		}]
+	}],
+	"pattern_logic": "and"
+}

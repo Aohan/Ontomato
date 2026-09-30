@@ -1,0 +1,36 @@
+{
+	"properties": {
+		"operator": "logic",
+		"and": [{
+			"field": "metrics",
+			"time_range": {
+				"start": "2024-01-01 00:00:00",
+				"end": "2024-01-31 23:59:59"
+			},
+			"conditions": [{
+					"metric": "name",
+					"operator": "=",
+					"value": "cpu"
+				},
+				{
+					"metric": "value",
+					"operator": ">",
+					"value": 80
+				}
+			],
+			"asserts": [{
+					"function": "avg",
+					"interval": "1h",
+					"operator": ">",
+					"value": 80
+				},
+				{
+					"function": "max",
+					"interval": "1m",
+					"operator": "<",
+					"value": 80
+				}
+			]
+		}]
+	}
+}

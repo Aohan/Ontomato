@@ -1,0 +1,17 @@
+{
+  "inputTags": {
+    "expectedAnswer": "standard-answer",
+    "expectedLogic": "expected-query-logic",
+    "actualLogic": "actual-query-logic"
+  },
+  "outputTags": {
+    "answerSummary": "test-answer",
+    "analysis": "analysis",
+    "verdict": "verdict"
+  },
+  "verdicts": {
+    "passed": "correct",
+    "failed": "incorrect"
+  },
+  "defaultJudgment": "A result counts as correct"
+}

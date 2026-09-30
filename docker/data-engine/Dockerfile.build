@@ -1,0 +1,141 @@
+# One reactor package, then the target app's runtime closure.
+# export-central writes empty Central settings. export-secret requires the maven-settings secret
+# and one artifact check: APP_CHECK_SCRIPT (a context path under /src) is run with sh on
+# APP_CHECK_JAR and APP_CHECK_ARG in this JDK stage after the export; the rule lives in the script.
+# Callers pass the reactor, module paths, excluded artifactIds, and optional native/profile.
+# Both exports also write maven-licenses.json: the Maven license record of every runtime
+# dependency of the app module, which the runtime image joins with the files under its lib/.
+ARG JDK_IMAGE=docker.io/library/eclipse-temurin:21-jdk-jammy@sha256:c7d5863b5dd8f26b90c64f1d80cc2b0e5a5e4642f8db9955a370d348edd8f438
+
+FROM ${JDK_IMAGE} AS ontomato-src
+WORKDIR /src
+COPY ontomato/ /src/ontomato/
+
+FROM ontomato-src AS recipe
+# license-maven-plugin builds each dependency's effective model with Maven's own project
+# builder (parent POM inheritance and interpolation included) over the same resolution as
+# copy-dependencies, so no POM is re-parsed here; this template only writes that model as JSON.
+COPY <<'EOF' /usr/local/share/maven-licenses.ftl
+[
+<#list dependencyMap as e>
+<#assign p = e.getKey()/>
+{"groupId": "${p.groupId?json_string}", "artifactId": "${p.artifactId?json_string}", "version": "${p.version?json_string}", "url": "${(p.url!"")?json_string}", "licenses": [<#list p.licenses as l>{"name": "${(l.name!"")?json_string}", "url": "${(l.url!"")?json_string}"}<#sep>, </#sep></#list>]}<#sep>,</#sep>
+</#list>
+]
+EOF
+COPY --chmod=0755 <<'EOF' /usr/local/bin/export-java.sh
+#!/bin/bash
+set -euo pipefail
+test -n "${REACTOR_DIR}"
+test -n "${APP_MODULE}"
+test -n "${APP_LIB_MODULES}"
+test -n "${EXCLUDE_ARTIFACT_IDS}"
+test -n "${MAVEN_SETTINGS}"
+test -f "${MAVEN_SETTINGS}"
+if test -n "${LICENSE_PROFILE}" && test "${LICENSE_PROFILE}" != "dev-override"; then
+  echo "LICENSE_PROFILE must be empty or dev-override" >&2
+  exit 1
+fi
+set --
+if test "${LICENSE_PROFILE}" = "dev-override"; then
+  set -- -Pdev-override
+fi
+reactor="/src/${REACTOR_DIR}"
+test -f "${reactor}/pom.xml"
+test -x /src/ontomato/mvnw
+mkdir -p /out/app/lib /out/runtime-lib
+/src/ontomato/mvnw -B -ntp -f "${reactor}/pom.xml" -s "${MAVEN_SETTINGS}" \
+  -pl "${APP_MODULE}" -am -DskipTests \
+  "$@" \
+  package dependency:copy-dependencies \
+  -DincludeScope=runtime \
+  -DexcludeArtifactIds="${EXCLUDE_ARTIFACT_IDS}" \
+  -DoutputDirectory='${project.build.directory}/runtime-lib' \
+  org.codehaus.mojo:license-maven-plugin:2.4.0:add-third-party \
+  -Dlicense.fileTemplate=/usr/local/share/maven-licenses.ftl \
+  -Dlicense.thirdPartyFilename=maven-licenses.json \
+  -Dlicense.includedScopes=compile,runtime \
+  -Dlicense.useRepositoryMissingFiles=false
+for module in ${APP_LIB_MODULES}; do
+  dir="${reactor}/${module}/target"
+  count=0
+  main=
+  for jar in "${dir}"/*.jar; do
+    test -f "${jar}" || continue
+    name=$(basename "${jar}")
+    case "${name}" in
+      *-sources.jar|*-javadoc.jar|*-tests.jar|*-test-sources.jar) continue ;;
+    esac
+    count=$((count + 1))
+    main=${jar}
+  done
+  if test "${count}" -ne 1; then
+    echo "expected one main jar under ${module}/target, found ${count}" >&2
+    exit 1
+  fi
+  cp "${main}" /out/app/lib/
+done
+rt="${reactor}/${APP_MODULE}/target/runtime-lib"
+test -d "${rt}"
+cp -a "${rt}/." /out/runtime-lib/
+cp "${reactor}/${APP_MODULE}/target/generated-sources/license/maven-licenses.json" /out/maven-licenses.json
+rm -f /out/runtime-lib/*.dll /out/runtime-lib/*.dylib
+if test -n "${KEEP_NATIVE}"; then
+  find /out/runtime-lib -maxdepth 1 -name '*.so' ! -name "${KEEP_NATIVE}" -delete
+  if test ! -f "/out/runtime-lib/${KEEP_NATIVE}"; then
+    echo "missing native library ${KEEP_NATIVE}" >&2
+    exit 1
+  fi
+else
+  rm -f /out/runtime-lib/*.so
+fi
+for jar in /out/app/lib/*.jar; do
+  if test -e "/out/runtime-lib/$(basename "${jar}")"; then
+    echo "own jar in runtime-lib: $(basename "${jar}")" >&2
+    exit 1
+  fi
+done
+set -- /out/runtime-lib/*.jar
+test -f "$1"
+EOF
+
+FROM recipe AS build-central
+ARG REACTOR_DIR
+ARG APP_MODULE
+ARG APP_LIB_MODULES
+ARG EXCLUDE_ARTIFACT_IDS
+ARG KEEP_NATIVE=
+ARG LICENSE_PROFILE=
+RUN --mount=type=cache,target=/root/.m2 <<'EOF'
+set -eu
+cat > /tmp/maven-settings.xml <<'SETTINGS'
+<settings></settings>
+SETTINGS
+MAVEN_SETTINGS=/tmp/maven-settings.xml /usr/local/bin/export-java.sh
+rm -f /tmp/maven-settings.xml
+EOF
+
+FROM scratch AS export-central
+COPY --from=build-central /out/ /
+
+FROM recipe AS enterprise-src
+COPY enterprise/ /src/enterprise/
+
+FROM enterprise-src AS build-secret
+ARG REACTOR_DIR
+ARG APP_MODULE
+ARG APP_LIB_MODULES
+ARG EXCLUDE_ARTIFACT_IDS
+ARG KEEP_NATIVE=
+ARG LICENSE_PROFILE=
+ARG APP_CHECK_SCRIPT
+ARG APP_CHECK_JAR
+ARG APP_CHECK_ARG
+RUN --mount=type=secret,id=maven-settings,required=true \
+    --mount=type=cache,target=/root/.m2 \
+    test -n "${APP_CHECK_SCRIPT}" && test -n "${APP_CHECK_JAR}" && test -n "${APP_CHECK_ARG}" \
+ && MAVEN_SETTINGS=/run/secrets/maven-settings /usr/local/bin/export-java.sh \
+ && sh "${APP_CHECK_SCRIPT}" "${APP_CHECK_JAR}" "${APP_CHECK_ARG}"
+
+FROM scratch AS export-secret
+COPY --from=build-secret /out/ /

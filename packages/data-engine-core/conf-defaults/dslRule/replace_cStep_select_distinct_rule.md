@@ -1,0 +1,1 @@
+A distinct value of true indicates deduplication of the field (**and distinct can only act in the output of a temporary table**)

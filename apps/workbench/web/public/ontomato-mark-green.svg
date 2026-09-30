@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-labelledby="title desc">
+  <title id="title">Ontomato</title>
+  <desc id="desc">Green Ontomato network mark</desc>
+  <path d="M69.2 24.2C68.3 14.4 78.5 6.7 88.8 7.2C89.1 18.2 81 26.8 69.2 24.2Z" fill="#496d46"/>
+  <circle cx="50" cy="58" r="38.4" fill="#639c2d"/>
+  <path d="M50 39v21m0 0L31.7 70.5M50 60l18.3 10.5" fill="none" stroke="#fff9f3" stroke-width="4.2"/>
+  <g fill="#fff9f3">
+    <circle cx="50" cy="60" r="7.7"/>
+    <circle cx="50" cy="39" r="5.9"/>
+    <circle cx="31.7" cy="70.5" r="5.9"/>
+    <circle cx="68.3" cy="70.5" r="5.9"/>
+  </g>
+</svg>
