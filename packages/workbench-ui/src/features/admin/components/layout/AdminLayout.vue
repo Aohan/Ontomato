@@ -103,10 +103,12 @@ const activeMenu = computed(() => {
 // Menu pages show their title and one-line description above the content; other pages (home-style tabs, knowledge governance) do not.
 const pageHeading = computed(() => props.items.find((item) => item.path === route.path));
 
+// Every navigation re-syncs the tab with the highlighted route's group. The source is a getter on the current location:
+// navRoute itself is the same route object for ordinary pages, so watching it would not fire.
 watch(
-  navRoute,
-  (newRoute) => {
-    const group = newRoute.meta?.group as string;
+  () => route.fullPath,
+  () => {
+    const group = navRoute.value.meta?.group as string;
     if (group && group !== activeGroup.value) {
       activeGroup.value = group;
     }

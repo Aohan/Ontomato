@@ -204,6 +204,25 @@ describe("shared admin layout", () => {
     }
   });
 
+  it("navigating to a menu page of another group switches the tab and the sidebar menu", async () => {
+    const { router, activeTab, menu, activeMenu } = await mountLayout(
+      {
+        ...base,
+        groups: [adminGroups.appCapabilities, adminGroups.platformManagement],
+        items: [adminMenuItems.systemAgents, adminMenuItems.auditLog],
+      },
+      "/admin/audit-log"
+    );
+    expect([activeTab(), menu(), activeMenu()]).toEqual(["System Management", ["Audit Logs"], "Audit Logs"]);
+    await router.push("/admin/system-agents");
+    await nextTick();
+    expect([activeTab(), menu(), activeMenu()]).toEqual([
+      "Agents and Skills",
+      ["System Agents"],
+      "System Agents",
+    ]);
+  });
+
   it("hidden navigation (restricted licensing): only back, title, theme and account, and the page still renders", async () => {
     const { el } = await mountLayout(
       { ...base, navigationHidden: true, account: { userName: "alice", logout: () => {} } },
