@@ -1,0 +1,96 @@
+name: Images
+
+# Builds the three product images for amd64 and arm64, starts the stack once on each
+# architecture, and publishes the images to GitHub Container Registry. A push to main
+# publishes them as `edge`; a version tag `v<version>` publishes `<version>` and `latest`.
+# deploy/docker-compose.ghcr.yml is the stack that pulls them.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/aohan
+  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'edge' }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build the component images
+        run: make build ARCH="$ARCH"
+
+      # The same assembly a deployment runs: the recipes and their arguments stay in
+      # deploy/docker-compose.yml.
+      - name: Assemble the product images
+        working-directory: deploy
+        run: |
+          sed "s/^ARCH=.*/ARCH=$ARCH/" .env.example > .env
+          docker compose build datarag ontomato
+
+      - name: Start the stack
+        working-directory: deploy
+        run: |
+          docker pull pgvector/pgvector:pg18
+          docker compose up -d --wait --wait-timeout 300
+          for port in 3000 3005; do
+            curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-connrefused \
+              --output /dev/null "http://127.0.0.1:$port/"
+          done
+
+      - name: Show the stack state
+        if: always()
+        working-directory: deploy
+        run: |
+          docker compose ps -a
+          docker compose logs --tail 200
+
+      - name: Publish the images of this architecture
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          publish() {
+            docker tag "$1" "$REGISTRY/$2:${VERSION#v}-$ARCH"
+            docker push "$REGISTRY/$2:${VERSION#v}-$ARCH"
+          }
+          publish "ontomato:ontomato-unified-$ARCH" ontomato
+          publish "datarag-opensource:ontomato-unified-$ARCH" ontomato-data-engine
+          publish "ontomato-ontology-manager:deploy-$ARCH" ontomato-ontology-manager
+
+  manifest:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publish the multi-architecture images
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          version="${VERSION#v}"
+          for name in ontomato ontomato-data-engine ontomato-ontology-manager; do
+            tags=(-t "$REGISTRY/$name:$version")
+            if [ "$version" != edge ]; then tags+=(-t "$REGISTRY/$name:latest"); fi
+            docker buildx imagetools create \
+              --annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+              "${tags[@]}" \
+              "$REGISTRY/$name:$version-amd64" "$REGISTRY/$name:$version-arm64"
+          done
