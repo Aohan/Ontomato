@@ -14,6 +14,7 @@ export interface WorkbenchProduct {
   subgraphFence: "data-agent-subgraph" | "ontomato-subgraph";
   mcpClientName: "data-agent" | "ontomato";
   analysisMcpServerName: "data-agent-analysis-agents" | "ontomato-analysis-agents";
+  opsMcpServerName: "data-agent-ops-agent" | "ontomato-ops-agent";
   systemMcpCatalogName: "dataagent-mcp" | "ontomato-mcp";
   serviceDisplayName: "Data Agent" | "Ontomato";
   emailFooter: string;

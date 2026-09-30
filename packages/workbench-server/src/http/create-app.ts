@@ -15,6 +15,7 @@ import feedbackRouter from "../api/routes/feedback";
 import memoriesRouter from "../api/routes/memories";
 import mcpRouter from "../api/routes/mcp";
 import analysisAgentMcpRouter from "../api/routes/analysis-agent-mcp";
+import opsAgentMcpRouter from "../api/routes/ops-agent-mcp";
 import preferencesRouter from "../api/routes/preferences";
 import queryHistoryRouter from "../api/routes/query-history";
 import reportsRouter from "../api/routes/reports";
@@ -110,6 +111,7 @@ export function createWorkbenchApp(mounts: WorkbenchMounts = {}): Express {
   app.use("/api/data-query", backendProxyRouter);
   app.use(product.proxyMountPath, backendProxyRouter);
   app.use("/mcp/analysis-agents", analysisAgentMcpRouter);
+  app.use("/mcp/ops-agent", opsAgentMcpRouter);
   app.use(
     "/api/echart",
     express.static(echartDir(), {

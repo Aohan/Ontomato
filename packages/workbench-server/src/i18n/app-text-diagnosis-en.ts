@@ -264,4 +264,11 @@ export const appTextDiagnosisEn: Record<string, string> = {
   "diag.observe.workspaces.turn-evidence-workspace.0": "# Sub-Turn Index",
   "diag.observe.workspaces.turn-evidence-workspace.1": "This run contains {p0} sub-Turns. The question execution status and the diagnostic-artifact status express different facts.",
   "diag.observe.workspaces.turn-evidence-workspace.2": "| # | Query Question | Stable Identity | Question Execution Status | Artifact Status | Artifact Location |",
+  "diag.observe.agent.mcp.send.title": "Send Message",
+  "diag.observe.agent.mcp.send.description": "Send a message to the operations diagnosis agent or poll for turn results.",
+  "diag.observe.agent.mcp.send.message": "User message to send. Required when starting a new session without sessionId.",
+  "diag.observe.agent.mcp.send.sessionId": "Optional operations diagnosis session ID to continue an existing session or poll for results.",
+  "diag.observe.agent.mcp.error.messageRequired": "message is required when sessionId is not provided",
+  "diag.observe.agent.mcp.error.sessionNotFound": "Session not found: {p0}",
 };
+

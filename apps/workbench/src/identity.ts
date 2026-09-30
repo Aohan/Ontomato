@@ -64,6 +64,8 @@ export const ossIdentity: WorkbenchIdentity = {
 
   observeAccess: pass,
 
+  async assertObserveAccess() {},
+
   requireDomainId() {
     return "default";
   },

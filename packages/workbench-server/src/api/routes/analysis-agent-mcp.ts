@@ -1,10 +1,7 @@
 import { startConversationTurn } from "../../services/analysis-agent/task/task-scheduler";
 import { randomUUID } from "node:crypto";
-import { Request, Response, Router } from "express";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { Request } from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { getAnalysisAgentMcpTaskTimeoutMs } from "../../config/mcp";
 import { getAnalysisAgentService } from "../../services/analysis-agent/runtime";
@@ -17,53 +14,18 @@ import {
   analysisReportPdfDownloadUrl,
 } from "../../services/mcp/catalog";
 import { resolveLocale, setLocale } from "../../i18n";
-import { workbenchIdentity } from "../../identity/installed";
 import { workbenchProduct } from "../../product/installed";
 import { requireOwner } from "../../utils/owner-guard";
 import { createLogger } from "../../logging/logger";
-import { runWithLogContext } from "../../logging/log-context";
-import { asyncHandler } from "../utils/http";
+import {
+  catalogRequest,
+  createStreamableMcpRouter,
+  listMcpServerTools,
+  textJson,
+  withMcpIdentity,
+} from "../utils/mcp-route";
 
-const router: ReturnType<typeof Router> = Router();
 const logger = createLogger("api:analysis-agent-mcp");
-
-interface McpIdentity {
-  userId: string;
-  domainId: string;
-  token?: string;
-  apiKey?: string;
-}
-
-function textJson(value: unknown) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(value, null, 2),
-      },
-    ],
-  };
-}
-
-async function withMcpIdentity(
-  req: Request,
-  action: (identity: McpIdentity) => Promise<ReturnType<typeof textJson>>,
-  toolApiKey?: string
-): Promise<ReturnType<typeof textJson>> {
-  let identity: McpIdentity;
-  try {
-    identity = await workbenchIdentity().resolveMcpCaller(req, toolApiKey);
-  } catch (error) {
-    return textJson({
-      success: false,
-      error: error instanceof Error ? error.message : "Authentication failed",
-    });
-  }
-  return runWithLogContext(
-    { domainId: identity.domainId, token: identity.token, apiKey: identity.apiKey },
-    () => action(identity)
-  );
-}
 
 function taskToMcpResult(task: AnalysisTask) {
   return {
@@ -83,10 +45,6 @@ function taskToMcpResult(task: AnalysisTask) {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };
-}
-
-function catalogRequest(): Request {
-  return { header: () => "", query: {} } as unknown as Request;
 }
 
 function createAnalysisAgentMcpServer(req: Request) {
@@ -269,62 +227,15 @@ function createAnalysisAgentMcpServer(req: Request) {
 
 /** The admin page catalog projects the Zod definitions actually used for MCP registration; no hand-copied JSON Schema is maintained anymore. */
 export async function getAnalysisAgentMcpToolCatalog() {
-  const server = createAnalysisAgentMcpServer(catalogRequest());
-  const client = new Client({ name: "analysis-agent-catalog", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
-  try {
-    const { tools } = await client.listTools();
-    return tools.sort(
-      (left, right) =>
-        Number(left.name === "get_analysis_task") - Number(right.name === "get_analysis_task")
-    );
-  } finally {
-    await client.close();
-    await server.close();
-  }
+  const tools = await listMcpServerTools(
+    createAnalysisAgentMcpServer(catalogRequest()),
+    "analysis-agent-catalog"
+  );
+  return tools.sort(
+    (left, right) =>
+      Number(left.name === "get_analysis_task") - Number(right.name === "get_analysis_task")
+  );
 }
 
-router.post(
-  "/",
-  asyncHandler(async (req: Request, res: Response) => {
-    const server = createAnalysisAgentMcpServer(req);
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+export default createStreamableMcpRouter(createAnalysisAgentMcpServer, logger);
 
-    try {
-      await server.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-      res.on("close", () => {
-        transport.close().catch(() => undefined);
-        server.close().catch(() => undefined);
-      });
-    } catch (error) {
-      logger.error("MCP request failed", error);
-      await transport.close().catch(() => undefined);
-      await server.close().catch(() => undefined);
-      if (!res.headersSent) {
-        res.status(500).json({
-          jsonrpc: "2.0",
-          error: { code: -32603, message: "Internal server error" },
-          id: null,
-        });
-      }
-    }
-  })
-);
-
-router.get(
-  "/",
-  asyncHandler(async (_req: Request, res: Response) => {
-    res.status(405).set("Allow", "POST").send("Method Not Allowed");
-  })
-);
-
-router.delete(
-  "/",
-  asyncHandler(async (_req: Request, res: Response) => {
-    res.status(405).set("Allow", "POST").send("Method Not Allowed");
-  })
-);
-
-export default router;

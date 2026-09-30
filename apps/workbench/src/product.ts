@@ -8,6 +8,7 @@ export const ossProduct: WorkbenchProduct = {
   subgraphFence: "ontomato-subgraph",
   mcpClientName: "ontomato",
   analysisMcpServerName: "ontomato-analysis-agents",
+  opsMcpServerName: "ontomato-ops-agent",
   systemMcpCatalogName: "ontomato-mcp",
   serviceDisplayName: "Ontomato",
   emailFooter: "This email was sent automatically by Ontomato",
