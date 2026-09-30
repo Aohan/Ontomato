@@ -29,22 +29,19 @@ export function textJson(value: unknown) {
 
 export interface WithMcpIdentityOptions {
   toolApiKey?: string;
-  validateIdentity?: (identity: McpIdentity) => Promise<void>;
+  authorize?: (identity: McpIdentity) => Promise<void>;
 }
 
 export async function withMcpIdentity(
   req: Request,
   action: (identity: McpIdentity) => Promise<ReturnType<typeof textJson>>,
-  options?: string | WithMcpIdentityOptions
+  options?: WithMcpIdentityOptions
 ): Promise<ReturnType<typeof textJson>> {
-  const toolApiKey = typeof options === "string" ? options : options?.toolApiKey;
-  const validateIdentity = typeof options === "object" ? options?.validateIdentity : undefined;
-
   let identity: McpIdentity;
   try {
-    identity = await workbenchIdentity().resolveMcpCaller(req, toolApiKey);
-    if (validateIdentity) {
-      await validateIdentity(identity);
+    identity = await workbenchIdentity().resolveMcpCaller(req, options?.toolApiKey);
+    if (options?.authorize) {
+      await options.authorize(identity);
     }
   } catch (error) {
     return textJson({

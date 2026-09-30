@@ -62,7 +62,7 @@ export function analysisReportPdfDownloadUrl(serviceRoot: string, taskId: string
 export async function buildMcpSystemToolsResponse(
   req: McpRequestLocation,
   analysisAgentMcpTools: McpToolDesc[],
-  opsAgentMcpTools: McpToolDesc[] = []
+  opsAgentMcpTools: McpToolDesc[]
 ): Promise<SystemMcpToolsResponse> {
   const mcpServerUrl = getSystemMcpUrl();
   const analysisMcpUrl = getAnalysisAgentMcpUrl(req);
@@ -109,14 +109,13 @@ export async function buildMcpSystemToolsResponse(
 }
 
 export async function buildMcpToolsResponse(
-  analysisAgentMcpTools: McpToolDesc[],
-  opsAgentMcpTools: McpToolDesc[] = []
+  analysisAgentMcpTools: McpToolDesc[]
 ): Promise<McpToolsResponse> {
   try {
     const mcpServerUrl = getSystemMcpUrl();
     const tools = mcpServerUrl ? await listMcpTools(mcpServerUrl) : [];
     return {
-      tools: [...tools, ...analysisAgentMcpTools, ...opsAgentMcpTools].map((t) => ({
+      tools: [...tools, ...analysisAgentMcpTools].map((t) => ({
         name: t.name,
         title: t.title || t.name,
         description: t.description || "",
@@ -124,7 +123,7 @@ export async function buildMcpToolsResponse(
     };
   } catch {
     return {
-      tools: [...analysisAgentMcpTools, ...opsAgentMcpTools].map((t) => ({
+      tools: analysisAgentMcpTools.map((t) => ({
         name: t.name,
         title: t.title || t.name,
         description: t.description || "",

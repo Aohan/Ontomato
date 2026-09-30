@@ -23,11 +23,7 @@ router.get(
 router.get(
   "/tools",
   asyncHandler(async (_req: Request, res: Response) => {
-    const [analysisTools, opsTools] = await Promise.all([
-      getAnalysisAgentMcpToolCatalog(),
-      getOpsAgentMcpToolCatalog(),
-    ]);
-    const response = await buildMcpToolsResponse(analysisTools, opsTools);
+    const response = await buildMcpToolsResponse(await getAnalysisAgentMcpToolCatalog());
     res.json(response);
   })
 );

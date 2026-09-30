@@ -270,5 +270,7 @@ export const appTextDiagnosisEn: Record<string, string> = {
   "diag.observe.agent.mcp.send.sessionId": "Optional operations diagnosis session ID to continue an existing session or poll for results.",
   "diag.observe.agent.mcp.error.messageRequired": "message is required when sessionId is not provided",
   "diag.observe.agent.mcp.error.sessionNotFound": "Session not found: {p0}",
+  "diag.observe.agent.mcp.error.cancelled": "Response cancelled",
+  "diag.observe.agent.mcp.error.failed": "Model response failed",
 };
 

@@ -218,7 +218,7 @@ function createAnalysisAgentMcpServer(req: Request) {
           message: "Analysis task submitted. Use get_analysis_task to poll status and results.",
           task: taskToMcpResult(runningTask),
         });
-      }, apiKey?.trim());
+      }, { toolApiKey: apiKey?.trim() });
     }
   );
 

@@ -33,11 +33,16 @@ async function waitForTurnResult(
       sessionId,
       error:
         terminal.error ||
-        (stream.status === "cancelled" ? "Response cancelled" : "Model response failed"),
+        (stream.status === "cancelled"
+          ? tApp("diag.observe.agent.mcp.error.cancelled")
+          : tApp("diag.observe.agent.mcp.error.failed")),
     };
   }
   const history = await diagnosisManager.getSessionHistory(sessionId);
-  const answer = history?.messages.filter((m) => m.role === "assistant").pop()?.content ?? "";
+  // Session exists because startChat/subscribe succeeded.
+  // Assistant message may be absent if the model turn completed without emitting text.
+  const lastAssistant = history ? history.messages.filter((m) => m.role === "assistant").pop() : undefined;
+  const answer = lastAssistant ? lastAssistant.content : "";
   return { status: "completed" as const, sessionId, answer };
 }
 
@@ -46,19 +51,18 @@ function waitForStreamTerminal(
   timeoutMs: number
 ): Promise<{ finished: boolean; error?: string }> {
   return new Promise((resolve) => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
     let settled = false;
     let unsubscribe: (() => void) | null = null;
 
     const onFinish = (result: { finished: boolean; error?: string }) => {
       if (settled) return;
       settled = true;
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
       if (unsubscribe) unsubscribe();
       resolve(result);
     };
 
-    timer = setTimeout(() => {
+    const timer = setTimeout(() => {
       onFinish({ finished: false });
     }, timeoutMs);
 
@@ -96,34 +100,14 @@ export function createOpsAgentMcpServer(
           const trimmedSessionId = sessionId?.trim();
           const trimmedMessage = message?.trim();
 
-          if (!trimmedSessionId) {
-            if (!trimmedMessage) {
-              return textJson({
-                success: false,
-                code: "INVALID_CHAT_INPUT",
-                error: tApp("diag.observe.agent.mcp.error.messageRequired"),
-              });
-            }
-            const session = await diagnosisManager.createSession({});
-            const started = await diagnosisManager.startChat(
-              session.id,
-              trimmedMessage,
-              identity.token,
-              identity.domainId
-            );
-            if (!started.ok) {
-              return textJson({
-                success: false,
-                code: started.code,
-                error: started.error,
-              });
-            }
-            return textJson(await waitForTurnResult(session.id, started.stream, timeoutMs));
-          }
-
           if (trimmedMessage) {
+            let targetSessionId = trimmedSessionId;
+            if (!targetSessionId) {
+              const session = await diagnosisManager.createSession({});
+              targetSessionId = session.id;
+            }
             const started = await diagnosisManager.startChat(
-              trimmedSessionId,
+              targetSessionId,
               trimmedMessage,
               identity.token,
               identity.domainId
@@ -135,14 +119,14 @@ export function createOpsAgentMcpServer(
                 error: started.error,
               });
             }
-            return textJson(await waitForTurnResult(trimmedSessionId, started.stream, timeoutMs));
+            return textJson(await waitForTurnResult(targetSessionId, started.stream, timeoutMs));
           }
 
-          if (!(await diagnosisManager.hasSession(trimmedSessionId))) {
+          if (!trimmedSessionId) {
             return textJson({
               success: false,
-              code: "SESSION_NOT_FOUND",
-              error: tApp("diag.observe.agent.mcp.error.sessionNotFound", { p0: trimmedSessionId }),
+              code: "INVALID_CHAT_INPUT",
+              error: tApp("diag.observe.agent.mcp.error.messageRequired"),
             });
           }
 
@@ -152,22 +136,31 @@ export function createOpsAgentMcpServer(
           }
 
           const history = await diagnosisManager.getSessionHistory(trimmedSessionId);
-          if (history?.responseStatus === "failed") {
+          if (!history) {
+            return textJson({
+              success: false,
+              code: "SESSION_NOT_FOUND",
+              error: tApp("diag.observe.agent.mcp.error.sessionNotFound", { p0: trimmedSessionId }),
+            });
+          }
+
+          if (history.responseStatus === "failed") {
             return textJson({
               status: "failed",
               sessionId: trimmedSessionId,
-              error: "Model response failed",
+              error: tApp("diag.observe.agent.mcp.error.failed"),
             });
           }
-          if (history?.responseStatus === "running") {
+          if (history.responseStatus === "running") {
             return textJson({ status: "running", sessionId: trimmedSessionId });
           }
-          const answer =
-            history?.messages.filter((m) => m.role === "assistant").pop()?.content ?? "";
+          // Assistant message may be absent if the completed turn produced no assistant message.
+          const lastAssistant = history.messages.filter((m) => m.role === "assistant").pop();
+          const answer = lastAssistant ? lastAssistant.content : "";
           return textJson({ status: "completed", sessionId: trimmedSessionId, answer });
         },
         {
-          validateIdentity: (caller) => workbenchIdentity().assertObserveAccess(caller),
+          authorize: (caller) => workbenchIdentity().assertObserveAccess(caller),
         }
       )
   );

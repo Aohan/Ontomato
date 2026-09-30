@@ -30,8 +30,32 @@ import { appTextEn } from "../../../i18n/app-text-en";
 import { en, enLocaleMeta } from "../../../i18n/locales/en";
 import { SessionResponseStream } from "../../../platform/diagnosis/observe/agent/session-stream";
 import { createOpsAgentMcpRouter, getOpsAgentMcpToolCatalog } from "../ops-agent-mcp";
+import os from "node:os";
+import { installContentLayout } from "../../../content/layout";
+import { installRuntimeDefaults } from "../../../runtime/defaults";
 import type { WorkbenchIdentity } from "../../../identity/types";
 import type { WorkbenchProduct } from "../../../product/types";
+
+configureI18n({
+  defaultLocale: "en",
+  languageSwitchEnabled: false,
+  appTextLocale: "en",
+  packs: { en: { messages: { ...en, ...appTextEn }, ...enLocaleMeta } },
+});
+
+installContentLayout({
+  runtimeRoot: os.tmpdir(),
+  prompts: [],
+  skillTemplate: [],
+  runtimeResources: [],
+});
+
+installRuntimeDefaults({
+  postgresFallback: "postgresql://localhost/dummy",
+  systemMcpUrlFallback: "",
+  defaultDataAdapter: "sql",
+  requestLocaleFallback: "en",
+});
 
 let servers: http.Server[] = [];
 let clients: Client[] = [];
@@ -43,15 +67,10 @@ beforeEach(() => {
   mocks.getResponseStream.mockReset();
   mocks.getSessionHistory.mockReset();
 
-  configureI18n({
-    defaultLocale: "en",
-    languageSwitchEnabled: false,
-    appTextLocale: "en",
-    packs: { en: { messages: { ...en, ...appTextEn }, ...enLocaleMeta } },
-  });
-
   installWorkbenchProduct({
+    analysisMcpServerName: "ontomato-analysis-agents",
     opsMcpServerName: "ontomato-ops-agent",
+    serviceDisplayName: "Ontomato",
   } as unknown as WorkbenchProduct);
 
   installWorkbenchIdentity({
@@ -269,7 +288,7 @@ describe("ops agent MCP router", () => {
   });
 
   it("returns session not found error when non-existent session is polled without message", async () => {
-    mocks.hasSession.mockResolvedValue(false);
+    mocks.getSessionHistory.mockResolvedValue(undefined);
 
     const client = await startClient(createOpsAgentMcpRouter({ timeoutMs: 1000 }));
     const result = readToolPayload(
@@ -290,5 +309,25 @@ describe("ops agent MCP router", () => {
     const tools = await getOpsAgentMcpToolCatalog();
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe("send");
+  });
+
+  it("includes ops agent service with send tool in /api/mcp/system/tools response", async () => {
+    const { default: mcpRouter } = await import("../mcp");
+    const app = express();
+    app.use("/api/mcp", mcpRouter);
+    const server = await new Promise<http.Server>((resolve) => {
+      const s = app.listen(0, "127.0.0.1", () => resolve(s));
+    });
+    servers.push(server);
+    const address = server.address() as AddressInfo;
+    const res = await fetch(`http://127.0.0.1:${address.port}/api/mcp/system/tools`);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      services: Array<{ mcpUrl: string; tools: Array<{ name: string }> }>;
+    };
+    const opsService = data.services.find((s) => s.mcpUrl.endsWith("/mcp/ops-agent"));
+    expect(opsService).toBeDefined();
+    expect(opsService?.tools).toHaveLength(1);
+    expect(opsService?.tools[0].name).toBe("send");
   });
 });
