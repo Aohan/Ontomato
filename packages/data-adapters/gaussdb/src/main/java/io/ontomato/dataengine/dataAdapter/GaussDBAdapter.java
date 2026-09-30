@@ -535,67 +535,61 @@ public class GaussDBAdapter implements DataAdapter {
 	public void validateClassNameFormat(String className) throws Exception {
 	}
 
+	private UnsupportedDataAdapterOperationException unsupported(String operation) {
+		return new UnsupportedDataAdapterOperationException("GaussDB", operation);
+	}
+
 	@Override
 	public void createNamespace(String namespace) {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("createNamespace");
 	}
 
 	@Override
 	public void truncateNamespace(String namespace) {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("truncateNamespace");
 	}
 
 	@Override
 	public void dropNamespace(String namespace) {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("dropNamespace");
 	}
 
 	@Override
 	public void createClass(String namespace, Map<String, Object> classDef) {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("createClass");
 	}
 
 	@Override
 	public void createEdgeType(String namespace, String edgeName) {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("createEdgeType");
 	}
 
 	@Override
 	public void insertObjects(String namespace, Map<String, Object> classDef, JSONArray objs) throws Exception {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("insertObjects");
 	}
 
 	@Override
 	public void updateObjects(String namespace, Map<String, Object> classDef, JSONObject setValues, JSONObject where)
 			throws Exception {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("updateObjects");
 	}
 
 	@Override
 	public void deleteObjects(String namespace, Map<String, Object> classDef, JSONObject where) throws Exception {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("deleteObjects");
 	}
 
 	@Override
 	public void createEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
 			String targetClassName, String targetObjId) throws Exception {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("createEdge");
 	}
 
 	@Override
 	public void deleteEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
 			String targetClassName, String targetObjId) throws Exception {
-		// TODO Auto-generated method stub
-		
+		throw unsupported("deleteEdge");
 	}
 
 	@Override
@@ -610,7 +604,6 @@ public class GaussDBAdapter implements DataAdapter {
 
 	@Override
 	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		throw unsupported("query");
 	}
 }

@@ -2,6 +2,7 @@ package io.ontomato.dataengine.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -87,6 +88,61 @@ class VectorResourceServiceImplTest {
 		JSONObject[] update = capturedUpdate();
 		assertEquals(JSON.parseArray("[]"), update[0].getJSONArray("photos"));
 		assertEquals(where("id", "P1"), update[1]);
+	}
+
+	@Test
+	void textOnlyUploadSavesTxtResourceAndAttaches() throws Exception {
+		when(vectorResourceDao.insert(any(), eq(null), eq(null), eq("d1"))).thenAnswer(call -> {
+			VectorResource saved = call.getArgument(0);
+			saved.setPath("idx/text.txt");
+			saved.setContent("cleaned");
+			return saved;
+		});
+
+		service.saveAndAttach(resource("pure text"), null, null, "d1");
+
+		JSONObject[] update = capturedUpdate();
+		assertEquals(JSON.parseArray("[{\"path\":\"idx/old.png\",\"text\":\"old\"},{\"path\":\"idx/text.txt\",\"text\":\"pure text\"}]"),
+				update[0].getJSONArray("photos"));
+		assertEquals(where("code", "P1"), update[1]);
+	}
+
+	@Test
+	void attachFailureRollsBackSavedResourceAndThrows() throws Exception {
+		when(vectorResourceDao.insert(any(), any(), any(), eq("d1"))).thenAnswer(call -> {
+			VectorResource saved = call.getArgument(0);
+			saved.setPath("idx/new.png");
+			return saved;
+		});
+		doThrow(new RuntimeException("adapter down")).when(adapter).updateObjects(any(), any(), any(), any());
+
+		assertThrows(RuntimeException.class, () -> service.saveAndAttach(resource("text"), null, null, "d1"));
+
+		verify(vectorResourceDao).delete("/Product", "photos", "P1", "idx/new.png", "d1");
+	}
+
+	@Test
+	void rollbackFailureIsSuppressedWhenAttachFails() throws Exception {
+		when(vectorResourceDao.insert(any(), any(), any(), eq("d1"))).thenAnswer(call -> {
+			VectorResource saved = call.getArgument(0);
+			saved.setPath("idx/new.png");
+			return saved;
+		});
+		doThrow(new RuntimeException("adapter down")).when(adapter).updateObjects(any(), any(), any(), any());
+		RuntimeException rollbackEx = new RuntimeException("rollback down");
+		doThrow(rollbackEx).when(vectorResourceDao).delete("/Product", "photos", "P1", "idx/new.png", "d1");
+
+		RuntimeException thrown = assertThrows(RuntimeException.class, () -> service.saveAndAttach(resource("text"), null, null, "d1"));
+		assertTrue(List.of(thrown.getSuppressed()).contains(rollbackEx));
+	}
+
+	@Test
+	void nonExistentClassDefIsRejectedBeforeSave() {
+		VectorResource res = resource("text");
+		res.setClassName("/NonExistent");
+
+		assertThrows(IllegalArgumentException.class, () -> service.saveAndAttach(res, null, null, "d1"));
+		verifyNoInteractions(vectorResourceDao);
 	}
 
 	@Test

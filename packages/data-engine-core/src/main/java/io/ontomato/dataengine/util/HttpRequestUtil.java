@@ -63,7 +63,17 @@ public class HttpRequestUtil {
     	
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		queryJson = DslUtil.normalizeClassNames(queryJson, classDefs);
-		Object[] addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId, adapter.useM3());
+		Object[] addVectorAndRowPermissionResult;
+		try {
+			addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId, adapter.useM3());
+		} catch (Exception e) {
+			log.error("Failed to process vector or row permission: " + e.getMessage(), e);
+			List<JSONObject> dsls = JSON.parseArray(queryJson, JSONObject.class);
+			JSONObject originDsl = (dsls != null && !dsls.isEmpty()) ? dsls.get(0) : new JSONObject();
+			DslExecutionResult failResult = DslExecutionResult.failure(new JSONObject(), e);
+			failResult.data().put("dsl", originDsl);
+			return new DslExecutionResult[] {failResult, failResult.copy()};
+		}
     	JSONObject originDsl = addVectorAndRowPermissionResult[0] == null ? null : (JSONObject)addVectorAndRowPermissionResult[0];
     	Map<String, List<String>> selectAsFilePathsMap = addVectorAndRowPermissionResult[1] == null ? null : (Map<String, List<String>>)addVectorAndRowPermissionResult[1];
     	Set<String> vectorResourceAsSet = addVectorAndRowPermissionResult[2] == null ? null : (Set<String>)addVectorAndRowPermissionResult[2];
@@ -85,16 +95,23 @@ public class HttpRequestUtil {
     }
     
     public static List<String> getNodeIds(
-    		DataAdapter adapter, 
-    		String queryJson,
-    		Map<String, Object> jsonRule,
-    		VectorResourceDao vectorResourceDao, 
-    		UserDataPermission permission,
-    		String domainId) {
+            DataAdapter adapter,
+            String queryJson,
+            Map<String, Object> jsonRule,
+            VectorResourceDao vectorResourceDao,
+            UserDataPermission permission,
+            String domainId) {
     	
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		queryJson = DslUtil.normalizeClassNames(queryJson, classDefs);
-		Object[] addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId, adapter.useM3());
+		Object[] addVectorAndRowPermissionResult;
+		try {
+			addVectorAndRowPermissionResult = addVectorAndRowPermission(queryJson, classDefs, vectorResourceDao, permission, domainId, adapter.useM3());
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to process vector or row permission in getNodeIds: " + e.getMessage(), e);
+		}
     	JSONObject rowPermissionDsl = addVectorAndRowPermissionResult[3] == null ? null : (JSONObject)addVectorAndRowPermissionResult[3];
     	
     	Set<String> nodeIds = new HashSet<String>();
@@ -135,24 +152,19 @@ public class HttpRequestUtil {
     		VectorResourceDao vectorResourceDao,
     		UserDataPermission permission,
             String domainId,
-            boolean useM3
-    		) {
+            boolean useM3) throws Exception {
     	// original DSL
     	List<JSONObject> dsls = JSON.parseArray(queryJson, JSONObject.class);
         JSONObject originDsl = dsls.get(0);
 
         //3. Call M3 to obtain data
         Object[] dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId, useM3);
-        JSONObject vectorDsl = null;
-        Map<String, List<String>> selectAsFilePathsMap = null;
-        Set<String> vectorResourceAsSet = new HashSet<String>();
-        if (dsl_selectAsFilePathsMap_vectorResourceAsSet != null) {
-        	vectorDsl = (JSONObject)dsl_selectAsFilePathsMap_vectorResourceAsSet[0];
-        	selectAsFilePathsMap = (Map<String, List<String>>)dsl_selectAsFilePathsMap_vectorResourceAsSet[1];
-        	vectorResourceAsSet = (Set<String>)dsl_selectAsFilePathsMap_vectorResourceAsSet[2];
-        }
+        JSONObject vectorDsl = (JSONObject)dsl_selectAsFilePathsMap_vectorResourceAsSet[0];
+        Map<String, List<String>> selectAsFilePathsMap = (Map<String, List<String>>)dsl_selectAsFilePathsMap_vectorResourceAsSet[1];
+        Set<String> vectorResourceAsSet = (Set<String>)dsl_selectAsFilePathsMap_vectorResourceAsSet[2];
+
         // Add row permission to the DSL
-        Object[] rowPermissionDslResult = DslPermissionUtil.addRowPermission(vectorDsl == null ? queryJson : ("[" + JSON.toJSONString(vectorDsl, Feature.WriteMapNullValue) + "]"), classDefs, permission);
+        Object[] rowPermissionDslResult = DslPermissionUtil.addRowPermission("[" + JSON.toJSONString(vectorDsl, Feature.WriteMapNullValue) + "]", classDefs, permission);
         JSONObject rowPermissionDsl = (JSONObject)rowPermissionDslResult[0];
         boolean addPermission = (boolean)rowPermissionDslResult[1];
         

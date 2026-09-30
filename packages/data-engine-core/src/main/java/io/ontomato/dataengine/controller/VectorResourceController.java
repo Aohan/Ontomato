@@ -66,12 +66,12 @@ public class VectorResourceController {
 	@PostMapping("/vectorResource/upload")
 	@ResponseBody
 	public JSONObject upload(
-			@RequestParam(value = "file") MultipartFile file,
+			@RequestParam(value = "file", required = false) MultipartFile file,
 			@RequestParam(value = "content") String content,
 			@RequestParam(value = "className") String className,
 			@RequestParam(value = "attrName") String attrName,
 			@RequestParam(value = "objectId") String objectId,
-			@RequestParam(value = "suffix") String suffix) {
+			@RequestParam(value = "suffix", required = false) String suffix) {
 		JSONObject ret = new JSONObject();
 		InputStream is = null;
 		try {
@@ -81,14 +81,12 @@ public class VectorResourceController {
 			resource.setClassName(className);
 			resource.setAttrName(attrName);
 			resource.setObjectId(objectId);
-			is = file.getInputStream();
-			VectorResource save = vectorResourceService.saveAndAttach(resource, is, suffix, user.getDomainId());
-			if (save != null) {
-				ret.put("success", true);
-				ret.put("data", save);
-			} else {
-				ret.put("success", false);
+			if (file != null && !file.isEmpty()) {
+				is = file.getInputStream();
 			}
+			VectorResource save = vectorResourceService.saveAndAttach(resource, is, suffix, user.getDomainId());
+			ret.put("success", true);
+			ret.put("data", save);
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 			ret.put("success", false);
@@ -120,6 +118,7 @@ public class VectorResourceController {
 	private MediaType determineContentType(String filename) {
         String extension = filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
         return switch (extension) {
+            case "txt" -> MediaType.parseMediaType("text/plain; charset=UTF-8");
             case "jpg", "jpeg" -> MediaType.IMAGE_JPEG;
             case "png" -> MediaType.IMAGE_PNG;
             case "gif" -> MediaType.IMAGE_GIF;

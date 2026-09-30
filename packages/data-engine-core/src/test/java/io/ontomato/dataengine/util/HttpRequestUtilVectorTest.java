@@ -1,11 +1,15 @@
 package io.ontomato.dataengine.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -47,6 +51,16 @@ class HttpRequestUtilVectorTest {
 			  "graph":{"patterns":[{"objects":[{"variable":"p","class":"/Product","conditions":{}}]}]},
 			  "output":{"fields":[{"variable":"p","field":"photos","as":"photos","query":"red"}]}}]}}]""";
 
+	private static final String SELECT_DSL_NO_CONDITIONS = """
+			[{"problem":"","answer":{"steps":[{
+			  "graph":{"patterns":[{"objects":[{"variable":"p","class":"/Product"}]}]},
+			  "output":{"fields":[{"variable":"p","field":"photos","as":"photos","query":"red"}]}}]}}]""";
+
+	private static final String PLAIN_DSL = """
+			[{"problem":"","answer":{"steps":[{
+			  "graph":{"patterns":[{"objects":[{"variable":"p","class":"/Product"}]}]},
+			  "output":{"fields":[{"variable":"p","field":"code","as":"code"}]}}]}}]""";
+
 	private static final String STORED = "[{\"path\":\"idx/a.png\",\"text\":\"red car\"},{\"path\":\"idx/b.png\",\"text\":\"blue boat\"}]";
 
 	@Test
@@ -54,6 +68,67 @@ class HttpRequestUtilVectorTest {
 		Run run = run(false, WHERE_DSL, STORED);
 		assertEquals("code", run.idFilter().getString("field"));
 		assertEquals(List.of("P'1"), run.idFilter().getJSONArray("value"));
+	}
+
+	@Test
+	void anObjectWithoutConditionsReceivesInFilter() throws Exception {
+		Run run = run(false, SELECT_DSL_NO_CONDITIONS, STORED);
+		assertEquals("code", run.idFilter().getString("field"));
+		assertEquals(List.of("P'1"), run.idFilter().getJSONArray("value"));
+	}
+
+	@Test
+	void dslWithoutVectorAttributesRemainsCompletelyUnchanged() throws Exception {
+		DataAdapter adapter = mock(DataAdapter.class);
+		ArgumentCaptor<String> executed = ArgumentCaptor.forClass(String.class);
+		when(adapter.executeDsl(executed.capture(), anyString(), any(), any())).thenReturn("[{\"answer\":[{\"code\":\"P1\"}]}]");
+
+		DataRagConfig dataRagConfig = new DataRagConfig();
+		dataRagConfig.setCardBaseUrl("http://card");
+		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
+
+		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, adapter, PLAIN_DSL, "s1", true, jsonRule,
+				mock(VectorResourceDao.class), mock(UserDataPermission.class), M3Mode.V1, "d1");
+
+		assertEquals(JSON.parseArray(PLAIN_DSL), JSON.parseArray(executed.getValue()));
+		assertEquals(false, results[1].failed());
+	}
+
+	@Test
+	void vectorSearchFailureReturnsErrorWithoutFallback() throws Exception {
+		VectorResourceDao vectorResourceDao = mock(VectorResourceDao.class);
+		when(vectorResourceDao.getResourceTotal(anyString(), anyString(), anyString())).thenReturn(1);
+		when(vectorResourceDao.find(anyString(), anyInt(), anyString(), anyString(), anyString()))
+				.thenThrow(new RuntimeException("Vector search down"));
+
+		DataAdapter adapter = mock(DataAdapter.class);
+		DataRagConfig dataRagConfig = new DataRagConfig();
+		dataRagConfig.setCardBaseUrl("http://card");
+		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
+
+		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, adapter, WHERE_DSL, "s1", true, jsonRule,
+				vectorResourceDao, mock(UserDataPermission.class), M3Mode.V1, "d1");
+
+		assertTrue(results[1].failed());
+		assertTrue(results[1].failure().cause().getMessage().contains("Vector search down"));
+		assertTrue(results[1].rawResponse().getString("error").contains("Vector search down"));
+		verify(adapter, never()).executeDsl(anyString(), anyString(), any(), any());
+	}
+
+	@Test
+	void getNodeIdsThrowsOnVectorSearchFailure() {
+		VectorResourceDao vectorResourceDao = mock(VectorResourceDao.class);
+		when(vectorResourceDao.getResourceTotal(anyString(), anyString(), anyString())).thenReturn(1);
+		when(vectorResourceDao.find(anyString(), anyInt(), anyString(), anyString(), anyString()))
+				.thenThrow(new RuntimeException("Vector search down"));
+
+		DataAdapter adapter = mock(DataAdapter.class);
+		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
+
+		RuntimeException thrown = assertThrows(RuntimeException.class, () ->
+				HttpRequestUtil.getNodeIds(adapter, WHERE_DSL, jsonRule, vectorResourceDao,
+						mock(UserDataPermission.class), "d1"));
+		assertTrue(thrown.getMessage().contains("Vector search down"));
 	}
 
 	@Test
