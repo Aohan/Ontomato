@@ -72,6 +72,19 @@ public class VectorResourceDao extends BaseDao {
 						+ ")");
 	}
 
+	/**
+	 * Ensure the vector table and its file directory exist (idempotent).
+	 *
+	 * <p>Used by the sandbox {@code createClass} to materialize the vector table and directory as an
+	 * explicit step, symmetric with {@link #dropNamespace}. Also the single place that backs the lazy
+	 * creation inside {@link #insert}, so the two callers share one idempotent rule.</p>
+	 */
+	public void ensureVectorTable(String className, String attrName, String domainId) {
+		String indexName = generateIndexName(className, attrName, domainId);
+		new File("conf/" + dirName + "/" + indexName).mkdirs();
+		ensureTable(indexName);
+	}
+
 	public VectorResource insert(VectorResource vectorResource, InputStream is, String suffix, String domainId) {
 		FileOutputStream fos = null;
 		try {
@@ -244,30 +257,67 @@ public class VectorResourceDao extends BaseDao {
 				+ "object_id VARCHAR(256), "
 				+ "brief_vector vector(" + dims + ")"
 				+ ")");
-		// 删目录下所有文件(不用递归)然后建目录
+		deleteFilesInDirectory(indexName);
+		new File("conf/" + dirName + "/" + indexName).mkdirs();
 		log.info("<<<rebuild " + indexName + " vector dimension: " + dims);
 	}
 	
+	/**
+	 * Clear the data of every vector table belonging to this sandbox (prefix-matched by namespace and domain),
+	 * keeping the tables and their file directories in place.
+	 */
 	public void truncateNamespace(String tmpNamespace, String domainId) {
-//		"SELECT current_schema();"
-//		String prefix = generateIndexNamePrefix(tmpNamespace);
-//		for (query("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';")) {
-//			if (tableName.startsWith(prefix) && tableName.endsWith("-" + domainId)) {
-//				delete from table_name
-//				删目录下所有文件(不用递归)
-//			}
-//		}
+		String prefix = generateIndexNamePrefix(tmpNamespace);
+		for (String tableName : listVectorTables(prefix, domainId)) {
+			jdbcTemplate.execute("DELETE FROM " + quotedTable(tableName));
+			deleteFilesInDirectory(tableName);
+		}
 	}
-	
+
+	/**
+	 * Drop every vector table of this sandbox (prefix-matched by namespace and domain) and delete their file
+	 * directories entirely.
+	 */
 	public void dropNamespace(String tmpNamespace, String domainId) {
-//		"SELECT current_schema();"
-//		String prefix = generateIndexNamePrefix(tmpNamespace);
-//		for (query("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';")) {
-//			if (tableName.startsWith(prefix) && tableName.endsWith("-" + domainId)) {
-//				drop table table_name
-//				删目录下所有文件(不用递归)和目录本身
-//			}
-//		}
+		String prefix = generateIndexNamePrefix(tmpNamespace);
+		for (String tableName : listVectorTables(prefix, domainId)) {
+			jdbcTemplate.execute("DROP TABLE IF EXISTS " + quotedTable(tableName));
+			deleteFilesInDirectory(tableName);
+			File dir = new File("conf/" + dirName + "/" + tableName);
+			if (dir.isDirectory() && !dir.delete()) {
+				log.warn("Failed to delete vector resource directory: {}", dir.getAbsolutePath());
+			}
+		}
+	}
+
+	/** Vector table names of the current schema matching the given prefix and ending with {@code -domainId}. */
+	private List<String> listVectorTables(String prefix, String domainId) {
+		String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'";
+		List<String> all = jdbcTemplate.queryForList(sql, String.class);
+		List<String> matched = new ArrayList<>();
+		for (String tableName : all) {
+			if (tableName.startsWith(prefix) && tableName.endsWith("-" + domainId)) {
+				matched.add(tableName);
+			}
+		}
+		return matched;
+	}
+
+	/** Delete all files directly under a vector resource directory, keeping the directory itself. */
+	private void deleteFilesInDirectory(String indexName) {
+		File dir = new File("conf/" + dirName + "/" + indexName);
+		if (!dir.isDirectory()) {
+			return;
+		}
+		File[] files = dir.listFiles();
+		if (files == null) {
+			return;
+		}
+		for (File file : files) {
+			if (file.isFile() && !file.delete()) {
+				log.warn("Failed to delete vector resource file: {}", file.getAbsolutePath());
+			}
+		}
 	}
 
 }

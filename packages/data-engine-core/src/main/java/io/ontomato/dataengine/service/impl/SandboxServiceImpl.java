@@ -46,42 +46,33 @@ public class SandboxServiceImpl implements SandboxService {
 	public void truncateNamespace(String tmpNamespace, String domainId) {
 		DataAdapter adapter = getDataAdapter(domainId);
 		adapter.truncateNamespace(tmpNamespace);
-		vectorResourceDao.truncateNamespace(getVectorNamespace(adapter.useM3(), tmpNamespace), domainId);
+		vectorResourceDao.truncateNamespace(getVectorNamespace(adapter, tmpNamespace), domainId);
 	}
 
 	@Override
 	public void dropNamespace(String tmpNamespace, String domainId) {
 		DataAdapter adapter = getDataAdapter(domainId);
 		adapter.dropNamespace(tmpNamespace);
-		vectorResourceDao.dropNamespace(getVectorNamespace(adapter.useM3(), tmpNamespace), domainId);
+		vectorResourceDao.dropNamespace(getVectorNamespace(adapter, tmpNamespace), domainId);
 	}
 
 	@Override
 	public void createClass(String tmpNamespace, Map<String, Object> classDef, String domainId) {
 		DataAdapter adapter = getDataAdapter(domainId);
 		adapter.createClass(tmpNamespace, classDef);
-		String vectorTableName = getVectorTableName(adapter.useM3(), tmpNamespace, classDef);
+		String vectorTableName = adapter.sandboxClassName(tmpNamespace, ((String) classDef.get("className")).trim());
 		for (String attrName : getVectorAttrNames(classDef)) {
-			vectorResourceDao.rebuildIndex(vectorTableName, attrName, domainId);
+			vectorResourceDao.ensureVectorTable(vectorTableName, attrName, domainId);
 		}
 	}
 	
-	private String getVectorNamespace(boolean useM3, String tmpNamespace) {
-		if (useM3) {
-			return "/" + tmpNamespace + "/";
-		} else {
-			return tmpNamespace;
-		}
-	}
-	
-	private String getVectorTableName(boolean useM3, String tmpNamespace, Map<String, Object> classDef) {
-		if (useM3) {
-			String className = ((String) classDef.get("className")).trim().substring(1);
-			className = className.substring(className.indexOf("/"));
-			return "/" + tmpNamespace + className;
-		} else {
-			return tmpNamespace + ((String) classDef.get("className")).trim();
-		}
+	/**
+	 * The sandbox namespace prefix for vector tables (empty class name yields just the namespace),
+	 * used to prefix-scan a sandbox's vector tables on truncate/drop. Delegates to the adapter's
+	 * {@code sandboxClassName} so the M3/relational prefix rule stays in one place.
+	 */
+	private String getVectorNamespace(DataAdapter adapter, String tmpNamespace) {
+		return adapter.sandboxClassName(tmpNamespace, "");
 	}
 	
 	private List<String> getVectorAttrNames(Map<String, Object> classDef) {
