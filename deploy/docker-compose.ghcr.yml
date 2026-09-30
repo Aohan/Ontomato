@@ -1,0 +1,41 @@
+name: ${COMPOSE_PROJECT_NAME:-ontomato}
+
+# Online stack: the same services as docker-compose.yml, with the published images
+# pulled from GitHub Container Registry instead of assembled from loaded images.
+# Everything except the image source is inherited from docker-compose.yml. ARCH in
+# .env is read only by that file's offline image names, which are replaced here, so
+# its value does not matter: the published images are multi-architecture.
+
+services:
+  postgres:
+    extends:
+      file: docker-compose.yml
+      service: postgres
+    pull_policy: missing
+
+  datarag:
+    extends:
+      file: docker-compose.yml
+      service: datarag
+    image: ghcr.io/aohan/ontomato-data-engine:${ONTOMATO_VERSION:-latest}
+    pull_policy: missing
+    build: !reset null
+
+  ontomato:
+    extends:
+      file: docker-compose.yml
+      service: ontomato
+    image: ghcr.io/aohan/ontomato:${ONTOMATO_VERSION:-latest}
+    pull_policy: missing
+    build: !reset null
+
+  ontology-manager:
+    extends:
+      file: docker-compose.yml
+      service: ontology-manager
+    image: ghcr.io/aohan/ontomato-ontology-manager:${ONTOMATO_VERSION:-latest}
+    pull_policy: missing
+    platform: !reset null
+
+volumes:
+  postgres18_data:
