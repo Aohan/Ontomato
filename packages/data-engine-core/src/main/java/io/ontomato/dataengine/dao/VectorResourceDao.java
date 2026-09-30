@@ -46,6 +46,16 @@ public class VectorResourceDao extends BaseDao {
 		return "vector-" + className.replace("/", "_") + "-" + attrName + "-" + domainId;
 	}
 
+	/**
+	 * Compose the stored relative path of a vector resource from its file id (the last path segment,
+	 * {@code id.suffix}). The {@code className} passed in must already carry the sandbox prefix when
+	 * inside a sandbox (see {@link io.ontomato.dataengine.dataAdapter.DataAdapter#sandboxClassName});
+	 * this method only mirrors how {@link #generateIndexName} and {@link #insert} form the path.
+	 */
+	public String generatePath(String className, String attrName, String domainId, String fileId) {
+		return generateIndexName(className, attrName, domainId) + "/" + fileId;
+	}
+
 	private String quotedTable(String indexName) {
 		return "\"" + indexName + "\"";
 	}
@@ -258,6 +268,45 @@ public class VectorResourceDao extends BaseDao {
 		}
 		if (!file.toFile().delete()) {
 			throw new IllegalStateException("Failed to delete vector resource file: " + file.toAbsolutePath());
+		}
+	}
+
+	/**
+	 * Update an existing vector resource in place: rewrite its file, recompute the embedding and refresh
+	 * the vector table row. The {@code className}/{@code objectId} must already carry the sandbox prefix
+	 * when inside a sandbox; {@code fileId} is the last path segment ({@code id.suffix}).
+	 */
+	public void update(String className, String attrName, String objectId, String fileId, String content, InputStream is, String domainId) {
+		String indexName = this.generateIndexName(className, attrName, domainId);
+		String path = indexName + "/" + fileId;
+		Path root = Paths.get("conf", dirName).toAbsolutePath();
+		Path indexDir = root.resolve(indexName).normalize();
+		Path file = root.resolve(path).normalize();
+		if (!root.equals(indexDir.getParent()) || !indexDir.equals(file.getParent())) {
+			throw new IllegalArgumentException("Vector resource path does not belong to " + indexName + ": " + path);
+		}
+		FileOutputStream fos = null;
+		try {
+			fos = new FileOutputStream(file.toFile());
+			fos.write(is.readAllBytes());
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+			throw new RuntimeException(e);
+		} finally {
+			if (fos != null) {
+				try {
+					fos.close();
+				} catch (Exception e) {
+					log.error(e.getMessage(), e);
+				}
+			}
+		}
+		String replaceBrief = this.replace(content);
+		float[] embededVector = this.briefToVector(replaceBrief, domainId);
+		PGvector pgVector = new PGvector(embededVector);
+		int updated = jdbcTemplate.update("UPDATE " + quotedTable(indexName) + " SET brief = ?, brief_vector = ?::vector WHERE object_id = ? AND path = ?", replaceBrief, pgVector, objectId, path);
+		if (updated == 0) {
+			throw new IllegalArgumentException("Vector resource not found for object " + objectId + ": " + path);
 		}
 	}
 

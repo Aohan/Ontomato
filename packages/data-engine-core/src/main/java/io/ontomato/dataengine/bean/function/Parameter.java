@@ -15,6 +15,7 @@ public class Parameter {
 	public static final String TYPE_TIME_ARRAY = "TYPE_TIME_ARRAY";
 	public static final String TYPE_ONTOOBJ = "TYPE_ONTOOBJ";
 	public static final String TYPE_DATASET = "TYPE_DATASET";
+	public static final String TYPE_VECTOR = "TYPE_VECTOR";
 	
 	private String name;
 	private String type;

@@ -58,6 +58,7 @@ node ontomato.mjs metric-view get <id>
 node ontomato.mjs metric-view save @metricView.json
 node ontomato.mjs metric-view delete <id>
 node ontomato.mjs action generate|execute|find|get|save|delete ...
+node ontomato.mjs action execute <id> [<param json|@file>] [--file <path> ...]
 node ontomato.mjs ask "How many orders were placed last month?"
 ```
 
@@ -130,7 +131,7 @@ The backend checks everything before importing and rejects the whole file, with 
 A MetricView is a read-only query interface and an Action is a write interface. Their commands and structure are the same; the examples use MetricView (replace `metric-view` with `action`).
 
 - `generate [--save] <description>`: describe in natural language what the interface should do; prints the generated definition. With `--save` it is saved once generated.
-- `execute <id> [<params>]`: calls the interface. Params are a JSON object keyed by `function.parameters[].name`; omit them for an interface without parameters. A MetricView returns rows. An Action returns its execution result (`result`, `spendTime`); when it fails, the script prints the reason and exits non-zero.
+- `execute <id> [<params>]`: calls the interface. Params are a JSON object keyed by `function.parameters[].name`; omit them for an interface without parameters. A MetricView returns rows. An Action returns its execution result (`result`, `spendTime`); when it fails, the script prints the reason and exits non-zero. An Action that takes files gets each one through `--file <path>`. A `TYPE_VECTOR` parameter takes an object such as `{"className": "...", "attrName": "...", "text": "...", "fileId": "...", "uploadFile": "0"}`: `uploadFile` is the zero-based position of its file among the `--file` options, `fileId` is needed only to update or delete an existing file, and `text` may be left out when deleting.
 - `find <class> [<question>]`: published interfaces related to a class; with a question, the 10 most relevant by meaning. Each entry has `id`, `name`, `logic`, `parameters` and `returnDef`.
 - `get <id>`: the full definition.
 - `save <definition>`: saves a definition; the body is the JSON `get` prints. With an `id` it updates that interface (the `id` must exist); without one it creates a new interface. Built-in system interfaces cannot be changed.
@@ -144,12 +145,25 @@ A page calls the interfaces through the test environment's frontend, the same pa
 
 ```
 POST <envUrl>/api/data-query/metricView/execute
-POST <envUrl>/api/data-query/action/execute
 Content-Type: application/json
 Accept-Language: en
 
-{"id": "<MetricView or Action id>", "param": {"param1": "xxx", "param2": 12.3}}
+{"id": "<MetricView id>", "param": {"param1": "xxx", "param2": 12.3}}
 ```
+
+An Action is called with a form (`multipart/form-data`), not a JSON body:
+
+```
+POST <envUrl>/api/data-query/action/execute
+Content-Type: multipart/form-data
+Accept-Language: en
+
+id     <Action id>
+param  {"param1": "xxx", "param2": 12.3}    the parameters as one JSON string
+file   <file>                                optional, repeatable
+```
+
+A `TYPE_VECTOR` parameter takes an object such as `{"className": "...", "attrName": "...", "text": "...", "fileId": "...", "uploadFile": "0"}`: `uploadFile` is the zero-based position of its file among the `file` parts, `fileId` is needed only to update or delete an existing file, and `text` may be left out when deleting.
 
 The response is `{"success": true, "data": ...}`, or `{"success": false, "message": "..."}` on failure.
 
