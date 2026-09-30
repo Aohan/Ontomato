@@ -938,32 +938,32 @@ public class DslUtil {
 		return JSONArray.toJSONString(dsls, Feature.WriteMapNullValue);
 	}
 	
-	public static Object[] splitToVector(String dslStr, List<Map<String, Object>> classDefs, VectorResourceDao vectorResourceDao, String domainId, boolean useM3) {
+	public static Object[] splitToVector(String dslStr, List<Map<String, Object>> classDefs, VectorResourceDao vectorResourceDao, String domainId, boolean useM3) throws Exception {
 		JSONArray dsls = JSON.parseArray(dslStr);
 		Map<String, Map<String, Object>> classDefMap = new HashMap<String, Map<String, Object>>();
 		for (Map<String, Object> classDef : classDefs) {
 			classDefMap.put((String)classDef.get("className"), classDef);
 		}
 		
-		try {
-			JSONObject dsl = dsls.getJSONObject(0);
-			JSONArray steps = dsl.getJSONObject("answer").getJSONArray("steps");
-			
-			// Handle the vector of where
-			Map<String, Set<String>> whereClassIdsMap = new HashMap<String, Set<String>>();
-			JSONObject firstStep = steps.getJSONObject(0);
-			JSONArray objects = firstStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0).getJSONArray("objects");
-			for (int i = 0; i < objects.size(); i++) {
-				JSONObject object = objects.getJSONObject(i);
-				String className = object.getString("class");
-				Map<String, Object> classDef = classDefMap.get(className);
-				Set<String> vectorAttrs = new HashSet<String>();
+		JSONObject dsl = dsls.getJSONObject(0);
+		JSONArray steps = dsl.getJSONObject("answer").getJSONArray("steps");
+
+		// Handle the vector of where
+		Map<String, Set<String>> whereClassIdsMap = new HashMap<String, Set<String>>();
+		JSONObject firstStep = steps.getJSONObject(0);
+		JSONArray objects = firstStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0).getJSONArray("objects");
+		for (int i = 0; i < objects.size(); i++) {
+			JSONObject object = objects.getJSONObject(i);
+			String className = object.getString("class");
+			Map<String, Object> classDef = classDefMap.get(className);
+			Set<String> vectorAttrs = new HashSet<String>();
+			if (classDef != null && classDef.get("attrs") != null) {
 				for (Map<String, Object> attrDef : (List<Map<String, Object>>)classDef.get("attrs")) {
 					if ("vector".equals(attrDef.get("type"))) {
 						vectorAttrs.add((String)attrDef.get("name"));
 					}
 				}
-				
+			}
 				if (object.getJSONObject("conditions") != null 
 						&& object.getJSONObject("conditions").getJSONObject("vector") != null
 						&& object.getJSONObject("conditions").getJSONObject("vector").getJSONObject("properties") != null) {
@@ -1021,11 +1021,14 @@ public class DslUtil {
 				JSONObject field = fields.getJSONObject(i);
 				String as = field.getString("as");
 				DslConsanguinity consanguinity = consanguinityMap.get(as);
+				if (consanguinity == null) {
+					continue;
+				}
 				String className = consanguinity.getClassName();
 				String attrName = consanguinity.getAttrName();
 				Map<String, Object> classDef = classDefMap.get(className);
 				boolean typeIsVector = false;
-				if (classDef != null) {
+				if (classDef != null && classDef.get("attrs") != null) {
 					for (Map<String, Object> attrDef : (List<Map<String, Object>>)classDef.get("attrs")) {
 						if (attrName.equals(attrDef.get("name")) && "vector".equals(attrDef.get("type"))) {
 							typeIsVector = true;
@@ -1087,6 +1090,10 @@ public class DslUtil {
 					idInArray.put("value", objIds);
 					
 					JSONObject conditions = object.getJSONObject("conditions");
+					if (conditions == null) {
+						conditions = new JSONObject();
+						object.put("conditions", conditions);
+					}
 					JSONObject properties = conditions.getJSONObject("properties");
 					if (properties == null) {
 						properties = new JSONObject();
@@ -1109,10 +1116,6 @@ public class DslUtil {
 			log.info("vector-dsl:" + JSON.toJSONString(dsl, JSONWriter.Feature.WriteNulls) + "    " + selectAsFilePathsMap + "    " + vectorResourceAsSet);
 			
 			return new Object[] {dsl, selectAsFilePathsMap, vectorResourceAsSet};
-		} catch (Exception e) {
-			log.error(e.getMessage(), e);
-			return null;
-		}
 	}
 
 	/**

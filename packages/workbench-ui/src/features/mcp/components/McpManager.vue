@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from "vue";
+import { computed, ref, reactive, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus, RefreshCw, Pencil, Trash2, Copy, Plug, ArrowUpRight } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
@@ -18,7 +18,12 @@ import McpToolList from "./McpToolList.vue";
 import { workbenchContent } from "../../../content";
 
 const { t } = useI18n();
-const { analysisMcpServerName } = workbenchContent();
+const { analysisMcpServerName, opsMcpServerName } = workbenchContent();
+// Published services this page recognizes by server name: their cards show a localized title and a connection hint.
+const recognizedPublished = new Map([
+  [analysisMcpServerName, { title: "mcp.agentService", hint: "mcp.publishedAuthHint" }],
+  [opsMcpServerName, { title: "mcp.opsAgentService", hint: "mcp.opsPublishedAuthHint" }],
+]);
 const activeTab = ref("external");
 const services = ref<McpServiceConfig[]>([]);
 const published = ref<PublishedMcpService[]>([]);
@@ -32,6 +37,16 @@ const dialogVisible = ref(false);
 const saving = ref(false);
 const previousName = ref<string>();
 const form = ref({ name: "", url: "", headers: [] as Array<{ name: string; value: string }> });
+const publishedCards = computed(() =>
+  published.value.map((service) => {
+    const text = recognizedPublished.get(service.name);
+    return {
+      service,
+      title: text ? t(text.title) : service.title || service.name,
+      hint: text ? t(text.hint) : "",
+    };
+  })
+);
 
 async function loadServices() {
   loading.value = true;
@@ -152,10 +167,6 @@ onMounted(loadServices);
 
 <template>
   <div class="mcp-manager">
-    <header class="page-heading">
-      <h2>{{ t("nav.mcpService") }}</h2>
-      <p>{{ t("mcp.pageHint") }}</p>
-    </header>
     <el-tabs v-model="activeTab" @tab-change="changeTab">
       <el-tab-pane name="external" :label="t('mcp.externalTab')">
         <div class="section-heading">
@@ -270,16 +281,14 @@ onMounted(loadServices);
           <el-button text @click="loadPublished">{{ t("common.retry") }}</el-button>
         </el-alert>
         <div v-else class="service-list">
-          <article v-for="service in published" :key="service.name" class="service-card">
+          <article
+            v-for="{ service, title, hint } in publishedCards"
+            :key="service.name"
+            class="service-card"
+          >
             <div class="service-title">
               <ArrowUpRight :size="20" />
-              <h4>
-                {{
-                  service.name === analysisMcpServerName
-                    ? t("mcp.agentService")
-                    : service.title || service.name
-                }}
-              </h4>
+              <h4>{{ title }}</h4>
             </div>
             <div class="address-row">
               <code class="service-address">
@@ -289,11 +298,9 @@ onMounted(loadServices);
                 {{ t("common.copy") }}
               </el-button>
             </div>
-            <p v-if="service.name === analysisMcpServerName" class="muted">
-              {{ t("mcp.publishedAuthHint") }}
-            </p>
+            <p v-if="hint" class="muted">{{ hint }}</p>
             <details class="published-tools">
-              <summary>{{ t("hotData.availableTools") }} · {{ service.tools.length }}</summary>
+              <summary>{{ t("mcp.availableTools") }} · {{ service.tools.length }}</summary>
               <McpToolList :tools="service.tools" />
             </details>
           </article>
@@ -364,23 +371,12 @@ onMounted(loadServices);
 
 <style scoped>
 .mcp-manager {
-  padding: 24px;
-  max-width: 1120px;
-  margin: 0 auto;
   color: var(--el-text-color-primary);
 }
-.page-heading {
-  margin-bottom: 20px;
-}
-h2,
 h3,
 h4,
 p {
   margin: 0;
-}
-h2 {
-  font-size: 22px;
-  font-weight: 600;
 }
 h3 {
   font-size: 17px;
@@ -391,7 +387,6 @@ h4 {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.page-heading p,
 .section-heading p {
   margin-top: 8px;
   color: var(--el-text-color-regular);

@@ -5,7 +5,7 @@ import type {
   SessionStopResult,
   SessionContext,
 } from "@ontomato/contracts/diagnosis";
-import type { AuthenticatedRequest } from "../../../../utils/request-identity";
+import { requireDomainId, type AuthenticatedRequest } from "../../../../utils/request-identity";
 /**
  * Diagnostic Agent API routes.
  *
@@ -55,11 +55,10 @@ router.post("/chat", async (req: Request, res: Response, next) => {
       return;
     }
 
-    // The page sends its datarag login token on every chat request (same `tk`
-    // header datarag itself uses). Passed into the session's current response token holder
-    // so datarag-backed tools (read_metadata / view_app_config / service_health)
-    // can authenticate. Not persisted -- overwritten for each response.
-    const tk = (req as AuthenticatedRequest).token || undefined;
+    const authReq = req as AuthenticatedRequest;
+    const domainId = requireDomainId(authReq);
+    const token = authReq.token || undefined;
+    const apiKey = authReq.apiKey || undefined;
 
     logger.info("Diagnostic chat request", {
       sessionId,
@@ -69,8 +68,7 @@ router.post("/chat", async (req: Request, res: Response, next) => {
     const started = await diagnosisManager.startChat(
       sessionId,
       message.trim(),
-      tk,
-      (req as AuthenticatedRequest).domainId
+      { domainId, token, apiKey }
     );
     if (!started.ok) {
       res.status(started.status).json({

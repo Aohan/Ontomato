@@ -48,13 +48,15 @@ public interface DataAdapter {
 	 *
 	 * <p>A vector attribute is stored as a text column holding the JSON array string
 	 * {@code [{"path":"...","text":"..."},...]}. This method returns that array parsed
-	 * into a {@link JSONArray} (empty array when the attribute is null/blank).</p>
+	 * into a {@link JSONArray} (empty array when the attribute is null/blank).
+	 * If the object does not exist, an {@link IllegalArgumentException} is thrown.</p>
 	 *
 	 * @param classDef the class definition (used to resolve the full class/table name and primary key)
 	 * @param attrName the vector attribute name
 	 * @param objectId the object's stored id value (M3 uses the {@code class:id} prefixed form,
 	 *                 relational adapters use the plain primary-key value) — no prefix handling is done here
 	 * @return the current vector attribute value as a JSON array
+	 * @throws IllegalArgumentException if the object does not exist
 	 */
 	public JSONArray queryVectorAttr(Map<String, Object> classDef, String attrName, String objectId) throws Exception;
 

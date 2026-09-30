@@ -89,6 +89,7 @@ export interface BuildWorkspaceArtifactInput {
   frontendLogTimeWindow?: LogFileTimeWindow;
   includeFrontendLogs?: boolean;
   token?: string;
+  apiKey?: string;
   userId?: string;
   locale?: string;
   signal?: AbortSignal;
@@ -164,6 +165,7 @@ export async function buildWorkspaceArtifact(
         frontendLogTimeWindow: input.frontendLogTimeWindow,
         includeFrontendLogs,
         token: input.token,
+        apiKey: input.apiKey,
         userId: input.userId,
         locale: input.locale,
         signal: input.signal,

@@ -15,7 +15,8 @@ const visible = defineModel<boolean>("visible");
 
 const props = defineProps<{
   editSkill?: SkillInfo | null;
-  category: "analysis" | "visualization";
+  /** Category preselected when creating (the list's current filter); editing keeps the skill's own category. */
+  initialCategory: SkillInfo["category"];
 }>();
 
 const emit = defineEmits<{
@@ -31,8 +32,8 @@ const submitButtonText = computed(() => (isEditMode.value ? t("common.save") : t
 
 const form = ref({
   id: "",
-  type: "knowledge" as "executable" | "knowledge",
-  category: "analysis",
+  type: "knowledge" as SkillInfo["type"],
+  category: "analysis" as SkillInfo["category"],
   title: "",
   description: "",
   tags: "",
@@ -160,11 +161,16 @@ async function handleSubmit() {
   }
 }
 
+// Chart (visualization) skills can only be executable.
+function typeForCategory(category: SkillInfo["category"]): SkillInfo["type"] {
+  return category === "visualization" ? "executable" : "knowledge";
+}
+
 function resetForm() {
   form.value = {
     id: "",
-    type: props.category === "visualization" ? "executable" : "knowledge",
-    category: props.category,
+    type: typeForCategory(props.initialCategory),
+    category: props.initialCategory,
     title: "",
     description: "",
     tags: "",
@@ -189,6 +195,17 @@ function resetForm() {
         <div class="form-tip">{{ t("admin.skillIdImmutable") }}</div>
       </el-form-item>
 
+      <el-form-item :label="t('common.category')" required>
+        <el-select
+          v-model="form.category"
+          :disabled="loading || isEditMode"
+          @change="form.type = typeForCategory(form.category)"
+        >
+          <el-option :label="t('admin.analysis')" value="analysis" />
+          <el-option :label="t('admin.visualization')" value="visualization" />
+        </el-select>
+      </el-form-item>
+
       <el-form-item :label="t('common.type')" required>
         <el-select
           v-model="form.type"
@@ -200,12 +217,6 @@ function resetForm() {
             value="knowledge"
           />
           <el-option :label="t('admin.executable')" value="executable" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item :label="t('common.category')" required>
-        <el-select v-model="form.category" disabled>
-          <el-option :label="t(`admin.${form.category}`)" :value="form.category" />
         </el-select>
       </el-form-item>
 

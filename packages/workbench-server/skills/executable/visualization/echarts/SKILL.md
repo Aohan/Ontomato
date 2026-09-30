@@ -8,19 +8,6 @@ tags:
   - visualization
   - echarts
   - chart
-supportedChartTypes:
-  - bar
-  - line
-  - pie
-  - scatter
-  - area
-  - radar
-  - heatmap
-  - funnel
-  - sankey
-  - treemap
-  - sunburst
-  - gauge
 timeout: 15000
 outputType: html
 version: 2.0.0
@@ -47,6 +34,8 @@ When calling this skill, the following configuration parameters must be provided
 | sortOrder   | No   | Sort order: asc (ascending) or desc (descending) |
 | topN        | No   | Limit the displayed count, used when the data volume is large         |
 | excludeCategoryValues | No | Array of category original values to exactly exclude from `xField`, keeping string or number types |
+
+Supported chart types: `bar`, `line`, `pie`, `scatter`, `area`, `radar`, `heatmap`, `funnel`, `sankey`, `treemap`, `sunburst`, `gauge`.
 
 ## Analysis Methodology
 

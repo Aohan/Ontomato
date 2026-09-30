@@ -64,7 +64,6 @@ class SkillManager {
       path: skill.path,
       version: skill.manifest.version,
       outputType: skill.manifest.outputType,
-      supportedChartTypes: skill.manifest.supportedChartTypes,
       useCases: skill.manifest.useCases,
     };
   }

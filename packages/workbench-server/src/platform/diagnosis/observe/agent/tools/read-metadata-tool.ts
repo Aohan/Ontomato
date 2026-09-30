@@ -2,7 +2,7 @@ import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet, backendPost } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
-import type { TkHolder } from "./tk-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { tApp } from "../../../../../i18n";
 
 
@@ -103,7 +103,7 @@ function hasJsonRule(data: Record<string, unknown>): boolean {
  * (`POST /admin/getschemamarkdown-v2`). tk is read from the per-session holder at
  * execute time.
  */
-export function createReadMetadataTool(tkHolder: TkHolder): AgentTool {
+export function createReadMetadataTool(caller: DiagnosisCallerIdentity): AgentTool {
   return {
     name: "read_metadata",
     description:
@@ -120,18 +120,6 @@ export function createReadMetadataTool(tkHolder: TkHolder): AgentTool {
       },
     },
     async execute(_toolCallId, params) {
-      const tk = tkHolder.current;
-      if (!tk) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: tApp("diag.observe.agent.tools.read-metadata-tool.6"),
-            },
-          ],
-        };
-      }
-
       const apiConfig = getApiConfig();
       if (!apiConfig.baseUrl) {
         return {
@@ -151,11 +139,22 @@ export function createReadMetadataTool(tkHolder: TkHolder): AgentTool {
         const resp =
           format === "json"
             ? await backendGet(endpoint, url, {
-                token: tk,
+                token: caller.token,
+                apiKey: caller.apiKey,
                 timeoutMs: 15_000,
                 retries: 1,
               })
-            : await backendPost(endpoint, url, {}, { token: tk, timeoutMs: 15_000, retries: 1 });
+            : await backendPost(
+                endpoint,
+                url,
+                {},
+                {
+                  token: caller.token,
+                  apiKey: caller.apiKey,
+                  timeoutMs: 15_000,
+                  retries: 1,
+                }
+              );
         let json: unknown = {};
         try {
           json = JSON.parse(resp.text);

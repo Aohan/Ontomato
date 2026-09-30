@@ -26,7 +26,7 @@ export async function executeResponse(
   turnId: string
 ): Promise<void> {
   return runWithLogContext(
-    { domainId: managed.domainId, token: managed.tkHolder.current },
+    { domainId: managed.caller.domainId, token: managed.caller.token, apiKey: managed.caller.apiKey },
     async () => {
       let status: "completed" | "failed" | "cancelled" = "completed";
       let errorMessage: string | undefined;

@@ -65,7 +65,7 @@ function session(id = firstId): GovernanceSession {
   };
 }
 const wrappers: ReturnType<typeof mount>[] = [];
-async function open(id = firstId) {
+async function open(id = firstId, query = "") {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -74,10 +74,10 @@ async function open(id = firstId) {
         path: "/admin/knowledge-governance/:sessionId?",
         component: GovernancePage,
       },
-      { path: "/admin/knowledge", component: { template: "<p>Knowledge</p>" } },
+      { path: "/admin/:page(.*)", component: { template: "<p>Admin page</p>" } },
     ],
   });
-  await router.push(`/admin/knowledge-governance/${id}`);
+  await router.push(`/admin/knowledge-governance/${id}${query}`);
   await router.isReady();
   const wrapper = mount(GovernancePage, {
     global: { plugins: [router, createI18n({ legacy: false, locale: "en", messages: { en } })] },
@@ -167,6 +167,30 @@ describe("governance page contract", () => {
     expect(wrapper.text()).not.toContain("Which date applies");
     wrapper.unmount();
     expect(governanceApi.stop).not.toHaveBeenCalled();
+  });
+
+  it("Back returns to the from page and switching rounds keeps from; without a valid from it returns to system agents", async () => {
+    vi.mocked(governanceApi.list).mockResolvedValue([
+      { id: secondId, createdAt: "2026-09-10T02:00:00Z", updatedAt: "2026-09-10T02:00:00Z", status: "idle" },
+    ]);
+    vi.mocked(governanceApi.read).mockImplementation((id) => Promise.resolve(session(id)));
+    const from = "/admin/ontology-manager?view=knowledge";
+    const { wrapper, router } = await open(firstId, `?from=${encodeURIComponent(from)}`);
+    await wrapper.get("summary").trigger("click");
+    await wrapper.get(".kg-history a").trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.params.sessionId).toBe(secondId);
+    expect(router.currentRoute.value.query.from).toBe(from);
+    await wrapper.get(`[aria-label="${en.governance.back}"]`).trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.fullPath).toBe(from);
+
+    for (const query of ["", "?from=https://example.com/admin/"]) {
+      const direct = await open(firstId, query);
+      await direct.wrapper.get(`[aria-label="${en.governance.back}"]`).trigger("click");
+      await flushPromises();
+      expect(direct.router.currentRoute.value.path).toBe("/admin/system-agents");
+    }
   });
 
   it("explicit Stop is distinct from detaching a running page", async () => {

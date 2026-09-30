@@ -68,6 +68,7 @@ export interface LogCollectorInput {
   frontendLogTimeWindow?: LogFileTimeWindow;
   includeFrontendLogs?: boolean;
   token?: string;
+  apiKey?: string;
   userId?: string;
   locale?: string;
   signal?: AbortSignal;
@@ -222,6 +223,7 @@ export async function collectLogs(input: LogCollectorInput): Promise<LogCollecto
       backendTimeWindow: input.backendTimeWindow,
       requestOptions: {
         token: input.token,
+        apiKey: input.apiKey,
         userId: input.userId,
         locale: input.locale,
         signal: input.signal,

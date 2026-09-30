@@ -2,9 +2,12 @@ import type { Component, InjectionKey } from "vue";
 import {
   Activity,
   Blocks,
+  Bot,
+  ClipboardList,
   Cpu,
   Database,
   MessageSquare,
+  MessagesSquare,
   Monitor,
   Network,
   Puzzle,
@@ -27,9 +30,13 @@ export interface AdminGroup {
 }
 
 export interface AdminMenuItem {
-  permission: string;
+  /** The item is visible when the user has any one of these permissions. */
+  permissions: readonly string[];
   path: string;
+  /** Menu label; the admin layout also shows it as the page title. */
   titleKey: string;
+  /** One-line description the admin layout shows under the page title. */
+  descriptionKey: string;
   icon: Component;
   groupKey: string;
 }
@@ -94,59 +101,92 @@ export const adminGroups = {
 } satisfies Record<string, AdminGroup>;
 
 export const adminMenuItems = {
-  analysis: {
-    permission: "analysis-agent",
+  businessAgents: {
+    permissions: ["analysis-agent"],
     path: "/admin/analysis",
-    titleKey: "nav.analysisAgents",
+    titleKey: "nav.businessAgents",
+    descriptionKey: "navDescription.businessAgents",
     icon: Blocks,
     groupKey: "app-capabilities",
   },
+  analysisPlans: {
+    permissions: ["hot-data"],
+    path: "/admin/analysis-plans",
+    titleKey: "nav.analysisPlans",
+    descriptionKey: "navDescription.analysisPlans",
+    icon: ClipboardList,
+    groupKey: "app-capabilities",
+  },
+  // Shown with either system agent's permission; each entry card on the page still checks its own.
+  systemAgents: {
+    permissions: ["observer", "business-knowledge"],
+    path: "/admin/system-agents",
+    titleKey: "nav.systemAgents",
+    descriptionKey: "navDescription.systemAgents",
+    icon: Bot,
+    groupKey: "app-capabilities",
+  },
   mcpService: {
-    permission: "mcp-service",
+    permissions: ["mcp-service"],
     path: "/admin/mcp-service",
     titleKey: "nav.mcpService",
+    descriptionKey: "navDescription.mcpService",
     icon: Network,
     groupKey: "app-capabilities",
   },
   skills: {
-    permission: "skill-management",
+    permissions: ["skill-management"],
     path: "/admin/skills",
     titleKey: "nav.skills",
+    descriptionKey: "navDescription.skills",
     icon: Puzzle,
     groupKey: "app-capabilities",
   },
   modelConfig: {
-    permission: "system-config",
+    permissions: ["system-config"],
     path: "/admin/model-config",
     titleKey: "nav.modelConfig",
+    descriptionKey: "navDescription.modelConfig",
     icon: Cpu,
     groupKey: "platform-management",
   },
   systemConfig: {
-    permission: "system-config",
+    permissions: ["system-config"],
     path: "/admin/system-config",
     titleKey: "nav.systemConfig",
+    descriptionKey: "navDescription.systemConfig",
     icon: ServerCog,
     groupKey: "platform-management",
   },
+  queryExamples: {
+    permissions: ["query-examples"],
+    path: "/admin/examples",
+    titleKey: "nav.queryExamples",
+    descriptionKey: "navDescription.queryExamples",
+    icon: MessagesSquare,
+    groupKey: "platform-management",
+  },
   auditLog: {
-    permission: "audit-logs",
+    permissions: ["audit-logs"],
     path: "/admin/audit-log",
     titleKey: "nav.auditLogs",
+    descriptionKey: "navDescription.auditLogs",
     icon: ScrollText,
     groupKey: "platform-management",
   },
   feedbackRecords: {
-    permission: "audit-logs",
+    permissions: ["audit-logs"],
     path: "/admin/feedback-records",
     titleKey: "nav.feedbackRecords",
+    descriptionKey: "navDescription.feedbackRecords",
     icon: MessageSquare,
     groupKey: "platform-management",
   },
   systemMonitor: {
-    permission: "system-monitoring",
+    permissions: ["system-monitoring"],
     path: "/admin/system-monitor",
     titleKey: "nav.systemMonitoring",
+    descriptionKey: "navDescription.systemMonitoring",
     icon: Activity,
     groupKey: "platform-management",
   },

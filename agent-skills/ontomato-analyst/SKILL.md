@@ -21,12 +21,15 @@ Three ways to get data, from most control to least:
 
 Every script call goes through the frontend: `<envUrl>/api/data-query/<backend path>`.
 
-## Configure application.yml
+## Configure the Ontomato URL
+
+Set `envUrl` in `application.yml` to the frontend URL of Ontomato, with no path suffix:
 
 ```yaml
-# Frontend URL of Ontomato, with no path suffix
 envUrl: http://host:3000
 ```
+
+When the environment variable `ONTOMATO_URL` is set, it takes precedence over `envUrl`, so one setting serves every installed Ontomato skill.
 
 ## Commands
 
@@ -59,7 +62,7 @@ A non-2xx response prints the status and body and exits non-zero. A JSON body wi
 ## Query workflow
 
 1. `dataset-desc` and `classes` to see what the dataset covers.
-2. `schema` for the classes the question needs, and `relationships` for how they join.
+2. `schema` for the classes the question needs, and `relationships` for how they join. If an attribute has type `vector`, it represents a set of file or text resources attached to the object, queried by semantics and cannot be used for equality or range comparisons.
 3. `distinct-values` to confirm filter values.
 4. Write a DSL query following the rules below and run `execute-dsl`.
 5. If the result is empty or wrong, check class and attribute names, filter values and relationship direction, then run again.
@@ -93,9 +96,23 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 
 		5.2.4 class specifies from which class the objects matching the conditions are queried
 
-		5.2.5 conditions represents the query conditions and consists of properties. If there are no conditions, conditions may be omitted; when properties is present, conditions must not be omitted.
+		5.2.5 conditions represents the query conditions and consists of properties, vector, and when multiple condition types coexist the logic is `AND`. If there are no conditions, conditions may be omitted; when one of properties, vector, is present, conditions must not be omitted, and a query condition type that is not set is regarded as having no constraint.
 
 			5.2.5.1 properties represents the query conditions of class attributes and may consist of multiple attribute conditions or a single attribute condition. For a single attribute condition it consists of field, operator and value; field is the attribute name, operator is the logical operator, including "=", "!=", ">", ">=", "<", "<=", "between", "like", "in", "is" and "is not", and value is the value of the logical operation. When operator is between, value is a two-element array; when operator is in, value is a multi-element array; when operator is is or is not, value is null. When it consists of multiple attributes, it is represented by the "operator": "logic" field, and the multiple attributes are represented by the list structure of the "and"/"or"/"not" fields; inside the list structure are multiple single-attribute conditions.
+
+			5.2.5.3 vector represents a vector query; if filtering is performed on a vector type field of an object, it can only be defined here, and it is not allowed to perform group by or having on it in a temporary table. It consists of one attribute properties, and the properties object consists of operator and the and/or attributes
+
+				5.2.5.3.1 The value of the operator attribute is "logic"
+
+				5.2.5.3.2 When the constraints are in an `AND` relationship, the and attribute is required, and the and attribute is an array
+
+				5.2.5.3.3 When the constraints are in an `OR` relationship, the or attribute is required, and the or attribute is an array
+
+				5.2.5.3.4 A single object in the array corresponding to the and or or attribute consists of the field and query attributes
+
+					5.2.5.3.4.1 field (required) represents the name of the vector type field in the class
+
+					5.2.5.3.4.2 query (required) represents the text to be queried
 
 		5.2.6  relationship indicates that a certain relationship must be satisfied between objects; it is a list structure, and relationships not returned by `relationships` must not be used. Each element in the list describes
 
@@ -128,6 +145,15 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 
 		6.3.3 **Arithmetic operations on multiple numeric type fields may only appear in the output of a temporary table and must not appear in the first step** If arithmetic operations on multiple numeric type fields are needed, the item consists only of the expr and as attributes; expr is the mathematical expression of the arithmetic operation, and as is the alias the output is converted to
 
+		6.3.4 The output of a vector type field requires at least two steps; in the query step the field is output to a temporary table (the as, variable and field attributes are required), and in the following step it is output from the temporary table (consisting of the as, variable, field and query attributes)
+
+			6.3.4.1 If in the following step the field has only the as, variable and field attributes, it means outputting all the files corresponding to the vectors of the field
+
+			6.3.4.2 If in the following step the field has the as, variable, field and query attributes, it means outputting the files corresponding to the vectors of the field filtered by the text content in query
+
+		- It is not allowed to perform group by and having operations on vector type fields in output
+		- It is not allowed to perform sort operations on vector type fields in output
+
 	6.4 sort represents the output sorting and consists of the list structure of fields; each field consists of variable, field and order, and the list structure of fields must not be omitted even if there is only one field. variable represents the class query object result participating in the sorting, field represents the attribute field of the class query object result, order represents ascending or descending order, asc means ascending and desc means descending. When the field in sort is a calculation result and does not belong to an attribute of a class, variable may be omitted
 
 	6.5 limit represents from which position to start and how many rows of data to take at most, and consists of offset and count; offset represents from which position to start, and count represents how many rows of data to take at most.
@@ -140,7 +166,15 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 	6.7 group_by, sort and limit can be implemented in the same step.
 ```
 
-### Example
+### Vector Semantics
+
+- **Vector Filtering Mechanism**: The `conditions.vector` condition in DSL takes effect only in the object conditions of the first step. Vector retrieval does not take a fixed top-k items; instead, it automatically truncates the highest-similarity cluster of resources based on similarity scores, extracts the primary keys of the corresponding objects, and converts them into a primary key `in` condition on the underlying query.
+- **Two-Step Output and Semantic Filtering**: Outputting a `vector` type attribute requires at least two steps: the first step outputs the attribute to a temporary table (specifying `as`, `variable`, `field`); the following step outputs from the temporary table. If `query` is specified on the field in the second step, only resource items semantically matching the query are retained; if `query` is omitted, all resource items associated with the object are output.
+- **Return Shape and Constraints**: The output vector field is an array of objects `[{"path": "<download_url>", "text": "..."}]`, where `path` is an accessible download URL (prefixed by `cardBaseUrl`). Vector fields cannot be used in `sort`, `group_by`, or `having`.
+
+### Examples
+
+#### Example 1: Multi-table join and grouping aggregation
 
 ```json
 {
@@ -223,9 +257,80 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 }
 ```
 
+#### Example 2: Vector retrieval and two-step output
+
+```json
+{
+  "problem": "Query published documents related to security auditing, and return attachments containing access control instructions",
+  "answer": {
+    "steps": [
+      {
+        "graph": {
+          "patterns": [
+            {
+              "objects": [
+                {
+                  "idx": 0,
+                  "variable": "d",
+                  "class": "document",
+                  "conditions": {
+                    "properties": {
+                      "field": "status",
+                      "operator": "=",
+                      "value": "published"
+                    },
+                    "vector": {
+                      "properties": {
+                        "operator": "logic",
+                        "and": [
+                          {
+                            "field": "attachments",
+                            "query": "security audit specification"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "pattern_logic": "and"
+        },
+        "output": {
+          "fields": [
+            {"as": "doc_id", "variable": "d", "field": "id"},
+            {"as": "title", "variable": "d", "field": "title"},
+            {"as": "doc_files", "variable": "d", "field": "attachments"}
+          ],
+          "to_user": false,
+          "save_table": "/temp_doc"
+        }
+      },
+      {
+        "graph": {
+          "patterns": [
+            {"objects": [{"idx": 0, "class": "/temp_doc", "variable": "t"}]}
+          ],
+          "pattern_logic": "and"
+        },
+        "output": {
+          "to_user": true,
+          "fields": [
+            {"as": "doc_id", "variable": "t", "field": "doc_id"},
+            {"as": "title", "variable": "t", "field": "title"},
+            {"as": "matched_files", "variable": "t", "field": "doc_files", "query": "access control instructions"}
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
 ### Result
 
-`execute-dsl` prints the response. `data[0].answer` holds the rows of the step with `to_user: true`, and `data[0].mqls` holds the statements that ran. When the query fails, `error` explains why and the script exits non-zero.
+`execute-dsl` prints the response. `data[0].answer` holds the rows of the step with `to_user: true`, and `data[0].mqls` holds the statements that ran. When the query fails, `error` explains why and the script exits non-zero. If the result contains a vector field, its value is an array of objects containing resource download URLs and text summaries: `[{"path": "<download_url>", "text": "..."}]`.
 
 ## Analysis agents (MCP)
 

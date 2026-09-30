@@ -22,6 +22,9 @@ export type ModelEntry = Omit<
   maxCompletionTokens?: number | null;
 };
 
+/** A save the page hands to a card's dialog: resolves to whether the value was saved; the dialog closes only on success. */
+export type SaveAction<T> = (value: T) => Promise<boolean>;
+
 /** Draft model references of the five roles: a config ID or not configured (null); same shape as agents in the saveModelSettings request. */
 export type RoleModels = Record<ModelRole, string | null>;
 

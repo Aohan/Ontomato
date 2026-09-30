@@ -1,7 +1,6 @@
 // Generated from the original frontend messages using the keys the migrated pages actually use; extended as more pages are migrated.
 export default {
   "admin": {
-    "systemAgents": "System Agents",
     "opsAgent": "Operations Agent",
     "opsAgentDescription": "Diagnoses issues in queries and analyses from logs and runtime records, and suggests fixes.",
     "openEntry": "Open",
@@ -31,8 +30,8 @@ export default {
     "externalMcpServices": "External MCP Services",
     "externalMcpServicesHint": "Saves a snapshot of the selected service names; an empty selection gives the agent no external tools.",
     "externalMcpServicesLoadFailed": "The external MCP service list could not be loaded; you can still save the agent's other settings.",
-    "visualizationSkills": "Visualization Skills",
-    "selectVisualSkills": "Select visualization skills for report-embedded charts",
+    "visualizationSkills": "Chart Skills",
+    "selectVisualSkills": "Select chart skills for report-embedded charts",
     "dragToSort": "Drag left handle to adjust sort order",
     "noSkillsConfigured": "No skills configured",
     "noAgentHint": "No agents yet, click \"Create Agent\" to create one",
@@ -43,12 +42,12 @@ export default {
     "summaryPositionBottom": "At the end of the report",
     "summaryPositionTop": "At the beginning of the report",
     "summaryPositionHint": "Choose where the comprehensive summary appears in the report.",
-    "hotReport": "Hot Reports",
-    "hotReportEnabled": "Enable hot reports",
-    "hotReportEnabledHint": "When enabled, analysis first tries to match a published hot report under this agent and, on a hit, reuses its dimensions and query results; when disabled, hot report matching is skipped and analysis always runs from the current configuration.",
-    "noHotReports": "No hot reports under this agent",
-    "hotReportLoadFailed": "Failed to load hot reports",
-    "hotReportToggleFailed": "Failed to update hot report status",
+    "hotReport": "Analysis Plans",
+    "hotReportEnabled": "Reuse published analysis plans",
+    "hotReportEnabledHint": "When enabled, analysis first tries to match a published analysis plan under this agent and, on a hit, reuses its dimensions and query approach to fetch fresh data; when disabled, plan matching is skipped and analysis always runs from the current configuration.",
+    "noHotReports": "No analysis plans under this agent",
+    "hotReportLoadFailed": "Failed to load analysis plans",
+    "hotReportToggleFailed": "Failed to update analysis plan status",
     "externalMcpServicesPlaceholder": "Select external MCP services this agent can call",
     "allTasks": "All Tasks",
     "searchColumn": "Search column values...",
@@ -115,7 +114,7 @@ export default {
     "editDetail": "Edit Detailed Content",
     "knowledge": "Knowledge",
     "executable": "Executable",
-    "visualization": "Visualization",
+    "visualization": "Chart",
     "analysis": "Analysis",
     "clickDisable": "Click to disable",
     "clickEnable": "Click to enable",
@@ -170,7 +169,6 @@ export default {
     "apiModelId": "API model ID",
     "keyCountConfigured": "{n} keys configured",
     "keyMissing": "No key configured",
-    "doneEdit": "Done",
     "roleModels": "Role models",
     "modelRoleGroups": {
       "queryEngine": "Query engine",
@@ -183,6 +181,15 @@ export default {
       "diagnosis": "Operations Agent",
       "knowledgeGovernance": "Knowledge Governance Agent"
     },
+    "modelRoleDescriptions": {
+      "query": "Understands the question, generates and validates queries, and retrieves business knowledge",
+      "coding": "Generates and runs calculation code, for Python calculation, post-calculation, functions, metric views and data retrieval programs",
+      "general": "Used by every model call in the workbench without a dedicated role, including chat replies, business agents, and report and chart generation",
+      "diagnosis": "Used by the operations agent when diagnosing issues",
+      "knowledgeGovernance": "Used in business knowledge governance conversations"
+    },
+    "deleteModelConfirm": "Delete model \"{name}\"?",
+    "deleteModelInUseConfirm": "Model \"{name}\" is used by these roles: {roles}. After deletion they become not configured. Delete it?",
     "roleNotConfigured": "Not configured",
     "defaultWhenEmpty": "Leave empty to use the default",
     "modelListEmpty": "No models yet. Add the first config.",
@@ -372,11 +379,12 @@ export default {
   "nav": {
     "systemManagement": "System Management",
     "agentsAndSkills": "Agents and Skills",
-    "analysisAgents": "Analysis Agents",
+    "businessAgents": "Business Agents",
     "skills": "Skills",
     "modelConfig": "Model Configuration",
     "ontologyManager": "Ontology Manager",
-    "hotReportManagement": "Hot Report Management",
+    "analysisPlans": "Analysis Plans",
+    "systemAgents": "System Agents",
     "queryExamples": "Query Examples",
     "mcpService": "MCP Service",
     "systemConfig": "System Configuration",
@@ -390,6 +398,19 @@ export default {
     "liveLogs": "Live Logs",
     "testCases": "Test Cases",
     "dslTest": "DSL Test"
+  },
+  "navDescription": {
+    "businessAgents": "The Q&A and analysis assistants business users choose on the chat page. Configure their mode, skills and prompts here.",
+    "analysisPlans": "Analysis frameworks (dimensions plus query approach) generated by agents. Once reviewed and published, similar questions reuse them to fetch fresh data.",
+    "systemAgents": "Built-in platform agents that help administrators troubleshoot issues and govern business knowledge.",
+    "skills": "Capability packages agents can call. Analysis skills provide methods or calculations; chart skills render charts.",
+    "mcpService": "Connect external tools or make platform capabilities available to other systems.",
+    "modelConfig": "Model connections available in this domain, and which model the query engine and each agent role uses.",
+    "systemConfig": "Runtime settings of this domain: query mode and time limit, skill directory, general parameters and data adapter.",
+    "queryExamples": "Sample questions and queries referenced when answering data questions, used to make generated queries more accurate.",
+    "auditLogs": "Operation logs recorded by the platform, searchable by business category and operation type.",
+    "feedbackRecords": "Ratings and comments users give on query and analysis results, with filtering and export.",
+    "systemMonitoring": "Running status of the platform's backend services, with service maintenance actions."
   },
   "harness": {
     "loadFailed": "Conversation history is temporarily unavailable. Please retry.",
@@ -444,10 +465,9 @@ export default {
     "running": "Working",
     "stopped": "Stopped",
     "failed": "Response failed",
-    "back": "Back to knowledge"
+    "back": "Back"
   },
   "analysis": {
-    "agent": "Agent",
     "agentNameRequired": "Please enter agent name",
     "agentUpdated": "Agent updated successfully",
     "agentCreated": "Agent created successfully",
@@ -704,7 +724,6 @@ export default {
     "conditionReplacementLabel": "Condition Replacement:"
   },
   "mcp": {
-    "pageHint": "Connect external tools or make platform capabilities available to other systems.",
     "externalTab": "Agent tools",
     "externalHint": "Add a service, then select it in the agent configuration.",
     "publishedTab": "Published services",
@@ -726,6 +745,9 @@ export default {
     "discoveryFailed": "Could not discover tools. Check the service URL and headers, then retry.",
     "agentService": "Agent service",
     "publishedAuthHint": "No API key is required to discover agents, start tasks or retrieve results in the open-source edition.",
+    "opsAgentService": "Operations agent service",
+    "opsPublishedAuthHint": "No API key is required in the open-source edition. Call send with a message to start a session; pass the returned sessionId to continue it, and call send with only the sessionId to fetch the result of a run that is still in progress.",
+    "availableTools": "Available tools",
     "noTools": "This service has no tools yet."
   },
   "task": {

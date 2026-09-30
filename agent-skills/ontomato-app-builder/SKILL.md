@@ -22,12 +22,15 @@ Build data applications on Ontomato. Every query on a page calls a MetricView an
 
 Every script call goes through the test environment's frontend: `<envUrl>/api/data-query/<backend path>`.
 
-## Configure application.yml
+## Configure the Ontomato URL
+
+Set `envUrl` in `application.yml` to the frontend URL of Ontomato, with no path suffix:
 
 ```yaml
-# Frontend URL of Ontomato, with no path suffix
 envUrl: http://host:3000
 ```
+
+When the environment variable `ONTOMATO_URL` is set, it takes precedence over `envUrl`, so one setting serves every installed Ontomato skill.
 
 ## Commands
 
@@ -43,6 +46,9 @@ node ontomato.mjs prod-distinct-values <class> <attribute> [--like <pattern>] [-
 node ontomato.mjs prod-query @query.json
 node ontomato.mjs prod-knowledge [--max <n>] <question>
 node ontomato.mjs import-test-data testData.json
+node ontomato.mjs vector-upload <class> <attribute> <object-id> --text <text|@file>
+node ontomato.mjs vector-upload <class> <attribute> <object-id> --file <path> --text <description|@file>
+node ontomato.mjs vector-delete <class> <attribute> <object-id> <path>
 node ontomato.mjs distinct-values <class> <attribute> [--like <pattern>] [--limit <n>]
 node ontomato.mjs execute-dsl @query.json
 node ontomato.mjs metric-view generate [--save] <description>
@@ -66,6 +72,8 @@ node ontomato.mjs ask "How many orders were placed last month?"
 | `prod-query` | `POST /productionEnv/queryData` | production | DSL result JSON |
 | `prod-knowledge` | `POST /productionEnv/queryBusinessKnowledge` | production | Business knowledge related to the question |
 | `import-test-data` | `POST /testEnv/importData` | test | Uploads a test data file and writes it |
+| `vector-upload` | `POST /vectorResource/upload` | test | Uploads text or attachment resource and binds to object attribute |
+| `vector-delete` | `POST /vectorResource/delete` | test | Deletes specified vector resource of an object |
 | `distinct-values` | `POST /admin/queryDistinctAttrValue` | test | Same as `prod-distinct-values` |
 | `execute-dsl` | `POST /dsl/executeV1` | test | DSL result JSON |
 | `metric-view ...` / `action ...` | `/metricView/*`, `/action/*` | test | See below |
@@ -73,15 +81,16 @@ node ontomato.mjs ask "How many orders were placed last month?"
 
 - After `import-schema`, `dataset-desc`, `classes`, `schema` and `relationships` return the production definitions.
 - `distinct-values` / `prod-distinct-values`: `--like` filters values; without `%` the pattern is wrapped as `%pattern%`. Without `--limit` at most 100 values are shown. Use them to find the exact stored value before writing an `=` or `in` condition.
+- `schema` may include `vector` attribute type, representing files or text resources attached to an object, maintained by vector upload interfaces, not supporting equality or range comparisons, only semantic retrieval via DSL vector conditions.
 - A non-2xx response prints the status and body and exits non-zero. A JSON body with `success: false` prints its message and exits non-zero.
 
 ## Workflow
 
 1. `import-schema` to bring the production definitions into the test environment.
 2. `dataset-desc`, `classes`, `schema` and `relationships` to learn the dataset; `prod-knowledge` for business knowledge the application depends on; `prod-distinct-values` and `prod-query` (with a `limit`, to keep results small) to see what real production data looks like.
-3. Write a test data file in the format below and load it with `import-test-data`; check the result with `distinct-values` and `execute-dsl`.
+3. Write a test data file in the format below (leave `vector` attributes empty in the file) and load it with `import-test-data`; then upload vector resources for specific objects via `vector-upload`; check the result with `distinct-values` and `execute-dsl`.
 4. Generate the interfaces the pages need with `metric-view generate` / `action generate`, and debug them with `execute`. Once you understand the structure, editing the definition from `get` and running `save` is usually faster than generating again from natural language.
-5. Run `import-test-data` again before each full test pass, so data changed by Actions in the previous pass does not confuse your checks.
+5. Run `import-test-data` again before each full test pass, so data changed by Actions in the previous pass does not confuse your checks (re-importing test data clears vector resources of classes present in the file, requiring re-upload).
 6. Build the pages on the tested MetricViews and Actions; see [Calling interfaces from a page](#calling-interfaces-from-a-page).
 
 ## Test data
@@ -111,8 +120,10 @@ The backend checks everything before importing and rejects the whole file, with 
 - Every row must have a non-empty primary key value. The primary key is the attribute `schema` marks as primary key; when a class has none, `import-schema` makes its first enabled attribute the primary key.
 - Primary key values must be unique across the whole file, across classes as well.
 - `relationName` must be an existing relationship type. `sourceObjId` must be the primary key value of a row of the relationship's source class in this file, and `targetObjId` of a row of its target class.
-
-On import, every class that appears in the file is emptied and then written; classes not in the file are left alone.
+- A row containing a `vector` attribute must leave it empty or omit it (providing a value will cause the entire file to be rejected); after importing test data, use `vector-upload` to attach vector resources to specific objects. The target object must already exist (otherwise upload fails without creating file or record); an attached file must not be empty.
+- On import, every class that appears in the file is emptied along with its associated vector resources and then written; classes not in the file are left alone.
+- Vector write and storage are supported only on PostgreSQL and DuckDB (Enterprise edition also supports M3); performing vector write operations on MySQL, Oracle, SQL Server, Db2, GaussDB, or DM will explicitly report an unsupported error.
+- Production environments do not expose vector upload or delete interfaces; vector links returned by `prod-query` point directly to the production environment, while test environment vector resources must be prepared by testers using the above interfaces.
 
 ## MetricViews and Actions
 
@@ -141,6 +152,17 @@ Accept-Language: en
 ```
 
 The response is `{"success": true, "data": ...}`, or `{"success": false, "message": "..."}` on failure.
+
+If a page needs to upload or delete vector resources of an object, call via frontend forwarding:
+
+- Upload resource (multipart/form-data):
+  `POST <envUrl>/api/data-query/vectorResource/upload`
+  Form fields: `content` (required, description text used for vector generation), `className`, `attrName`, `objectId`; if attaching a file, pass `file` (must not be empty) and specify extension in `suffix` (alphanumeric only, 1-16 chars; defaults to txt when no file attached). The target object must already exist in the test environment (otherwise upload fails without saving file or record). On success returns `{"success": true, "data": {"id": "...", "path": "<index_name>/<id>.<suffix>", "content": "...", "className": "...", "attrName": "...", "objectId": "..."}}`, where `data` is the saved resource record and `data.path` is the relative path `<index_name>/<id>.<suffix>` to be passed as `path` when deleting.
+- Delete resource (application/json):
+  `POST <envUrl>/api/data-query/vectorResource/delete`
+  Request JSON body: `{"className": "...", "attrName": "...", "objectId": "...", "path": "<data.path from upload>"}`. On success returns `{"success": true}`.
+- Resource download and display:
+  Vector fields returned by query interfaces (MetricView or DSL) are formatted as `[{"path": "<full_download_url>", "text": "..."}]`, where `path` is automatically constructed by the backend as an accessible URL prefixed with the system's `cardBaseUrl` configuration (`<cardBaseUrl>/vectorResource/resource/<path>`).
 
 ## Natural-language questions
 
@@ -175,9 +197,23 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 
 		5.2.4 class specifies from which class the objects matching the conditions are queried
 
-		5.2.5 conditions represents the query conditions and consists of properties. If there are no conditions, conditions may be omitted; when properties is present, conditions must not be omitted.
+		5.2.5 conditions represents the query conditions and consists of properties, vector, and when multiple condition types coexist the logic is `AND`. If there are no conditions, conditions may be omitted; when one of properties, vector, is present, conditions must not be omitted, and a query condition type that is not set is regarded as having no constraint.
 
 			5.2.5.1 properties represents the query conditions of class attributes and may consist of multiple attribute conditions or a single attribute condition. For a single attribute condition it consists of field, operator and value; field is the attribute name, operator is the logical operator, including "=", "!=", ">", ">=", "<", "<=", "between", "like", "in", "is" and "is not", and value is the value of the logical operation. When operator is between, value is a two-element array; when operator is in, value is a multi-element array; when operator is is or is not, value is null. When it consists of multiple attributes, it is represented by the "operator": "logic" field, and the multiple attributes are represented by the list structure of the "and"/"or"/"not" fields; inside the list structure are multiple single-attribute conditions.
+
+			5.2.5.3 vector represents a vector query; if filtering is performed on a vector type field of an object, it can only be defined here, and it is not allowed to perform group by or having on it in a temporary table. It consists of one attribute properties, and the properties object consists of operator and the and/or attributes
+
+				5.2.5.3.1 The value of the operator attribute is "logic"
+
+				5.2.5.3.2 When the constraints are in an `AND` relationship, the and attribute is required, and the and attribute is an array
+
+				5.2.5.3.3 When the constraints are in an `OR` relationship, the or attribute is required, and the or attribute is an array
+
+				5.2.5.3.4 A single object in the array corresponding to the and or or attribute consists of the field and query attributes
+
+					5.2.5.3.4.1 field (required) represents the name of the vector type field in the class
+
+					5.2.5.3.4.2 query (required) represents the text to be queried
 
 		5.2.6  relationship indicates that a certain relationship must be satisfied between objects; it is a list structure, and relationships not returned by `relationships` must not be used. Each element in the list describes
 
@@ -210,6 +246,15 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 
 		6.3.3 **Arithmetic operations on multiple numeric type fields may only appear in the output of a temporary table and must not appear in the first step** If arithmetic operations on multiple numeric type fields are needed, the item consists only of the expr and as attributes; expr is the mathematical expression of the arithmetic operation, and as is the alias the output is converted to
 
+		6.3.4 The output of a vector type field requires at least two steps; in the query step the field is output to a temporary table (the as, variable and field attributes are required), and in the following step it is output from the temporary table (consisting of the as, variable, field and query attributes)
+
+			6.3.4.1 If in the following step the field has only the as, variable and field attributes, it means outputting all the files corresponding to the vectors of the field
+
+			6.3.4.2 If in the following step the field has the as, variable, field and query attributes, it means outputting the files corresponding to the vectors of the field filtered by the text content in query
+
+		- It is not allowed to perform group by and having operations on vector type fields in output
+		- It is not allowed to perform sort operations on vector type fields in output
+
 	6.4 sort represents the output sorting and consists of the list structure of fields; each field consists of variable, field and order, and the list structure of fields must not be omitted even if there is only one field. variable represents the class query object result participating in the sorting, field represents the attribute field of the class query object result, order represents ascending or descending order, asc means ascending and desc means descending. When the field in sort is a calculation result and does not belong to an attribute of a class, variable may be omitted
 
 	6.5 limit represents from which position to start and how many rows of data to take at most, and consists of offset and count; offset represents from which position to start, and count represents how many rows of data to take at most.
@@ -222,7 +267,15 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 	6.7 group_by, sort and limit can be implemented in the same step.
 ```
 
-### Example
+### Vector Semantics
+
+- **Vector Filtering Mechanism**: The `conditions.vector` condition in DSL takes effect only in the object conditions of the first step. Vector retrieval does not take a fixed top-k items; instead, it automatically truncates the highest-similarity cluster of resources based on similarity scores, extracts the primary keys of the corresponding objects, and converts them into a primary key `in` condition on the underlying query.
+- **Two-Step Output and Semantic Filtering**: Outputting a `vector` type attribute requires at least two steps: the first step outputs the attribute to a temporary table (specifying `as`, `variable`, `field`); the following step outputs from the temporary table. If `query` is specified on the field in the second step, only resource items semantically matching the query are retained; if `query` is omitted, all resource items associated with the object are output.
+- **Return Shape and Constraints**: The output vector field is an array of objects `[{"path": "<download_url>", "text": "..."}]`, where `path` is an accessible download URL (prefixed by `cardBaseUrl`). Vector fields cannot be used in `sort`, `group_by`, or `having`.
+
+### Examples
+
+#### Example 1: Multi-table join and grouping aggregation
 
 ```json
 {
@@ -305,6 +358,77 @@ Use the class and attribute names exactly as `classes` and `schema` return them;
 }
 ```
 
+#### Example 2: Vector retrieval and two-step output
+
+```json
+{
+  "problem": "Query published documents related to security auditing, and return attachments containing access control instructions",
+  "answer": {
+    "steps": [
+      {
+        "graph": {
+          "patterns": [
+            {
+              "objects": [
+                {
+                  "idx": 0,
+                  "variable": "d",
+                  "class": "document",
+                  "conditions": {
+                    "properties": {
+                      "field": "status",
+                      "operator": "=",
+                      "value": "published"
+                    },
+                    "vector": {
+                      "properties": {
+                        "operator": "logic",
+                        "and": [
+                          {
+                            "field": "attachments",
+                            "query": "security audit specification"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ],
+          "pattern_logic": "and"
+        },
+        "output": {
+          "fields": [
+            {"as": "doc_id", "variable": "d", "field": "id"},
+            {"as": "title", "variable": "d", "field": "title"},
+            {"as": "doc_files", "variable": "d", "field": "attachments"}
+          ],
+          "to_user": false,
+          "save_table": "/temp_doc"
+        }
+      },
+      {
+        "graph": {
+          "patterns": [
+            {"objects": [{"idx": 0, "class": "/temp_doc", "variable": "t"}]}
+          ],
+          "pattern_logic": "and"
+        },
+        "output": {
+          "to_user": true,
+          "fields": [
+            {"as": "doc_id", "variable": "t", "field": "doc_id"},
+            {"as": "title", "variable": "t", "field": "title"},
+            {"as": "matched_files", "variable": "t", "field": "doc_files", "query": "access control instructions"}
+          ]
+        }
+      }
+    ]
+  }
+}
+```
+
 ### Result
 
-`execute-dsl` and `prod-query` print the response. `data[0].answer` holds the rows of the step with `to_user: true`, and `data[0].mqls` holds the statements that ran. When the query fails, `error` explains why and the script exits non-zero.
+`execute-dsl` and `prod-query` print the response. `data[0].answer` holds the rows of the step with `to_user: true`, and `data[0].mqls` holds the statements that ran. When the query fails, `error` explains why and the script exits non-zero. If the result contains a vector field, its value is an array of objects containing resource download URLs and text summaries: `[{"path": "<download_url>", "text": "..."}]`.

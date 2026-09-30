@@ -76,9 +76,8 @@ describe("open-source system config page", () => {
     });
   });
 
-  it("shows the query examples block and loads its examples", async () => {
-    const page = await mountPage();
-    expect(page.find(".examples-card").exists()).toBe(true);
-    expect(sent.some((request) => request.url.endsWith("/bussinessexample/getall"))).toBe(true);
+  it("no longer carries query examples (they moved to their own menu page)", async () => {
+    await mountPage();
+    expect(sent.some((request) => request.url.endsWith("/bussinessexample/getall"))).toBe(false);
   });
 });

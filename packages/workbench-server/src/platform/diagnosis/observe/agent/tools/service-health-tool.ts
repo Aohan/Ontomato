@@ -2,7 +2,7 @@ import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
-import type { TkHolder } from "./tk-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { m3DiagnosticSupport } from "../../m3-support";
 import { workbenchProduct } from "../../../../../product/installed";
 import { tApp } from "../../../../../i18n";
@@ -300,7 +300,7 @@ function formatReport(status: SystemStatus): string {
  * does not list those services. tk is read from the
  * per-session holder at execute time. Read-only: never starts/stops services.
  */
-export function createServiceHealthTool(tkHolder: TkHolder): AgentTool {
+export function createServiceHealthTool(caller: DiagnosisCallerIdentity): AgentTool {
   return {
     name: "service_health",
     description:
@@ -310,18 +310,6 @@ export function createServiceHealthTool(tkHolder: TkHolder): AgentTool {
       properties: {},
     },
     async execute() {
-      const tk = tkHolder.current;
-      if (!tk) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: tApp("diag.observe.agent.tools.service-health-tool.19"),
-            },
-          ],
-        };
-      }
-
       const apiConfig = getApiConfig();
       if (!apiConfig.baseUrl) {
         return {
@@ -337,7 +325,8 @@ export function createServiceHealthTool(tkHolder: TkHolder): AgentTool {
       try {
         const url = buildUrl(apiConfig, ENDPOINT);
         const resp = await backendGet(ENDPOINT, url, {
-          token: tk,
+          token: caller.token,
+          apiKey: caller.apiKey,
           timeoutMs: 15_000,
           retries: 1,
         });

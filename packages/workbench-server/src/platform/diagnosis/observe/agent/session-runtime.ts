@@ -2,7 +2,7 @@ import type { SessionContext } from "@ontomato/contracts/diagnosis";
 import type { ModelConfig } from "../../../../core/agent-loop/types";
 import { Agent, type AgentTool, type HarnessRun } from "../../../../core/agent-loop/index";
 import type { DiagnosisAgentRole } from "./role-loader";
-import type { TkHolder } from "./tools/tk-holder";
+import type { DiagnosisCallerIdentity } from "./tools/caller-identity";
 import { createDiagnosisRuntimeCapabilities } from "./runtime-registry";
 import { sessionSystemPrompt } from "./prompt-context";
 import { createDispatchAgentTool } from "./tools/dispatch-agent-tool";
@@ -15,9 +15,8 @@ export interface ManagedSession {
   skillsIndex: string;
   roles: DiagnosisAgentRole[];
   context?: SessionContext;
-  /** Domain of the request that started the current response. Not a stored permission. */
-  domainId?: string;
-  tkHolder: TkHolder;
+  /** Caller of the request that started the current response. Not a stored permission. */
+  caller: DiagnosisCallerIdentity;
   latestResponse?: SessionResponseStream;
   currentExecution?: Promise<void>;
   turnId?: string;
@@ -41,15 +40,19 @@ export function buildResponseTools(
   ];
 }
 
-export function createManagedSession(sessionId: string, context?: SessionContext): ManagedSession {
-  const runtime = createDiagnosisRuntimeCapabilities();
+export function createManagedSession(
+  sessionId: string,
+  context: SessionContext | undefined,
+  caller: DiagnosisCallerIdentity
+): ManagedSession {
+  const runtime = createDiagnosisRuntimeCapabilities(caller);
   return {
     sessionId,
     baseTools: runtime.tools,
     skillsIndex: runtime.skillsIndex,
     roles: runtime.roles,
     context,
-    tkHolder: runtime.tkHolder,
+    caller,
   };
 }
 

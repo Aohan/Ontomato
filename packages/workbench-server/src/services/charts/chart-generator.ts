@@ -133,7 +133,7 @@ export async function generateChartsFromCandidates(params: {
       const availableSkillsInfo = availableSkills
         .map(
           ({ skill, content }) =>
-            `### ${skill.id}\ntitle: ${skill.manifest.title || skill.id}\nsupportedChartTypes: ${(skill.manifest.supportedChartTypes || []).join(", ")}\n${content}`
+            `### ${skill.id}\ntitle: ${skill.manifest.title || skill.id}\n${content}`
         )
         .join("\n\n");
       const candidatesInfo = candidates
@@ -170,9 +170,7 @@ export async function generateChartsFromCandidates(params: {
           (candidate) => candidate.sourceSubQuestion === plan.sourceSubQuestion
         );
         const skill = availableSkills.find(
-          ({ skill: candidate }) =>
-            candidate.id === plan.skillId &&
-            candidate.manifest.supportedChartTypes?.includes(plan.chartType)
+          ({ skill: candidate }) => candidate.id === plan.skillId
         )?.skill;
         if (!source?.data.length || !skill || !hasValidFields(plan, source.data)) {
           diagnose("invalid_plan", tApp("queryFixed.1", { v0: (plan.title) }));

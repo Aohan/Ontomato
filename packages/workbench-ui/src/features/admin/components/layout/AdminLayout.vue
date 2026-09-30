@@ -15,7 +15,8 @@ import {
 import { useTheme } from "../../../../composables/useTheme";
 import { useLocale } from "../../../../composables/useLocale";
 import { workbenchLanguage } from "../../../../i18n";
-import { adminAccessKey, type AdminLayoutConfig } from "../../navigation";
+import { adminAccessKey, type AdminLayoutConfig, type AdminMenuItem } from "../../navigation";
+import { governanceReturnPath } from "../../../knowledge-governance";
 
 const props = defineProps<AdminLayoutConfig>();
 provide(adminAccessKey, props.access);
@@ -52,6 +53,9 @@ function openLangMenu() {
 
 const collapsed = ref(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1");
 
+// A menu item is visible with any one of its permissions.
+const canSeeItem = (item: AdminMenuItem) => item.permissions.some((p) => props.access.can(p));
+
 // A tab is visible if it has permission itself or at least one menu item in its group does; menu items are filtered one by one.
 // Landing path when switching groups: the home page for a home-style tab, otherwise the group's first visible menu item.
 const navGroups = computed(() =>
@@ -59,13 +63,11 @@ const navGroups = computed(() =>
     .filter(
       (group) =>
         props.access.can(group.permission) ||
-        props.items.some(
-          (item) => item.groupKey === group.key && props.access.can(item.permission)
-        )
+        props.items.some((item) => item.groupKey === group.key && canSeeItem(item))
     )
     .map((group) => {
       const items = props.items
-        .filter((item) => item.groupKey === group.key && props.access.can(item.permission))
+        .filter((item) => item.groupKey === group.key && canSeeItem(item))
         .map((item) => ({ path: item.path, title: t(item.titleKey), icon: item.icon }));
       return { ...group, title: t(group.titleKey), items, landing: group.homePath ?? items[0]?.path };
     })
@@ -85,26 +87,28 @@ const currentGroupItems = computed(() => {
 // Tabs without menu items (home-style tabs) hide the sidebar so the content fills the page.
 const showAside = computed(() => currentGroupItems.value.length > 0);
 
+// The route whose menu item and tab are highlighted: knowledge governance has two entries and follows the page it was opened from.
+const navRoute = computed(() =>
+  route.name === "KnowledgeGovernance" ? router.resolve(governanceReturnPath(route.query)) : route
+);
+
 const activeMenu = computed(() => {
-  if (route.path.startsWith("/admin/intelligence-assets/")) {
+  const path = navRoute.value.path;
+  if (path.startsWith("/admin/intelligence-assets/")) {
     return "/admin/intelligence-assets/metric-views";
   }
-  if (route.path === "/admin/hot-data") {
-    return "/admin/analysis";
-  }
-  if (route.path === "/admin/skills/analysis" || route.path === "/admin/skills/visualization") {
-    return "/admin/skills";
-  }
-  if (route.path.startsWith("/admin/knowledge-governance")) {
-    return "/admin/analysis";
-  }
-  return route.path;
+  return path;
 });
 
+// Menu pages show their title and one-line description above the content; other pages (home-style tabs, knowledge governance) do not.
+const pageHeading = computed(() => props.items.find((item) => item.path === route.path));
+
+// Every navigation re-syncs the tab with the highlighted route's group. The source is a getter on the current location:
+// navRoute itself is the same route object for ordinary pages, so watching it would not fire.
 watch(
-  route,
-  (newRoute) => {
-    const group = newRoute.meta?.group as string;
+  () => route.fullPath,
+  () => {
+    const group = navRoute.value.meta?.group as string;
     if (group && group !== activeGroup.value) {
       activeGroup.value = group;
     }
@@ -123,7 +127,7 @@ watch(
   () => props.access.ready,
   (ready) => {
     if (!ready || !hasRealGroups.value) return;
-    const currentGroup = route.meta?.group as string | undefined;
+    const currentGroup = navRoute.value.meta?.group as string | undefined;
     if (currentGroup && navGroups.value.some((g) => g.key === currentGroup)) {
       activeGroup.value = currentGroup;
       return;
@@ -322,9 +326,15 @@ function openObserve() {
             </el-menu-item>
           </el-menu>
         </aside>
-        <main class="admin-main">
-          <router-view />
-        </main>
+        <div class="admin-content">
+          <header v-if="pageHeading" class="admin-page-heading">
+            <h1>{{ t(pageHeading.titleKey) }}</h1>
+            <p>{{ t(pageHeading.descriptionKey) }}</p>
+          </header>
+          <main class="admin-main">
+            <router-view />
+          </main>
+        </div>
       </div>
     </template>
   </div>
@@ -641,6 +651,35 @@ function openObserve() {
   overflow-y: auto;
   background: var(--el-bg-color-page);
   min-width: 0;
+  min-height: 0;
+}
+
+/* Page heading stays above the scrolling page content. */
+.admin-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--el-bg-color-page);
+}
+
+.admin-page-heading {
+  flex-shrink: 0;
+  padding: var(--spacing-xl) var(--spacing-xl) 0;
+}
+
+.admin-page-heading h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--el-text-color-primary);
+}
+
+.admin-page-heading p {
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
 }
 
 @media (max-width: 640px) {
@@ -668,6 +707,10 @@ function openObserve() {
 
   .admin-main {
     padding: var(--spacing-md);
+  }
+
+  .admin-page-heading {
+    padding: var(--spacing-md) var(--spacing-md) 0;
   }
 }
 

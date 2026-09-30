@@ -1159,7 +1159,10 @@ public class PostgreAdapter implements DataAdapter {
 		String pk = DslUtil.getPrimaryKey(classDef);
 		String sql = "select " + attrName + " from " + fullClassName + " where " + pk + " = '" + objectId.replace("'", "''") + "'";
 		JSONArray rows = querySql(connection, sql);
-		Object value = (rows != null && rows.size() > 0) ? rows.getJSONObject(0).get(attrName) : null;
+		if (rows == null || rows.isEmpty()) {
+			throw new IllegalArgumentException("Object " + objectId + " of class " + fullClassName + " does not exist");
+		}
+		Object value = rows.getJSONObject(0).get(attrName);
 		return DslUtil.parseVectorAttr(value);
 	}
 

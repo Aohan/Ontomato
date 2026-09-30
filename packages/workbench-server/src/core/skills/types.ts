@@ -63,7 +63,6 @@ export interface SkillInput {
   availableRenderSkills?: Array<{
     id: string;
     title: string;
-    supportedChartTypes?: string[];
     description?: string;
   }>;
 }

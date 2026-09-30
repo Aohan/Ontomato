@@ -3,17 +3,17 @@ import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
 import { computed, reactive, ref, shallowRef } from "vue";
 import { Cpu, Plus, Trash2 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import { formatTimeout, type ModelEntry } from "../../types";
+import { formatTimeout, type ModelEntry, type SaveAction } from "../../types";
 import CustomRequestParametersEditor from "./CustomRequestParametersEditor.vue";
 
 const { t } = useI18n();
 
 const props = defineProps<{
-  disabled: boolean;
+  /** The saved list. Entries are plain objects; adding or editing hands a whole new list to save instead of mutating it. */
+  models: ModelEntry[];
+  saving: boolean;
+  save: SaveAction<ModelEntry[]>;
 }>();
-
-// Entries are plain objects: the parent holds the list by a shallow ref, and adding or editing replaces the whole list instead of mutating it.
-const models = defineModel<ModelEntry[]>("models", { required: true });
 
 const emit = defineEmits<{
   remove: [index: number];
@@ -80,7 +80,7 @@ function openAddDialog() {
 }
 
 function openEditDialog(index: number) {
-  const entry = models.value[index]!;
+  const entry = props.models[index]!;
   editingIndex.value = index;
   editingBaseline = entry;
   Object.assign(draft, {
@@ -104,14 +104,14 @@ function openEditDialog(index: number) {
   dialogVisible.value = true;
 }
 
-function confirmDialog() {
+async function saveDialog() {
   const staged: ModelEntry = {
     ...editingBaseline,
     // The config ID is the identity roles refer to, so existing entries cannot change it; the display name can change at any time without affecting references.
     name: draft.name.trim(),
     displayName: draft.displayName.trim(),
     baseUrl: draft.baseUrl,
-    // Keys are a plain array of original values: deleting removes the item, and save and test both submit the draft as-is.
+    // Keys are a plain array of original values: deleting removes the item and the rest is submitted as-is.
     apiKeys: [...draft.apiKeys],
     modelName: draft.modelName,
     maxTokens: draft.maxTokens,
@@ -123,9 +123,12 @@ function confirmDialog() {
     maxCompletionTokens: draft.maxCompletionTokens,
     customRequestParameters: customParams.value,
   };
-  models.value = isNew.value
-    ? [...models.value, staged]
-    : models.value.map((entry, index) => (index === editingIndex.value ? staged : entry));
+  const saved = await props.save(
+    isNew.value
+      ? [...props.models, staged]
+      : props.models.map((entry, index) => (index === editingIndex.value ? staged : entry))
+  );
+  if (!saved) return;
   customParams.value = {};
   dialogVisible.value = false;
 }
@@ -146,21 +149,21 @@ function keyStatus(entry: ModelEntry): string {
         :icon="Plus"
         size="small"
         class="header-action"
-        :disabled="props.disabled"
+        :disabled="props.saving"
         @click="openAddDialog"
       >
         {{ t("admin.addModel") }}
       </el-button>
     </div>
     <div class="card-body">
-      <el-empty v-if="models.length === 0" :description="t('admin.modelListEmpty')">
-        <el-button type="primary" :disabled="props.disabled" @click="openAddDialog">
+      <el-empty v-if="props.models.length === 0" :description="t('admin.modelListEmpty')">
+        <el-button type="primary" :disabled="props.saving" @click="openAddDialog">
           {{ t("admin.addModel") }}
         </el-button>
       </el-empty>
       <ul v-else class="model-list">
-        <li v-for="(entry, index) in models" :key="entry.name" class="model-item">
-          <div class="model-main">
+        <li v-for="(entry, index) in props.models" :key="entry.name" class="model-item">
+          <div class="model-info">
             <span class="model-name">{{ entry.displayName }}</span>
             <code
               v-if="entry.displayName !== entry.name"
@@ -169,8 +172,6 @@ function keyStatus(entry: ModelEntry): string {
             >
               {{ entry.name }}
             </code>
-          </div>
-          <div class="model-sub">
             <code class="model-id">{{ entry.modelName }}</code>
             <el-tooltip :content="entry.baseUrl" placement="top" :disabled="!entry.baseUrl">
               <span class="model-url">{{ entry.baseUrl }}</span>
@@ -178,13 +179,13 @@ function keyStatus(entry: ModelEntry): string {
             <span class="model-keys">{{ keyStatus(entry) }}</span>
           </div>
           <div class="model-actions">
-            <el-button link type="primary" :disabled="props.disabled" @click="emit('test', entry)">
+            <el-button link type="primary" :disabled="props.saving" @click="emit('test', entry)">
               {{ t("common.testModel") }}
             </el-button>
             <el-button
               link
               type="primary"
-              :disabled="props.disabled"
+              :disabled="props.saving"
               @click="openEditDialog(index)"
             >
               {{ t("common.edit") }}
@@ -192,7 +193,7 @@ function keyStatus(entry: ModelEntry): string {
             <el-button
               link
               type="danger"
-              :disabled="props.disabled"
+              :disabled="props.saving"
               @click="emit('remove', index)"
             >
               {{ t("common.delete") }}
@@ -335,10 +336,11 @@ function keyStatus(entry: ModelEntry): string {
           <el-button @click="dialogVisible = false">{{ t("common.cancel") }}</el-button>
           <el-button
             type="primary"
+            :loading="props.saving"
             :disabled="!draftComplete || !customRequestParametersValid"
-            @click="confirmDialog"
+            @click="saveDialog"
           >
-            {{ isNew ? t("admin.addModel") : t("admin.doneEdit") }}
+            {{ t("common.save") }}
           </el-button>
         </template>
       </el-dialog>

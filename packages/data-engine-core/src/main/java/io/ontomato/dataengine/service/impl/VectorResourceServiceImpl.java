@@ -50,109 +50,102 @@ public class VectorResourceServiceImpl implements VectorResourceService {
 
 	@Override
 	public VectorResource saveAndAttach(VectorResource vectorResource, InputStream is, String suffix, String domainId) {
-		// Preserve the original text before insert overwrites content with the cleaned brief.
 		String originalText = vectorResource.getContent();
-		VectorResource saved = vectorResourceDao.insert(vectorResource, is, suffix, domainId);
-		if (saved == null) {
-			return null;
-		}
+		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
+		Map<String, Object> classDef = requireClassDef(vectorResource.getClassName(), jsonRule);
+
+		BusinessConfig businessConfig = businessConfigService.get(domainId);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
+
+		JSONArray current;
 		try {
-			attachToObject(saved, originalText, domainId);
+			current = adapter.queryVectorAttr(classDef, vectorResource.getAttrName(), vectorResource.getObjectId());
+		} catch (RuntimeException re) {
+			throw re;
 		} catch (Exception e) {
-			// The vector resource is already persisted; an attach failure should not roll it back silently.
-			log.error("attach vector resource to object failed: " + e.getMessage(), e);
+			throw new RuntimeException("Failed to query vector attribute: " + e.getMessage(), e);
+		}
+
+		VectorResource saved = vectorResourceDao.insert(vectorResource, is, suffix, domainId);
+		try {
+			JSONArray updated = new JSONArray();
+			boolean exists = false;
+			for (int i = 0; i < current.size(); i++) {
+				JSONObject item = current.getJSONObject(i);
+				if (saved.getPath().equals(item.getString("path"))) {
+					exists = true;
+				}
+				updated.add(item);
+			}
+			if (!exists) {
+				JSONObject newItem = new JSONObject();
+				newItem.put("path", saved.getPath());
+				newItem.put("text", originalText);
+				updated.add(newItem);
+			}
+			writeObjectVectorAttr(adapter, classDef, saved.getAttrName(), saved.getObjectId(), updated);
+		} catch (Exception e) {
+			try {
+				vectorResourceDao.delete(saved.getClassName(), saved.getAttrName(), saved.getObjectId(), saved.getPath(), domainId);
+			} catch (Exception rollbackEx) {
+				e.addSuppressed(rollbackEx);
+			}
+			if (e instanceof RuntimeException re) {
+				throw re;
+			}
+			throw new RuntimeException("attach vector resource to object failed: " + e.getMessage(), e);
 		}
 		return saved;
 	}
 
-	private void attachToObject(VectorResource saved, String originalText, String domainId) throws Exception {
-		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
-		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
-		Map<String, Object> classDef = null;
-		for (Map<String, Object> cd : classDefs) {
-			if (saved.getClassName().equals(cd.get("className"))) {
-				classDef = cd;
-				break;
-			}
-		}
-		if (classDef == null) {
-			log.warn("classDef not found for className: {}", saved.getClassName());
-			return;
-		}
-
-		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
-
-		// Read the object's current vector attribute.
-		JSONArray current = adapter.queryVectorAttr(classDef, saved.getAttrName(), saved.getObjectId());
-
-		// Deduplicate by path, then append the new entry.
-		JSONArray updated = new JSONArray();
-		boolean exists = false;
-		for (int i = 0; i < current.size(); i++) {
-			JSONObject item = current.getJSONObject(i);
-			if (saved.getPath().equals(item.getString("path"))) {
-				exists = true;
-			}
-			updated.add(item);
-		}
-		if (!exists) {
-			JSONObject newItem = new JSONObject();
-			newItem.put("path", saved.getPath());
-			newItem.put("text", originalText);
-			updated.add(newItem);
-		}
-
-		// Write back the updated vector attribute.
-		String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
-		JSONObject setValues = new JSONObject();
-		setValues.put(saved.getAttrName(), updated);
-		JSONObject where = new JSONObject();
-		where.put("field", pkField);
-		where.put("operator", "=");
-		where.put("value", saved.getObjectId());
-		adapter.updateObjects(null, classDef, setValues, where);
-	}
-
 	@Override
 	public void deleteAndDetach(String className, String attrName, String objectId, String path, String domainId) {
-		vectorResourceDao.delete(className, attrName, objectId, path, domainId);
-		try {
-			detachFromObject(className, attrName, objectId, path, domainId);
-		} catch (Exception e) {
-			// The vector record/file is already removed; a detach failure should not surface as a hard error.
-			log.error("detach vector resource from object failed: " + e.getMessage(), e);
-		}
-	}
-
-	private void detachFromObject(String className, String attrName, String objectId, String path, String domainId) throws Exception {
 		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
-		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
-		Map<String, Object> classDef = null;
-		for (Map<String, Object> cd : classDefs) {
-			if (className.equals(cd.get("className"))) {
-				classDef = cd;
-				break;
-			}
-		}
-		if (classDef == null) {
-			log.warn("classDef not found for className: {}", className);
-			return;
-		}
+		Map<String, Object> classDef = requireClassDef(className, jsonRule);
 
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
 		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 
-		JSONArray current = adapter.queryVectorAttr(classDef, attrName, objectId);
-
-		JSONArray updated = new JSONArray();
-		for (int i = 0; i < current.size(); i++) {
-			JSONObject item = current.getJSONObject(i);
-			if (!path.equals(item.getString("path"))) {
-				updated.add(item);
-			}
+		JSONArray current;
+		try {
+			current = adapter.queryVectorAttr(classDef, attrName, objectId);
+		} catch (RuntimeException re) {
+			throw re;
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to query vector attribute: " + e.getMessage(), e);
 		}
 
+		vectorResourceDao.delete(className, attrName, objectId, path, domainId);
+		try {
+			JSONArray updated = new JSONArray();
+			for (int i = 0; i < current.size(); i++) {
+				JSONObject item = current.getJSONObject(i);
+				if (!path.equals(item.getString("path"))) {
+					updated.add(item);
+				}
+			}
+			writeObjectVectorAttr(adapter, classDef, attrName, objectId, updated);
+		} catch (RuntimeException re) {
+			throw re;
+		} catch (Exception e) {
+			throw new RuntimeException("detach vector resource from object failed: " + e.getMessage(), e);
+		}
+	}
+
+	private Map<String, Object> requireClassDef(String className, Map<String, Object> jsonRule) {
+		List<Map<String, Object>> classDefs = jsonRule != null ? (List<Map<String, Object>>) jsonRule.get("classDef") : null;
+		if (classDefs != null) {
+			for (Map<String, Object> cd : classDefs) {
+				if (className.equals(cd.get("className"))) {
+					return cd;
+				}
+			}
+		}
+		throw new IllegalArgumentException("classDef not found for className: " + className);
+	}
+
+	private void writeObjectVectorAttr(DataAdapter adapter, Map<String, Object> classDef, String attrName,
+			String objectId, JSONArray updated) throws Exception {
 		String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
 		JSONObject setValues = new JSONObject();
 		setValues.put(attrName, updated);

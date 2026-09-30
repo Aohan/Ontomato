@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { MODEL_ROLES, type ModelSettingsData } from "@ontomato/contracts/model-settings";
 import { computed, onMounted, ref, shallowRef } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { adminApi } from "../../admin";
 import { renderMarkdown } from "../../../utils/markdown";
@@ -18,30 +18,31 @@ import {
   type RoleModels,
 } from "../types";
 
-// Model configuration page: the model list and the five role references are an edit draft of the Java model library, saved at once; the Embedding card saves separately.
+// Model configuration page: saved where edited. The page holds the saved model list and role references (from the last load
+// or save response) plus a role draft; model dialogs, model deletion, the role card and the Embedding dialog each save on their own.
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
 
+const unsetRoles = () => Object.fromEntries(MODEL_ROLES.map((role) => [role, null])) as RoleModels;
+
 // The list is held by a shallow ref and replaced as a whole: entries stay plain objects and opaque custom parameters never pass through Vue proxies.
-const models = shallowRef<ModelEntry[]>([]);
-const roles = ref<RoleModels>(
-  Object.fromEntries(MODEL_ROLES.map((role) => [role, null])) as RoleModels
-);
+const savedModels = shallowRef<ModelEntry[]>([]);
+const savedRoles = ref<RoleModels>(unsetRoles());
+const roleDraft = ref<RoleModels>(unsetRoles());
 const loading = ref(false);
 const loadError = ref("");
 const saving = ref(false);
-const savedSignature = ref("");
 
-const signature = () => JSON.stringify({ models: models.value, agents: roles.value });
-const dirty = computed(() => signature() !== savedSignature.value);
+const rolesDirty = computed(() =>
+  MODEL_ROLES.some((role) => roleDraft.value[role] !== savedRoles.value[role])
+);
 
-function applySettings(data: ModelSettingsData) {
-  models.value = data.models;
+function applySaved(data: ModelSettingsData) {
+  savedModels.value = data.models;
   // Unconfigured roles may omit the model field in the response; normalize them to null.
-  roles.value = Object.fromEntries(
+  savedRoles.value = Object.fromEntries(
     MODEL_ROLES.map((role) => [role, data.agents[role].model ?? null])
   ) as RoleModels;
-  savedSignature.value = signature();
 }
 
 async function loadSettings() {
@@ -49,7 +50,8 @@ async function loadSettings() {
   loadError.value = "";
   try {
     const res = await adminApi.getModelSettings();
-    applySettings(res.data as ModelSettingsData);
+    applySaved(res.data as ModelSettingsData);
+    roleDraft.value = { ...savedRoles.value };
   } catch (e: any) {
     loadError.value = e.message || t("admin.loadConfigFailed");
   } finally {
@@ -57,25 +59,56 @@ async function loadSettings() {
   }
 }
 
-function removeModel(index: number) {
-  const removed = models.value[index]!.name;
-  models.value = models.value.filter((_, i) => i !== index);
-  // Roles referring to a deleted model are cleared so no dangling reference is saved.
-  for (const role of MODEL_ROLES) {
-    if (roles.value[role] === removed) roles.value[role] = null;
+// The backend takes models and roles as one document; each save sends the part being changed together with the saved rest.
+async function saveSettings(models: ModelEntry[], agents: RoleModels): Promise<boolean> {
+  saving.value = true;
+  try {
+    const res = await adminApi.saveModelSettings({ models, agents });
+    applySaved(res.data as ModelSettingsData);
+    ElMessage.success(t("admin.modelSaveSuccess"));
+    return true;
+  } catch (e: any) {
+    ElMessage.error(e.message || t("admin.saveFailed"));
+    return false;
+  } finally {
+    saving.value = false;
   }
 }
 
-async function saveSettings() {
-  saving.value = true;
-  try {
-    const res = await adminApi.saveModelSettings({ models: models.value, agents: roles.value });
-    applySettings(res.data as ModelSettingsData);
-    ElMessage.success(t("admin.modelSaveSuccess"));
-  } catch (e: any) {
-    ElMessage.error(e.message || t("admin.saveFailed"));
-  } finally {
-    saving.value = false;
+// Model add/edit: saved with the saved roles, so an unsaved role draft is neither submitted nor lost.
+const saveModels = (models: ModelEntry[]) => saveSettings(models, savedRoles.value);
+
+async function saveRoles() {
+  if (await saveSettings(savedModels.value, roleDraft.value)) {
+    roleDraft.value = { ...savedRoles.value };
+  }
+}
+
+async function removeModel(index: number) {
+  const removed = savedModels.value[index]!;
+  const usedBy = MODEL_ROLES.filter((role) => savedRoles.value[role] === removed.name);
+  const name = modelLabel(removed);
+  const confirmed = await ElMessageBox.confirm(
+    usedBy.length
+      ? t("admin.deleteModelInUseConfirm", {
+          name,
+          roles: usedBy.map((role) => t(`admin.modelRoleNames.${role}`)).join(", "),
+        })
+      : t("admin.deleteModelConfirm", { name }),
+    t("common.deleteConfirm"),
+    { type: "warning", confirmButtonText: t("common.delete"), cancelButtonText: t("common.cancel") }
+  ).then(
+    () => true,
+    () => false
+  );
+  if (!confirmed) return;
+  // Roles referring to the deleted model become not configured in the same save, so no dangling reference is stored.
+  const agents = { ...savedRoles.value };
+  for (const role of usedBy) agents[role] = null;
+  const models = savedModels.value.filter((_, i) => i !== index);
+  if (!(await saveSettings(models, agents))) return;
+  for (const role of MODEL_ROLES) {
+    if (roleDraft.value[role] === removed.name) roleDraft.value[role] = null;
   }
 }
 
@@ -101,7 +134,6 @@ async function runModelTest() {
   testRunning.value = true;
   testResult.value = "";
   try {
-    // Test with the current draft entry without saving.
     const res = await adminApi.testModel(testModel.value!, testContent.value);
     testResult.value = res.data as string;
   } catch (e: any) {
@@ -130,14 +162,17 @@ async function loadEmbedding() {
   }
 }
 
-async function saveEmbeddingConfig() {
+// The dialog hands over the whole snapshot, which keeps fields it does not show (such as customHeaders).
+async function saveEmbeddingConfig(model: EmbeddingModelConfig): Promise<boolean> {
   savingEmbedding.value = true;
   try {
-    // Submit the whole snapshot to keep fields not shown in the dialog, such as customHeaders.
-    await adminApi.saveEmbeddingModel(embedding.value);
+    await adminApi.saveEmbeddingModel(model);
+    embedding.value = model;
     ElMessage.success(t("admin.embeddingSaveSuccess"));
+    return true;
   } catch (e: any) {
     ElMessage.error(e.message || t("admin.saveFailed"));
+    return false;
   } finally {
     savingEmbedding.value = false;
   }
@@ -185,26 +220,27 @@ onMounted(() => {
     </div>
     <template v-else>
       <ModelListCard
-        v-model:models="models"
-        :disabled="saving"
+        :models="savedModels"
+        :saving="saving"
+        :save="saveModels"
         @remove="removeModel"
         @test="openModelTest"
       />
-      <RoleModelsCard v-model:roles="roles" :models="models" :disabled="saving" />
-      <div class="model-settings-actions">
-        <el-tag v-if="dirty" type="warning" size="small">{{ t("admin.unsaved") }}</el-tag>
-        <el-button type="primary" :loading="saving" @click="saveSettings">
-          {{ t("common.save") }}
-        </el-button>
-      </div>
+      <RoleModelsCard
+        v-model:roles="roleDraft"
+        :models="savedModels"
+        :saving="saving"
+        :dirty="rolesDirty"
+        @save="saveRoles"
+      />
     </template>
 
     <EmbeddingModelConfigCard
-      v-model:model="embedding"
+      :model="embedding"
       :loading="embeddingLoading"
       :saving="savingEmbedding"
       :load-error="embeddingLoadError"
-      @save="saveEmbeddingConfig"
+      :save="saveEmbeddingConfig"
       @test="testEmbeddingDialogVisible = true"
       @retry="loadEmbedding"
     />
@@ -242,21 +278,5 @@ onMounted(() => {
   flex-direction: column;
   gap: var(--spacing-lg);
   min-width: 0;
-}
-
-/* The single save action for the model list and role references, right after the role table; the Embedding card has its own save. */
-.model-settings-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-@media (max-width: 640px) {
-  .model-settings-actions :deep(.el-button) {
-    min-width: 44px;
-    min-height: 44px;
-  }
 }
 </style>

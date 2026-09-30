@@ -16,6 +16,7 @@ import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.core.utils.ProductionLoginCipher;
+import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
@@ -49,6 +50,9 @@ public class EnvServiceImpl implements EnvService {
 
 	@Autowired
 	private ProductionEnvironmentLoginPolicy productionEnvironmentLoginPolicy;
+
+	@Autowired
+	private VectorResourceDao vectorResourceDao;
 	
 	@Override
 	public void importSchema(User user) throws Exception {
@@ -110,6 +114,7 @@ public class EnvServiceImpl implements EnvService {
 			adapter.truncateNamespace(namespace);
 			adapter.dropNamespace(namespace);
 			adapter.createNamespace(namespace);
+			vectorResourceDao.clearByDomain(domainId);
 			// Create class
 			for (Map<String, Object> classDef : classDefs) {
 				adapter.createClass(namespace == null ? "" : namespace, classDef);
@@ -161,13 +166,18 @@ public class EnvServiceImpl implements EnvService {
 			Map<String, Object> classDef = classDefMap.get(className);
 			if (classDef != null) {
 				Set<String> attrNameSet = new HashSet<String>();
+				Set<String> vectorAttrs = new HashSet<String>();
 				String pk = "id";
 				List<Map<String, Object>> attrDefs = (List<Map<String, Object>>)classDef.get("attrs");
 				for (Map<String, Object> attrDef : attrDefs) {
 					if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
-						attrNameSet.add((String)attrDef.get("name"));
+						String attrName = (String)attrDef.get("name");
+						attrNameSet.add(attrName);
+						if ("vector".equals(attrDef.get("type"))) {
+							vectorAttrs.add(attrName);
+						}
 						if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
-							pk = (String)attrDef.get("name");
+							pk = attrName;
 						}
 					}
 				}
@@ -178,6 +188,12 @@ public class EnvServiceImpl implements EnvService {
 					for (String key : row.keySet()) {
 						if (!attrNameSet.contains(key)) {
 							throw new Exception("The row of Class[" + className + "] has a property[" + key + "], but that property does not belong to Class[" + className + "].");
+						}
+						if (vectorAttrs.contains(key)) {
+							Object val = row.get(key);
+							if (val != null && !(val instanceof String s && s.trim().isEmpty())) {
+								throw new Exception("The row of Class[" + className + "] has a vector property[" + key + "] with non-empty value, but vector properties can only be written via the upload interface.");
+							}
 						}
 					}
 					if (row.get(pk) != null && !"".equals(row.getString(pk).trim())) {
@@ -244,6 +260,12 @@ public class EnvServiceImpl implements EnvService {
 			// Clear old data
 			Map<String, Object> classDef = classDefMap.get(className);
 			adapter.deleteObjects(null, classDef, null);
+			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>) classDef.get("attrs");
+			for (Map<String, Object> attrDef : attrDefs) {
+				if ("vector".equals(attrDef.get("type"))) {
+					vectorResourceDao.clear(className, (String) attrDef.get("name"), domainId);
+				}
+			}
 			// Insert data
 			adapter.insertObjects(null, classDef, objs);
 		}
@@ -257,11 +279,6 @@ public class EnvServiceImpl implements EnvService {
 			String targetObjId = rel.getString("targetObjId");
 			adapter.createEdge(null, relationName, sourceClassName, sourceObjId, targetClassName, targetObjId);
 		}
-	}
-	
-	private boolean isSupportedType(String type) {
-		return "varchar".equals(type) || "text".equals(type) || "int".equals(type) || "long".equals(type)
-				|| "double".equals(type) || "date".equals(type) || "timestamp".equals(type);
 	}
 
 	@Override

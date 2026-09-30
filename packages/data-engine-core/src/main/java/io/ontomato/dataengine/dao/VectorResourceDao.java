@@ -3,10 +3,13 @@ package io.ontomato.dataengine.dao;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -96,17 +99,31 @@ public class VectorResourceDao extends BaseDao {
 	}
 
 	public VectorResource insert(VectorResource vectorResource, InputStream is, String suffix, String domainId) {
-		FileOutputStream fos = null;
-		try {
-			String indexName = generateIndexName(vectorResource.getClassName(), vectorResource.getAttrName(), domainId);
+		if (vectorResource.getContent() == null || vectorResource.getContent().trim().isEmpty()) {
+			throw new IllegalArgumentException("content is required");
+		}
+		if (is != null) {
+			if (suffix == null || !suffix.matches("^[a-zA-Z0-9]{1,16}$")) {
+				throw new IllegalArgumentException("Invalid suffix: must be 1-16 alphanumeric characters");
+			}
+		} else {
+			suffix = "txt";
+		}
 
-			// File storage
-			File dir = new File("conf/" + dirName + "/" + indexName);
-			dir.mkdirs();
-			String id = UUID.randomUUID().toString();
-			File file = new File(dir, id + "." + suffix);
-			fos = new FileOutputStream(file);
-			fos.write(is.readAllBytes());
+		String indexName = generateIndexName(vectorResource.getClassName(), vectorResource.getAttrName(), domainId);
+		File dir = new File("conf/" + dirName + "/" + indexName);
+		dir.mkdirs();
+		String id = UUID.randomUUID().toString();
+		File file = new File(dir, id + "." + suffix);
+
+		try {
+			try (FileOutputStream fos = new FileOutputStream(file)) {
+				if (is != null) {
+					fos.write(is.readAllBytes());
+				} else {
+					fos.write(vectorResource.getContent().getBytes(StandardCharsets.UTF_8));
+				}
+			}
 
 			vectorResource.setId(id);
 			vectorResource.setPath(indexName + "/" + id + "." + suffix);
@@ -132,16 +149,14 @@ public class VectorResourceDao extends BaseDao {
 
 			return vectorResource;
 		} catch (Exception e) {
-			log.error(e.getMessage(), e);
-			return null;
-		} finally {
-			if (fos != null) {
-				try {
-					fos.close();
-				} catch (Exception e) {
-					log.error(e.getMessage(), e);
-				}
+			if (file.exists()) {
+				file.delete();
 			}
+			log.error(e.getMessage(), e);
+			if (e instanceof RuntimeException re) {
+				throw re;
+			}
+			throw new RuntimeException("Failed to insert vector resource: " + e.getMessage(), e);
 		}
 	}
 
@@ -209,6 +224,10 @@ public class VectorResourceDao extends BaseDao {
 			} else {
 				log.error("Exception:{},question:{},findVector length={},queryString:\n{}", e.getMessage(), question, findVector.length, queryString);
 			}
+			if (e instanceof RuntimeException re) {
+				throw re;
+			}
+			throw new RuntimeException("Vector search failed: " + e.getMessage(), e);
 		}
 		return vectorResources;
 	}
@@ -247,7 +266,9 @@ public class VectorResourceDao extends BaseDao {
 		if (deleted == 0) {
 			throw new IllegalArgumentException("Vector resource not found for object " + objectId + ": " + path);
 		}
-		file.toFile().delete();
+		if (!file.toFile().delete()) {
+			throw new IllegalStateException("Failed to delete vector resource file: " + file.toAbsolutePath());
+		}
 	}
 
 	/**
@@ -365,6 +386,54 @@ public class VectorResourceDao extends BaseDao {
 		for (File file : files) {
 			if (file.isFile() && !file.delete()) {
 				log.warn("Failed to delete vector resource file: {}", file.getAbsolutePath());
+			}
+		}
+	}
+
+	public void clear(String className, String attrName, String domainId) {
+		String indexName = this.generateIndexName(className, attrName, domainId);
+		clearIndex(indexName);
+	}
+
+	public void clearByDomain(String domainId) {
+		Set<String> indexNames = new HashSet<>();
+		File rootDir = new File("conf/" + dirName);
+		if (rootDir.exists() && rootDir.isDirectory()) {
+			File[] dirs = rootDir.listFiles();
+			if (dirs != null) {
+				for (File dir : dirs) {
+					if (dir.isDirectory() && dir.getName().startsWith("vector-") && dir.getName().endsWith("-" + domainId)) {
+						indexNames.add(dir.getName());
+					}
+				}
+			}
+		}
+		List<String> tables = jdbcTemplate.queryForList(
+				"SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name LIKE ?",
+				String.class,
+				"vector-%-" + domainId);
+		if (tables != null) {
+			indexNames.addAll(tables);
+		}
+		for (String indexName : indexNames) {
+			clearIndex(indexName);
+		}
+	}
+
+	private void clearIndex(String indexName) {
+		jdbcTemplate.execute("DROP TABLE IF EXISTS " + quotedTable(indexName));
+		File dir = new File("conf/" + dirName + "/" + indexName);
+		if (dir.exists()) {
+			File[] files = dir.listFiles();
+			if (files != null) {
+				for (File f : files) {
+					if (!f.delete()) {
+						throw new IllegalStateException("Failed to delete vector resource file: " + f.getAbsolutePath());
+					}
+				}
+			}
+			if (!dir.delete()) {
+				throw new IllegalStateException("Failed to delete vector resource directory: " + dir.getAbsolutePath());
 			}
 		}
 	}

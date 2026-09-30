@@ -2,10 +2,12 @@ package io.ontomato.dataengine.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -90,13 +92,88 @@ class VectorResourceServiceImplTest {
 	}
 
 	@Test
-	void aRejectedDeleteLeavesTheObjectUntouched() {
+	void textOnlyUploadSavesTxtResourceAndAttaches() throws Exception {
+		when(vectorResourceDao.insert(any(), eq(null), eq(null), eq("d1"))).thenAnswer(call -> {
+			VectorResource saved = call.getArgument(0);
+			saved.setPath("idx/text.txt");
+			saved.setContent("cleaned");
+			return saved;
+		});
+
+		service.saveAndAttach(resource("pure text"), null, null, "d1");
+
+		JSONObject[] update = capturedUpdate();
+		assertEquals(JSON.parseArray("[{\"path\":\"idx/old.png\",\"text\":\"old\"},{\"path\":\"idx/text.txt\",\"text\":\"pure text\"}]"),
+				update[0].getJSONArray("photos"));
+		assertEquals(where("code", "P1"), update[1]);
+	}
+
+	@Test
+	void attachFailureRollsBackSavedResourceAndThrows() throws Exception {
+		when(vectorResourceDao.insert(any(), any(), any(), eq("d1"))).thenAnswer(call -> {
+			VectorResource saved = call.getArgument(0);
+			saved.setPath("idx/new.png");
+			return saved;
+		});
+		doThrow(new RuntimeException("adapter down")).when(adapter).updateObjects(any(), any(), any(), any());
+
+		assertThrows(RuntimeException.class, () -> service.saveAndAttach(resource("text"), null, null, "d1"));
+
+		verify(vectorResourceDao).delete("/Product", "photos", "P1", "idx/new.png", "d1");
+	}
+
+	@Test
+	void rollbackFailureIsSuppressedWhenAttachFails() throws Exception {
+		when(vectorResourceDao.insert(any(), any(), any(), eq("d1"))).thenAnswer(call -> {
+			VectorResource saved = call.getArgument(0);
+			saved.setPath("idx/new.png");
+			return saved;
+		});
+		doThrow(new RuntimeException("adapter down")).when(adapter).updateObjects(any(), any(), any(), any());
+		RuntimeException rollbackEx = new RuntimeException("rollback down");
+		doThrow(rollbackEx).when(vectorResourceDao).delete("/Product", "photos", "P1", "idx/new.png", "d1");
+
+		RuntimeException thrown = assertThrows(RuntimeException.class, () -> service.saveAndAttach(resource("text"), null, null, "d1"));
+		assertTrue(List.of(thrown.getSuppressed()).contains(rollbackEx));
+	}
+
+	@Test
+	void nonExistentClassDefIsRejectedBeforeSave() {
+		VectorResource res = resource("text");
+		res.setClassName("/NonExistent");
+
+		assertThrows(IllegalArgumentException.class, () -> service.saveAndAttach(res, null, null, "d1"));
+		verifyNoInteractions(vectorResourceDao);
+	}
+
+	@Test
+	void nonExistentObjectUploadFailsWithoutLeavingFileOrRecord() throws Exception {
+		when(adapter.queryVectorAttr(PRODUCT, "photos", "P1"))
+				.thenThrow(new IllegalArgumentException("Object P1 of class /Product does not exist"));
+
+		InputStream file = new ByteArrayInputStream(new byte[] {1});
+		assertThrows(IllegalArgumentException.class, () -> service.saveAndAttach(resource("text"), file, "png", "d1"));
+		verifyNoInteractions(vectorResourceDao);
+	}
+
+	@Test
+	void nonExistentObjectDeleteFailsWithoutTouchingDao() throws Exception {
+		when(adapter.queryVectorAttr(PRODUCT, "photos", "P1"))
+				.thenThrow(new IllegalArgumentException("Object P1 of class /Product does not exist"));
+
+		assertThrows(IllegalArgumentException.class,
+				() -> service.deleteAndDetach("/Product", "photos", "P1", "idx/old.png", "d1"));
+		verifyNoInteractions(vectorResourceDao);
+	}
+
+	@Test
+	void aRejectedDeleteLeavesTheObjectUntouched() throws Exception {
 		doThrow(new IllegalArgumentException("not found")).when(vectorResourceDao)
 				.delete("/Product", "photos", "P1", "idx/other.png", "d1");
 
 		assertThrows(IllegalArgumentException.class,
 				() -> service.deleteAndDetach("/Product", "photos", "P1", "idx/other.png", "d1"));
-		verifyNoInteractions(adapter);
+		verify(adapter, never()).updateObjects(any(), any(), any(), any());
 	}
 
 	private VectorResource resource(String content) {
