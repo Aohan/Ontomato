@@ -20,6 +20,7 @@ function loadConfig() {
     if (colon < 0) die(`application.yml line is not key: value: ${trimmed}`);
     cfg[trimmed.slice(0, colon).trim()] = trimmed.slice(colon + 1).trim();
   }
+  if (process.env.ONTOMATO_URL) cfg.envUrl = process.env.ONTOMATO_URL;
   return cfg;
 }
 
@@ -271,7 +272,7 @@ async function main() {
   const lang = takeOption(argv, "--lang") ?? "en";
   const cmd = argv[0];
   const cfg = loadConfig();
-  if (!cfg.envUrl) die("envUrl is required in application.yml");
+  if (!cfg.envUrl) die("Set ONTOMATO_URL or envUrl in application.yml");
   const api = { envUrl: cfg.envUrl, lang };
   if (cmd === "dataset-desc") {
     printData(await requestJson(api, "GET", "/admin/getDatasetDesc"));

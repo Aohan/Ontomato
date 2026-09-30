@@ -22,12 +22,15 @@ Build data applications on Ontomato. Every query on a page calls a MetricView an
 
 Every script call goes through the test environment's frontend: `<envUrl>/api/data-query/<backend path>`.
 
-## Configure application.yml
+## Configure the Ontomato URL
+
+Set `envUrl` in `application.yml` to the frontend URL of Ontomato, with no path suffix:
 
 ```yaml
-# Frontend URL of Ontomato, with no path suffix
 envUrl: http://host:3000
 ```
+
+When the environment variable `ONTOMATO_URL` is set, it takes precedence over `envUrl`, so one setting serves every installed Ontomato skill.
 
 ## Commands
 

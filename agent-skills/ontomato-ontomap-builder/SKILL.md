@@ -17,12 +17,15 @@ Ontomato uses one datasource at a time. Pointing it at another source replaces t
 
 Every call goes through the frontend: `<envUrl>/api/data-query/<backend path>`.
 
-## Configure application.yml
+## Configure the Ontomato URL
+
+Set `envUrl` in `application.yml` to the frontend URL of Ontomato, with no path suffix:
 
 ```yaml
-# Frontend URL of Ontomato, with no path suffix
 envUrl: http://host:3000
 ```
+
+When the environment variable `ONTOMATO_URL` is set, it takes precedence over `envUrl`, so one setting serves every installed Ontomato skill.
 
 ## Workflow
 
