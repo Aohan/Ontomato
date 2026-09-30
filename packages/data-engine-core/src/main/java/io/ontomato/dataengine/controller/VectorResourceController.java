@@ -81,7 +81,12 @@ public class VectorResourceController {
 			resource.setClassName(className);
 			resource.setAttrName(attrName);
 			resource.setObjectId(objectId);
-			if (file != null && !file.isEmpty()) {
+			if (file != null) {
+				if (file.isEmpty()) {
+					ret.put("success", false);
+					ret.put("message", "Uploaded file cannot be empty");
+					return ret;
+				}
 				is = file.getInputStream();
 			}
 			VectorResource save = vectorResourceService.saveAndAttach(resource, is, suffix, user.getDomainId());

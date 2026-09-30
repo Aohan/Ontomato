@@ -51,30 +51,39 @@ public class VectorResourceServiceImpl implements VectorResourceService {
 	@Override
 	public VectorResource saveAndAttach(VectorResource vectorResource, InputStream is, String suffix, String domainId) {
 		String originalText = vectorResource.getContent();
-		requireClassDef(vectorResource.getClassName(), jsonRuleDao.query(domainId));
+		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
+		Map<String, Object> classDef = requireClassDef(vectorResource.getClassName(), jsonRule);
+
+		BusinessConfig businessConfig = businessConfigService.get(domainId);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
+
+		JSONArray current;
+		try {
+			current = adapter.queryVectorAttr(classDef, vectorResource.getAttrName(), vectorResource.getObjectId());
+		} catch (RuntimeException re) {
+			throw re;
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to query vector attribute: " + e.getMessage(), e);
+		}
 
 		VectorResource saved = vectorResourceDao.insert(vectorResource, is, suffix, domainId);
 		try {
-			updateObjectVectorAttr(saved.getClassName(), saved.getAttrName(), saved.getObjectId(), domainId, current -> {
-				JSONArray updated = new JSONArray();
-				boolean exists = false;
-				if (current != null) {
-					for (int i = 0; i < current.size(); i++) {
-						JSONObject item = current.getJSONObject(i);
-						if (saved.getPath().equals(item.getString("path"))) {
-							exists = true;
-						}
-						updated.add(item);
-					}
+			JSONArray updated = new JSONArray();
+			boolean exists = false;
+			for (int i = 0; i < current.size(); i++) {
+				JSONObject item = current.getJSONObject(i);
+				if (saved.getPath().equals(item.getString("path"))) {
+					exists = true;
 				}
-				if (!exists) {
-					JSONObject newItem = new JSONObject();
-					newItem.put("path", saved.getPath());
-					newItem.put("text", originalText);
-					updated.add(newItem);
-				}
-				return updated;
-			});
+				updated.add(item);
+			}
+			if (!exists) {
+				JSONObject newItem = new JSONObject();
+				newItem.put("path", saved.getPath());
+				newItem.put("text", originalText);
+				updated.add(newItem);
+			}
+			writeObjectVectorAttr(adapter, classDef, saved.getAttrName(), saved.getObjectId(), updated);
 		} catch (Exception e) {
 			try {
 				vectorResourceDao.delete(saved.getClassName(), saved.getAttrName(), saved.getObjectId(), saved.getPath(), domainId);
@@ -91,20 +100,31 @@ public class VectorResourceServiceImpl implements VectorResourceService {
 
 	@Override
 	public void deleteAndDetach(String className, String attrName, String objectId, String path, String domainId) {
+		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
+		Map<String, Object> classDef = requireClassDef(className, jsonRule);
+
+		BusinessConfig businessConfig = businessConfigService.get(domainId);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
+
+		JSONArray current;
+		try {
+			current = adapter.queryVectorAttr(classDef, attrName, objectId);
+		} catch (RuntimeException re) {
+			throw re;
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to query vector attribute: " + e.getMessage(), e);
+		}
+
 		vectorResourceDao.delete(className, attrName, objectId, path, domainId);
 		try {
-			updateObjectVectorAttr(className, attrName, objectId, domainId, current -> {
-				JSONArray updated = new JSONArray();
-				if (current != null) {
-					for (int i = 0; i < current.size(); i++) {
-						JSONObject item = current.getJSONObject(i);
-						if (!path.equals(item.getString("path"))) {
-							updated.add(item);
-						}
-					}
+			JSONArray updated = new JSONArray();
+			for (int i = 0; i < current.size(); i++) {
+				JSONObject item = current.getJSONObject(i);
+				if (!path.equals(item.getString("path"))) {
+					updated.add(item);
 				}
-				return updated;
-			});
+			}
+			writeObjectVectorAttr(adapter, classDef, attrName, objectId, updated);
 		} catch (RuntimeException re) {
 			throw re;
 		} catch (Exception e) {
@@ -124,17 +144,8 @@ public class VectorResourceServiceImpl implements VectorResourceService {
 		throw new IllegalArgumentException("classDef not found for className: " + className);
 	}
 
-	private void updateObjectVectorAttr(String className, String attrName, String objectId, String domainId,
-			java.util.function.UnaryOperator<JSONArray> attrUpdater) throws Exception {
-		Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
-		Map<String, Object> classDef = requireClassDef(className, jsonRule);
-
-		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
-
-		JSONArray current = adapter.queryVectorAttr(classDef, attrName, objectId);
-		JSONArray updated = attrUpdater.apply(current);
-
+	private void writeObjectVectorAttr(DataAdapter adapter, Map<String, Object> classDef, String attrName,
+			String objectId, JSONArray updated) throws Exception {
 		String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
 		JSONObject setValues = new JSONObject();
 		setValues.put(attrName, updated);

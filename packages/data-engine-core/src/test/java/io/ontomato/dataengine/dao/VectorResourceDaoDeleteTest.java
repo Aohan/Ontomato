@@ -201,6 +201,19 @@ class VectorResourceDaoDeleteTest {
 		}
 	}
 
+	@Test
+	void deleteThrowsWhenFileDeleteFails() throws IOException {
+		Path file = resource(index + "/a.png");
+		File indexDir = file.getParent().toFile();
+		when(jdbcTemplate.update(contains("\"" + index + "\""), eq("P1"), eq(index + "/a.png"))).thenReturn(1);
+		indexDir.setWritable(false);
+		try {
+			assertThrows(IllegalStateException.class, () -> dao.delete(className, "photos", "P1", index + "/a.png", "d1"));
+		} finally {
+			indexDir.setWritable(true);
+		}
+	}
+
 	/** Create a file under conf/vectorResource, recording every directory and file this creates. */
 	private Path resource(String relative) throws IOException {
 		Path file = Paths.get("conf", "vectorResource").resolve(relative).toAbsolutePath().normalize();

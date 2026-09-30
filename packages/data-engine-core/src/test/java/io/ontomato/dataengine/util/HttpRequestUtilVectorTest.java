@@ -17,6 +17,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
@@ -24,8 +26,11 @@ import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.bean.VectorResource;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.config.EmbeddingModelProperties;
+import io.ontomato.dataengine.core.exception.ServiceException;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
+import io.ontomato.dataengine.service.ai.EmbeddingService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 
@@ -94,12 +99,23 @@ class HttpRequestUtilVectorTest {
 		assertEquals(false, results[1].failed());
 	}
 
+	private VectorResourceDao createRealDaoWithFailingEmbedding(String errorMessage) {
+		VectorResourceDao vectorResourceDao = org.mockito.Mockito.spy(new VectorResourceDao());
+		org.mockito.Mockito.doReturn(1).when(vectorResourceDao).getResourceTotal(anyString(), anyString(), anyString());
+		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+		EmbeddingService embeddingService = mock(EmbeddingService.class);
+		when(embeddingService.embedding(anyString(), anyString())).thenThrow(new RuntimeException(errorMessage));
+		EmbeddingModelProperties embeddingModelProperties = new EmbeddingModelProperties();
+		embeddingModelProperties.setDimensions(1024);
+		ReflectionTestUtils.setField(vectorResourceDao, "jdbcTemplate", jdbcTemplate);
+		ReflectionTestUtils.setField(vectorResourceDao, "embeddingService", embeddingService);
+		ReflectionTestUtils.setField(vectorResourceDao, "embeddingModelProperties", embeddingModelProperties);
+		return vectorResourceDao;
+	}
+
 	@Test
 	void vectorSearchFailureReturnsErrorWithoutFallback() throws Exception {
-		VectorResourceDao vectorResourceDao = mock(VectorResourceDao.class);
-		when(vectorResourceDao.getResourceTotal(anyString(), anyString(), anyString())).thenReturn(1);
-		when(vectorResourceDao.find(anyString(), anyInt(), anyString(), anyString(), anyString()))
-				.thenThrow(new RuntimeException("Vector search down"));
+		VectorResourceDao vectorResourceDao = createRealDaoWithFailingEmbedding("Vector search down");
 
 		DataAdapter adapter = mock(DataAdapter.class);
 		DataRagConfig dataRagConfig = new DataRagConfig();
@@ -117,10 +133,7 @@ class HttpRequestUtilVectorTest {
 
 	@Test
 	void getNodeIdsThrowsOnVectorSearchFailure() {
-		VectorResourceDao vectorResourceDao = mock(VectorResourceDao.class);
-		when(vectorResourceDao.getResourceTotal(anyString(), anyString(), anyString())).thenReturn(1);
-		when(vectorResourceDao.find(anyString(), anyInt(), anyString(), anyString(), anyString()))
-				.thenThrow(new RuntimeException("Vector search down"));
+		VectorResourceDao vectorResourceDao = createRealDaoWithFailingEmbedding("Vector search down");
 
 		DataAdapter adapter = mock(DataAdapter.class);
 		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
@@ -129,6 +142,24 @@ class HttpRequestUtilVectorTest {
 				HttpRequestUtil.getNodeIds(adapter, WHERE_DSL, jsonRule, vectorResourceDao,
 						mock(UserDataPermission.class), "d1"));
 		assertTrue(thrown.getMessage().contains("Vector search down"));
+	}
+
+	@Test
+	void rowPermissionFailureThrowsDirectlyInsteadOfReturningFailureResult() {
+		VectorResourceDao vectorResourceDao = mock(VectorResourceDao.class);
+		DataAdapter adapter = mock(DataAdapter.class);
+		DataRagConfig dataRagConfig = new DataRagConfig();
+		dataRagConfig.setCardBaseUrl("http://card");
+		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
+
+		UserDataPermission permission = mock(UserDataPermission.class);
+		when(permission.getRowPermissionMQLByClassName(anyString())).thenAnswer(inv -> {
+			throw new RuntimeException("permission lookup error");
+		});
+
+		assertThrows(ServiceException.class, () ->
+				HttpRequestUtil.getM3Data(dataRagConfig, adapter, PLAIN_DSL, "s1", true, jsonRule,
+						vectorResourceDao, permission, M3Mode.V1, "d1"));
 	}
 
 	@Test

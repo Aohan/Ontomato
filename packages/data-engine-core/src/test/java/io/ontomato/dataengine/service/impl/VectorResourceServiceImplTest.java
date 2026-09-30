@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -146,13 +147,33 @@ class VectorResourceServiceImplTest {
 	}
 
 	@Test
-	void aRejectedDeleteLeavesTheObjectUntouched() {
+	void nonExistentObjectUploadFailsWithoutLeavingFileOrRecord() throws Exception {
+		when(adapter.queryVectorAttr(PRODUCT, "photos", "P1"))
+				.thenThrow(new IllegalArgumentException("Object P1 of class /Product does not exist"));
+
+		InputStream file = new ByteArrayInputStream(new byte[] {1});
+		assertThrows(IllegalArgumentException.class, () -> service.saveAndAttach(resource("text"), file, "png", "d1"));
+		verifyNoInteractions(vectorResourceDao);
+	}
+
+	@Test
+	void nonExistentObjectDeleteFailsWithoutTouchingDao() throws Exception {
+		when(adapter.queryVectorAttr(PRODUCT, "photos", "P1"))
+				.thenThrow(new IllegalArgumentException("Object P1 of class /Product does not exist"));
+
+		assertThrows(IllegalArgumentException.class,
+				() -> service.deleteAndDetach("/Product", "photos", "P1", "idx/old.png", "d1"));
+		verifyNoInteractions(vectorResourceDao);
+	}
+
+	@Test
+	void aRejectedDeleteLeavesTheObjectUntouched() throws Exception {
 		doThrow(new IllegalArgumentException("not found")).when(vectorResourceDao)
 				.delete("/Product", "photos", "P1", "idx/other.png", "d1");
 
 		assertThrows(IllegalArgumentException.class,
 				() -> service.deleteAndDetach("/Product", "photos", "P1", "idx/other.png", "d1"));
-		verifyNoInteractions(adapter);
+		verify(adapter, never()).updateObjects(any(), any(), any(), any());
 	}
 
 	private VectorResource resource(String content) {

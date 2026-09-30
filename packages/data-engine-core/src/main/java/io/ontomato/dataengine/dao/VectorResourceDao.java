@@ -197,6 +197,10 @@ public class VectorResourceDao extends BaseDao {
 			} else {
 				log.error("Exception:{},question:{},findVector length={},queryString:\n{}", e.getMessage(), question, findVector.length, queryString);
 			}
+			if (e instanceof RuntimeException re) {
+				throw re;
+			}
+			throw new RuntimeException("Vector search failed: " + e.getMessage(), e);
 		}
 		return vectorResources;
 	}
@@ -235,7 +239,9 @@ public class VectorResourceDao extends BaseDao {
 		if (deleted == 0) {
 			throw new IllegalArgumentException("Vector resource not found for object " + objectId + ": " + path);
 		}
-		file.toFile().delete();
+		if (!file.toFile().delete()) {
+			throw new IllegalStateException("Failed to delete vector resource file: " + file.toAbsolutePath());
+		}
 	}
 
 	public void rebuildIndex(String className, String attrName, String domainId) {

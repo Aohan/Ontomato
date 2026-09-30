@@ -178,7 +178,6 @@ async function vectorUpload(api, argv) {
   form.append("content", content);
   if (file != null) {
     const ext = path.extname(file).replace(/^\./, "").toLowerCase();
-    if (!ext || !/^[a-zA-Z0-9]+$/.test(ext)) die("file extension must be alphanumeric");
     form.append("suffix", ext);
     form.append("file", new Blob([fs.readFileSync(file)]), path.basename(file));
   }

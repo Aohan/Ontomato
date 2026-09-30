@@ -1021,7 +1021,7 @@ public class DslUtil {
 				JSONObject field = fields.getJSONObject(i);
 				String as = field.getString("as");
 				DslConsanguinity consanguinity = consanguinityMap.get(as);
-				if (consanguinity == null || consanguinity.getClassName() == null || consanguinity.getAttrName() == null) {
+				if (consanguinity == null) {
 					continue;
 				}
 				String className = consanguinity.getClassName();
