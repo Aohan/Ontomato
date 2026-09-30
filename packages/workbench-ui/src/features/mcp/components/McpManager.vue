@@ -152,10 +152,6 @@ onMounted(loadServices);
 
 <template>
   <div class="mcp-manager">
-    <header class="page-heading">
-      <h2>{{ t("nav.mcpService") }}</h2>
-      <p>{{ t("mcp.pageHint") }}</p>
-    </header>
     <el-tabs v-model="activeTab" @tab-change="changeTab">
       <el-tab-pane name="external" :label="t('mcp.externalTab')">
         <div class="section-heading">
@@ -364,23 +360,12 @@ onMounted(loadServices);
 
 <style scoped>
 .mcp-manager {
-  padding: 24px;
-  max-width: 1120px;
-  margin: 0 auto;
   color: var(--el-text-color-primary);
 }
-.page-heading {
-  margin-bottom: 20px;
-}
-h2,
 h3,
 h4,
 p {
   margin: 0;
-}
-h2 {
-  font-size: 22px;
-  font-weight: 600;
 }
 h3 {
   font-size: 17px;
@@ -391,7 +376,6 @@ h4 {
   font-weight: 600;
   overflow-wrap: anywhere;
 }
-.page-heading p,
 .section-heading p {
   margin-top: 8px;
   color: var(--el-text-color-regular);

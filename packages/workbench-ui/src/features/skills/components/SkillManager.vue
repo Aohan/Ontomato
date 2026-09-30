@@ -3,8 +3,8 @@ import type { AnalysisAgentSkillReference as SkillAgentReference } from "@ontoma
 
 import type { SkillInfo } from "@ontomato/contracts/skills";
 
-import { ref, computed, onMounted, watch } from "vue";
-import { useRoute } from "vue-router";
+import { ref, computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { ElMessageBox, ElMessage } from "element-plus";
 import type { UploadFile } from "element-plus";
 import { Search, Plus, Upload } from "lucide-vue-next";
@@ -19,6 +19,7 @@ import { useI18n } from "vue-i18n";
 const { t } = useI18n();
 
 const route = useRoute();
+const router = useRouter();
 const skills = ref<SkillInfo[]>([]);
 const searchQuery = ref("");
 const loading = ref(false);
@@ -29,18 +30,20 @@ const showDebugDialog = ref(false);
 const debuggingSkill = ref<SkillInfo | null>(null);
 const importLoading = ref(false);
 
-const props = defineProps<{
-  category?: "analysis" | "visualization";
-}>();
-
-const currentCategory = computed<"analysis" | "visualization">(() => {
-  if (props.category) return props.category;
-  if (route.query.category === "visualization") return "visualization";
-  return route.meta?.category === "visualization" ? "visualization" : "analysis";
+// Category filter kept in the category query (URL input): only the two category values filter, anything else shows all.
+const categoryFilter = computed<SkillInfo["category"] | "all">({
+  get: () => {
+    const category = route.query.category;
+    return category === "analysis" || category === "visualization" ? category : "all";
+  },
+  set: (category) => {
+    router.replace({ query: category === "all" ? {} : { category } });
+  },
 });
 
 const filteredByCategory = computed(() => {
-  return skills.value.filter((s) => s.category === currentCategory.value);
+  const category = categoryFilter.value;
+  return category === "all" ? skills.value : skills.value.filter((s) => s.category === category);
 });
 
 const filteredSkills = computed(() => {
@@ -246,13 +249,6 @@ async function handleImport(uploadFile: UploadFile) {
   await doImport(file);
 }
 
-watch(
-  () => [props.category, route.meta?.category, route.query.category],
-  () => {
-    searchQuery.value = "";
-  }
-);
-
 onMounted(() => {
   loadSkills();
 });
@@ -261,6 +257,11 @@ onMounted(() => {
 <template>
   <div class="skill-manager">
     <div class="toolbar">
+      <el-radio-group v-model="categoryFilter" :aria-label="t('common.category')">
+        <el-radio-button value="all">{{ t("common.all") }}</el-radio-button>
+        <el-radio-button value="analysis">{{ t("admin.analysis") }}</el-radio-button>
+        <el-radio-button value="visualization">{{ t("admin.visualization") }}</el-radio-button>
+      </el-radio-group>
       <el-input
         v-model="searchQuery"
         :placeholder="t('admin.searchSkill')"
@@ -310,7 +311,7 @@ onMounted(() => {
   <SkillFormDialog
     v-model:visible="showFormDialog"
     :edit-skill="editingSkill"
-    :category="currentCategory"
+    :initial-category="categoryFilter === 'all' ? 'analysis' : categoryFilter"
     @created="handleSkillCreated"
     @updated="handleSkillUpdated"
   />
