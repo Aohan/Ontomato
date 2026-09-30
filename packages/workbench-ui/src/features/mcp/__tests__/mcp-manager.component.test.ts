@@ -39,6 +39,12 @@ beforeEach(() => {
       mcpUrl: "http://localhost/mcp/analysis-agents",
       tools: [],
     },
+    {
+      name: workbenchContent().opsMcpServerName,
+      title: "Ontomato Ops Agent MCP",
+      mcpUrl: "http://localhost/mcp/ops-agent",
+      tools: [{ name: "send", description: "Send a message" }],
+    },
   ]);
 });
 
@@ -55,6 +61,26 @@ describe("MCP manager interactions", () => {
     await flushPromises();
     expect(page.text()).toContain("http://localhost/mcp/analysis-agents");
     expect(api.saveMcpService).not.toHaveBeenCalled();
+    page.unmount();
+  });
+
+  it("shows localized titles, connection hints and the tool count label on recognized published services", async () => {
+    const page = mountPage();
+    await flushPromises();
+    await page
+      .findAll('[role="tab"]')
+      .find((tab) => tab.text() === "Published services")!
+      .trigger("click");
+    await flushPromises();
+    const [analysisCard, opsCard] = page.findAll(".service-card");
+    expect(analysisCard.find("h4").text()).toBe(en.mcp.agentService);
+    expect(analysisCard.find("p.muted").text()).toBe(en.mcp.publishedAuthHint);
+    expect(analysisCard.find("summary").text()).toBe("Available tools · 0");
+    expect(opsCard.find("h4").text()).toBe("Operations agent service");
+    expect(opsCard.find("p.muted").text()).toBe(en.mcp.opsPublishedAuthHint);
+    expect(opsCard.find("summary").text()).toBe("Available tools · 1");
+    expect(page.text()).not.toContain("Ontomato Ops Agent MCP");
+    expect(page.text()).not.toContain("availableTools");
     page.unmount();
   });
 
