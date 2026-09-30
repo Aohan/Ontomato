@@ -211,6 +211,12 @@ export const en = {
   "api.loadConfigFailed": "Failed to load configuration",
   "api.saveConfigFailed": "Failed to save configuration",
   "api.modelTestFailed": "Model test failed",
+  "model.roleNotConfigured": "No model configured for role '{role}', please configure it in model settings",
+  "model.role.query": "Query",
+  "model.role.coding": "Coding and Computing",
+  "model.role.general": "General",
+  "model.role.diagnosis": "Operations Agent",
+  "model.role.knowledgeGovernance": "Knowledge Governance Agent",
   "api.noAvailableDashboardData":
     "No available data in current analysis results. Please verify that the query results contain table data before retrying.",
   "api.dashboardNotFound": "Dashboard not found",

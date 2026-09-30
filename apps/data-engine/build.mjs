@@ -7,7 +7,7 @@ const repoRoot = resolve(appRoot, "../..");
 // Every public adapter module is in the reactor (the root pom lists them all); this app installs postgresql only.
 const PUBLIC_ADAPTERS = ["postgresql", "mysql", "oracle", "sqlserver", "db2", "gaussdb", "duckdb"];
 const HELP =
-  "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=zh|en], make pack-data-engine, or make pack-data-engine-app.\npack-data-engine-app uses the locked, imported runtime and never rebuilds it.";
+  "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=zh|en], make data-engine-app, make pack-data-engine, or make pack-data-engine-app.\ndata-engine-app and pack-data-engine-app compare the sources with the runtime lock and never build a runtime.";
 
 export const app = {
   repoRoot,
@@ -19,7 +19,6 @@ export const app = {
   family: "java-app",
   interfaceVersion: 3,
   promptLang: "en",
-  promptLabel: "io.ontomato.prompt.lang",
   reactorDir: "ontomato",
   appModule: "apps/data-engine",
   appLibModules: ["packages/data-engine-core", "packages/data-adapters/postgresql", "apps/data-engine"],
@@ -48,7 +47,6 @@ export const app = {
   bin: [
     [repoRoot, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"],
     [repoRoot, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"],
-    [repoRoot, "scripts/data-engine/runtime_dependencies.py", "bin/runtime_dependencies.py"],
     [repoRoot, "scripts/data-engine/sync-product-files.py", "bin/sync-product-files.py"],
   ],
   pairContract: "/opt/datarag/bin/runtime-contract.py",
@@ -61,8 +59,6 @@ export const app = {
   payloadFiles: {},
   appLabels: {},
   appTagSuffix: "",
-  exportImages: ["JDK_IMAGE"],
-  runtimeImages: ["JRE_IMAGE", "PYTHON_RUNTIME_IMAGE"],
 };
 
 async function main(args) {

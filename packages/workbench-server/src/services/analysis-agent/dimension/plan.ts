@@ -134,17 +134,23 @@ export async function resolveAnalysisPlan(
     ctx.domainId
   );
 
-  const matchResult = await matchAnalysisReportCards({
-    question: ctx.userQuestion,
-    agentId: ctx.agentId,
-    domainId: ctx.domainId,
-    frameworkContext: {
-      agentName: agent.name,
-      analysisDimensionPrompt: ctx.analysisDimensionPrompt,
-      dimensions,
-    },
-    signal: ctx.signal,
-  });
+  const hotReportEnabled = agent.hotReportEnabled !== false;
+  const matchResult = hotReportEnabled
+    ? await matchAnalysisReportCards({
+        question: ctx.userQuestion,
+        agentId: ctx.agentId,
+        domainId: ctx.domainId,
+        frameworkContext: {
+          agentName: agent.name,
+          analysisDimensionPrompt: ctx.analysisDimensionPrompt,
+          dimensions,
+        },
+        signal: ctx.signal,
+      })
+    : { matched: false as const };
+  if (!hotReportEnabled) {
+    logger.debug(tApp("analysis.dimension.plan.159"));
+  }
 
   const hotMatchCard = matchResult.matched && matchResult.card ? matchResult.card : null;
   if (hotMatchCard) {

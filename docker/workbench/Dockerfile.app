@@ -9,17 +9,15 @@
 #                           tests/.env excluded by the driver) with the two
 #                           repos adjacent, so workspace links keep working
 #   inputs.json             N4a build input record (workspace/app selection)
-#   runtime-contract.json   the locked runtime's contract, read by the host
-#                           from the already imported runtime image
 #   tools/                  the installer/contract scripts this stage needs
 #   launch.sh               the single app launcher owned by this recipe
 #   LICENSE, NOTICE         the public repository's own license files
-ARG NODE_BUILDER_IMAGE=docker.1ms.run/library/node:24.21.0@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
+ARG NODE_BUILDER_IMAGE=docker.io/library/node:24.21.0@sha256:64af3819f9275802414d7cdc38c27e9d82bd564dec4d4da87d008255d36c63b4
 ARG WORKSPACE=ontomato
 ARG APP_META_JSON
 
 # Builder runs on the build host: full frozen install (dev included, unlike
-# the runtime --filter-prod selection), the N3 closure preflight, the web
+# the runtime --filter-prod selection), the closure check, the web
 # build and the /stage assembly. Only the final scratch stage ships.
 FROM --platform=$BUILDPLATFORM ${NODE_BUILDER_IMAGE} AS web-builder
 
@@ -29,16 +27,20 @@ ARG APP_META_JSON
 
 ARG PNPM_VERSION=9.15.9
 RUN npm install -g pnpm@${PNPM_VERSION}
+# pnpm's package store persists on the build machine across builds (a BuildKit
+# cache mount): packages are downloaded once and still installed exactly by the
+# frozen lock with integrity checks, so image contents do not depend on it.
+# Every step that reads the store (install, licenses) mounts the same cache.
+ENV npm_config_store_dir=/pnpm/store
 
 WORKDIR /build
 COPY workspace/ /build/workspace/
-COPY runtime-contract.json /tmp/runtime-contract.json
 COPY inputs.json /inputs.json
 COPY tools/ /tmp/tools/
 COPY launch.sh /tmp/launch.sh
 
 WORKDIR /build/workspace/${WORKSPACE}
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 WORKDIR /build/workspace/${WORKSPACE}/apps/workbench
 RUN pnpm build:web
 RUN node /tmp/tools/workbench/stage-app.mjs
@@ -51,7 +53,7 @@ RUN cp /tmp/launch.sh /stage/launch.sh \
 # devDependencies, and listing more than the bundle uses is accepted where
 # listing less is not. Everything else under /app comes from the runtime.
 COPY LICENSE NOTICE /stage/licenses/
-RUN pnpm --filter "${APPLICATION}..." licenses list --json > /tmp/npm-licenses.json
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm --filter "${APPLICATION}..." licenses list --json > /tmp/npm-licenses.json
 RUN python3 /tmp/tools/third_party_notices.py /stage/licenses/THIRD_PARTY_NOTICES.txt --npm /tmp/npm-licenses.json <<'EOF'
 None in this image: it holds only application files and the bundled web
 assets. Node.js, Python, the system packages and the server's production

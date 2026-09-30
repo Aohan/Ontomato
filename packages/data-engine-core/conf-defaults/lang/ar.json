@@ -338,5 +338,29 @@
   {
     "key": "WriteFunctionOperation.relationNotExist",
     "value": "العلاقة غير موجودة"
+  },
+  {
+    "key": "AgentRole.notConfigured",
+    "value": "لم يتم تكوين أي نموذج للدور \"{0}\". يرجى اختيار واحد في تكوين النموذج."
+  },
+  {
+    "key": "AgentRole.query",
+    "value": "الاستعلام"
+  },
+  {
+    "key": "AgentRole.coding",
+    "value": "الترميز والحوسبة"
+  },
+  {
+    "key": "AgentRole.general",
+    "value": "عام"
+  },
+  {
+    "key": "AgentRole.diagnosis",
+    "value": "وكيل العمليات"
+  },
+  {
+    "key": "AgentRole.knowledgeGovernance",
+    "value": "وكيل حوكمة المعرفة"
   }
 ]

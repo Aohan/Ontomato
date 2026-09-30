@@ -21,6 +21,7 @@ describe("视图与 hash", () => {
   it("根 hash 不算定位，view 参数映射到数据浏览与智能资产", () => {
     expect(start("/?view=data-browser#/").view.value).toBe("/data");
     expect(start("/?view=assets").view.value).toBe("/assets/metrics");
+    expect(start("/?view=knowledge").view.value).toBe("/knowledge");
   });
 
   it("view=visual-modeling 映射到建模视图，focus/id/back 原样进入视图查询串，其他参数不带入", () => {

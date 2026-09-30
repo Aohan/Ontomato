@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { test } from "node:test";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -13,14 +14,17 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  buildStamp,
   canonical,
   fingerprint,
+  imageLabels,
   loadRuntimeLock,
   parseOptions,
-  requireRuntime,
+  parsePythonRequirements,
   runtimeTag,
   saveRuntimeLock,
   sourceIdentity,
+  stagingDirectory,
   validateContract,
 } from "./build-support.mjs";
 
@@ -105,7 +109,7 @@ test("successful runtime builds refresh locks; unchanged contracts do not rewrit
     assert.equal(loadRuntimeLock(dir, FAMILY, "amd64"), refreshed);
     assert.equal(loadRuntimeLock(dir, FAMILY, "arm64"), arm);
   }));
-test("lock and imported-contract boundaries reject old schema, bad fingerprints, family and platform mismatches", () =>
+test("lock and contract boundaries reject old schema, bad fingerprints, family and platform mismatches", () =>
   temporary((dir) => {
     const file = join(dir, "runtime-lock.json");
     assert.throws(() => loadRuntimeLock(dir, FAMILY, "amd64"), /missing/);
@@ -207,14 +211,14 @@ test("source identity reads the given repo and excludes only the service lock", 
     const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], {
       encoding: "utf8",
     }).trim();
-    const clean = sourceIdentity("4.0.0-dev", dir, lock);
+    const clean = sourceIdentity(dir, lock);
     assert.equal(clean.dirty, false);
     assert.equal(clean.revision, head);
     mkdirSync(join(dir, "apps/data-engine"), { recursive: true });
     writeFileSync(join(dir, lock), "{}\n");
-    assert.equal(sourceIdentity("4.0.0-dev", dir, lock).dirty, false);
+    assert.equal(sourceIdentity(dir, lock).dirty, false);
     writeFileSync(join(dir, "other.txt"), "wip");
-    assert.equal(sourceIdentity("4.0.0-dev", dir, lock).dirty, true);
+    assert.equal(sourceIdentity(dir, lock).dirty, true);
   }));
 test("without a runtime lock the whole source state counts", () =>
   temporary((dir) => {
@@ -222,14 +226,82 @@ test("without a runtime lock the whole source state counts", () =>
     writeFileSync(join(dir, "keep.txt"), "a");
     git(dir, ["add", "keep.txt"]);
     git(dir, ["commit", "-m", "init"]);
-    assert.equal(sourceIdentity("4.0.0-dev", dir).dirty, false);
+    assert.equal(sourceIdentity(dir).dirty, false);
     mkdirSync(join(dir, "apps/data-engine"), { recursive: true });
     writeFileSync(join(dir, "apps/data-engine/runtime-lock.json"), "{}\n");
-    assert.equal(sourceIdentity("4.0.0-dev", dir).dirty, true);
+    assert.equal(sourceIdentity(dir).dirty, true);
   }));
-test("a missing runtime image is an inspect failure and does not build", () => {
+test("parsePythonRequirements parses pinned requirements correctly and rejects non-pinned", () => {
+  const parsed = parsePythonRequirements(
+    "# comment\nNumPy==2.2.6\npython_dateutil==2.9.0.post0 # note\n",
+  );
+  assert.deepEqual(parsed, {
+    numpy: "2.2.6",
+    "python-dateutil": "2.9.0.post0",
+  });
+  assert.throws(() => parsePythonRequirements("numpy>=1.0"), /exact.*pin/i);
+});
+test("the build stamp takes the app repo's revision and any dirty source dirties it", () => {
+  const entries = [
+    { id: "ontomato", root: "/repos/ontomato", revision: "a".repeat(40), dirty: false },
+    { id: "enterprise", root: "/repos/enterprise", revision: "b".repeat(40), dirty: false },
+  ];
+  assert.match(
+    buildStamp("4.0.0-dev", "/repos/enterprise", entries),
+    /^4\.0\.0-dev-\d{8}-\d{6}-gbbbbbbbbbbbb$/,
+  );
+  // One dirty source dirties the whole stamp, even when the app repo is clean.
+  assert.match(
+    buildStamp("4.0.0-dev", "/repos/enterprise", [
+      { ...entries[0], dirty: true },
+      entries[1],
+    ]),
+    /^4\.0\.0-dev-\d{8}-\d{6}-gbbbbbbbbbbbb-dirty$/,
+  );
   assert.throws(
-    () => requireRuntime(FAMILY, "arm64", "a".repeat(64)),
-    /No runtime build was started/,
+    () => buildStamp("4.0.0-dev", "/repos/other", entries),
+    /not a build source/,
   );
 });
+test("image labels carry only the version, component, kind and the pair fingerprint", () => {
+  const labels = (args) =>
+    Object.fromEntries(
+      args
+        .filter((_, index) => index % 2 === 1)
+        .map((entry) => {
+          const at = entry.indexOf("=");
+          return [entry.slice(0, at), entry.slice(at + 1)];
+        }),
+    );
+  assert.deepEqual(
+    labels(imageLabels("ontomato", "app", "4.0.0-dev", "f".repeat(64), "node-app")),
+    {
+      "org.opencontainers.image.version": "4.0.0-dev",
+      "io.runtime.component": "ontomato",
+      "io.runtime.kind": "app",
+      "io.runtime.compat-fingerprint": "f".repeat(64),
+      "io.runtime.family": "node-app",
+    },
+  );
+  // A builder without a runtime pair carries no fingerprint or family.
+  assert.deepEqual(
+    labels(imageLabels("ontomato-ontology-manager", "manager", "4.0.0-dev")),
+    {
+      "org.opencontainers.image.version": "4.0.0-dev",
+      "io.runtime.component": "ontomato-ontology-manager",
+      "io.runtime.kind": "manager",
+    },
+  );
+});
+test("the staging directory is fixed per builder and emptied before every build", () =>
+  temporary((dir) => {
+    const context = join(dir, ".build", "contexts", "workbench", "arm64", "runtime");
+    mkdirSync(join(context, "stale"), { recursive: true });
+    writeFileSync(join(context, "stale", "left.txt"), "old");
+    assert.equal(stagingDirectory(dir, "workbench", "arm64", "runtime"), context);
+    assert.equal(existsSync(join(context, "stale")), false);
+    assert.equal(statSync(context).isDirectory(), true);
+    writeFileSync(join(context, "again.txt"), "new");
+    assert.equal(stagingDirectory(dir, "workbench", "arm64", "runtime"), context);
+    assert.equal(existsSync(join(context, "again.txt")), false);
+  }));

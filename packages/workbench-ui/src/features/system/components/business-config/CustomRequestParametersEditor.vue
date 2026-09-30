@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import type { JsonObject } from "@ontomato/contracts/system-model";
-
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
-const model = defineModel<JsonObject>({ required: true });
+const model = defineModel<Record<string, unknown>>({ required: true });
 const valid = defineModel<boolean>("valid", { default: true });
 const placeholder = '{\n  "chat_template_kwargs": {\n    "enable_thinking": false\n  }\n}';
 
@@ -27,7 +25,7 @@ function applyDraft(nextDraft: string) {
     error.value = "";
     valid.value = true;
     updatingModel = true;
-    model.value = parsed as JsonObject;
+    model.value = parsed as Record<string, unknown>;
     updatingModel = false;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t("admin.invalidJson");

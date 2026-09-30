@@ -136,5 +136,6 @@ export default {
     relationTypes: "أنواع العلاقات",
     scheduledWriteTasks: "مهام الكتابة المجدولة",
     visualModeling: "النمذجة المرئية",
+    businessKnowledge: "معرفة الأعمال",
   },
 };

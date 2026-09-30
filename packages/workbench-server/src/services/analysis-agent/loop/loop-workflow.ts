@@ -18,7 +18,7 @@ import { createHarnessRun } from "../../../core/agent-loop/session-run";
 import { harnessSessions } from "../../../infrastructure/harness-sessions";
 import { type CompactionPromptKeys } from "../../../core/agent-loop/compaction/types";
 import type { AgentEvent, AgentState, ModelConfig } from "../../../core/agent-loop/types";
-import { resolveSystemModel } from "../../../config/system-model";
+import { resolveModelForRole } from "../../../config/model-resolver";
 import { initializeConnection } from "../../../infrastructure/connection";
 import { renderPrompt } from "../../../core/prompts/loader";
 import { t } from "../../../i18n";
@@ -126,7 +126,9 @@ export async function runAnalysisLoopWorkflow(
   await recordTurnRunStart({ threadId, requestSeq, source: "analysis" });
   const turn = buildTurnIdentity(threadId, requestSeq);
 
-  return runWithLogContext({ domainId, turn }, async () => {
+  return runWithLogContext(
+    { domainId, turn, token: token || undefined, apiKey: apiKey || undefined },
+    async () => {
     const taskService = getAnalysisTaskService();
     let state: AgentState | undefined;
     let sessionId: string | undefined;
@@ -299,11 +301,12 @@ export async function runAnalysisLoopWorkflow(
         trajectory,
       });
 
-      const systemModel = resolveSystemModel(domainId);
+      const systemModel = await resolveModelForRole("general");
       const modelConfig: ModelConfig = {
         baseUrl: systemModel.baseUrl,
         apiKey: systemModel.apiKey,
         modelName: systemModel.modelName,
+        maxTokens: systemModel.maxTokens,
         modelKwargs: systemModel.customRequestParameters,
         llmLog: { agentName: modelAgentName("analysisLoop"), agentRunId: uuidv4() },
       };

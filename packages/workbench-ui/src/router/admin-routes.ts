@@ -64,16 +64,16 @@ export const adminRoutes = {
     component: () => import("../features/knowledge-governance/GovernancePage.vue"),
     meta: { group: "app-capabilities", permission: "business-knowledge" },
   },
-  // 版本原值（KnowledgeManagerProps）由应用在路由记录上以 props 传入。
+  // 业务知识已迁入本体管理器，旧路由重定向到本体管理器的业务知识页。
   knowledge: {
     path: "knowledge",
-    redirect: "/admin/skills?tab=knowledge",
-    meta: { group: "app-capabilities", permission: "business-knowledge" },
+    redirect: "/admin/ontology-manager?view=knowledge",
+    meta: { group: "data-assets", permission: "business-knowledge" },
   },
   examples: {
     path: "examples",
-    redirect: "/admin/skills?tab=knowledge&section=examples",
-    meta: { group: "app-capabilities", permission: "query-examples" },
+    redirect: "/admin/system-config",
+    meta: { group: "platform-management", permission: "query-examples" },
   },
   actionManagement: {
     path: "action-management",
@@ -113,32 +113,35 @@ export const adminRoutes = {
     redirect: "/admin/skills?tab=visualization",
     meta: { group: "app-capabilities", category: "visualization", permission: "visualization-skills" },
   },
+  modelConfig: {
+    path: "model-config",
+    name: "ModelConfig",
+    component: () => import("../features/system/components/ModelConfig.vue"),
+    meta: { group: "platform-management", permission: "system-config" },
+  },
   // 版本原值（BusinessConfigProps）由应用在路由记录上以 props 传入。
   businessConfig: {
     path: "system-config",
-    name: "BusinessConfig",
+    name: "SystemConfig",
     component: () => import("../features/system/components/BusinessConfig.vue"),
     meta: { group: "platform-management", permission: "system-config" },
   },
-  operations: {
-    path: "operations",
-    name: "OperationsGovernance",
-    component: () => import("../features/admin/components/platform-operations/OperationsGovernance.vue"),
-    meta: { group: "platform-management", permission: "system-management" },
-  },
   auditLog: {
     path: "audit-log",
-    redirect: "/admin/operations?section=audit",
+    name: "AuditLog",
+    component: () => import("../features/admin/components/platform-operations/AuditLogManager.vue"),
     meta: { group: "platform-management", permission: "audit-logs" },
   },
   feedbackRecords: {
     path: "feedback-records",
-    redirect: "/admin/operations?section=feedback",
+    name: "FeedbackRecords",
+    component: () => import("../features/admin/components/platform-operations/FeedbackRecords.vue"),
     meta: { group: "platform-management", permission: "audit-logs" },
   },
   systemMonitor: {
     path: "system-monitor",
-    redirect: "/admin/operations?section=monitor",
+    name: "SystemMonitor",
+    component: () => import("../features/admin/components/platform-operations/SystemMonitor.vue"),
     meta: { group: "platform-management", permission: "system-monitoring" },
   },
 } satisfies Record<string, RouteRecordRaw>;

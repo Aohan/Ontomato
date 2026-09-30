@@ -143,7 +143,7 @@ export async function generateChartsFromCandidates(params: {
         })
         .join("\n\n");
       params.onProgress?.({ stage: "planning", skills: availableSkills.map(({ skill }) => skill) });
-      const model = createModel({ agentName: modelAgentName("chartPlanner") });
+      const model = await createModel({ agentName: modelAgentName("chartPlanner") });
       const response = await model.invoke(
         renderPrompt("charts.chart-planner.user", {
           userQuestion: params.userQuestion,

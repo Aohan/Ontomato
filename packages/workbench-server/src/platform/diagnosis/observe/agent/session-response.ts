@@ -6,6 +6,8 @@ import type { ManagedSession } from "./session-runtime";
 import type { SessionResponseStream } from "./session-stream";
 import { toDiagnosisStreamEvent } from "./sse-bridge";
 
+import { runWithLogContext } from "../../../../logging/log-context";
+
 export const logger: ReturnType<typeof createLogger> = createLogger("observe:pi-agent");
 
 function lastAssistant(messages: readonly AssistantMessage[]): AssistantMessage | undefined {
@@ -23,12 +25,15 @@ export async function executeResponse(
   stream: SessionResponseStream,
   turnId: string
 ): Promise<void> {
-  let status: "completed" | "failed" | "cancelled" = "completed";
-  let errorMessage: string | undefined;
-  let unsubscribe = () => {};
+  return runWithLogContext(
+    { domainId: managed.domainId, token: managed.tkHolder.current },
+    async () => {
+      let status: "completed" | "failed" | "cancelled" = "completed";
+      let errorMessage: string | undefined;
+      let unsubscribe = () => {};
 
-  logger.info("Chat started", { sessionId, targetKey: managed.context?.targetKey });
-  stream.append({ type: "response_started", message });
+      logger.info("Chat started", { sessionId, targetKey: managed.context?.targetKey });
+      stream.append({ type: "response_started", message });
   try {
     const agent = managed.agent;
     if (!agent) throw new Error("Diagnosis response has no agent");
@@ -75,4 +80,6 @@ export async function executeResponse(
     );
     logger.info("Chat finished", { sessionId, status });
   }
+}
+  );
 }

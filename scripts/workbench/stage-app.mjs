@@ -1,8 +1,9 @@
 // Container-side app stager for the workbench app image. Runs in web-builder
 // against the real workspace after the full frozen install and the web build:
-// it preflights the production closure against the locked runtime contract,
+// it checks pnpm's production selection against the graph closure,
 // materializes /stage (selected own members as real dirs, third-party as
-// absolute /opt/runtime links from the runtime index), copies the built web
+// absolute /opt/runtime links whose store paths come from this builder's own
+// install of the same lock), copies the built web
 // output, and writes .image-meta.json. The launch script and the empty data
 // mount point are placed by the recipe, not here.
 import {
@@ -16,13 +17,12 @@ import { createRequire } from "node:module";
 import { join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { output } from "../build-support.mjs";
-import { checkBuild, productionClosure } from "./runtime-contract.mjs";
-import { linkPlan, writeStage } from "./runtime-layout.mjs";
+import { productionClosure } from "./runtime-contract.mjs";
+import { bindingIndex, linkPlan, writeStage } from "./runtime-layout.mjs";
 
 const SOURCES = "/build/workspace";
 const STAGE = "/stage";
 const STORE = "/opt/runtime";
-const CONTRACT = "/tmp/runtime-contract.json";
 const INPUTS = "/inputs.json";
 const SERVER = "@ontomato/workbench-server";
 // Payload allowlist per member: manifest, sources, and the package-owned
@@ -77,21 +77,9 @@ export function copyMember(from, to) {
   }
 }
 
-// The runtime contract carries the target platform, so the graph is built
-// for it via N3's own mapping -- never the build host's architecture. The
-// expected fingerprint comes from the app metadata the host sampled, not
-// from recomputing the contract being checked.
-export function preflightStage({ graph, contract, meta }) {
-  if (meta.platform !== contract.platform)
-    throw new Error("app metadata platform differs from the runtime contract");
-  if (typeof contract.snapshotPaths !== "object" || contract.snapshotPaths === null)
-    throw new Error("runtime contract has no snapshotPaths");
-  checkBuild(graph, contract, meta.runtimeCompatFingerprint);
-  return contract.snapshotPaths;
-}
-
-// Pure assembly: bindings plus the pnpm-reported members plus the runtime
-// index become stage directories, the link plan, and the member copies.
+// Pure assembly: bindings plus the pnpm-reported members plus the binding
+// index from this builder's own install become stage directories, the link
+// plan, and the member copies.
 export function stagePlan(graph, members, index) {
   const directories = Object.fromEntries(
     Object.keys(graph.bindings).map((importer) => [importer, stageDirectory(importer)]),
@@ -114,26 +102,28 @@ export function assembleAppStage({
   stageRoot,
   storeRoot,
   record,
-  contract,
   meta,
   lock,
   members,
   selected,
 }) {
+  if (!meta || typeof meta.platform !== "string")
+    throw new Error("meta.platform is required");
   const manifests = Object.fromEntries(members.map((member) => [member.path, member.manifest]));
+  const platform = meta.platform;
   const graph = productionClosure(
     { importer: record.appImporter, manifests },
     lock,
-    contract.platform,
+    platform,
   );
-  const snapshotPaths = preflightStage({ graph, contract, meta });
+  const index = bindingIndex(root, root, graph);
   const closure = Object.keys(graph.bindings).sort().join("\n");
   const chosen = selected.map((member) => member.path).sort().join("\n");
   if (closure !== chosen)
     throw new Error(
       `pnpm production selection differs from the graph closure\nselected:\n${chosen}\nclosure:\n${closure}`,
     );
-  const { plan, copies } = stagePlan(graph, members, snapshotPaths);
+  const { plan, copies } = stagePlan(graph, members, index);
   for (const copy of copies) copyMember(copy.from, join(stageRoot, copy.to));
   cpSync(join(root, "dist/web"), join(stageRoot, "dist/web"), { recursive: true });
   writeFileSync(join(stageRoot, ".image-meta.json"), `${JSON.stringify(meta)}\n`);
@@ -166,7 +156,6 @@ function main() {
     stageRoot: STAGE,
     storeRoot: STORE,
     record,
-    contract: JSON.parse(readFileSync(CONTRACT, "utf8")),
     meta,
     lock,
     members,

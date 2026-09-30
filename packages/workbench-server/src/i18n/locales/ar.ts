@@ -160,6 +160,12 @@ export const ar = {
   "api.feedbackSubmitted": "تم إرسال الملاحظات",
   "api.loadConfigFailed": "فشل الحصول على الإعدادات",
   "api.saveConfigFailed": "فشل حفظ الإعدادات",
+  "model.roleNotConfigured": "لم يتم تكوين نموذج للدور '{role}'، يرجى تحديده في إعدادات النموذج",
+  "model.role.query": "الاستعلام",
+  "model.role.coding": "الكود والحساب",
+  "model.role.general": "عام",
+  "model.role.diagnosis": "وكيل العمليات",
+  "model.role.knowledgeGovernance": "وكيل حوكمة المعرفة",
   "api.modelTestFailed": "فشل اختبار النموذج",
   "api.noAvailableDashboardData":
     "لا توجد بيانات متاحة في نتائج التحليل الحالية. يرجى التحقق من أن نتائج الاستعلام تحتوي على بيانات جدولية قبل إعادة المحاولة.",

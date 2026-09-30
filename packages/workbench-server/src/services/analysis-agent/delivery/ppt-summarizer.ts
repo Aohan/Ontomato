@@ -69,7 +69,7 @@ function normalizeOutline(value: unknown, input: SummaryInput): PptSummaryOutlin
 }
 
 export async function summarizeReportForPpt(input: SummaryInput): Promise<PptSummaryOutline> {
-  const model = createModel({ temperature: 0.25, agentName: "PPT-ReportSummarizer" });
+  const model = await createModel({ temperature: 0.25, agentName: "PPT-ReportSummarizer" });
   const response = await model.invoke([
     {
       role: "system",

@@ -18,18 +18,15 @@ ARG EXPECTED_ARCH
 ARG APP_COMPONENT
 
 # A composite of two separately built images: clear the inherited image
-# version/revision/created and source labels instead of reporting the runtime's.
+# version label instead of reporting the runtime's.
 LABEL io.runtime.kind="composite" \
       io.runtime.component="${APP_COMPONENT}" \
       org.opencontainers.image.title="${APP_COMPONENT}" \
-      org.opencontainers.image.version="" \
-      org.opencontainers.image.revision="" \
-      org.opencontainers.image.created="" \
-      io.runtime.source.dirty="" \
-      io.runtime.sources=""
+      org.opencontainers.image.version=""
 
 # Copy application files into /app
 COPY --from=app-source / /app/
 
-# The runtime owns pairing: startup pairing plus the expected architecture.
+# The runtime owns pairing: compatibility fingerprint, family, the expected
+# architecture and no broken links under /app.
 RUN node /runtime/scripts/workbench/runtime-contract.mjs assemble "${EXPECTED_ARCH:?EXPECTED_ARCH is required}"

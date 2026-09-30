@@ -1,4 +1,4 @@
-import type { JsonObject } from "@ontomato/contracts/system-model";
+export type JsonObject = Record<string, unknown>;
 
 export class CustomRequestParametersError extends Error {}
 

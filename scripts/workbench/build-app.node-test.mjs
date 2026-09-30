@@ -9,6 +9,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +19,6 @@ import { fileURLToPath } from "node:url";
 import { buildWorkbenchApp } from "./build-images.mjs";
 import { fingerprint } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
-import { productionClosure, productionFingerprint } from "./runtime-contract.mjs";
 import { assembleAppStage, stageDirectory } from "./stage-app.mjs";
 
 const VERSION = "9.9.9-test";
@@ -27,11 +27,13 @@ const CONTRACT = {
   family: "node-app",
   interfaceVersion: 3,
   platform: "linux/arm64",
-  node: { api: "20.3", modules: "115", glibc: "2.36" },
-  productionDependencies: "d".repeat(64),
-  snapshotPaths: {},
-  nativeDependencies: "e".repeat(64),
-  python: { packages: { numpy: "1.26.4", pandas: "1.5.3" } },
+  node: "20.18",
+  pnpm: "9.15.4",
+  productionDependencies: "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  python: {
+    version: "3.10",
+    packages: { numpy: "1.26.4", pandas: "1.5.3" },
+  },
 };
 
 function repo(t, appName) {
@@ -42,7 +44,16 @@ function repo(t, appName) {
   writeFileSync(join(dir, ".gitignore"), ".build/\n");
   writeFileSync(join(dir, "package.json"), '{"name":"fixture","private":true}\n');
   writeFileSync(join(dir, "pnpm-workspace.yaml"), "packages:\n  - 'apps/*'\n");
-  writeFileSync(join(dir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+  writeFileSync(
+    join(dir, "pnpm-lock.yaml"),
+    `lockfileVersion: '9.0'
+importers:
+  apps/workbench:
+    dependencies: {}
+snapshots: {}
+packages: {}
+`,
+  );
   writeFileSync(join(dir, "LICENSE"), "fixture license\n");
   writeFileSync(join(dir, "NOTICE"), "fixture notice\n");
   writeFileSync(
@@ -50,6 +61,14 @@ function repo(t, appName) {
     `<project><properties><revision>${VERSION}</revision></properties></project>\n`,
   );
   mkdirSync(join(dir, "docker/workbench"), { recursive: true });
+  writeFileSync(
+    join(dir, "docker/workbench/Dockerfile.runtime"),
+    "ARG NODE_RUNTIME_IMAGE=docker.io/library/node:20.18.0-slim\nARG PNPM_VERSION=9.15.4\nARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm\n",
+  );
+  writeFileSync(
+    join(dir, "docker/workbench/Dockerfile.app"),
+    "ARG NODE_BUILDER_IMAGE=docker.io/library/node:20.18.0\nARG PNPM_VERSION=9.15.4\n",
+  );
   writeFileSync(join(dir, "docker/workbench/requirements.txt"), "numpy==1.26.4\npandas==1.5.3\n");
   writeFileSync(join(dir, "docker/workbench/launch.sh"), "#!/bin/sh\nexec node app\n");
   mkdirSync(join(dir, "apps/workbench"), { recursive: true });
@@ -87,11 +106,9 @@ function writeLock(dir, arm64Fp = fingerprint(CONTRACT)) {
 
 // Fixture Docker for the app command. Every invocation is recorded; an
 // unknown subcommand fails instead of silently succeeding. FAKE_MODE selects
-// ok | no-image | bad-fp | fail-build | fail-inspect. FAKE_COMMIT_REPO commits
-// once there during the app build (a source moving mid-build).
+// ok | fail-build | fail-inspect.
 const FAKE = `#!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 function canonical(value) {
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
@@ -109,24 +126,23 @@ mkdirSync(dir, { recursive: true });
 appendFileSync(dir + "/args.jsonl", JSON.stringify(args) + "\\n");
 if (args[0] === "version") {
   process.stdout.write("25.0.0\\n");
-} else if (args[0] === "run") {
-  process.stdout.write(JSON.stringify(contract));
 } else if (args[0] === "buildx") {
-  if (mode === "fail-build") process.exit(1);
-  if (process.env.FAKE_COMMIT_REPO) execFileSync("git", ["-C", process.env.FAKE_COMMIT_REPO, "-c", "user.name=fake", "-c", "user.email=fake@example.invalid", "commit", "-q", "--allow-empty", "-m", "moved"]);
+  const target = args.includes("--target") ? args[args.indexOf("--target") + 1] : undefined;
+  if (target === "compat-contract-export") {
+    // The contract stage's output: this fixture's contract for the lock's arch.
+    const out = args[args.indexOf("--output") + 1].replace("type=local,dest=", "");
+    mkdirSync(out, { recursive: true });
+    writeFileSync(out + "/contract.json", JSON.stringify(contract));
+  } else if (mode === "fail-build") process.exit(1);
 } else if (args[0] === "image") {
-  if (mode === "no-image") { process.stderr.write("Error: No such image\\n"); process.exit(1); }
+  // The app command inspects only the app image it built.
   const tag = args[args.length - 1];
-  const appTag = tag.match(/^(.*)-app:/);
-  const broken = mode === "bad-fp" || (mode === "fail-inspect" && appTag);
-  const labels = appTag
-    ? { "io.runtime.component": appTag[1], "io.runtime.kind": "app", "io.runtime.family": broken ? "java-app" : "node-app", "io.runtime.compat-fingerprint": broken ? "0".repeat(64) : fp }
-    : { "io.runtime.component": "node-app", "io.runtime.kind": "runtime", "io.runtime.family": mode === "bad-fp" ? "java-app" : "node-app", "io.runtime.compat-fingerprint": mode === "bad-fp" ? "0".repeat(64) : fp };
+  const component = tag.match(/^(.*)-app:/)[1];
+  const broken = mode === "fail-inspect";
+  const labels = { "io.runtime.component": component, "io.runtime.kind": "app", "io.runtime.family": broken ? "java-app" : "node-app", "io.runtime.compat-fingerprint": broken ? "0".repeat(64) : fp };
   process.stdout.write(JSON.stringify([{ Os: "linux", Architecture: "arm64", Config: { Labels: labels } }]));
 } else if (args[0] === "save") {
   process.stdout.write("fake-app-image-bytes");
-} else if (args[0] === "tag") {
-  // recorded above; re-tagging an existing image
 } else {
   process.stderr.write("unknown docker call\\n");
   process.exit(1);
@@ -146,13 +162,12 @@ function fakeDocker(t, root) {
 async function withDocker(env, fn) {
   const savedPath = process.env.PATH;
   const saved = {};
-  for (const key of ["FAKE_DIR", "FAKE_MODE", "FAKE_CONTRACT", "FAKE_COMMIT_REPO"])
+  for (const key of ["FAKE_DIR", "FAKE_MODE", "FAKE_CONTRACT"])
     saved[key] = process.env[key];
   process.env.PATH = `${env.bin}${delimiter}${savedPath}`;
   process.env.FAKE_DIR = env.state;
   process.env.FAKE_MODE = env.mode;
   process.env.FAKE_CONTRACT = JSON.stringify(CONTRACT);
-  if (env.commitRepo) process.env.FAKE_COMMIT_REPO = env.commitRepo;
   try {
     await fn();
   } finally {
@@ -195,33 +210,15 @@ test("a missing lock fails before any Docker call", async (t) => {
   assert.equal(existsSync(join(docker.state, "args.jsonl")), false);
 });
 
-test("a missing runtime image fails without touching the lock", async (t) => {
+test("a changed dependency or contract fails without touching the lock", async (t) => {
   const root = repo(t, "@ontomato/workbench");
-  writeLock(root);
+  writeLock(root, "0".repeat(64));
   const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
   const docker = fakeDocker(t, root);
-  await withDocker({ ...docker, mode: "no-image" }, async () => {
+  await withDocker({ ...docker, mode: "ok" }, async () => {
     await assert.rejects(
       () => buildWorkbenchApp(descriptor(root), ["app", "--arch", "arm64"]),
-      /No runtime build was started/,
-    );
-  });
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
-  const attempted = existsSync(join(docker.state, "args.jsonl"))
-    ? readFileSync(join(docker.state, "args.jsonl"), "utf8")
-    : "";
-  assert.equal(attempted.includes("buildx"), false);
-});
-
-test("a wrong-fingerprint image fails without touching the lock", async (t) => {
-  const root = repo(t, "@ontomato/workbench");
-  writeLock(root);
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
-  const docker = fakeDocker(t, root);
-  await withDocker({ ...docker, mode: "bad-fp" }, async () => {
-    await assert.rejects(
-      () => buildWorkbenchApp(descriptor(root), ["app", "--arch", "arm64"]),
-      /wrong family, kind, architecture or compatibility fingerprint/,
+      /Runtime dependencies or contract changed/,
     );
   });
   assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
@@ -242,13 +239,12 @@ test("a late build failure writes no lock and no pack", async (t) => {
   assert.equal(existsSync(join(root, ".build/pack")), false);
 });
 
-test("success packs with snapshot metadata and keeps the runtime lock", async (t) => {
+test("success packs and keeps the runtime lock, writing only the pairing metadata", async (t) => {
   const pub = repo(t, "@ontomato/workbench");
   const ent = repo(t, "@enterprise/workbench");
   for (const [root, app] of [[pub, descriptor(pub)], [ent, descriptor(pub, ent)]]) {
     writeLock(root);
     const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
-    const start = execFileSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     const docker = fakeDocker(t, root);
     await withDocker({ ...docker, mode: "ok" }, async () => {
       await buildWorkbenchApp(app, ["app", "--arch", "arm64", "--pack-app"]);
@@ -263,39 +259,24 @@ test("success packs with snapshot metadata and keeps the runtime lock", async (t
     const applicationArg = buildArgv.find((arg) => arg.startsWith("APPLICATION="));
     assert.equal(applicationArg, `APPLICATION=${root === pub ? "@ontomato" : "@enterprise"}/workbench`);
     const meta = metaArg(buildArgv);
+    assert.deepEqual(Object.keys(meta).sort(), [
+      "arch",
+      "family",
+      "kind",
+      "platform",
+      "runtimeCompatFingerprint",
+      "schema",
+    ]);
     assert.equal(meta.schema, 3);
     assert.equal(meta.kind, "app");
-    assert.equal(meta.version, VERSION);
-    assert.equal(meta.revision, start);
     assert.equal(meta.platform, "linux/arm64");
-    assert.equal(meta.stamp.startsWith(`${VERSION}-`), true);
-    assert.equal(meta.sources.length, app.sources.length);
-    // The locked runtime is only re-tagged to this product's alias, after the
-    // app image check; no runtime build is started.
+    assert.equal(meta.runtimeCompatFingerprint, fingerprint(CONTRACT));
     const argv = calls(docker.state);
-    const runtimeImage = `node-app-runtime:compat-${fingerprint(CONTRACT).slice(0, 16)}-arm64`;
-    const retag = argv.findIndex((call) => call[0] === "tag");
-    assert.deepEqual(argv[retag], ["tag", runtimeImage, `${app.runtimeImageName}:deploy-arm64`]);
-    assert.equal(retag > argv.findLastIndex((call) => call[0] === "image"), true);
-    assert.equal(argv.filter((call) => call[0] === "buildx").length, 1);
-    assert.equal(argv.some((call) => call.includes("--target")), false);
+    const builds = argv.filter((call) => call[0] === "buildx");
+    assert.equal(builds.length, 2);
+    assert.equal(builds[0][builds[0].indexOf("--target") + 1], "compat-contract-export");
+    assert.equal(builds[1].includes("--target"), false);
   }
-});
-
-test("a source moving during the app build fails before the runtime alias or pack", async (t) => {
-  const root = repo(t, "@ontomato/workbench");
-  writeLock(root);
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
-  const docker = fakeDocker(t, root);
-  await withDocker({ ...docker, mode: "ok", commitRepo: root }, async () => {
-    await assert.rejects(
-      () => buildWorkbenchApp(descriptor(root), ["app", "--arch", "arm64", "--pack-app"]),
-      /source ontomato changed during the build/,
-    );
-  });
-  assert.equal(calls(docker.state).some((call) => call[0] === "tag"), false);
-  assert.equal(existsSync(join(root, ".build/pack")), false);
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
 });
 
 test("the public entry names the ontomato product and the node-app-runtime alias", async () => {
@@ -377,7 +358,7 @@ test("workspace copies reuse the collector listing and live source bytes", (t) =
   for (const rel of ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml", "apps/workbench/package.json", "packages/lib/package.json"])
     assert.equal(readFileSync(at(rel), "utf8"), captured(rel));
   // Owned sources follow the live tree (the record only scopes them); the
-  // metadata scoping above plus the HEAD recheck are the consistency guards.
+  // metadata scoping above is the consistency guard.
   assert.equal(readFileSync(at("packages/lib/src/index.ts"), "utf8"), "changed\n");
   const cases = [
     ["apps/workbench/src/index.ts", true],
@@ -409,7 +390,7 @@ test("the app recipe declares its stage arguments and launch permissions", () =>
   assert.match(recipe, /chmod 0755 \/stage\/launch\.sh/);
   const [builder, final] = recipe.split("FROM scratch AS app");
   const sources = [...builder.matchAll(/^COPY\s+(\S+)/gm)].map((match) => match[1]);
-  assert.deepEqual(sources, ["workspace/", "runtime-contract.json", "inputs.json", "tools/", "launch.sh", "LICENSE"]);
+  assert.deepEqual(sources, ["workspace/", "inputs.json", "tools/", "launch.sh", "LICENSE"]);
   assert.match(final, /COPY --from=web-builder \/stage\/ \//);
 });
 
@@ -443,13 +424,11 @@ test("assemble writes own packages, resources, links, web and meta from a real g
         resolution: { integrity: "sha512-abc" },
         os: ["linux"],
         cpu: ["arm64", "x64"],
-        libc: ["glibc"],
       },
       "@probe/native@1.0.0": {
         resolution: { integrity: "sha512-native" },
         os: ["linux"],
         cpu: ["arm64"],
-        libc: ["glibc"],
       },
     },
     snapshots: {
@@ -507,33 +486,32 @@ test("assemble writes own packages, resources, links, web and meta from a real g
   writeFileSync(join(ossDecoy, "package.json"), '{"name":"@ontomato/workbench"}\n');
   writeFileSync(join(ossDecoy, "src/index.ts"), "oss\n");
   members.push({ name: "@ontomato/workbench", path: "../ontomato/apps/workbench", absolute: ossDecoy, manifest: { name: "@ontomato/workbench" } });
-  const store = join(dir, "store");
+  const store = ent;
   const expressDir = join(store, "node_modules/.pnpm/express@4.22.1/node_modules/express");
   const nativeDir = join(store, "node_modules/.pnpm/@probe+native@1.0.0/node_modules/@probe/native");
   mkdirSync(expressDir, { recursive: true });
   mkdirSync(nativeDir, { recursive: true });
-  const fullIndex = {
-    "express@4.22.1": "node_modules/.pnpm/express@4.22.1/node_modules/express",
-    "@probe/native@1.0.0": "node_modules/.pnpm/@probe+native@1.0.0/node_modules/@probe/native",
+
+  const linkDep = (pkgDir, name, target) => {
+    const dest = join(pkgDir, "node_modules", name);
+    mkdirSync(dirname(dest), { recursive: true });
+    symlinkSync(target, dest);
   };
+  linkDep(join(ent, "apps/workbench"), "express", expressDir);
+  linkDep(join(ent, "packages/ent-lib"), "express", expressDir);
+  linkDep(join(ent, "packages/ent-lib"), "@probe/native", nativeDir);
+  linkDep(join(pub, "packages/shared"), "express", expressDir);
+
   const record = { workspaceId: "enterprise", appImporter: "apps/workbench", application: "@enterprise/workbench" };
   // Mirrors pnpm --filter-prod <app>... : only closure members are selected.
   const selected = members.filter((member) => member.name !== "@ontomato/workbench");
-  const contractFor = (platform, graph, index) => ({
-    family: "node-app",
-    interfaceVersion: 3,
-    platform,
-    productionDependencies: productionFingerprint(graph),
-    snapshotPaths: index,
-  });
-  const metaFor = (contract) => ({ platform: contract.platform, runtimeCompatFingerprint: fingerprint(contract) });
-
-  const armGraph = productionClosure({ importer: record.appImporter, manifests }, lock, "linux/arm64");
-  const armContract = contractFor("linux/arm64", armGraph, fullIndex);
+  // The stager reads only the target platform from the metadata and copies the
+  // rest through; link paths come from its own install (bindingIndex).
+  const metaFor = (platform) => ({ platform, runtimeCompatFingerprint: "c".repeat(64) });
   const armStage = join(dir, "stage-arm64");
   const assembled = assembleAppStage({
     root: ent, stageRoot: armStage, storeRoot: store, record,
-    contract: armContract, meta: metaFor(armContract), lock, members, selected,
+    meta: metaFor("linux/arm64"), lock, members, selected,
   });
   assert.equal(assembled.copies.length, 3);
   assert.equal(readFileSync(join(armStage, "apps/workbench/src/index.ts"), "utf8"), "enterprise\n");
@@ -551,7 +529,7 @@ test("assemble writes own packages, resources, links, web and meta from a real g
   assert.equal(existsSync(join(armStage, "packages/ent-lib/data/.env")), false);
   assert.equal(existsSync(join(armStage, "packages/ent-lib/src/node_modules")), false);
   assert.equal(existsSync(join(armStage, "dist/web/index.html")), true);
-  assert.deepEqual(JSON.parse(readFileSync(join(armStage, ".image-meta.json"), "utf8")), metaFor(armContract));
+  assert.deepEqual(JSON.parse(readFileSync(join(armStage, ".image-meta.json"), "utf8")), metaFor("linux/arm64"));
   assert.equal(
     realpathSync(join(armStage, "apps/workbench/node_modules/express")),
     realpathSync(expressDir),
@@ -566,13 +544,10 @@ test("assemble writes own packages, resources, links, web and meta from a real g
   );
 
   // Opposite target: the optional arm64-only native is skipped, the rest holds.
-  const amdIndex = { "express@4.22.1": fullIndex["express@4.22.1"] };
-  const amdGraph = productionClosure({ importer: record.appImporter, manifests }, lock, "linux/amd64");
-  const amdContract = contractFor("linux/amd64", amdGraph, amdIndex);
   const amdStage = join(dir, "stage-amd64");
   assembleAppStage({
     root: ent, stageRoot: amdStage, storeRoot: store, record,
-    contract: amdContract, meta: metaFor(amdContract), lock, members, selected,
+    meta: metaFor("linux/amd64"), lock, members, selected,
   });
   assert.equal(existsSync(join(amdStage, "apps/workbench/node_modules/express")), true);
   assert.equal(existsSync(join(amdStage, "packages/ent-lib/node_modules/@probe/native")), false);
@@ -586,12 +561,8 @@ test("assemble writes own packages, resources, links, web and meta from a real g
       "express@4.22.1": { ...lock.packages["express@4.22.1"], cpu: ["arm64"] },
     },
   };
-  const amdOnlyContract = { ...amdContract, productionDependencies: "0".repeat(64) };
   const failures = [
-    [{ meta: { ...metaFor(armContract), runtimeCompatFingerprint: "0".repeat(64) } }, /does not match/],
-    [{ meta: { ...metaFor(armContract), platform: "linux/amd64" } }, /platform differs/],
-    [{ contract: { ...armContract, snapshotPaths: null }, meta: metaFor({ ...armContract, snapshotPaths: null }) }, /no snapshotPaths/],
-    [{ contract: amdOnlyContract, meta: { platform: "linux/amd64", runtimeCompatFingerprint: "0".repeat(64) }, lock: armOnlyLock }, /not linux/],
+    [{ meta: { platform: "linux/amd64", runtimeCompatFingerprint: "0".repeat(64) }, lock: armOnlyLock }, /not linux/],
     [{ selected: selected.slice(0, 1) }, /differs from the graph closure/],
   ];
   let stageNo = 0;
@@ -604,8 +575,7 @@ test("assemble writes own packages, resources, links, web and meta from a real g
           stageRoot: join(dir, `s${stageNo}`),
           storeRoot: store,
           record,
-          contract: armContract,
-          meta: metaFor(armContract),
+          meta: metaFor("linux/arm64"),
           lock,
           members,
           selected,

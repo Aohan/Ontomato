@@ -3,12 +3,6 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import SkillManager from "./SkillManager.vue";
-import KnowledgeAndExamples from "../../admin/components/intelligence-engine/KnowledgeAndExamples.vue";
-import type { KnowledgeManagerProps } from "../../admin/components/intelligence-engine/knowledge-manager";
-
-defineProps<{
-  knowledgeManager: KnowledgeManagerProps;
-}>();
 
 const route = useRoute();
 const router = useRouter();
@@ -17,7 +11,7 @@ const { t } = useI18n();
 const activeCategory = computed({
   get: () => {
     const tab = route.query.tab || route.query.category;
-    if (tab === "visualization" || tab === "knowledge") return tab;
+    if (tab === "visualization") return tab;
     return "analysis";
   },
   set: (tab: string) => {
@@ -28,7 +22,6 @@ const activeCategory = computed({
     );
     query.tab = tab;
     delete query.category;
-    if (tab !== "knowledge") delete query.section;
     router.replace({ query });
   },
 });
@@ -42,9 +35,6 @@ const activeCategory = computed({
       </el-tab-pane>
       <el-tab-pane :label="t('admin.visualizationSkills')" name="visualization">
         <SkillManager v-if="activeCategory === 'visualization'" category="visualization" />
-      </el-tab-pane>
-      <el-tab-pane :label="t('nav.knowledgeAndExamples')" name="knowledge">
-        <KnowledgeAndExamples v-if="activeCategory === 'knowledge'" :knowledge-manager="knowledgeManager" />
       </el-tab-pane>
     </el-tabs>
   </div>

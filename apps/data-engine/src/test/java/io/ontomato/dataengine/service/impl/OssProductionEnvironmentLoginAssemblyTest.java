@@ -116,6 +116,7 @@ class OssProductionEnvironmentLoginAssemblyTest {
             context.addBeanFactoryPostProcessor(factory -> {
                 factory.registerResolvableDependency(DataRagConfig.class, config);
                 factory.registerResolvableDependency(BusinessConfigService.class, unused(BusinessConfigService.class));
+                factory.registerResolvableDependency(io.ontomato.dataengine.dataAdapter.DataAdapterRegistry.class, new io.ontomato.dataengine.dataAdapter.DataAdapterRegistry(List.of(), config));
                 factory.registerResolvableDependency(AdminService.class, unused(AdminService.class));
                 factory.registerResolvableDependency(SchemaPermissionService.class, unused(SchemaPermissionService.class));
             });

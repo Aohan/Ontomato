@@ -10,6 +10,7 @@ import {
   type OntologyManagerEntryConfig,
 } from "../views/admin/manager-entry-config";
 import { adminRoutes } from "../router/admin-routes";
+import { adminAccessKey } from "../features/admin/navigation";
 
 // config/app.ts 在导入时读取运行配置。
 window.__APP_CONFIG__ = { ONTOLOGY_MANAGER_URL: "http://manager.test/" };
@@ -23,7 +24,13 @@ const enterpriseEntry: OntologyManagerEntryConfig = {
 };
 const ossEntry: OntologyManagerEntryConfig = { ...enterpriseEntry, themeMessage: "ontomato-theme", localeMessage: null };
 
-async function managerFrameUrl(path: string, entry: OntologyManagerEntryConfig, token: string | null, apiKey: string | null) {
+async function managerFrameUrl(
+  path: string,
+  entry: OntologyManagerEntryConfig,
+  token: string | null,
+  apiKey: string | null,
+  granted: readonly string[] = []
+) {
   installOntologyManagerEntry(entry);
   installAuthHost({
     getToken: () => token,
@@ -44,12 +51,19 @@ async function managerFrameUrl(path: string, entry: OntologyManagerEntryConfig, 
   });
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: "/admin", component: RouterView, children: [adminRoutes.ontologyManager, adminRoutes.visualModeling] }],
+    routes: [
+      {
+        path: "/admin",
+        component: RouterView,
+        children: [adminRoutes.ontologyManager, adminRoutes.visualModeling, adminRoutes.knowledgeGovernance],
+      },
+    ],
   });
   await router.push(path);
   const el = document.createElement("div");
   document.body.append(el);
   const app = createApp({ render: () => h(RouterView) }).use(i18n).use(ElementPlus).use(router);
+  app.provide(adminAccessKey, { ready: true, can: (permission) => granted.includes(permission) });
   app.mount(el);
   await router.isReady();
   await new Promise((resolve) => setTimeout(resolve));
@@ -80,6 +94,7 @@ describe("Manager 入口", () => {
       back: "playground",
       theme: "light",
       locale: "en",
+      embedded: "1",
       tk: "tok",
     });
     expect(url.hash).toBe("");
@@ -91,6 +106,15 @@ describe("Manager 入口", () => {
     expect(withKey.url.searchParams.get("tk")).toBeNull();
 
     const oss = await managerFrameUrl("/admin/ontology-manager?view=data-browser", ossEntry, null, null);
-    expect(Object.fromEntries(oss.url.searchParams)).toEqual({ view: "data-browser", theme: "light" });
+    expect(Object.fromEntries(oss.url.searchParams)).toEqual({ view: "data-browser", theme: "light", embedded: "1" });
+  });
+
+  it("有 business-knowledge 权限时带业务知识治理页的绝对地址，无权限不带", async () => {
+    const granted = await managerFrameUrl("/admin/ontology-manager", ossEntry, null, null, ["business-knowledge"]);
+    expect(granted.url.searchParams.get("knowledgeGovernanceUrl")).toBe(
+      `${window.location.origin}/admin/knowledge-governance`
+    );
+    const denied = await managerFrameUrl("/admin/ontology-manager", ossEntry, null, null, ["ontology-modeling"]);
+    expect(denied.url.searchParams.has("knowledgeGovernanceUrl")).toBe(false);
   });
 });

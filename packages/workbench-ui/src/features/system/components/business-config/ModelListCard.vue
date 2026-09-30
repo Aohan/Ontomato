@@ -1,68 +1,53 @@
 <script setup lang="ts">
-import { computed, reactive, ref, shallowRef, watch } from "vue";
+import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
+import { computed, reactive, ref, shallowRef } from "vue";
 import { Cpu, Plus, Trash2 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import type { JsonObject } from "@ontomato/contracts/system-model";
-import { formatTimeout, parseTimeoutSeconds, type BackendModelConfig } from "../../types";
-import { plainOuter } from "../../utils/raw";
+import { formatTimeout, type ModelEntry } from "../../types";
 import CustomRequestParametersEditor from "./CustomRequestParametersEditor.vue";
-import { workbenchContent } from "../../../../content";
 
 const { t } = useI18n();
-const { businessConfigSeparator } = workbenchContent().text;
 
 const props = defineProps<{
-  saving: boolean;
-  loading: boolean;
-  loadError: string;
+  disabled: boolean;
 }>();
 
-const models = defineModel<BackendModelConfig[]>("models", { required: true });
+// 条目是普通对象：父页以浅引用持有列表，新增与编辑都整表替换，不就地修改。
+const models = defineModel<ModelEntry[]>("models", { required: true });
 
 const emit = defineEmits<{
-  save: [];
-  test: [model: BackendModelConfig];
-  retry: [];
+  remove: [index: number];
+  test: [model: ModelEntry];
 }>();
 
 const dialogVisible = ref(false);
 const editingIndex = ref(-1);
 const customRequestParametersValid = ref(true);
-const savedSignature = ref("");
-const modelSignature = () => JSON.stringify(models.value.map((entry) => plainOuter(entry)));
-const dirty = computed(
-  () => savedSignature.value !== "" && modelSignature() !== savedSignature.value
-);
-watch(
-  () => props.loading,
-  (loading) => {
-    if (!loading && !props.loadError) markSaved();
-  },
-  { immediate: true }
-);
-// 原条目的完整快照（含隐藏连接字段与未上控件的参数），编辑时展开回写，保证往返保真。
-let editingBaseline: BackendModelConfig | null = null;
-// 自定义对象不进 reactive：Vue 深层代理会吞掉保留键，用浅引用 holding 原始对象。
-const customParams = shallowRef<JsonObject>({});
+// 原条目的完整快照（含未上控件的字段），编辑时展开回写，保证往返保真。
+let editingBaseline: ModelEntry | null = null;
+// 自定义对象不进 reactive：Vue 深层代理会吞掉保留键，用浅引用持有原始对象。
+const customParams = shallowRef<Record<string, unknown>>({});
 
-function updateCustomParameters(value: JsonObject) {
+function updateCustomParameters(value: Record<string, unknown>) {
   // 显式写入 ref，避免模板将含 __v_isRef 的普通 JSON 当成新的 ref 绑定。
   customParams.value = value;
 }
 
-function emptyDraft(): Omit<BackendModelConfig, "customRequestParameters"> {
+// 数值项为 null 表示不设置：maxTokens / contextWindow 由 Java 补默认值，其余不下发。
+function emptyDraft() {
   return {
     name: "",
     displayName: "",
     baseUrl: "",
-    apiKeys: [],
+    apiKeys: [] as string[],
     modelName: "",
-    timeout: "PT300S",
-    maxRetries: 3,
-    temperature: null,
-    topP: null,
-    maxTokens: null,
-    maxCompletionTokens: null,
+    maxTokens: null as number | null,
+    contextWindow: null as number | null,
+    timeoutSeconds: null as number | null,
+    maxRetries: null as number | null,
+    temperature: null as number | null,
+    topP: null as number | null,
+    maxCompletionTokens: null as number | null,
   };
 }
 
@@ -86,7 +71,6 @@ const draftComplete = computed(
 );
 
 function openAddDialog() {
-  if (props.loading || props.saving || props.loadError) return;
   editingIndex.value = -1;
   editingBaseline = null;
   Object.assign(draft, emptyDraft());
@@ -96,34 +80,32 @@ function openAddDialog() {
 }
 
 function openEditDialog(index: number) {
-  if (props.loading || props.saving || props.loadError) return;
-  const entry = models.value[index];
-  if (!entry) return;
+  const entry = models.value[index]!;
   editingIndex.value = index;
-  // 只对外层解代理；custom 是不透明 JSON，原样引用，编辑器整件替换、不就地改。
-  const raw = plainOuter<BackendModelConfig>(entry);
-  editingBaseline = raw;
+  editingBaseline = entry;
   Object.assign(draft, {
-    name: raw.name,
-    displayName: raw.displayName,
-    baseUrl: raw.baseUrl,
-    apiKeys: [...raw.apiKeys],
-    modelName: raw.modelName,
-    timeout: raw.timeout,
-    maxRetries: raw.maxRetries,
-    temperature: raw.temperature ?? null,
-    topP: raw.topP ?? null,
-    maxTokens: raw.maxTokens ?? null,
-    maxCompletionTokens: raw.maxCompletionTokens ?? null,
+    name: entry.name,
+    displayName: entry.displayName,
+    baseUrl: entry.baseUrl,
+    apiKeys: [...entry.apiKeys],
+    modelName: entry.modelName,
+    maxTokens: entry.maxTokens,
+    contextWindow: entry.contextWindow,
+    // 超时读取为 ISO-8601 时长（如 PT5M），缺失即空。
+    timeoutSeconds: entry.timeout ? parseIsoDurationSeconds(entry.timeout) : null,
+    maxRetries: entry.maxRetries ?? null,
+    temperature: entry.temperature ?? null,
+    topP: entry.topP ?? null,
+    maxCompletionTokens: entry.maxCompletionTokens ?? null,
   });
-  customParams.value = raw.customRequestParameters ?? {};
+  // custom 是不透明 JSON，原样引用，编辑器整件替换、不就地改。
+  customParams.value = entry.customRequestParameters ?? {};
   customRequestParametersValid.value = true;
   dialogVisible.value = true;
 }
 
 function confirmDialog() {
-  if (!draftComplete.value) return;
-  const staged: BackendModelConfig = {
+  const staged: ModelEntry = {
     ...editingBaseline,
     // 配置 ID 是角色引用的身份，已有条目不可改；显示名可随时改，不影响引用。
     name: draft.name.trim(),
@@ -132,34 +114,23 @@ function confirmDialog() {
     // 密钥是原值普通数组：删除即删项，保存与测试都按草稿原样提交。
     apiKeys: [...draft.apiKeys],
     modelName: draft.modelName,
-    timeout: draft.timeout,
+    maxTokens: draft.maxTokens,
+    contextWindow: draft.contextWindow,
+    timeout: draft.timeoutSeconds === null ? null : formatTimeout(draft.timeoutSeconds),
     maxRetries: draft.maxRetries,
     temperature: draft.temperature,
     topP: draft.topP,
-    maxTokens: draft.maxTokens,
     maxCompletionTokens: draft.maxCompletionTokens,
     customRequestParameters: customParams.value,
   };
-  if (editingIndex.value < 0) {
-    models.value.push(staged);
-  } else {
-    models.value[editingIndex.value] = staged;
-  }
+  models.value = isNew.value
+    ? [...models.value, staged]
+    : models.value.map((entry, index) => (index === editingIndex.value ? staged : entry));
   customParams.value = {};
   dialogVisible.value = false;
 }
 
-function removeModel(index: number) {
-  models.value.splice(index, 1);
-}
-
-function markSaved() {
-  savedSignature.value = modelSignature();
-}
-
-defineExpose({ markSaved });
-
-function keyStatus(entry: BackendModelConfig): string {
+function keyStatus(entry: ModelEntry): string {
   const count = entry.apiKeys.length;
   return count > 0 ? t("admin.keyCountConfigured", { n: count }) : t("admin.keyMissing");
 }
@@ -170,36 +141,25 @@ function keyStatus(entry: BackendModelConfig): string {
     <div class="card-header">
       <el-icon :size="20"><Cpu /></el-icon>
       <span>{{ t("admin.modelList") }}</span>
-      <el-tag
-        v-if="dirty && !props.loadError && !props.loading"
-        type="warning"
-        size="small"
-        class="dirty-tag"
-      >
-        {{ t("admin.unsaved") }}
-      </el-tag>
       <el-button
         type="primary"
         :icon="Plus"
         size="small"
         class="header-action"
-        :disabled="props.loading || props.saving || !!props.loadError"
+        :disabled="props.disabled"
         @click="openAddDialog"
       >
         {{ t("admin.addModel") }}
       </el-button>
     </div>
     <div class="card-body">
-      <el-skeleton v-if="props.loading" :rows="3" animated />
-      <div v-else-if="props.loadError" class="load-error" role="alert">
-        <span>{{ t("admin.modelListLoadFailed") }}{{ businessConfigSeparator }}{{ props.loadError }}</span>
-        <el-button size="small" @click="emit('retry')">{{ t("common.retry") }}</el-button>
-      </div>
-      <el-empty v-else-if="models.length === 0" :description="t('admin.modelListEmpty')">
-        <el-button type="primary" @click="openAddDialog">{{ t("admin.addModel") }}</el-button>
+      <el-empty v-if="models.length === 0" :description="t('admin.modelListEmpty')">
+        <el-button type="primary" :disabled="props.disabled" @click="openAddDialog">
+          {{ t("admin.addModel") }}
+        </el-button>
       </el-empty>
       <ul v-else class="model-list">
-        <li v-for="(entry, index) in models" :key="entry.name || index" class="model-item">
+        <li v-for="(entry, index) in models" :key="entry.name" class="model-item">
           <div class="model-main">
             <span class="model-name">{{ entry.displayName }}</span>
             <code
@@ -218,34 +178,28 @@ function keyStatus(entry: BackendModelConfig): string {
             <span class="model-keys">{{ keyStatus(entry) }}</span>
           </div>
           <div class="model-actions">
+            <el-button link type="primary" :disabled="props.disabled" @click="emit('test', entry)">
+              {{ t("common.testModel") }}
+            </el-button>
             <el-button
               link
               type="primary"
-              :disabled="props.saving"
-              @click="emit('test', models[index]!)"
+              :disabled="props.disabled"
+              @click="openEditDialog(index)"
             >
-              {{ t("common.testModel") }}
-            </el-button>
-            <el-button link type="primary" :disabled="props.saving" @click="openEditDialog(index)">
               {{ t("common.edit") }}
             </el-button>
-            <el-button link type="danger" :disabled="props.saving" @click="removeModel(index)">
+            <el-button
+              link
+              type="danger"
+              :disabled="props.disabled"
+              @click="emit('remove', index)"
+            >
               {{ t("common.delete") }}
             </el-button>
           </div>
         </li>
       </ul>
-
-      <el-form-item class="form-actions">
-        <el-button
-          type="primary"
-          :loading="props.saving"
-          :disabled="!!props.loadError || props.loading"
-          @click="emit('save')"
-        >
-          {{ t("admin.saveModelList") }}
-        </el-button>
-      </el-form-item>
 
       <el-dialog
         v-model="dialogVisible"
@@ -301,13 +255,38 @@ function keyStatus(entry: BackendModelConfig): string {
           </el-form-item>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12">
+              <el-form-item label="maxTokens">
+                <el-input-number
+                  v-model="draft.maxTokens"
+                  :min="1"
+                  :precision="0"
+                  :placeholder="t('admin.defaultWhenEmpty')"
+                  controls-position="right"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('admin.contextWindow')">
+                <el-input-number
+                  v-model="draft.contextWindow"
+                  :min="1"
+                  :precision="0"
+                  :placeholder="t('admin.defaultWhenEmpty')"
+                  controls-position="right"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <h4 class="dialog-section">{{ t("admin.advancedSettings") }}</h4>
+          <el-row :gutter="24">
+            <el-col :xs="24" :sm="12">
               <el-form-item :label="t('common.timeoutSec')">
                 <el-input-number
-                  :model-value="parseTimeoutSeconds(draft.timeout)"
+                  v-model="draft.timeoutSeconds"
                   :min="1"
+                  :precision="0"
                   :step="10"
                   controls-position="right"
-                  @update:model-value="draft.timeout = formatTimeout($event ?? 300)"
                 />
               </el-form-item>
             </el-col>
@@ -316,13 +295,12 @@ function keyStatus(entry: BackendModelConfig): string {
                 <el-input-number
                   v-model="draft.maxRetries"
                   :min="0"
-                  :step="1"
+                  :precision="0"
                   controls-position="right"
                 />
               </el-form-item>
             </el-col>
           </el-row>
-          <h4 class="dialog-section">{{ t("admin.advancedSettings") }}</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12">
               <el-form-item label="temperature">
@@ -337,13 +315,13 @@ function keyStatus(entry: BackendModelConfig): string {
           </el-row>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12">
-              <el-form-item label="maxTokens">
-                <el-input-number v-model="draft.maxTokens" controls-position="right" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
               <el-form-item label="maxCompletionTokens">
-                <el-input-number v-model="draft.maxCompletionTokens" controls-position="right" />
+                <el-input-number
+                  v-model="draft.maxCompletionTokens"
+                  :min="1"
+                  :precision="0"
+                  controls-position="right"
+                />
               </el-form-item>
             </el-col>
           </el-row>

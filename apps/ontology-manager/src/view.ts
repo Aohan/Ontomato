@@ -24,6 +24,7 @@ function initialView(initialRoute: string) {
   const view = params.get("view");
   if (view === "data-browser") return "/data";
   if (view === "assets") return "/assets/metrics";
+  if (view === "knowledge") return "/knowledge";
   if (view === "visual-modeling") return `/visual-modeling${visualModelingQuery(params)}`;
   return initialRoute ? normalizeInitialRoute(initialRoute) : "/playground";
 }

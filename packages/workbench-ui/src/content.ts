@@ -114,11 +114,11 @@ export interface WorkbenchFixedText {
     exportSucceeded: string;
     exportFailed: string;
   };
-  /** 批量删除部分失败提示末尾的计数原文（业务知识经 KnowledgeManager 路由 props、问数示例两类批删）。 */
+  /** 批量删除部分失败提示末尾的计数原文（问数示例两类批删）。 */
   batchDeleteFailureSuffix: (failed: number, total: number) => string;
   /** 问数示例卡片字段标签后的原冒号（ExamplesManager.vue 五处）；与请求错误的 errorPunctuation 各自独立。 */
   exampleFieldSeparator: string;
-  /** 系统配置页错误说明与超时文本的原分隔（BusinessConfig 及 BackendModelList/SystemModel/Embedding×2/QuerySettings 六处）。 */
+  /** 系统配置与模型配置页错误说明与超时文本的原分隔（BusinessConfig 及 BackendModelList/SystemModel/Embedding×2/QuerySettings 六处）。 */
   businessConfigSeparator: string;
   /** PPT 章节标题缺省与提炼失败（analysis/utils/ppt.ts）。 */
   pptSectionFallback: string;

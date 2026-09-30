@@ -46,6 +46,7 @@ import { ensureReportDeliverableToggleSchema } from "./20260901-report-deliverab
 import { ensureAnalysisAgentMcpServicesSchema } from "./20260901-analysis-agent-mcp-services/schema.js";
 import { ensureKnowledgeGovernanceSchema } from "./20260910-knowledge-governance/schema.js";
 import { ensureAnalysisReportSummaryPositionSchema } from "./20260918-analysis-report-summary-position/schema.js";
+import { ensureAnalysisAgentHotReportSchema } from "./20260929-analysis-agent-hot-report/schema.js";
 import {
   QUERY_RUN_BACKEND_SESSIONS_NAME,
   QUERY_RUN_BACKEND_SESSIONS_VERSION,
@@ -93,6 +94,10 @@ export const POSTGRES_MIGRATION_REGISTRY: MigrationRegistration[] = [
   {
     directory: "20260918-analysis-report-summary-position",
     ensureSchema: ensureAnalysisReportSummaryPositionSchema,
+  },
+  {
+    directory: "20260929-analysis-agent-hot-report",
+    ensureSchema: ensureAnalysisAgentHotReportSchema,
   },
   {
     directory: "20260625-business-storage-v1",
