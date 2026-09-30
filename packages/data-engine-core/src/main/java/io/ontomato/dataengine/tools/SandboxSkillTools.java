@@ -1,8 +1,10 @@
 package io.ontomato.dataengine.tools;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -48,9 +50,9 @@ public class SandboxSkillTools {
 	private AgentWorkspaceService workspaceService;
 
 	@Tool("Prepare the test data to be imported into the sandbox\n"
-			+ "Input: object data, relationship data\n"
+			+ "Input: object data, relationship data, vector data\n"
 			+ "Output: execution result or failure reason")
-    public String prepareTestData(@P("object data") List<Map> objDatas, @P("relationship data") List<Map> relDatas) {
+    public String prepareTestData(@P("object data") List<Map> objDatas, @P("relationship data") List<Map> relDatas, @P("vector data") List<Map> vectorDatas) {
 		FileOutputStream fos = null;
 		try {
 			AgentCallContext callContext = AgentCallContext.current();
@@ -138,12 +140,57 @@ public class SandboxSkillTools {
 				}
 			}
 			
+			// Check the vector data
+			List<Map<String, Object>> newVectorDatas = new ArrayList<Map<String, Object>>();
+			if (vectorDatas != null) {
+				for (Map<String, Object> vectorData : vectorDatas) {
+					String className = (String) vectorData.get("className");
+					String objectId = (String) vectorData.get("objectId");
+					String attrName = (String) vectorData.get("attrName");
+					String text = (String) vectorData.get("text");
+					String fileId = (String) vectorData.get("fileId");
+					Map<String, Object> classDef = classDefMap.get(className);
+					if (classDef == null) {
+						throw new Exception("The vector data: Class[" + className + "] is not exist.");
+					}
+					Set<String> ids = classIdsMap.get(className);
+					if (ids == null || !ids.contains(objectId)) {
+						throw new Exception("The vector data: objectId[" + objectId + "] is not in Class[" + className + "].");
+					}
+					if (attrName == null || "".equals(attrName.trim())) {
+						throw new Exception("The vector data: attrName is empty.");
+					}
+					boolean isVectorAttr = false;
+					List<Map<String, Object>> attrDefs = (List<Map<String, Object>>) classDef.get("attrs");
+					for (Map<String, Object> attrDef : attrDefs) {
+						if (attrName.equals(attrDef.get("name")) && "vector".equals(attrDef.get("type"))) {
+							isVectorAttr = true;
+							break;
+						}
+					}
+					if (!isVectorAttr) {
+						throw new Exception("The vector data: attrName[" + attrName + "] is not a vector attribute of Class[" + className + "].");
+					}
+					if (text == null || "".equals(text.trim())) {
+						throw new Exception("The vector data: text is empty.");
+					}
+					Map<String, Object> newVectorData = new HashMap<String, Object>();
+					newVectorData.put("className", className);
+					newVectorData.put("objectId", objectId);
+					newVectorData.put("attrName", attrName);
+					newVectorData.put("text", text);
+					newVectorData.put("fileId", fileId);
+					newVectorDatas.add(newVectorData);
+				}
+			}
+			
 			// Save the test data to a JSON file
 			File file = getTestDataFile(sandboxId);
 			file.getParentFile().mkdirs();
 			JSONObject data = new JSONObject();
 			data.put("objDatas", objDatas);
 			data.put("relDatas", newRelDatas);
+			data.put("vectorDatas", newVectorDatas);
 			fos = new FileOutputStream(file);
 			fos.write(JSON.toJSONString(data, Feature.WriteMapNullValue).getBytes("utf-8"));
 			return "Test data preparation completed";
@@ -164,6 +211,17 @@ public class SandboxSkillTools {
 	private File getTestDataFile(String sandboxId) {
 		File file = new File("./python/" + sandboxId + "-testData.json");
 		return file;
+	}
+	
+	private String getSuffixFromFileId(String fileId) {
+		if (fileId == null || "".equals(fileId.trim())) {
+			return "txt";
+		}
+		int idx = fileId.lastIndexOf(".");
+		if (idx >= 0 && idx < fileId.length() - 1) {
+			return fileId.substring(idx + 1);
+		}
+		return "txt";
 	}
 	
 	@Tool("After clearing the sandbox data, import the test data into the sandbox\n"
@@ -199,6 +257,20 @@ public class SandboxSkillTools {
 				
 				JSONArray relDatas = data.getJSONArray("relDatas");
 				sandboxService.insertRelations(sandboxId, relDatas, domainId);
+				
+				JSONArray vectorDatas = data.getJSONArray("vectorDatas");
+				if (vectorDatas != null) {
+					for (int i = 0; i < vectorDatas.size(); i++) {
+						JSONObject vectorData = vectorDatas.getJSONObject(i);
+						String className = vectorData.getString("className");
+						String objectId = vectorData.getString("objectId");
+						String attrName = vectorData.getString("attrName");
+						String text = vectorData.getString("text");
+						String fileId = vectorData.getString("fileId");
+						String suffix = getSuffixFromFileId(fileId);
+						writeFunctionOperationService.appendVector(className, attrName, objectId, text, new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8)), suffix, sandboxId, domainId);
+					}
+				}
 			} else {
 				throw new Exception("The test data file to be imported into the sandbox does not exist");
 			}

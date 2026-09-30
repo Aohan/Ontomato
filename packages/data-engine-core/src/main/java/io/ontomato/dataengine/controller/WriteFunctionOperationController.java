@@ -1,12 +1,15 @@
 package io.ontomato.dataengine.controller;
 
+import java.io.InputStream;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
@@ -135,6 +138,101 @@ public class WriteFunctionOperationController {
 		String domainId = param.getString("domainId");
 		return writeFunctionOperationService.query(dsl, sandboxId, domainId);
     }
+	
+	@PostMapping("/writeFunctionOperation/appendVector")
+    @ResponseBody
+    public JSONObject appendVector(@RequestParam("className") String className,
+    		@RequestParam("attrName") String attrName,
+    		@RequestParam("objectId") String objectId,
+    		@RequestParam("text") String text,
+    		@RequestParam("file") MultipartFile file,
+    		@RequestParam("sandboxId") String sandboxId,
+    		@RequestParam("domainId") String domainId) {
+		JSONObject ret = new JSONObject();
+		InputStream is = null;
+		try {
+			is = file.getInputStream();
+			writeFunctionOperationService.appendVector(className, attrName, objectId, text, is, getSuffix(file.getOriginalFilename()), dealSandboxId(sandboxId), domainId);
+			ret.put("success", true);
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+			ret.put("success", false);
+			ret.put("message", e.getMessage());
+		} finally {
+			if (is != null) {
+				try {
+					is.close();
+				} catch (Exception e) {
+					log.error(e.getMessage(), e);
+				}
+			}
+		}
+		return ret;
+    }
+	
+	@PostMapping("/writeFunctionOperation/updateVector")
+    @ResponseBody
+    public JSONObject updateVector(@RequestParam("className") String className,
+    		@RequestParam("attrName") String attrName,
+    		@RequestParam("objectId") String objectId,
+    		@RequestParam("fileId") String fileId,
+    		@RequestParam("text") String text,
+    		@RequestParam("file") MultipartFile file,
+    		@RequestParam("sandboxId") String sandboxId,
+    		@RequestParam("domainId") String domainId) {
+		JSONObject ret = new JSONObject();
+		InputStream is = null;
+		try {
+			is = file.getInputStream();
+			writeFunctionOperationService.updateVector(className, attrName, objectId, fileId, text, is, dealSandboxId(sandboxId), domainId);
+			ret.put("success", true);
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+			ret.put("success", false);
+			ret.put("message", e.getMessage());
+		} finally {
+			if (is != null) {
+				try {
+					is.close();
+				} catch (Exception e) {
+					log.error(e.getMessage(), e);
+				}
+			}
+		}
+		return ret;
+    }
+	
+	@PostMapping("/writeFunctionOperation/deleteVector")
+    @ResponseBody
+    public JSONObject deleteVector(@RequestBody JSONObject param) throws Exception {
+		JSONObject ret = new JSONObject();
+		try {
+			String className = param.getString("className");
+			String attrName = param.getString("attrName");
+			String objectId = param.getString("objectId");
+			String fileId = param.getString("fileId");
+			String sandboxId = dealSandboxId(param.getString("sandboxId"));
+			String domainId = param.getString("domainId");
+			writeFunctionOperationService.deleteVector(className, attrName, objectId, fileId, sandboxId, domainId);
+			ret.put("success", true);
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+			ret.put("success", false);
+			ret.put("message", e.getMessage());
+		}
+		return ret;
+    }
+	
+	private String getSuffix(String filename) {
+		if (filename == null) {
+			return "";
+		}
+		int idx = filename.lastIndexOf(".");
+		if (idx >= 0 && idx < filename.length() - 1) {
+			return filename.substring(idx + 1);
+		}
+		return "";
+	}
 	
 	private JSONObject validDslJsonFormat(JSONObject param) throws Exception {
 		try {
