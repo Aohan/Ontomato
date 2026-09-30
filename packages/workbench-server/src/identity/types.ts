@@ -14,6 +14,8 @@ export interface VerifiedOnlineCredential {
 export interface SkillResourceDomainResult {
   ok: true;
   domainId: string;
+  token?: string;
+  apiKey?: string;
 }
 
 export interface SkillResourceDomainFailure {

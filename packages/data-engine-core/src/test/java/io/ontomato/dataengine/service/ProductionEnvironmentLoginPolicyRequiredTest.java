@@ -21,6 +21,7 @@ class ProductionEnvironmentLoginPolicyRequiredTest {
                 ctx.addBeanFactoryPostProcessor(factory -> {
                     factory.registerResolvableDependency(DataRagConfig.class, new DataRagConfig());
                     factory.registerResolvableDependency(BusinessConfigService.class, unused(BusinessConfigService.class));
+                    factory.registerResolvableDependency(io.ontomato.dataengine.dataAdapter.DataAdapterRegistry.class, new io.ontomato.dataengine.dataAdapter.DataAdapterRegistry(java.util.List.of(), new DataRagConfig()));
                     factory.registerResolvableDependency(AdminService.class, unused(AdminService.class));
                     factory.registerResolvableDependency(SchemaPermissionService.class, unused(SchemaPermissionService.class));
                 });

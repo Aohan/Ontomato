@@ -91,8 +91,7 @@ vi.mock("../../../admin", () => ({
       success: true,
       data: JSON.parse(
         JSON.stringify({
-          models: [],
-          agents: {},
+          agents: { coding: { model: null } },
           lang: "en",
           dataAdapter: backend.dataAdapter,
           dataAdapterConnections: backend.connections,

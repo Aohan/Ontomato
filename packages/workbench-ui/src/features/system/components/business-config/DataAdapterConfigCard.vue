@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { Link2 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import type { BusinessConfig, DataAdapterConnection, DataAdapterInfo } from "../../types";
+import type { DataAdapterConnection, DataAdapterInfo, SystemSettings } from "../../types";
 import type { BusinessConfigAdapterDisplay } from "../../business-config";
 
 const { t } = useI18n();
@@ -14,7 +14,7 @@ const props = defineProps<{
   adapterDisplay: BusinessConfigAdapterDisplay;
 }>();
 
-const config = defineModel<BusinessConfig>("config", { required: true });
+const config = defineModel<SystemSettings>("config", { required: true });
 const mode = defineModel<string>("mode", { required: true });
 
 const emit = defineEmits<{
@@ -92,7 +92,7 @@ function connection(type: string): DataAdapterConnection {
 
         <el-form-item class="form-actions">
           <el-button type="primary" :loading="saving" :disabled="disabled" @click="emit('save')">
-            {{ t("common.save") }}
+            {{ t("common.saveAdapterConfig") }}
           </el-button>
         </el-form-item>
       </el-form>

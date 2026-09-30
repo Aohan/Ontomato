@@ -21,6 +21,7 @@ describe("view and hash", () => {
   it("a root hash does not locate anything; the view parameter maps to data browsing and smart assets", () => {
     expect(start("/?view=data-browser#/").view.value).toBe("/data");
     expect(start("/?view=assets").view.value).toBe("/assets/metrics");
+    expect(start("/?view=knowledge").view.value).toBe("/knowledge");
   });
 
   it("view=visual-modeling maps to the modeling view; focus/id/back enter the view query as-is and other parameters are dropped", () => {

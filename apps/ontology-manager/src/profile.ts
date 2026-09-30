@@ -13,4 +13,5 @@ export const ossProfile: ManagerShellProfile = {
     unnamedAsset: "Unnamed asset",
   },
   presentation: ossPresentation,
+  knowledgeTagValues: { general: "General", business: "Business", tech: "Tech" },
 };

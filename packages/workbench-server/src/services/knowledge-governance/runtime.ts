@@ -7,7 +7,7 @@ import {
   type HarnessTurnStatus,
 } from "../../infrastructure/harness-sessions";
 import { renderPrompt, getPromptTemplate } from "../../core/prompts/loader";
-import { resolveSystemModel, SYSTEM_MODEL_MAX_TOKENS } from "../../config/system-model";
+import { ModelNotConfiguredError, resolveModelForRole } from "../../config/model-resolver";
 import { runWithLogContext } from "../../logging/log-context";
 import { createLogger } from "../../logging/logger";
 import { HttpError } from "../../utils/errors";
@@ -65,8 +65,9 @@ export class GovernanceRuntime {
       throw error;
     }
     const controller = new AbortController();
-    const done = runWithLogContext({ domainId: owner.domainId }, () =>
-      this.run(record, turnId, credentials, locale, message, controller.signal)
+    const done = runWithLogContext(
+      { domainId: owner.domainId, token: credentials.token, apiKey: credentials.apiKey },
+      () => this.run(record, turnId, credentials, locale, message, controller.signal)
     );
     this.active.set(id, { controller, done });
     void done
@@ -108,12 +109,12 @@ export class GovernanceRuntime {
       record.draft = "";
       record.error = null;
       record.activity = "working";
-      const model = resolveSystemModel(record.domainId);
+      const model = await resolveModelForRole("knowledgeGovernance");
       const modelConfig = {
         baseUrl: model.baseUrl,
         apiKey: model.apiKey,
         modelName: model.modelName,
-        maxTokens: SYSTEM_MODEL_MAX_TOKENS,
+        maxTokens: model.maxTokens,
         modelKwargs: model.customRequestParameters,
         llmLog: { agentName: "KnowledgeGovernance", agentRunId: turnId },
       };
@@ -176,8 +177,11 @@ export class GovernanceRuntime {
     } catch (error) {
       terminal = signal.aborted ? "cancelled" : "failed";
       if (!signal.aborted) {
+        // When no model is configured for the role, directly provide the localized reason; other failures keep the generic message.
         record.error =
-          "The governance response could not finish. Saved work is retained; please retry.";
+          error instanceof ModelNotConfiguredError
+            ? error.message
+            : "The governance response could not finish. Saved work is retained; please retry.";
         logger.error("Governance response failed", { sessionId: record.id, error: String(error) });
       }
     }

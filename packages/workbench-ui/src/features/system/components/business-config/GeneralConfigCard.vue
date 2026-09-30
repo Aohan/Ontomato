@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Cog } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import type { BusinessConfig, GeneralConfigKey } from "../../types";
+import type { GeneralConfigKey, SystemSettings } from "../../types";
 import type { BusinessConfigLanguageOption } from "../../business-config";
 
 const { t } = useI18n();
@@ -13,7 +13,7 @@ defineProps<{
   defaultLanguage: string;
 }>();
 
-const config = defineModel<BusinessConfig>("config", { required: true });
+const config = defineModel<SystemSettings>("config", { required: true });
 
 const emit = defineEmits<{
   save: [key: GeneralConfigKey];

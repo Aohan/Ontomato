@@ -22,6 +22,4 @@ export interface BusinessConfigProps {
   /** Backend languages this edition's data engine ships resources for, in display order; the only selectable values. */
   languageOptions: readonly BusinessConfigLanguageOption[];
   adapterDisplay: BusinessConfigAdapterDisplay;
-  /** Whether this page shows the query examples block (editions that keep examples on another page turn it off). */
-  queryExamples: boolean;
 }

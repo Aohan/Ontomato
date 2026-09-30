@@ -39,10 +39,13 @@ export interface ManagerPresentation {
   readonly dataBrowserDescription: (objectLabel: string | undefined) => string;
   /** Dialogs switch to the narrow layout when the component container is at most 700px wide. */
   readonly compactDialogs: boolean;
-  /** Whether the Manager offers its business knowledge page (sidebar entry and the /knowledge view). */
-  readonly businessKnowledge: boolean;
-  /** Whether to show the workspace brand header; set to false to hide it when embedded in a host (shown when absent). */
-  readonly showWorkspaceHeader?: boolean;
+}
+
+/** This edition's stored values of the three business knowledge tags: submitted and stored as-is; option labels come from Manager messages. */
+export interface ManagerKnowledgeTagValues {
+  readonly general: string;
+  readonly business: string;
+  readonly tech: string;
 }
 
 /** Everything the host passes in; the component does not read host storage, document theme classes or global routing. */
@@ -59,6 +62,12 @@ export interface ManagerHostContext {
   dataFallbacks: ManagerDataFallbacks;
   /** Presentation values supplied statically by the host; see ManagerPresentation. */
   presentation: ManagerPresentation;
+  /** Business knowledge tag values supplied statically by the host; see ManagerKnowledgeTagValues. */
+  knowledgeTagValues: ManagerKnowledgeTagValues;
+  /** Embedded in a host page: the host already has the Ontology Manager tab and back navigation, so the brand header is hidden. */
+  embedded: boolean;
+  /** The host's knowledge governance page URL (only when the current user has governance permission); the knowledge page shows an entry for it; null when absent. */
+  knowledgeGovernanceUrl: string | null;
 }
 
 const contextKey: InjectionKey<Readonly<ManagerHostContext>> = Symbol("ontology-manager-context");

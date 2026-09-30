@@ -41,7 +41,7 @@ export async function replyNode(state: GraphState, config?: any): Promise<GraphU
     const datasetSchema = shouldIncludeDataset
       ? await datasetSchemaService.getSchemaForQuestion(userQuestion, token, apiKey)
       : "";
-    const model = createModel({ agentName: modelAgentName("reply") });
+    const model = await createModel({ agentName: modelAgentName("reply") });
     const replyPrompt = renderPrompt("standard-chat.reply-task.system", {
       userQuestion,
       replyKind: taskReply?.replyKind || "direct_explanation",

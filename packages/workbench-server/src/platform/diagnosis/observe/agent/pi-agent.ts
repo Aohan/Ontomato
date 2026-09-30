@@ -7,10 +7,10 @@ import type {
 import { randomUUID } from "node:crypto";
 import type { ModelConfig } from "../../../../core/agent-loop/types";
 import {
-  SystemModelConfigError,
-  resolveSystemModel,
-  SYSTEM_MODEL_MAX_TOKENS,
-} from "../../../../config/system-model";
+  ModelNotConfiguredError,
+  resolveModelForRole,
+} from "../../../../config/model-resolver";
+import { runWithLogContext } from "../../../../logging/log-context";
 import {
   HarnessSessionBusyError,
   harnessSessions,
@@ -33,10 +33,6 @@ export type StartChatResult =
       code: "SESSION_NOT_FOUND" | "MODEL_NOT_CONFIGURED" | "RESPONSE_BUSY";
       error: string;
     };
-
-function modelNotConfiguredMessage(): string {
-  return tApp("diag.observe.agent.pi-agent.0");
-}
 
 export class DiagnosisSessionManager {
   private sessions = new Map<string, ManagedSession>();
@@ -111,90 +107,85 @@ export class DiagnosisSessionManager {
     tk?: string,
     domainId?: string
   ): Promise<StartChatResult> {
-    const row = await diagnosisSessions.get(sessionId);
-    if (!row)
-      return { ok: false, status: 404, code: "SESSION_NOT_FOUND", error: "Session not found" };
-    if (row.responseStatus === "running")
-      return {
-        ok: false,
-        status: 409,
-        code: "RESPONSE_BUSY",
-        error: "Session response already running",
-      };
-    let captured: ModelConfig;
-    let contextWindow: number;
-    try {
-      const entry = resolveSystemModel(domainId, "diagnosis");
-      if (!entry.apiKey)
+    return runWithLogContext({ domainId, token: tk }, async () => {
+      const row = await diagnosisSessions.get(sessionId);
+      if (!row)
+        return { ok: false, status: 404, code: "SESSION_NOT_FOUND", error: "Session not found" };
+      if (row.responseStatus === "running")
         return {
           ok: false,
-          status: 400,
-          code: "MODEL_NOT_CONFIGURED",
-          error: modelNotConfiguredMessage(),
+          status: 409,
+          code: "RESPONSE_BUSY",
+          error: "Session response already running",
         };
-      captured = {
-        baseUrl: entry.baseUrl,
-        apiKey: entry.apiKey,
-        modelName: entry.modelName,
-        maxTokens: SYSTEM_MODEL_MAX_TOKENS,
-        modelKwargs: entry.customRequestParameters,
-      };
-      contextWindow = entry.contextWindow;
-    } catch (error) {
-      if (error instanceof SystemModelConfigError)
-        return { ok: false, status: 400, code: "MODEL_NOT_CONFIGURED", error: error.message };
-      throw error;
-    }
-    let turnId: string;
-    try {
-      turnId = (await harnessSessions.beginTurn(sessionId)).turnId;
-    } catch (error) {
-      if (error instanceof HarnessSessionBusyError)
-        return { ok: false, status: 409, code: "RESPONSE_BUSY", error: error.message };
-      throw error;
-    }
-    const stream = new SessionResponseStream();
-    let managed: ManagedSession | undefined;
-    try {
-      managed = createManagedSession(sessionId, row.context);
-      managed.domainId = domainId;
-      managed.tkHolder.current = tk;
-      managed.latestResponse = stream;
-      managed.turnId = turnId;
-      this.sessions.get(sessionId)?.agent?.dispose();
-      this.sessions.set(sessionId, managed);
-      const run = await createHarnessRun(harnessSessions, {
-        sessionId,
-        turnId,
-        contextWindow,
-        promptKeys: DIAGNOSIS_COMPACTION_PROMPT_KEYS,
-        summaryNote: diagnosisSummaryNote,
-      });
-      bindResponseAgent(managed, captured, run, () => {
-        const entry = resolveSystemModel(domainId, "diagnosis");
-        return {
-          contextWindow: entry.contextWindow,
-          config: {
-            baseUrl: entry.baseUrl,
-            apiKey: entry.apiKey,
-            modelName: entry.modelName,
-            maxTokens: SYSTEM_MODEL_MAX_TOKENS,
-            modelKwargs: entry.customRequestParameters,
-          },
+      let captured: ModelConfig;
+      let contextWindow: number;
+      try {
+        const entry = await resolveModelForRole("diagnosis");
+        captured = {
+          baseUrl: entry.baseUrl,
+          apiKey: entry.apiKey,
+          modelName: entry.modelName,
+          maxTokens: entry.maxTokens,
+          modelKwargs: entry.customRequestParameters,
         };
-      });
-      managed.currentExecution = executeResponse(sessionId, managed, message, stream, turnId);
-      // Keep the settled promise for delete/stop ownership; failures must not become unhandled rejections.
-      void managed.currentExecution.catch((error) =>
-        logger.error("Diagnosis response failed", { sessionId, error })
-      );
-      return { ok: true, stream };
-    } catch (error) {
-      managed?.agent?.dispose();
-      if (this.sessions.get(sessionId) === managed) this.sessions.delete(sessionId);
-      await harnessSessions.finishTurn(sessionId, turnId, "failed");
-      throw error;
-    }
+        contextWindow = entry.contextWindow;
+      } catch (error) {
+        if (error instanceof ModelNotConfiguredError)
+          return { ok: false, status: 400, code: "MODEL_NOT_CONFIGURED", error: error.message };
+        throw error;
+      }
+      let turnId: string;
+      try {
+        turnId = (await harnessSessions.beginTurn(sessionId)).turnId;
+      } catch (error) {
+        if (error instanceof HarnessSessionBusyError)
+          return { ok: false, status: 409, code: "RESPONSE_BUSY", error: error.message };
+        throw error;
+      }
+      const stream = new SessionResponseStream();
+      let managed: ManagedSession | undefined;
+      try {
+        managed = createManagedSession(sessionId, row.context);
+        managed.domainId = domainId;
+        managed.tkHolder.current = tk;
+        managed.latestResponse = stream;
+        managed.turnId = turnId;
+        this.sessions.get(sessionId)?.agent?.dispose();
+        this.sessions.set(sessionId, managed);
+        const run = await createHarnessRun(harnessSessions, {
+          sessionId,
+          turnId,
+          contextWindow,
+          promptKeys: DIAGNOSIS_COMPACTION_PROMPT_KEYS,
+          summaryNote: diagnosisSummaryNote,
+        });
+        bindResponseAgent(managed, captured, run, async () => {
+          const entry = await resolveModelForRole("diagnosis");
+          return {
+            contextWindow: entry.contextWindow,
+            config: {
+              baseUrl: entry.baseUrl,
+              apiKey: entry.apiKey,
+              modelName: entry.modelName,
+              maxTokens: entry.maxTokens,
+              modelKwargs: entry.customRequestParameters,
+            },
+          };
+        });
+        managed.currentExecution = executeResponse(sessionId, managed, message, stream, turnId);
+        // Keep the settled promise for delete/stop ownership; failures must not become unhandled rejections.
+        void managed.currentExecution.catch((error) =>
+          logger.error("Diagnosis response failed", { sessionId, error })
+        );
+        return { ok: true, stream };
+      } catch (error) {
+        managed?.agent?.dispose();
+        if (this.sessions.get(sessionId) === managed) this.sessions.delete(sessionId);
+        await harnessSessions.finishTurn(sessionId, turnId, "failed");
+        throw error;
+      }
+    });
   }
 
   getResponseStream(sessionId: string): SessionResponseStream | undefined {

@@ -17,8 +17,6 @@
     "./composables/useTheme": "./src/composables/useTheme.ts",
     "./features/admin/system-monitor": "./src/features/admin/system-monitor.ts",
     "./features/admin/components/platform-operations/SystemMonitor.vue": "./src/features/admin/components/platform-operations/SystemMonitor.vue",
-    "./features/admin/components/platform-operations/OperationsGovernance.vue": "./src/features/admin/components/platform-operations/OperationsGovernance.vue",
-    "./features/admin/components/intelligence-engine/KnowledgeAndExamples.vue": "./src/features/admin/components/intelligence-engine/KnowledgeAndExamples.vue",
     "./features/chat": "./src/features/chat/index.ts",
     "./features/analysis": "./src/features/analysis/index.ts",
     "./features/dashboard": "./src/features/dashboard/index.ts",

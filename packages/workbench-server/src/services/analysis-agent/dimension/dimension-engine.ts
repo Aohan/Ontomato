@@ -131,7 +131,7 @@ export class DimensionEngine {
       .join("\n\n");
 
     try {
-      const model = createModel({ agentName: modelAgentName("analysisDimension") });
+      const model = await createModel({ agentName: modelAgentName("analysisDimension") });
       const messages = [
         { role: "system" as const, content: systemPrompt },
         { role: "user" as const, content: userPrompt },

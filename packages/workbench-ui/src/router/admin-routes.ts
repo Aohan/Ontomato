@@ -65,10 +65,10 @@ export const adminRoutes = {
     component: () => import("../features/knowledge-governance/GovernancePage.vue"),
     meta: { group: "app-capabilities", permission: "business-knowledge" },
   },
-  // Business knowledge moved into the Ontology Manager sidebar; the old route redirects to the Manager.
+  // Business knowledge moved into the Ontology Manager; the old route redirects to the Manager's knowledge page.
   knowledge: {
     path: "knowledge",
-    redirect: "/admin/ontology-manager",
+    redirect: "/admin/ontology-manager?view=knowledge",
     meta: { group: "data-assets", permission: "business-knowledge" },
   },
   examples: {

@@ -9,3 +9,4 @@ export type {
   AdminLayoutConfig,
   AdminMenuItem,
 } from "./navigation";
+export { useAdminAccess } from "./composables/useAdminAccess";

@@ -1,45 +1,29 @@
-import type { JsonObject } from "@ontomato/contracts/system-model";
+import type {
+  BackendAgentConfig,
+  BackendModelConfig,
+  ModelRole,
+} from "@ontomato/contracts/model-settings";
 
-export interface BackendModelConfig {
-  name: string;
-  displayName: string;
-  baseUrl: string;
-  apiKeys: string[];
-  organizationId?: string | null;
-  projectId?: string | null;
-  modelName: string;
-  timeout: string;
-  maxRetries: number;
-  temperature: number | null;
-  topP: number | null;
-  stop?: string[] | null;
+/**
+ * A model entry edited on the model configuration page: based on the entry read by getModelSettings, with fields that
+ * have no controls (organizationId etc.) round-tripped as-is in the snapshot. Unset optional fields may be null when
+ * read; new or cleared maxTokens / contextWindow are submitted as null and Java's read normalization fills the defaults.
+ */
+export type ModelEntry = Omit<
+  BackendModelConfig,
+  "maxTokens" | "contextWindow" | "timeout" | "maxRetries" | "temperature" | "topP"
+> & {
   maxTokens: number | null;
-  maxCompletionTokens: number | null;
-  presencePenalty?: number | null;
-  frequencyPenalty?: number | null;
-  logitBias?: Record<string, number> | null;
-  responseFormat?: string | null;
-  strictJsonSchema?: boolean | null;
-  seed?: number | null;
-  user?: string | null;
-  strictTools?: boolean | null;
-  parallelToolCalls?: boolean | null;
-  store?: boolean | null;
-  metadata?: Record<string, string> | null;
-  serviceTier?: string | null;
-  reasoningEffort?: string | null;
-  logRequests?: boolean | null;
-  logResponses?: boolean | null;
-  customRequestParameters: JsonObject;
-  customHeaders?: Record<string, string> | null;
-  supportedCapabilities?: string[] | null;
-}
+  contextWindow: number | null;
+  timeout?: string | null;
+  maxRetries?: number | null;
+  temperature?: number | null;
+  topP?: number | null;
+  maxCompletionTokens?: number | null;
+};
 
-export interface BackendAgentConfig {
-  model: string;
-  actorCopies: number;
-  skilldir?: string;
-}
+/** Draft model references of the five roles: a config ID or not configured (null); same shape as agents in the saveModelSettings request. */
+export type RoleModels = Record<ModelRole, string | null>;
 
 export interface EmbeddingModelConfig {
   baseUrl: string;
@@ -65,10 +49,8 @@ export interface DataAdapterInfo {
   examples: Partial<Record<DataAdapterField, string>>;
 }
 
-export interface BusinessConfig {
-  models: BackendModelConfig[];
-  agents: Record<AgentKey, BackendAgentConfig>;
-  embeddingModelProperties: EmbeddingModelConfig | null;
+/** General parameters, language and data adapter edited on the system config page. */
+export interface SystemSettings {
   knowledgeMaxResult: number;
   toolAndPythonRetry: number;
   dslCookerTries: number;
@@ -80,15 +62,11 @@ export interface BusinessConfig {
   dataAdapterConnections: Record<string, DataAdapterConnection>;
 }
 
-export const agentKeys = [
-  "normalChat",
-  "questionSpliter",
-  "cleverNormalChat",
-  "pythonChat",
-  "toolChat",
-] as const;
-
-export type AgentKey = (typeof agentKeys)[number];
+/** The parts of GET /businessConfig/getConfig the two pages read: the system config page reads general settings and the skill directory, the model configuration page reads Embedding. */
+export interface BusinessConfig extends SystemSettings {
+  agents: Record<ModelRole, BackendAgentConfig>;
+  embeddingModelProperties: EmbeddingModelConfig | null;
+}
 
 export type GeneralConfigKey =
   | "knowledgeMaxResult"
@@ -99,15 +77,10 @@ export type GeneralConfigKey =
   | "questionSpliterTimeout"
   | "lang";
 
-// Shared identity for application and query engine models: name is the fixed config ID and
-// displayName may be duplicated; append the ID when they differ, show it once when they match.
+// Model identity: name is the fixed config ID and displayName may be duplicated;
+// append the ID when they differ, show it once when they match.
 export function modelLabel(model: { name: string; displayName: string }): string {
   return model.displayName === model.name ? model.name : `${model.displayName} (${model.name})`;
-}
-
-export function parseTimeoutSeconds(timeout: string): number {
-  const match = timeout?.match(/^PT(\d+)S$/);
-  return match ? parseInt(match[1], 10) : 300;
 }
 
 export function formatTimeout(seconds: number): string {

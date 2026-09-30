@@ -14,6 +14,7 @@ import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.BackendSessionEntrance;
 import io.ontomato.dataengine.service.JSONCorrector;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.SessionCancelledException;
 import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
 import io.ontomato.dataengine.util.UserMessageUtil;
@@ -29,6 +30,9 @@ public class JSONCorrectorImpl implements JSONCorrector {
 	
 	@Autowired
     private MultiThreadAIChatService multiThreadAIChatService;
+
+	@Autowired
+	private LangService langService;
 
 	@Override
 	public JSONObject parseObject(String str, String domainId, String sessionId) {
@@ -75,7 +79,7 @@ public class JSONCorrectorImpl implements JSONCorrector {
 				originalQuestion, 
 				correctSessionId,
 				userMessage,
-				ModelResolver.resolve(businessConfig, AgentRole.NORMAL_CHAT),
+				ModelResolver.resolve(businessConfig, AgentRole.QUERY, langService),
 				domainId);
 		if (correctJsonStr.indexOf("```json") >= 0) {
 			correctJsonStr = correctJsonStr.substring(correctJsonStr.indexOf("```json") + 7);

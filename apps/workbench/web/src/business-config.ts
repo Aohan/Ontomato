@@ -10,5 +10,4 @@ export const businessConfig: BusinessConfigProps = {
   },
   // The open-source data engine ships only lang/en.json.
   languageOptions: [{ value: "en", label: "English" }],
-  queryExamples: true,
 };

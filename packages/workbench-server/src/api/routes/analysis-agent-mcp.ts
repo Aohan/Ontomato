@@ -59,7 +59,10 @@ async function withMcpIdentity(
       error: error instanceof Error ? error.message : "Authentication failed",
     });
   }
-  return runWithLogContext({ domainId: identity.domainId }, () => action(identity));
+  return runWithLogContext(
+    { domainId: identity.domainId, token: identity.token, apiKey: identity.apiKey },
+    () => action(identity)
+  );
 }
 
 function taskToMcpResult(task: AnalysisTask) {

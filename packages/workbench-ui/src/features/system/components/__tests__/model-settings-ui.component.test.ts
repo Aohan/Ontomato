@@ -1,44 +1,37 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ElementPlus from "element-plus";
+import ElementPlus, { ElMessage } from "element-plus";
 import { reactive } from "vue";
-import BackendModelListCard from "../business-config/BackendModelListCard.vue";
-import SystemModelConfigCard from "../business-config/SystemModelConfigCard.vue";
-import RoleReferencesCard from "../business-config/RoleReferencesCard.vue";
-import BackendAgentConfigCard from "../business-config/BackendAgentConfigCard.vue";
+import { MODEL_ROLES } from "@ontomato/contracts/model-settings";
+import ModelListCard from "../business-config/ModelListCard.vue";
+import RoleModelsCard from "../business-config/RoleModelsCard.vue";
 import EmbeddingModelConfigCard from "../business-config/EmbeddingModelConfigCard.vue";
 import SkillDirConfigCard from "../business-config/SkillDirConfigCard.vue";
 import QuerySettingsCard from "../business-config/QuerySettingsCard.vue";
 import BusinessConfig from "../BusinessConfig.vue";
 import ModelConfig from "../ModelConfig.vue";
-import ExamplesManager from "../../../admin/components/intelligence-engine/ExamplesManager.vue";
-import type { BackendModelConfig, EmbeddingModelConfig } from "../../types";
-import { agentKeys } from "../../types";
+import type { EmbeddingModelConfig, ModelEntry, RoleModels } from "../../types";
 import { adminApi } from "../../../admin";
 import { workbenchI18n } from "../../../../i18n";
 import { businessConfig } from "../../../../../../../apps/workbench/web/src/business-config";
 
-const BACKEND_CUSTOMS =
+const OPAQUE_CUSTOMS =
   '{"__v_isRef":true,"__v_isReactive":1,"__v_isReadonly":0,"__v_raw":{"nested":"user-value"},"value":"keep-me","temperature":null,"constructor":{"x":1},"__proto__":{"polluted":false},"arr":[1,null,{"k":"v"}]}';
-const FRONTEND_CUSTOMS =
-  '{"__v_raw":{"deep":"frontend-value"},"__v_isRef":true,"__v_isReactive":true,"__v_isReadonly":true,"value":7,"note":null}';
 
-const savedPayload = vi.hoisted(() => ({
-  models: null as unknown,
-  system: null as unknown,
+const sent = vi.hoisted(() => ({
+  settings: null as unknown,
   test: null as unknown,
-  roleModels: null as unknown,
   skilldir: null as unknown,
   embedding: null as unknown,
   embeddingTest: null as unknown,
+  system: null as unknown,
 }));
 
-const calls = vi.hoisted(() => ({ getConfig: 0 }));
-
-// Simulates the server-persisted model library: GET returns a copy (with full fake keys) and saves are stored as-is.
+// Simulates the Java model library: reads return a copy; saves are stored atomically and filled with the maxTokens / contextWindow defaults as read normalization does.
 const server = vi.hoisted(() => ({
   models: [] as Array<Record<string, unknown>>,
-  failNextRead: false,
+  agents: {} as Record<string, string | null>,
+  reads: 0,
 }));
 
 const fixtures = vi.hoisted(() => ({
@@ -49,16 +42,17 @@ const fixtures = vi.hoisted(() => ({
       baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
       apiKeys: ["", "sk-fake-ab12", "sk-fake-cd34"],
       modelName: "qwen3",
-      timeout: "PT300S",
+      maxTokens: 50000,
+      contextWindow: 256000,
+      timeout: "PT5M",
       maxRetries: 99,
       organizationId: "org-existing",
       projectId: "project-existing",
+      stop: ["</end>"],
       customHeaders: { "X-Provider-Test": "keep" },
       logResponses: false,
       temperature: 0.7,
       topP: null,
-      maxTokens: null,
-      maxCompletionTokens: null,
       customRequestParameters: JSON.parse(
         '{"__v_isRef":true,"__v_isReactive":1,"__v_isReadonly":0,"__v_raw":{"nested":"user-value"},"value":"keep-me","temperature":null,"constructor":{"x":1},"__proto__":{"polluted":false},"arr":[1,null,{"k":"v"}]}'
       ),
@@ -69,21 +63,17 @@ const fixtures = vi.hoisted(() => ({
       baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
       apiKeys: ["sk-fake-ef56"],
       modelName: "qwen3-lite",
-      timeout: "PT120S",
-      maxRetries: 3,
-      temperature: null,
-      topP: null,
-      maxTokens: null,
-      maxCompletionTokens: null,
+      maxTokens: 8000,
+      contextWindow: 32000,
       customRequestParameters: {},
     },
   ],
   agents: {
-    normalChat: { model: "qwen-main", actorCopies: 7 },
-    questionSpliter: { model: "qwen-main", actorCopies: 1 },
-    cleverNormalChat: { model: "qwen-main", actorCopies: 1 },
-    pythonChat: { model: "qwen-main", actorCopies: 1 },
-    toolChat: { model: "qwen-main", actorCopies: 1, skilldir: "skills/legacy" },
+    query: "qwen-main",
+    coding: "qwen-main",
+    general: "qwen-lite",
+    diagnosis: "qwen-main",
+    knowledgeGovernance: null,
   },
   embedding: {
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
@@ -92,57 +82,62 @@ const fixtures = vi.hoisted(() => ({
     timeout: "PT300S",
     customHeaders: { "X-Embed-Key": "keep" },
   },
-  system: {
-    models: [
-      {
-        name: "default",
-        displayName: "GPT-4o",
-        baseUrl: "https://api.openai.com/v1",
-        apiKey: "sk-preview",
-        modelName: "gpt-4o",
-        customRequestParameters: JSON.parse(
-          '{"__v_raw":{"deep":"frontend-value"},"__v_isRef":true,"__v_isReactive":true,"__v_isReadonly":true,"value":7,"note":null}'
-        ),
-        timeoutSeconds: 300,
-        maxRetries: 3,
-        contextWindow: 256000,
-      },
-    ],
-    agents: { default: { model: "default" }, diagnosis: { model: "default" } },
-    abcQuestionMode: "harness",
-    queryTimeoutSeconds: 600,
-    hasCustomConfig: false,
-  },
 }));
+
+function settingsData() {
+  return JSON.parse(
+    JSON.stringify({
+      models: server.models,
+      agents: Object.fromEntries(
+        Object.entries(server.agents).map(([role, model]) => [
+          role,
+          role === "coding" ? { model, skilldir: "skills/legacy" } : { model },
+        ])
+      ),
+    })
+  );
+}
 
 vi.mock("../../../admin", () => ({
   adminApi: {
-    getBusinessConfig: vi.fn(async () => {
-      calls.getConfig += 1;
-      if (server.failNextRead) {
-        server.failNextRead = false;
-        return { success: false, message: "reread down" };
-      }
-      return {
-        success: true,
-        data: JSON.parse(
-          JSON.stringify({
-            models: server.models,
-            agents: fixtures.agents,
-            embeddingModelProperties: fixtures.embedding,
-            knowledgeMaxResult: 10,
-            toolAndPythonRetry: 0,
-            dslCookerTries: 1,
-            dslCookerTimeout: 300000,
-            questionSpliterTries: 1,
-            questionSpliterTimeout: 300000,
-            lang: "zh-CN",
-            dataAdapter: "postgresql",
-            dataAdapterConnections: {},
-          })
-        ),
-      };
+    getModelSettings: vi.fn(async () => {
+      server.reads += 1;
+      return { success: true, data: settingsData() };
     }),
+    saveModelSettings: vi.fn(
+      async (payload: { models: Array<Record<string, unknown>>; agents: Record<string, string | null> }) => {
+        sent.settings = JSON.parse(JSON.stringify(payload));
+        server.models = (sent.settings as typeof payload).models.map((model) => ({
+          ...model,
+          maxTokens: model.maxTokens ?? 50000,
+          contextWindow: model.contextWindow ?? 256000,
+        }));
+        server.agents = (sent.settings as typeof payload).agents;
+        return { success: true, data: settingsData() };
+      }
+    ),
+    testModel: vi.fn(async (model: unknown, prompt: string) => {
+      sent.test = JSON.parse(JSON.stringify({ model, prompt }));
+      return { success: true, data: "ok" };
+    }),
+    getBusinessConfig: vi.fn(async () => ({
+      success: true,
+      data: JSON.parse(
+        JSON.stringify({
+          agents: settingsData().agents,
+          embeddingModelProperties: fixtures.embedding,
+          knowledgeMaxResult: 10,
+          toolAndPythonRetry: 0,
+          dslCookerTries: 1,
+          dslCookerTimeout: 300000,
+          questionSpliterTries: 1,
+          questionSpliterTimeout: 300000,
+          lang: "zh-CN",
+          dataAdapter: "postgresql",
+          dataAdapterConnections: {},
+        })
+      ),
+    })),
     listDataAdapters: vi.fn(async () => ({
       success: true,
       data: [
@@ -157,42 +152,23 @@ vi.mock("../../../admin", () => ({
     })),
     getSystemModelConfig: vi.fn(async () => ({
       success: true,
-      data: JSON.parse(JSON.stringify(fixtures.system)),
+      data: { abcQuestionMode: "harness", queryTimeoutSeconds: 600 },
     })),
-    testSystemModelConfig: vi.fn(async (payload: unknown) => {
-      savedPayload.test = JSON.parse(JSON.stringify(payload));
-      return new Response('data: {"content":"ok"}\n\ndata: {"done":true}\n\n', {
-        headers: { "content-type": "text/event-stream" },
-      });
-    }),
     saveSystemModelConfig: vi.fn(async (payload: Record<string, unknown>) => {
-      savedPayload.system = JSON.parse(JSON.stringify(payload));
-      return { success: true, data: { ...payload, hasCustomConfig: true } };
-    }),
-    saveBackendModels: vi.fn(async (models: Array<Record<string, unknown>>) => {
-      savedPayload.models = JSON.parse(JSON.stringify(models));
-      server.models = JSON.parse(JSON.stringify(models));
-      return { success: true };
-    }),
-    saveBackendAgentModels: vi.fn(async (modelsByRole: unknown) => {
-      savedPayload.roleModels = JSON.parse(JSON.stringify(modelsByRole));
-      return { success: true };
+      sent.system = JSON.parse(JSON.stringify(payload));
+      return { success: true, data: { ...payload } };
     }),
     saveToolSkillDir: vi.fn(async (skilldir: string) => {
-      savedPayload.skilldir = skilldir;
+      sent.skilldir = skilldir;
       return { success: true };
     }),
     saveEmbeddingModel: vi.fn(async (payload: unknown) => {
-      savedPayload.embedding = JSON.parse(JSON.stringify(payload));
+      sent.embedding = JSON.parse(JSON.stringify(payload));
       return { success: true };
     }),
-    testBackendModel: vi.fn(async (model: unknown, prompt: string) => {
-      savedPayload.test = JSON.parse(JSON.stringify({ model, prompt }));
-      return { success: true, data: "ok" };
-    }),
     testEmbeddingModel: vi.fn(async (payload: unknown) => {
-      savedPayload.embeddingTest = JSON.parse(JSON.stringify(payload));
-      return { success: true, data: "ok" };
+      sent.embeddingTest = JSON.parse(JSON.stringify(payload));
+      return { success: true };
     }),
   },
 }));
@@ -216,20 +192,23 @@ const global = {
 
 const wrappers: ReturnType<typeof mount>[] = [];
 beforeEach(() => {
-  Object.assign(savedPayload, {
-    models: null,
-    system: null,
+  vi.clearAllMocks();
+  Object.assign(sent, {
+    settings: null,
     test: null,
-    roleModels: null,
     skilldir: null,
     embedding: null,
     embeddingTest: null,
+    system: null,
   });
-  calls.getConfig = 0;
   server.models = JSON.parse(JSON.stringify(fixtures.models));
-  server.failNextRead = false;
+  server.agents = { ...fixtures.agents };
+  server.reads = 0;
 });
-afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
+afterEach(() => {
+  wrappers.splice(0).forEach((wrapper) => wrapper.unmount());
+  vi.restoreAllMocks();
+});
 
 function track<T extends ReturnType<typeof mount>>(wrapper: T): T {
   wrappers.push(wrapper);
@@ -240,8 +219,24 @@ function button(wrapper: Pick<ReturnType<typeof mount>, "findAll">, text: string
   return wrapper.findAll("button").find((candidate) => candidate.text().includes(text));
 }
 
-/** The three connection fields of the query engine model add dialog: URL, one added key, model name. */
-async function fillBackendConnection(dialog: Pick<ReturnType<typeof mount>, "findAll">) {
+function entry(name: string, extra: Partial<ModelEntry> = {}): ModelEntry {
+  return {
+    name,
+    displayName: name,
+    baseUrl: "https://example/v1",
+    apiKeys: ["sk-1"],
+    modelName: "qwen3",
+    maxTokens: 50000,
+    contextWindow: 256000,
+    customRequestParameters: {},
+    ...extra,
+  };
+}
+
+/** Add dialog: inputs are config ID, display name and URL, followed by the key rows and the API model id. */
+async function fillNewModel(dialog: Pick<ReturnType<typeof mount>, "findAll">, id: string) {
+  await dialog.findAll("input")[0]!.setValue(id);
+  await dialog.findAll("input")[1]!.setValue(`Model ${id}`);
   await dialog.findAll("input")[2]!.setValue("https://new.example/v1");
   await button(dialog, t("admin.addApiKey"))!.trigger("click");
   const inputs = dialog.findAll("input");
@@ -249,28 +244,24 @@ async function fillBackendConnection(dialog: Pick<ReturnType<typeof mount>, "fin
   await inputs[4]!.setValue("new-model");
 }
 
-/** The three connection fields of the application model add dialog (URL, key, model name) are required. */
-async function fillConnection(dialog: Pick<ReturnType<typeof mount>, "findAll">) {
-  const inputs = dialog.findAll("input");
-  await inputs[2]!.setValue("https://new.example/v1");
-  await inputs[3]!.setValue("sk-new");
-  await inputs[4]!.setValue("new-model");
-}
-
-function mountBackend(models: BackendModelConfig[], extra: Record<string, unknown> = {}) {
-  return track(
-    mount(BackendModelListCard, {
-      props: { models, saving: false, loading: false, loadError: "", ...extra },
+/** The list card replaces the whole list through v-model: updates are written back to props on mount, simulating the parent's shallow ref. */
+function mountList(models: ModelEntry[], extra: Record<string, unknown> = {}) {
+  const wrapper: ReturnType<typeof mount> = track(
+    mount(ModelListCard, {
+      props: {
+        models,
+        disabled: false,
+        "onUpdate:models": (next: ModelEntry[]) => wrapper.setProps({ models: next }),
+        ...extra,
+      },
       global,
     })
   );
-}
-
-async function mountPage() {
-  const wrapper = track(mount(BusinessConfig, { props: businessConfig, global }));
-  await flushPromises();
   return wrapper;
 }
+
+const listModels = (wrapper: ReturnType<typeof mount>) =>
+  (wrapper.props() as { models: ModelEntry[] }).models;
 
 async function mountModelPage() {
   const wrapper = track(mount(ModelConfig, { global }));
@@ -278,103 +269,65 @@ async function mountModelPage() {
   return wrapper;
 }
 
-describe("backend model list card", () => {
-  it("shows an add entry when the library is legitimately empty", () => {
-    const wrapper = mountBackend([]);
+/** System config page: query settings, skill directory and other config; query examples have their own API and are doubled here. */
+async function mountSystemPage() {
+  const wrapper = track(
+    mount(BusinessConfig, {
+      props: businessConfig,
+      global: { ...global, stubs: { ...global.stubs, ExamplesManager: true } },
+    })
+  );
+  await flushPromises();
+  return wrapper;
+}
+
+function roleSelect(page: ReturnType<typeof mount>, role: string) {
+  return page
+    .findComponent(RoleModelsCard)
+    .findAllComponents({ name: "ElSelect" })
+    .find((select) => select.props("ariaLabel") === t(`admin.modelRoleNames.${role}`))!;
+}
+
+async function saveButton(page: ReturnType<typeof mount>) {
+  return page.find(".model-settings-actions").findAll("button").at(-1)!;
+}
+
+describe("model list card", () => {
+  it("shows an add entry when the library is legitimately empty", async () => {
+    const wrapper = mountList([]);
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
-    expect(button(wrapper, t("admin.addModel"))).toBeTruthy();
-    expect(wrapper.find("button").attributes("disabled")).toBeUndefined();
-  });
-
-  it("shows the error with retry and disables save when loading failed", async () => {
-    const wrapper = mountBackend([], { loadError: "boom" });
-    expect(wrapper.text()).toContain(t("admin.modelListLoadFailed"));
-    const retry = button(wrapper, t("common.retry"));
-    await retry?.trigger("click");
-    expect(wrapper.emitted("retry")).toHaveLength(1);
-    const save = button(wrapper, t("admin.saveModelList"));
-    expect(save?.attributes("disabled")).toBeDefined();
-    expect(wrapper.emitted("save")).toBeUndefined();
-    expect(button(wrapper, t("admin.addModel"))!.attributes("disabled")).toBeDefined();
-  });
-
-  it("blocks new drafts and writes while the model library is loading", async () => {
-    const wrapper = mountBackend([], { loading: true });
-    const add = button(wrapper, t("admin.addModel"))!;
-    expect(add.attributes("disabled")).toBeDefined();
-    await add.trigger("click");
-    expect(wrapper.find("section").exists()).toBe(false);
-    expect(button(wrapper, t("admin.saveModelList"))!.attributes("disabled")).toBeDefined();
-    expect(wrapper.emitted("save")).toBeUndefined();
+    const adds = wrapper.findAll("button").filter((b) => b.text().includes(t("admin.addModel")));
+    expect(adds).toHaveLength(2);
+    expect(adds.every((b) => b.attributes("disabled") === undefined)).toBe(true);
+    await adds[1]!.trigger("click");
+    expect(wrapper.find("section").exists()).toBe(true);
   });
 
   it("cancelling an edit leaves the original entry untouched", async () => {
-    const models = reactive([
-      {
-        name: "qwen-main",
-        displayName: "Qwen",
-        baseUrl: "https://example/v1",
-        apiKeys: ["sk-1"],
-        modelName: "qwen3",
-        timeout: "PT300S",
-        maxRetries: 3,
-        customRequestParameters: { temperature: 0.1 },
-        temperature: null,
-        topP: null,
-        maxTokens: null,
-        maxCompletionTokens: null,
-      },
-    ]);
-    const wrapper = mountBackend(models);
-    await button(wrapper, t("common.edit"))?.trigger("click");
+    const wrapper = mountList([entry("qwen-main", { displayName: "Qwen" })]);
+    await button(wrapper, t("common.edit"))!.trigger("click");
     await wrapper.findAll("section input")[1]!.setValue("changed");
-    await button(wrapper, t("common.cancel"))?.trigger("click");
-    expect(models[0]!.displayName).toBe("Qwen");
+    await button(wrapper, t("common.cancel"))!.trigger("click");
+    expect(wrapper.emitted("update:models")).toBeUndefined();
+    expect(listModels(wrapper)[0]!.displayName).toBe("Qwen");
   });
 
   it("starts a new draft empty instead of reusing the previous entry", async () => {
-    const models = reactive([
-      {
-        name: "qwen-main",
-        displayName: "Qwen",
-        baseUrl: "https://example/v1",
-        apiKeys: ["sk-1"],
-        modelName: "qwen3",
-        timeout: "PT300S",
-        maxRetries: 3,
-        customRequestParameters: {},
-        temperature: null,
-        topP: null,
-        maxTokens: null,
-        maxCompletionTokens: null,
-      },
-    ]);
-    const wrapper = mountBackend(models);
-    await button(wrapper, t("common.edit"))?.trigger("click");
-    await button(wrapper, t("common.cancel"))?.trigger("click");
-    await button(wrapper, t("admin.addModel"))?.trigger("click");
-    const nameInput = wrapper.find("section input");
-    expect((nameInput.element as HTMLInputElement).value).toBe("");
+    const wrapper = mountList([entry("qwen-main")]);
+    await button(wrapper, t("common.edit"))!.trigger("click");
+    await button(wrapper, t("common.cancel"))!.trigger("click");
+    await button(wrapper, t("admin.addModel"))!.trigger("click");
+    const inputs = wrapper.findAll("section input");
+    expect((inputs[0]!.element as HTMLInputElement).value).toBe("");
+    // maxTokens and the context window stay empty; Java fills the defaults and the frontend holds none.
+    const numbers = wrapper.findAll("section .el-input-number input");
+    expect(numbers.map((input) => (input.element as HTMLInputElement).value)).toEqual(
+      Array(7).fill("")
+    );
   });
 
   it("fixes the config ID once created while the display name stays editable", async () => {
-    const models = reactive<BackendModelConfig[]>([
-      {
-        name: "qwen-main",
-        displayName: "Qwen",
-        baseUrl: "https://example/v1",
-        apiKeys: ["sk-1"],
-        modelName: "qwen3",
-        timeout: "PT300S",
-        maxRetries: 3,
-        customRequestParameters: {},
-        temperature: null,
-        topP: null,
-        maxTokens: null,
-        maxCompletionTokens: null,
-      },
-    ]);
-    const wrapper = mountBackend(models);
+    const wrapper = mountList([entry("qwen-main", { displayName: "Qwen" })]);
     expect(wrapper.find(".model-name").text()).toBe("Qwen");
     expect(wrapper.find(".model-main .model-id").text()).toBe("qwen-main");
 
@@ -383,13 +336,7 @@ describe("backend model list card", () => {
     expect(idInput!.attributes("disabled")).toBeDefined();
     await displayInput!.setValue("Qwen Max");
     await button(wrapper, t("admin.doneEdit"))!.trigger("click");
-    expect(models[0]).toMatchObject({ name: "qwen-main", displayName: "Qwen Max" });
-    // When the display name equals the ID it is shown only once.
-    await button(wrapper, t("common.edit"))!.trigger("click");
-    await wrapper.findAll("section input")[1]!.setValue("qwen-main");
-    await button(wrapper, t("admin.doneEdit"))!.trigger("click");
-    expect(wrapper.find(".model-main").text()).toBe("qwen-main");
-    expect(wrapper.find(".model-main .model-id").exists()).toBe(false);
+    expect(listModels(wrapper)[0]).toMatchObject({ name: "qwen-main", displayName: "Qwen Max" });
 
     // The ID is editable when creating; the entry joins the list only after the ID, display name and the three connection fields are filled in.
     await button(wrapper, t("admin.addModel"))!.trigger("click");
@@ -397,31 +344,19 @@ describe("backend model list card", () => {
     const confirm = () => button(dialog, t("admin.addModel"))!;
     expect(dialog.findAll("input")[0]!.attributes("disabled")).toBeUndefined();
     await dialog.findAll("input")[0]!.setValue("deepseek-main");
-    await dialog.findAll("input")[1]!.setValue("DeepSeek");
     expect(confirm().attributes("disabled")).toBeDefined();
-    await fillBackendConnection(dialog);
+    await fillNewModel(dialog, "deepseek-main");
     await confirm().trigger("click");
-    expect(models[1]).toMatchObject({ name: "deepseek-main", displayName: "DeepSeek" });
+    expect(listModels(wrapper).map((model) => model.name)).toEqual(["qwen-main", "deepseek-main"]);
+    expect(listModels(wrapper)[1]).toMatchObject({
+      maxTokens: null,
+      contextWindow: null,
+      timeout: null,
+    });
   });
 
   it("reveals the full fake key and deletes several keys without shifting the rest", async () => {
-    const models = reactive<BackendModelConfig[]>([
-      {
-        name: "qwen-main",
-        displayName: "Qwen",
-        baseUrl: "https://example/v1",
-        apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"],
-        modelName: "qwen3",
-        timeout: "PT300S",
-        maxRetries: 3,
-        customRequestParameters: {},
-        temperature: null,
-        topP: null,
-        maxTokens: null,
-        maxCompletionTokens: null,
-      },
-    ]);
-    const wrapper = mountBackend(models);
+    const wrapper = mountList([entry("qwen-main", { apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"] })]);
     // The list shows only the count, never the key text.
     expect(wrapper.text()).not.toContain("sk-fake");
     expect(wrapper.text()).toContain(t("admin.keyCountConfigured", { n: 3 }));
@@ -440,102 +375,30 @@ describe("backend model list card", () => {
     await wrapper.findAll(trash)[1]!.trigger("click");
     expect(keyValues()).toEqual(["sk-fake-2"]);
     await button(wrapper, t("admin.doneEdit"))!.trigger("click");
-    expect(models[0]!.apiKeys).toEqual(["sk-fake-2"]);
+    expect(listModels(wrapper)[0]!.apiKeys).toEqual(["sk-fake-2"]);
   });
 
-  it("exposes the outer save entry and reflects the saving state", async () => {
-    const wrapper = mountBackend([]);
-    await button(wrapper, t("admin.saveModelList"))?.trigger("click");
-    expect(wrapper.emitted("save")).toHaveLength(1);
-    const saving = mountBackend([], { saving: true });
-    expect(saving.find(".is-loading").exists()).toBe(true);
+  it("disables every row and add entry while the page is saving", () => {
+    const wrapper = mountList([entry("qwen-main")], { disabled: true });
+    expect(wrapper.findAll("button").every((b) => b.attributes("disabled") !== undefined)).toBe(
+      true
+    );
   });
 });
 
-describe("frontend system model card", () => {
-  function mountSystem(extra: Record<string, unknown> = {}) {
-    return track(
-      mount(SystemModelConfigCard, {
-        props: {
-          model: {
-            models: [],
-            agents: { default: { model: "" }, diagnosis: { model: "" } },
-            abcQuestionMode: "harness",
-            queryTimeoutSeconds: 600,
-            hasCustomConfig: false,
-          },
-          loading: false,
-          saving: false,
-          loadError: "",
-          ...extra,
-        },
-        global,
-      })
-    );
-  }
-
-  it("hides the key plaintext and keeps empty/failed states apart", () => {
-    const empty = mountSystem();
-    expect(empty.text()).toContain(t("admin.modelListEmpty"));
-    const failed = mountSystem({ loadError: "down" });
-    expect(failed.text()).toContain(t("admin.modelListLoadFailed"));
-  });
-
-  it("shows the model list without role selects or query settings", () => {
-    const wrapper = mountSystem();
-    expect(wrapper.text()).toContain(t("admin.modelList"));
-    expect(wrapper.text()).not.toContain(t("admin.systemModel"));
-    expect(wrapper.text()).not.toContain(t("admin.diagnosisModel"));
-    expect(wrapper.text()).not.toContain(t("admin.queryMode"));
-    expect(wrapper.text()).not.toContain(t("admin.queryTimeoutSec"));
-    expect(wrapper.findAllComponents({ name: "ElSelect" })).toHaveLength(0);
-  });
-
-  it("fixes the config ID, edits the display name and labels duplicate names by ID", async () => {
-    const model = reactive({
-      models: [
-        {
-          name: "default",
-          displayName: "GPT",
-          baseUrl: "https://api.openai.com/v1",
-          apiKey: "sk-secret",
-          modelName: "gpt-4o",
-          customRequestParameters: {},
-          timeoutSeconds: 300,
-          maxRetries: 3,
-          contextWindow: 256000,
-        },
-        {
-          name: "backup",
-          displayName: "GPT",
-          baseUrl: "https://api.openai.com/v1",
-          apiKey: "",
-          modelName: "gpt-4o-mini",
-          customRequestParameters: {},
-          timeoutSeconds: 300,
-          maxRetries: 3,
-          contextWindow: 256000,
-        },
-        {
-          name: "legacy",
-          displayName: "legacy",
-          baseUrl: "",
-          apiKey: "",
-          modelName: "",
-          customRequestParameters: {},
-          timeoutSeconds: 300,
-          maxRetries: 3,
-          contextWindow: 256000,
-        },
-      ],
-      agents: { default: { model: "default" }, diagnosis: { model: "default" } },
-      abcQuestionMode: "harness" as const,
-      queryTimeoutSeconds: 600,
-      hasCustomConfig: false,
+describe("role models card", () => {
+  function mountRoles(models = [entry("qwen-main", { displayName: "Qwen" }), entry("qwen-lite", { displayName: "Qwen" })]) {
+    const roles = reactive<RoleModels>({
+      query: "qwen-main",
+      coding: null,
+      general: "qwen-lite",
+      diagnosis: null,
+      knowledgeGovernance: null,
     });
+    // Options render in the dropdown popper's content slot, so the tooltip stub renders it too.
     const wrapper = track(
-      mount(SystemModelConfigCard, {
-        props: { model, loading: false, saving: false, loadError: "" },
+      mount(RoleModelsCard, {
+        props: { roles, models, disabled: false },
         global: {
           ...global,
           stubs: {
@@ -545,49 +408,45 @@ describe("frontend system model card", () => {
         },
       })
     );
-    expect(wrapper.text()).not.toContain("sk-secret");
-    expect(wrapper.text()).toContain(t("admin.keyCountConfigured", { n: 1 }));
-    // Duplicate names get the ID appended; when the display name equals the ID it is shown once.
-    expect(wrapper.findAll(".model-main").map((main) => main.text())).toEqual([
-      "GPTdefault",
-      "GPTbackup",
-      "legacy",
+    return { roles, wrapper };
+  }
+
+  it("lists the five roles in the query engine and agent groups", () => {
+    const { wrapper } = mountRoles();
+    const groups = wrapper.findAll(".role-group");
+    expect(groups.map((group) => group.find("h4").text())).toEqual([
+      t("admin.modelRoleGroups.queryEngine"),
+      t("admin.modelRoleGroups.agents"),
     ]);
+    expect(groups.map((group) => group.findAll(".role-name").map((name) => name.text()))).toEqual([
+      [t("admin.modelRoleNames.query"), t("admin.modelRoleNames.coding")],
+      [
+        t("admin.modelRoleNames.general"),
+        t("admin.modelRoleNames.diagnosis"),
+        t("admin.modelRoleNames.knowledgeGovernance"),
+      ],
+    ]);
+  });
 
-    await button(wrapper, t("common.edit"))!.trigger("click");
-    const [idInput, displayInput] = wrapper.find("section").findAll("input");
-    expect(idInput!.attributes("disabled")).toBeDefined();
-    await displayInput!.setValue("GPT Main");
-    await button(wrapper, t("admin.doneEdit"))!.trigger("click");
-    expect(model.models[0]).toMatchObject({
-      name: "default",
-      displayName: "GPT Main",
-      apiKey: "sk-secret",
-    });
-
-    // The ID is editable when creating; the entry joins the list only after the ID, display name and the three connection fields are filled in.
-    await button(wrapper, t("admin.addModel"))!.trigger("click");
-    const dialog = wrapper.find("section");
-    const confirm = () => button(dialog, t("admin.addModel"))!;
-    expect(dialog.findAll("input")[0]!.attributes("disabled")).toBeUndefined();
-    await dialog.findAll("input")[0]!.setValue("claude");
-    await dialog.findAll("input")[1]!.setValue("GPT");
-    expect(confirm().attributes("disabled")).toBeDefined();
-    await fillConnection(dialog);
-    await confirm().trigger("click");
-    expect(model.models[3]).toMatchObject({ name: "claude", displayName: "GPT" });
+  it("offers the given models by config ID and clears a role to not configured", async () => {
+    const { roles, wrapper } = mountRoles();
+    const selects = wrapper.findAllComponents({ name: "ElSelect" });
+    expect(selects).toHaveLength(5);
+    const options = selects[0]!.findAllComponents({ name: "ElOption" });
+    expect(options.map((option) => [option.props("value"), option.props("label")])).toEqual([
+      ["qwen-main", "Qwen (qwen-main)"],
+      ["qwen-lite", "Qwen (qwen-lite)"],
+    ]);
+    expect(selects[1]!.props("placeholder")).toBe(t("admin.roleNotConfigured"));
+    await selects[0]!.trigger("mouseenter");
+    await selects[0]!.find(".el-select__clear").trigger("click");
+    expect(roles.query).toBeNull();
   });
 });
 
 describe("query settings card", () => {
-  it("tracks only its two fields and clears the marker when reverted", async () => {
-    const model = reactive({
-      models: [],
-      agents: { default: { model: "" }, diagnosis: { model: "" } },
-      abcQuestionMode: "harness" as const,
-      queryTimeoutSeconds: 600,
-      hasCustomConfig: false,
-    });
+  it("tracks its two fields and clears the marker when reverted", async () => {
+    const model = reactive({ abcQuestionMode: "harness" as const, queryTimeoutSeconds: 600 });
     const wrapper = track(
       mount(QuerySettingsCard, {
         props: { model, loading: false, saving: false, loadError: "" },
@@ -601,17 +460,13 @@ describe("query settings card", () => {
     expect(wrapper.find(".dirty-tag").exists()).toBe(true);
     await input.setValue("600");
     expect(wrapper.find(".dirty-tag").exists()).toBe(false);
-    // Application model draft changes do not count as unsaved in this section.
-    model.agents.default.model = "other";
-    await flushPromises();
-    expect(wrapper.find(".dirty-tag").exists()).toBe(false);
   });
 
   it("shows the load error with retry and blocks save", async () => {
     const wrapper = track(
       mount(QuerySettingsCard, {
         props: {
-          model: { ...fixtures.system, abcQuestionMode: "harness" as const },
+          model: { abcQuestionMode: "harness" as const, queryTimeoutSeconds: 600 },
           loading: false,
           saving: false,
           loadError: "node down",
@@ -620,125 +475,28 @@ describe("query settings card", () => {
       })
     );
     expect(wrapper.find(".load-error").text()).toContain("node down");
-    expect(button(wrapper, t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(wrapper, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(wrapper, t("common.retry"))!.trigger("click");
     expect(wrapper.emitted("retry")).toHaveLength(1);
   });
 });
 
-describe("backend agent reference card", () => {
-  function mountRoles(extra: Record<string, unknown> = {}) {
-    const agents = reactive(
-      Object.fromEntries(agentKeys.map((key) => [key, { model: "qwen-main", actorCopies: 1 }]))
-    ) as Record<string, { model: string; actorCopies: number }>;
-    return {
-      agents,
-      wrapper: track(
-        mount(BackendAgentConfigCard, {
-          props: {
-            agents,
-            models: [
-              { name: "qwen-main", displayName: "Qwen" },
-              { name: "qwen-lite", displayName: "Qwen" },
-              { name: "legacy", displayName: "legacy" },
-            ],
-            saving: false,
-            disabled: false,
-            ...extra,
-          },
-          global,
-        })
-      ),
-    };
-  }
-
-  it("renders the five roles as one list and saves them together", async () => {
-    const { wrapper } = mountRoles();
-    expect(wrapper.text()).toContain(t("admin.agentRoles.normalChat"));
-    expect(wrapper.text()).toContain(t("admin.agentRoles.toolChat"));
-    await button(wrapper, t("admin.saveAgentModels"))!.trigger("click");
-    expect(wrapper.emitted("save")).toHaveLength(1);
-  });
-
-  it("does not offer tests or per-role saves", () => {
-    const { wrapper } = mountRoles();
-    expect(wrapper.text()).not.toContain(t("common.testModel"));
-    expect(wrapper.text()).not.toContain(t("common.saveConfig"));
-    expect(wrapper.findAll(".el-tabs__item")).toHaveLength(0);
-  });
-
-  it("blocks the single save while a role reference is still unselected", async () => {
-    const { agents, wrapper } = mountRoles();
-    agents.pythonChat.model = "";
-    await flushPromises();
-    const save = button(wrapper, t("admin.saveAgentModels"))!;
-    expect(save.attributes("disabled")).toBeDefined();
-    await save.trigger("click");
-    expect(wrapper.emitted("save")).toBeUndefined();
-  });
-
-  it("uses the config ID as option value and shows it beside duplicate display names", async () => {
-    // Options render in the dropdown popper's content slot, so the tooltip stub renders it too.
-    const wrapper = track(
-      mount(BackendAgentConfigCard, {
-        props: {
-          agents: mountRoles().agents,
-          models: [
-            { name: "qwen-main", displayName: "Qwen" },
-            { name: "qwen-lite", displayName: "Qwen" },
-            { name: "legacy", displayName: "legacy" },
-          ],
-          saving: false,
-          disabled: false,
-        },
-        global: {
-          ...global,
-          stubs: {
-            ...global.stubs,
-            "el-tooltip": { template: '<span><slot /><slot name="content" /></span>' },
-          },
-        },
-      })
-    );
-    const options = wrapper
-      .findAllComponents({ name: "ElOption" })
-      .slice(0, 3)
-      .map((option) => [option.props("label"), option.props("value")]);
-    expect(options).toEqual([
-      ["Qwen (qwen-main)", "qwen-main"],
-      ["Qwen (qwen-lite)", "qwen-lite"],
-      ["legacy", "legacy"],
-    ]);
-  });
-
-  it("labels every role select with its role name", () => {
-    const { wrapper } = mountRoles();
-    const labels = wrapper
-      .findAllComponents({ name: "ElSelect" })
-      .map((select) => select.props("ariaLabel"));
-    expect(labels).toEqual(agentKeys.map((key) => t(`admin.agentRoles.${key}`)));
-  });
-});
-
 describe("embedding model card", () => {
   function mountEmbedding(extra: Record<string, unknown> = {}) {
-    const model = reactive<EmbeddingModelConfig>({ ...fixtures.embedding });
-    return {
-      model,
-      wrapper: track(
-        mount(EmbeddingModelConfigCard, {
-          props: { model, loading: false, saving: false, loadError: "", ...extra },
-          global,
-        })
-      ),
-    };
+    return track(
+      mount(EmbeddingModelConfigCard, {
+        props: { model: { ...fixtures.embedding }, loading: false, saving: false, loadError: "", ...extra },
+        global,
+      })
+    );
   }
 
   it("shows one compact row with the key masked and keeps unshown fields when editing", async () => {
-    const { wrapper } = mountEmbedding();
+    const wrapper = mountEmbedding({ model: { ...fixtures.embedding, timeout: "PT5M" } });
     expect(wrapper.findAll(".model-item")).toHaveLength(1);
     expect(wrapper.text()).toContain("text-embedding-v3");
     expect(wrapper.text()).not.toContain("sk-embed");
+    expect(wrapper.text()).toContain("300");
     await button(wrapper, t("common.edit"))!.trigger("click");
     await wrapper.find("section input").setValue("https://proxy.example/v1");
     await button(wrapper, t("admin.doneEdit"))!.trigger("click");
@@ -747,92 +505,55 @@ describe("embedding model card", () => {
     expect(updated.timeout).toBe("PT300S");
     // The dialog overwrites only the 4 displayed fields; fields not shown, such as customHeaders, must be kept as-is.
     expect(updated.customHeaders).toEqual({ "X-Embed-Key": "keep" });
-    await button(wrapper, t("common.save"))!.trigger("click");
+    await button(wrapper, t("common.saveConfig"))!.trigger("click");
     expect(wrapper.emitted("save")).toHaveLength(1);
   });
 
-  it("offers the row test entry", async () => {
-    const { wrapper } = mountEmbedding();
-    await button(wrapper, t("common.testModel"))!.trigger("click");
-    expect(wrapper.emitted("test")).toHaveLength(1);
-  });
-
   it("does not fake a model row while loading or after a load failure", async () => {
-    const loading = mountEmbedding({ loading: true });
-    expect(loading.wrapper.findAll(".model-item")).toHaveLength(0);
+    expect(mountEmbedding({ loading: true }).findAll(".model-item")).toHaveLength(0);
     const failed = mountEmbedding({ loadError: "down" });
-    expect(failed.wrapper.findAll(".model-item")).toHaveLength(0);
-    expect(failed.wrapper.text()).toContain("down");
-    expect(button(failed.wrapper, t("common.save"))!.attributes("disabled")).toBeDefined();
-    await button(failed.wrapper, t("common.retry"))!.trigger("click");
-    expect(failed.wrapper.emitted("retry")).toHaveLength(1);
+    expect(failed.findAll(".model-item")).toHaveLength(0);
+    expect(failed.text()).toContain("down");
+    expect(button(failed, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
+    await button(failed, t("common.retry"))!.trigger("click");
+    expect(failed.emitted("retry")).toHaveLength(1);
   });
 
   it("shows an add entry when no embedding model is configured", async () => {
-    const { wrapper } = mountEmbedding({ model: null });
-    expect(wrapper.findAll(".model-item")).toHaveLength(0);
+    const wrapper = mountEmbedding({ model: null });
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
-    expect(button(wrapper, t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(wrapper, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     await wrapper.find("section").findAll("input")[0]!.setValue("https://new.example/v1");
     await button(wrapper, t("admin.doneEdit"))!.trigger("click");
     const updated = wrapper.emitted("update:model")![0]![0] as EmbeddingModelConfig;
     expect(updated.baseUrl).toBe("https://new.example/v1");
-    expect(updated.modelName).toBe("");
     expect(updated.timeout).toBe("PT300S");
-  });
-});
-
-describe("skill directory card", () => {
-  it("keeps an independent draft and save entry", async () => {
-    const skilldir = reactive({ value: "skills/legacy" });
-    const wrapper = track(
-      mount(SkillDirConfigCard, {
-        props: { skilldir: skilldir.value, saving: false, disabled: false },
-        global,
-      })
-    );
-    await wrapper.find("input").setValue("skills/aftercalculate");
-    await button(wrapper, t("common.save"))!.trigger("click");
-    expect(wrapper.emitted("save")).toHaveLength(1);
   });
 });
 
 describe("password visibility with the real dialog", () => {
   // ElDialog/teleport are not replaced: after a real close/destroy and rebuilt key rows, password inputs return to hidden by default.
   const realDialog = { plugins: [i18n, ElementPlus], stubs: { transition: false } };
-  // Opening/closing the dialog completes through timers and transitions.
   const settle = async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     await flushPromises();
   };
-  const backendEntry = (name: string, apiKeys: string[]): BackendModelConfig => ({
-    name,
-    displayName: name,
-    baseUrl: "https://example/v1",
-    apiKeys,
-    modelName: "qwen3",
-    timeout: "PT300S",
-    maxRetries: 3,
-    customRequestParameters: {},
-    temperature: null,
-    topP: null,
-    maxTokens: null,
-    maxCompletionTokens: null,
-  });
   const keyTypes = (wrapper: ReturnType<typeof mount>) =>
     wrapper.findAll(".api-key-row input").map((input) => input.attributes("type"));
   const keyValues = (wrapper: ReturnType<typeof mount>) =>
     wrapper.findAll(".api-key-row input").map((input) => (input.element as HTMLInputElement).value);
 
   it("keeps remaining keys hidden after deleting a revealed row and when reopening another entry", async () => {
-    const models = reactive([
-      backendEntry("a", ["sk-fake-1", "sk-fake-2", "sk-fake-3"]),
-      backendEntry("b", ["sk-fake-9"]),
-    ]);
     const wrapper = track(
-      mount(BackendModelListCard, {
-        props: { models, saving: false, loading: false, loadError: "" },
+      mount(ModelListCard, {
+        props: {
+          models: [
+            entry("a", { apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"] }),
+            entry("b", { apiKeys: ["sk-fake-9"] }),
+          ],
+          disabled: false,
+        },
         global: realDialog,
         attachTo: document.body,
       })
@@ -842,7 +563,6 @@ describe("password visibility with the real dialog", () => {
     await settle();
     expect(keyTypes(wrapper)).toEqual(["password", "password", "password"]);
 
-    // Reveal rows 1 and 2, then delete row 1: the remaining row is hidden by default and values do not shift.
     await wrapper.findAll(".api-key-row .el-input__password")[0]!.trigger("click");
     await wrapper.findAll(".api-key-row .el-input__password")[1]!.trigger("click");
     expect(keyTypes(wrapper)).toEqual(["text", "text", "password"]);
@@ -850,11 +570,7 @@ describe("password visibility with the real dialog", () => {
     await wrapper.findAll(trash)[0]!.trigger("click");
     expect(keyTypes(wrapper)).toEqual(["password", "password"]);
     expect(keyValues(wrapper)).toEqual(["sk-fake-2", "sk-fake-3"]);
-    await wrapper.find(".api-key-row .el-input__password").trigger("click");
-    expect(keyTypes(wrapper)).toEqual(["text", "password"]);
-    expect(keyValues(wrapper)[0]).toBe("sk-fake-2");
 
-    // Close, then open another entry: the visibility state is not inherited.
     await button(wrapper, t("common.cancel"))!.trigger("click");
     await settle();
     await edits()[1]!.trigger("click");
@@ -863,301 +579,306 @@ describe("password visibility with the real dialog", () => {
     expect(keyValues(wrapper)).toEqual(["sk-fake-9"]);
   });
 
-  it("re-hides the application and embedding keys when their editor is reopened", async () => {
-    const system = track(
-      mount(SystemModelConfigCard, {
-        props: {
-          model: reactive(JSON.parse(JSON.stringify(fixtures.system))),
-          loading: false,
-          saving: false,
-          loadError: "",
-        },
-        global: realDialog,
-        attachTo: document.body,
-      })
-    );
-    const embedding = track(
+  it("re-hides the embedding key when its editor is reopened", async () => {
+    const wrapper = track(
       mount(EmbeddingModelConfigCard, {
         props: { model: { ...fixtures.embedding }, loading: false, saving: false, loadError: "" },
         global: realDialog,
         attachTo: document.body,
       })
     );
-    for (const [wrapper, key] of [
-      [system, "sk-preview"],
-      [embedding, "sk-embed"],
-    ] as const) {
-      const keyInput = () =>
-        wrapper.find(
-          ".el-dialog input[type='password'], .el-dialog input[type='text'][placeholder='sk-...']"
-        );
-      await button(wrapper, t("common.edit"))!.trigger("click");
-      await settle();
-      await wrapper.find(".el-dialog .el-input__password").trigger("click");
-      expect(keyInput().attributes("type")).toBe("text");
-      expect((keyInput().element as HTMLInputElement).value).toBe(key);
-      await button(wrapper, t("common.cancel"))!.trigger("click");
-      await settle();
-      await button(wrapper, t("common.edit"))!.trigger("click");
-      await settle();
-      expect(keyInput().attributes("type")).toBe("password");
-      expect((keyInput().element as HTMLInputElement).value).toBe(key);
-    }
+    const keyInput = () =>
+      wrapper.find(
+        ".el-dialog input[type='password'], .el-dialog input[type='text'][placeholder='sk-...']"
+      );
+    await button(wrapper, t("common.edit"))!.trigger("click");
+    await settle();
+    await wrapper.find(".el-dialog .el-input__password").trigger("click");
+    expect(keyInput().attributes("type")).toBe("text");
+    await button(wrapper, t("common.cancel"))!.trigger("click");
+    await settle();
+    await button(wrapper, t("common.edit"))!.trigger("click");
+    await settle();
+    expect(keyInput().attributes("type")).toBe("password");
+    expect((keyInput().element as HTMLInputElement).value).toBe("sk-embed");
   });
 });
 
-describe("business config page wiring", () => {
-  it("model config page shows a single model list with role references at the same level", async () => {
-    const wrapper = await mountModelPage();
-    expect(wrapper.findAll(".el-tabs__item")).toHaveLength(0);
-    expect(wrapper.findComponent(SystemModelConfigCard).exists()).toBe(true);
-    expect(wrapper.findComponent(BackendModelListCard).exists()).toBe(false);
-    expect(wrapper.findComponent(RoleReferencesCard).exists()).toBe(true);
-    expect(wrapper.findComponent(EmbeddingModelConfigCard).exists()).toBe(true);
-    expect(wrapper.findComponent(QuerySettingsCard).exists()).toBe(false);
-    expect(wrapper.findComponent(SkillDirConfigCard).exists()).toBe(false);
-    // Role references sit beside the model list: the system model card no longer embeds role selection.
-    expect(
-      wrapper.findComponent(SystemModelConfigCard).findAllComponents({ name: "ElSelect" })
-    ).toHaveLength(0);
-    // The only save button is in the Role model references card.
-    expect(
-      button(wrapper.findComponent(SystemModelConfigCard), t("common.save"))
-    ).toBeUndefined();
-    expect(
-      button(wrapper.findComponent(RoleReferencesCard), t("common.save"))
-    ).toBeTruthy();
+describe("model config page", () => {
+  it("is one page without tabs: model list, role table, one save and the embedding card", async () => {
+    const page = await mountModelPage();
+    expect(page.find(".el-tabs").exists()).toBe(false);
+    expect(page.findComponent(ModelListCard).exists()).toBe(true);
+    expect(page.findComponent(RoleModelsCard).exists()).toBe(true);
+    expect(page.findComponent(EmbeddingModelConfigCard).exists()).toBe(true);
+    expect(page.findComponent(QuerySettingsCard).exists()).toBe(false);
+    expect(page.findComponent(SkillDirConfigCard).exists()).toBe(false);
+    expect(page.find(".model-settings-actions").findAll("button")).toHaveLength(1);
+
+    const system = await mountSystemPage();
+    expect(system.findComponent(QuerySettingsCard).exists()).toBe(true);
+    expect(system.findComponent(SkillDirConfigCard).exists()).toBe(true);
+    expect(system.findComponent(ModelListCard).exists()).toBe(false);
+    expect(system.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
   });
 
-  it("system configuration page stacks settings cards and query examples without model cards", async () => {
-    const wrapper = await mountPage();
-    expect(wrapper.findComponent(QuerySettingsCard).exists()).toBe(true);
-    expect(wrapper.findComponent(SkillDirConfigCard).exists()).toBe(true);
-    expect(wrapper.findComponent(ExamplesManager).exists()).toBe(true);
-    expect(wrapper.findComponent(SystemModelConfigCard).exists()).toBe(false);
-    expect(wrapper.findComponent(BackendModelListCard).exists()).toBe(false);
-    expect(wrapper.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
-  });
+  it("adds a model to an empty library and assigns it to a role in the same save", async () => {
+    server.models = [];
+    server.agents = Object.fromEntries(MODEL_ROLES.map((role) => [role, null]));
+    const page = await mountModelPage();
+    const list = page.findComponent(ModelListCard);
+    expect(list.text()).toContain(t("admin.modelListEmpty"));
+    expect(page.find(".model-settings-actions .el-tag").exists()).toBe(false);
 
-  it("defaults every unset role to the first configured model", async () => {
-    vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
-      success: true,
-      data: {
-        models: [],
-        agents: {
-          normalChat: { model: "" },
-          questionSpliter: { model: "" },
-          cleverNormalChat: { model: "" },
-          pythonChat: { model: "" },
-          toolChat: { model: "" },
+    await button(list, t("admin.addModel"))!.trigger("click");
+    await fillNewModel(list.find("section"), "fresh");
+    await button(list.find("section"), t("admin.addModel"))!.trigger("click");
+    // Options come from the current draft: a newly added model can be selected before saving.
+    expect(page.findComponent(RoleModelsCard).props("models")).toMatchObject([{ name: "fresh" }]);
+    roleSelect(page, "query").vm.$emit("update:modelValue", "fresh");
+    roleSelect(page, "general").vm.$emit("update:modelValue", "fresh");
+    await flushPromises();
+    expect(page.find(".model-settings-actions .el-tag").text()).toBe(t("admin.unsaved"));
+
+    await (await saveButton(page)).trigger("click");
+    await flushPromises();
+    expect(adminApi.saveModelSettings).toHaveBeenCalledTimes(1);
+    expect(sent.settings).toEqual({
+      models: [
+        {
+          name: "fresh",
+          displayName: "Model fresh",
+          baseUrl: "https://new.example/v1",
+          apiKeys: ["sk-new"],
+          modelName: "new-model",
+          maxTokens: null,
+          contextWindow: null,
+          timeout: null,
+          maxRetries: null,
+          temperature: null,
+          topP: null,
+          maxCompletionTokens: null,
+          customRequestParameters: {},
         },
-        embeddingModelProperties: fixtures.embedding,
+      ],
+      agents: {
+        query: "fresh",
+        coding: null,
+        general: "fresh",
+        diagnosis: null,
+        knowledgeGovernance: null,
       },
     });
-    const wrapper = await mountModelPage();
-    const roles = wrapper.findComponent(RoleReferencesCard);
-    const queryAgents = roles.props("queryAgents") as Record<string, { model: string }>;
-    expect(queryAgents.normalChat.model).toBe("default");
-    expect(queryAgents.questionSpliter.model).toBe("default");
-    expect(queryAgents.toolChat.model).toBe("default");
-    const systemAgents = roles.props("systemAgents") as Record<string, { model: string }>;
-    expect(systemAgents.default.model).toBe("default");
-    expect(systemAgents.diagnosis.model).toBe("default");
-  });
-
-  it("single save in role references persists models, roles and forwards to the query engine", async () => {
-    const wrapper = await mountModelPage();
-    await button(wrapper.findComponent(RoleReferencesCard), t("common.save"))!.trigger("click");
-    await flushPromises();
-    expect(Object.keys(savedPayload.system as object).sort()).toEqual(["agents", "models"]);
-    expect((savedPayload.models as Array<{ name: string }>).map((m) => m.name)).toEqual([
-      "default",
+    // On success the returned data is filled back as a whole (including Java's defaults) and the unsaved marker clears.
+    expect(page.findComponent(ModelListCard).props("models")).toMatchObject([
+      { name: "fresh", maxTokens: 50000, contextWindow: 256000 },
     ]);
-    expect(Object.keys(savedPayload.roleModels as object)).toEqual([
-      "normalChat",
-      "questionSpliter",
-      "cleverNormalChat",
-      "pythonChat",
-      "toolChat",
-    ]);
+    expect(page.find(".model-settings-actions .el-tag").exists()).toBe(false);
+    expect(server.reads).toBe(1);
   });
 
-  it("saves query settings as an isolated partial update", async () => {
-    const wrapper = await mountPage();
-    const query = wrapper.findComponent(QuerySettingsCard);
-    const timeout = query.find(".el-input-number input");
-    await timeout.setValue("900");
-    await button(query, t("common.save"))!.trigger("click");
+  it("submits exactly the model list and the five role keys in one request", async () => {
+    const page = await mountModelPage();
+    await (await saveButton(page)).trigger("click");
     await flushPromises();
-    expect(savedPayload.system).toEqual({ abcQuestionMode: "harness", queryTimeoutSeconds: 900 });
-    expect(query.find(".dirty-tag").exists()).toBe(false);
+    const payload = sent.settings as { models: unknown[]; agents: Record<string, unknown> };
+    expect(Object.keys(payload)).toEqual(["models", "agents"]);
+    expect(Object.keys(payload.agents)).toEqual([...MODEL_ROLES]);
+    // Roles carry only config IDs; the skill directory is not submitted with the model save.
+    expect(payload.agents).toEqual(fixtures.agents);
+    expect(payload.models).toHaveLength(2);
   });
 
-  it("saves the skill directory alone from the system configuration page", async () => {
-    const wrapper = await mountPage();
-    const skill = wrapper.findComponent(SkillDirConfigCard);
-    expect((skill.find("input").element as HTMLInputElement).value).toBe("skills/legacy");
-    await button(skill, t("common.save"))!.trigger("click");
+  it("clears the roles that referenced a deleted model and shows them as not configured", async () => {
+    const page = await mountModelPage();
+    const list = page.findComponent(ModelListCard);
+    await list.findAll("button").filter((b) => b.text() === t("common.delete"))[0]!.trigger("click");
     await flushPromises();
-    expect(savedPayload.skilldir).toBe("skills/legacy");
-    expect(savedPayload.roleModels).toBeNull();
-  });
+    for (const role of ["query", "coding", "diagnosis"]) {
+      const select = roleSelect(page, role);
+      expect(select.props("modelValue")).toBeNull();
+      expect(select.find(".el-select__placeholder").text()).toBe(t("admin.roleNotConfigured"));
+    }
+    expect(roleSelect(page, "general").props("modelValue")).toBe("qwen-lite");
+    expect(page.findComponent(RoleModelsCard).props("models")).toMatchObject([{ name: "qwen-lite" }]);
 
-  it("saves the embedding draft as a full snapshot", async () => {
-    const wrapper = await mountModelPage();
-    const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
-    await button(embedding, t("common.edit"))!.trigger("click");
-    await embedding.findAll("section input")[1]!.setValue("sk-embed-2");
-    await button(embedding, t("admin.doneEdit"))!.trigger("click");
-    await button(embedding, t("common.save"))!.trigger("click");
+    await (await saveButton(page)).trigger("click");
     await flushPromises();
-    expect(savedPayload.embedding).toMatchObject({
-      baseUrl: fixtures.embedding.baseUrl,
-      apiKey: "sk-embed-2",
-      modelName: "text-embedding-v3",
-      timeout: "PT300S",
-      customHeaders: { "X-Embed-Key": "keep" },
+    expect(sent.settings).toMatchObject({
+      models: [{ name: "qwen-lite" }],
+      agents: {
+        query: null,
+        coding: null,
+        general: "qwen-lite",
+        diagnosis: null,
+        knowledgeGovernance: null,
+      },
     });
   });
 
-  it("tests the embedding row through its own list entry", async () => {
-    const wrapper = await mountModelPage();
-    await button(wrapper.findComponent(EmbeddingModelConfigCard), t("common.testModel"))!.trigger(
-      "click"
+  it("shows a persistent error with retry and offers no write entry when loading fails", async () => {
+    vi.mocked(adminApi.getModelSettings).mockRejectedValueOnce(new Error("legacy role params"));
+    const page = await mountModelPage();
+    const alert = page.find(".load-error[role='alert']");
+    expect(alert.text()).toContain("legacy role params");
+    expect(page.findComponent(ModelListCard).exists()).toBe(false);
+    expect(page.findComponent(RoleModelsCard).exists()).toBe(false);
+    expect(page.find(".model-settings-actions").exists()).toBe(false);
+    expect(button(page, t("admin.addModel"))).toBeUndefined();
+
+    await button(alert, t("common.retry"))!.trigger("click");
+    await flushPromises();
+    expect(page.find(".load-error[role='alert']").exists()).toBe(false);
+    expect(page.findComponent(ModelListCard).props("models")).toHaveLength(2);
+  });
+
+  it("keeps the drafts and shows the backend message when saving fails", async () => {
+    const error = vi.spyOn(ElMessage, "error");
+    vi.mocked(adminApi.saveModelSettings).mockRejectedValueOnce(
+      new Error("Model referenced by role query does not exist: gone")
     );
-    const testDialog = wrapper.findAll("section").at(-1)!;
+    const page = await mountModelPage();
+    roleSelect(page, "knowledgeGovernance").vm.$emit("update:modelValue", "qwen-lite");
+    await flushPromises();
+    await (await saveButton(page)).trigger("click");
+    await flushPromises();
+    expect(error).toHaveBeenCalledWith("Model referenced by role query does not exist: gone");
+    expect(roleSelect(page, "knowledgeGovernance").props("modelValue")).toBe("qwen-lite");
+    expect(page.find(".model-settings-actions .el-tag").exists()).toBe(true);
+  });
+
+  it("shows an ISO timeout in seconds and writes it back as PT{n}S", async () => {
+    const page = await mountModelPage();
+    const list = page.findComponent(ModelListCard);
+    await button(list, t("common.edit"))!.trigger("click");
+    const numbers = list.findAll("section .el-input-number input");
+    // In order: maxTokens, context window, timeout, retries, temperature, topP, maxCompletionTokens.
+    expect(numbers.map((input) => (input.element as HTMLInputElement).value)).toEqual([
+      "50000",
+      "256000",
+      "300",
+      "99",
+      "0.7",
+      "",
+      "",
+    ]);
+    await button(list, t("admin.doneEdit"))!.trigger("click");
+    await (await saveButton(page)).trigger("click");
+    await flushPromises();
+    expect((sent.settings as { models: ModelEntry[] }).models[0]!.timeout).toBe("PT300S");
+  });
+
+  it("round-trips fields without controls through edit, test and save", async () => {
+    const page = await mountModelPage();
+    const list = page.findComponent(ModelListCard);
+    await button(list, t("common.edit"))!.trigger("click");
+    await list.find("section").findAll("input")[2]!.setValue("https://new.example.com/v1");
+    const trash = `.api-key-row button[aria-label="${t("common.delete") as string}"]`;
+    await list.find("section").findAll(trash)[1]!.trigger("click");
+    await button(list, t("admin.doneEdit"))!.trigger("click");
+
+    // Test with the current draft without saving.
+    await button(list, t("common.testModel"))!.trigger("click");
+    const testDialog = page.findAll("section").at(-1)!;
     await testDialog.find("textarea").setValue("hello");
     await button(testDialog, t("common.sendTest"))!.trigger("click");
     await flushPromises();
-    const tested = savedPayload.embeddingTest as { modelConfig: Record<string, unknown> };
-    expect(tested.modelConfig.modelName).toBe("text-embedding-v3");
-    expect(tested.modelConfig.customHeaders).toEqual({ "X-Embed-Key": "keep" });
-  });
+    const tested = (sent.test as { model: Record<string, unknown>; prompt: string });
+    expect(tested.prompt).toBe("hello");
+    expect(tested.model.baseUrl).toBe("https://new.example.com/v1");
+    expect(tested.model.apiKeys).toEqual(["", "sk-fake-cd34"]);
+    expect(JSON.stringify(tested.model.customRequestParameters)).toBe(OPAQUE_CUSTOMS);
+    expect(adminApi.saveModelSettings).not.toHaveBeenCalled();
+    await button(testDialog, t("common.close"))!.trigger("click");
 
-  it("keeps a persistent embedding error with retry on the model config page", async () => {
-    vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
-      success: false,
-      message: "legacy role params",
-    });
-    const wrapper = await mountModelPage();
-    const roles = wrapper.findComponent(RoleReferencesCard);
-    expect(button(roles, t("common.save"))!.attributes("disabled")).toBeDefined();
-    const embedding = wrapper.findComponent(EmbeddingModelConfigCard);
-    expect(button(embedding, t("common.save"))!.attributes("disabled")).toBeDefined();
-    expect(embedding.find(".load-error").text()).toContain("legacy role params");
-    expect(embedding.findAll(".model-item")).toHaveLength(0);
-
-    await button(embedding, t("common.retry"))!.trigger("click");
+    await (await saveButton(page)).trigger("click");
     await flushPromises();
-    expect(embedding.find(".load-error").exists()).toBe(false);
-    expect(embedding.findAll(".model-item")).toHaveLength(1);
-  });
-
-  it("keeps a persistent config error banner on the system configuration page", async () => {
-    vi.mocked(adminApi.getBusinessConfig).mockResolvedValueOnce({
-      success: false,
-      message: "legacy role params",
+    const saved = (sent.settings as { models: Array<Record<string, unknown>> }).models[0]!;
+    expect(saved).toMatchObject({
+      baseUrl: "https://new.example.com/v1",
+      apiKeys: ["", "sk-fake-cd34"],
+      temperature: 0.7,
+      maxRetries: 99,
+      organizationId: "org-existing",
+      projectId: "project-existing",
+      stop: ["</end>"],
+      customHeaders: { "X-Provider-Test": "keep" },
+      logResponses: false,
     });
-    const wrapper = await mountPage();
-    expect(
-      button(wrapper.findComponent(SkillDirConfigCard), t("common.save"))!.attributes(
-        "disabled"
-      )
-    ).toBeDefined();
-    const banner = wrapper.find(".config-load-error");
-    expect(banner.text()).toContain("legacy role params");
-    expect(button(banner, t("common.retry"))).toBeTruthy();
+    expect(JSON.stringify(saved.customRequestParameters)).toBe(OPAQUE_CUSTOMS);
+    // Unedited entries are submitted as-is.
+    expect((sent.settings as { models: unknown[] }).models[1]).toEqual(fixtures.models[1]);
   });
 
-  it("titles every test dialog as a model test named after the selected entry", async () => {
-    const wrapper = await mountModelPage();
-    const dialogs = () => wrapper.findAllComponents({ name: "ElDialog" });
+  it("titles the model and embedding test dialogs after the selected entry", async () => {
+    const page = await mountModelPage();
     const title = () =>
-      dialogs()
-        .find((d) => d.props("modelValue"))!
+      page
+        .findAllComponents({ name: "ElDialog" })
+        .find((dialog) => dialog.props("modelValue"))!
         .props("title") as string;
-    await button(wrapper.findComponent(SystemModelConfigCard), t("common.testModel"))!.trigger(
-      "click"
-    );
-    expect(title()).toBe(t("admin.testModelNamed", { name: "GPT-4o (default)" }));
-    await button(wrapper.findAll("section").at(-1)!, t("common.close"))!.trigger("click");
-    await button(wrapper.findComponent(EmbeddingModelConfigCard), t("common.testModel"))!.trigger(
+    await button(page.findComponent(ModelListCard), t("common.testModel"))!.trigger("click");
+    expect(title()).toBe(t("admin.testModelNamed", { name: "Qwen (qwen-main)" }));
+    await button(page.findAll("section").at(-1)!, t("common.close"))!.trigger("click");
+    await button(page.findComponent(EmbeddingModelConfigCard), t("common.testModel"))!.trigger(
       "click"
     );
     expect(title()).toBe(t("admin.testModelNamed", { name: t("admin.embeddingModelConfig") }));
   });
 
-  it("edits context windows and saves models and distinct role references in one save", async () => {
-    const wrapper = await mountModelPage();
-    const application = wrapper.findComponent(SystemModelConfigCard);
-    await button(application, t("common.edit"))!.trigger("click");
-    const editInputs = application.find("section").findAll("input");
-    expect((editInputs[7]!.element as HTMLInputElement).value).toBe("256000");
-    await editInputs[7]!.setValue("200000");
-    await button(application, t("admin.doneEdit"))!.trigger("click");
-
-    await button(application, t("admin.addModel"))!.trigger("click");
-    const addInputs = application.find("section").findAll("input");
-    await addInputs[0]!.setValue("diag");
-    await addInputs[1]!.setValue("Diagnosis");
-    await fillConnection(application.find("section"));
-    await addInputs[7]!.setValue("64000");
-    await button(application.find("section"), t("admin.addModel"))!.trigger("click");
-
-    const roles = wrapper.findComponent(RoleReferencesCard);
-    const diagnosisRole = roles.findAllComponents({ name: "ElSelect" })[1]!;
-    diagnosisRole.vm.$emit("update:modelValue", "diag");
+  it("saves and tests the embedding draft as a full snapshot on its own", async () => {
+    const page = await mountModelPage();
+    const embedding = page.findComponent(EmbeddingModelConfigCard);
+    await button(embedding, t("common.edit"))!.trigger("click");
+    await embedding.findAll("section input")[1]!.setValue("sk-embed-2");
+    await button(embedding, t("admin.doneEdit"))!.trigger("click");
+    await button(embedding, t("common.saveConfig"))!.trigger("click");
     await flushPromises();
+    expect(sent.embedding).toEqual({ ...fixtures.embedding, apiKey: "sk-embed-2" });
+    expect(sent.settings).toBeNull();
 
-    await button(roles, t("common.save"))!.trigger("click");
-    await flushPromises();
-    const saved = savedPayload.system as {
-      models: Array<Record<string, unknown>>;
-      agents: Record<string, { model: string }>;
-    };
-    expect(saved.models.map((entry) => [entry.name, entry.contextWindow])).toEqual([
-      ["default", 200000],
-      ["diag", 64000],
-    ]);
-    expect(saved.agents).toEqual({ default: { model: "default" }, diagnosis: { model: "diag" } });
-  });
-
-  it("frontend save and test keep the config ID, the renamed display name and opaque customs", async () => {
-    const wrapper = await mountModelPage();
-    const frontend = wrapper.findComponent(SystemModelConfigCard);
-    await button(frontend, t("common.edit"))!.trigger("click");
-    await frontend.find("section").findAll("input")[1]!.setValue("GPT-4o Main");
-    await frontend.find("section").findAll("input")[2]!.setValue("https://new.example/v1");
-    const editedCustoms = JSON.stringify({
-      ...JSON.parse(FRONTEND_CUSTOMS),
-      model: "payload-model",
-      temperature: null,
-    });
-    await frontend
-      .find(".custom-request-parameters-editor .el-collapse-item__header")
-      .trigger("click");
-    await frontend.find("section textarea").setValue(editedCustoms);
-    await button(frontend, t("admin.doneEdit"))!.trigger("click");
-    expect(frontend.find(".dirty-tag").exists()).toBe(true);
-    await button(wrapper.findComponent(RoleReferencesCard), t("common.save"))!.trigger("click");
-    await flushPromises();
-    expect(frontend.find(".dirty-tag").exists()).toBe(false);
-    const saved = savedPayload.system as {
-      models: Array<Record<string, unknown>>;
-    };
-    expect(saved.models[0]).toMatchObject({
-      name: "default",
-      displayName: "GPT-4o Main",
-      baseUrl: "https://new.example/v1",
-    });
-    expect(JSON.stringify(saved.models[0]!.customRequestParameters)).toBe(editedCustoms);
-    await button(frontend, t("common.testModel"))!.trigger("click");
-    const testDialog = wrapper.findAll("section").at(-1)!;
+    await button(embedding, t("common.testModel"))!.trigger("click");
+    const testDialog = page.findAll("section").at(-1)!;
     await testDialog.find("textarea").setValue("hello");
     await button(testDialog, t("common.sendTest"))!.trigger("click");
     await flushPromises();
-    const tested = savedPayload.test as Record<string, unknown>;
-    expect(JSON.stringify(tested.customRequestParameters)).toBe(editedCustoms);
-    expect(tested.apiKey).toBe("sk-preview");
+    expect(sent.embeddingTest).toEqual({
+      modelConfig: { ...fixtures.embedding, apiKey: "sk-embed-2" },
+      userContent: "hello",
+    });
+  });
+});
+
+describe("system config page", () => {
+  it("reads and writes only the two query settings", async () => {
+    const page = await mountSystemPage();
+    const query = page.findComponent(QuerySettingsCard);
+    await query.find(".el-input-number input").setValue("900");
+    await button(query, t("common.saveConfig"))!.trigger("click");
+    await flushPromises();
+    expect(sent.system).toEqual({ abcQuestionMode: "harness", queryTimeoutSeconds: 900 });
+    expect(query.find(".dirty-tag").exists()).toBe(false);
+  });
+
+  it("reads the skill directory from the coding role and saves it alone", async () => {
+    const page = await mountSystemPage();
+    const skill = page.findComponent(SkillDirConfigCard);
+    expect((skill.find("input").element as HTMLInputElement).value).toBe("skills/legacy");
+    await skill.find("input").setValue("skills/aftercalculate");
+    await button(skill, t("common.saveConfig"))!.trigger("click");
+    await flushPromises();
+    expect(sent.skilldir).toBe("skills/aftercalculate");
+    expect(sent.settings).toBeNull();
+  });
+
+  it("keeps a persistent error and disables writes when the business config fails to load", async () => {
+    vi.mocked(adminApi.getBusinessConfig).mockRejectedValueOnce(new Error("java down"));
+    const page = await mountSystemPage();
+    expect(
+      button(page.findComponent(SkillDirConfigCard), t("common.saveConfig"))!.attributes("disabled")
+    ).toBeDefined();
+    const banner = page.find(".config-load-error");
+    expect(banner.text()).toContain("java down");
+    expect(button(banner, t("common.retry"))).toBeTruthy();
   });
 });

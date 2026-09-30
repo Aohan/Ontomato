@@ -109,7 +109,9 @@ export async function runDeepAnalysisWorkflow(
   await recordTurnRunStart({ threadId, requestSeq, source: "analysis" });
   const turn = buildTurnIdentity(threadId, requestSeq);
 
-  return runWithLogContext({ domainId, turn }, async () => {
+  return runWithLogContext(
+    { domainId, turn, token: token || undefined, apiKey: apiKey || undefined },
+    async () => {
     const store = createDeepAnalysisArtifactStore({
       taskId,
       identity,

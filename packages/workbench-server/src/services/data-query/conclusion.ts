@@ -307,7 +307,7 @@ export async function streamConclusion(
     return fullContent;
   }
 
-  const model = createModel({ temperature: 0.3, agentName: modelAgentName("conclusion") });
+  const model = await createModel({ temperature: 0.3, agentName: modelAgentName("conclusion") });
   const prompt = buildGenericConclusionPrompt(originalQuestion, resultsetsForPrompt, locale);
 
   let fullContent = prefix + "\n\n";

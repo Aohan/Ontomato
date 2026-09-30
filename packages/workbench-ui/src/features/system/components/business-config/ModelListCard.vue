@@ -1,68 +1,53 @@
 <script setup lang="ts">
-import { computed, reactive, ref, shallowRef, watch } from "vue";
+import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
+import { computed, reactive, ref, shallowRef } from "vue";
 import { Cpu, Plus, Trash2 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import type { JsonObject } from "@ontomato/contracts/system-model";
-import { formatTimeout, parseTimeoutSeconds, type BackendModelConfig } from "../../types";
-import { plainOuter } from "../../utils/raw";
+import { formatTimeout, type ModelEntry } from "../../types";
 import CustomRequestParametersEditor from "./CustomRequestParametersEditor.vue";
-import { workbenchContent } from "../../../../content";
 
 const { t } = useI18n();
-const { businessConfigSeparator } = workbenchContent().text;
 
 const props = defineProps<{
-  saving: boolean;
-  loading: boolean;
-  loadError: string;
+  disabled: boolean;
 }>();
 
-const models = defineModel<BackendModelConfig[]>("models", { required: true });
+// Entries are plain objects: the parent holds the list by a shallow ref, and adding or editing replaces the whole list instead of mutating it.
+const models = defineModel<ModelEntry[]>("models", { required: true });
 
 const emit = defineEmits<{
-  save: [];
-  test: [model: BackendModelConfig];
-  retry: [];
+  remove: [index: number];
+  test: [model: ModelEntry];
 }>();
 
 const dialogVisible = ref(false);
 const editingIndex = ref(-1);
 const customRequestParametersValid = ref(true);
-const savedSignature = ref("");
-const modelSignature = () => JSON.stringify(models.value.map((entry) => plainOuter(entry)));
-const dirty = computed(
-  () => savedSignature.value !== "" && modelSignature() !== savedSignature.value
-);
-watch(
-  () => props.loading,
-  (loading) => {
-    if (!loading && !props.loadError) markSaved();
-  },
-  { immediate: true }
-);
-// Complete snapshot of the original entry (including hidden connection fields and parameters without controls), spread back when editing to keep round trips lossless.
-let editingBaseline: BackendModelConfig | null = null;
+// Complete snapshot of the original entry (including fields without controls), spread back when editing to keep round trips lossless.
+let editingBaseline: ModelEntry | null = null;
 // Custom objects stay out of reactive: Vue's deep proxy would swallow reserved keys, so a shallow ref holds the raw object.
-const customParams = shallowRef<JsonObject>({});
+const customParams = shallowRef<Record<string, unknown>>({});
 
-function updateCustomParameters(value: JsonObject) {
+function updateCustomParameters(value: Record<string, unknown>) {
   // Write the ref explicitly so the template does not treat plain JSON containing __v_isRef as a new ref binding.
   customParams.value = value;
 }
 
-function emptyDraft(): Omit<BackendModelConfig, "customRequestParameters"> {
+// A null number means unset: Java fills maxTokens / contextWindow defaults and the rest are not sent.
+function emptyDraft() {
   return {
     name: "",
     displayName: "",
     baseUrl: "",
-    apiKeys: [],
+    apiKeys: [] as string[],
     modelName: "",
-    timeout: "PT300S",
-    maxRetries: 3,
-    temperature: null,
-    topP: null,
-    maxTokens: null,
-    maxCompletionTokens: null,
+    maxTokens: null as number | null,
+    contextWindow: null as number | null,
+    timeoutSeconds: null as number | null,
+    maxRetries: null as number | null,
+    temperature: null as number | null,
+    topP: null as number | null,
+    maxCompletionTokens: null as number | null,
   };
 }
 
@@ -86,7 +71,6 @@ const draftComplete = computed(
 );
 
 function openAddDialog() {
-  if (props.loading || props.saving || props.loadError) return;
   editingIndex.value = -1;
   editingBaseline = null;
   Object.assign(draft, emptyDraft());
@@ -96,34 +80,32 @@ function openAddDialog() {
 }
 
 function openEditDialog(index: number) {
-  if (props.loading || props.saving || props.loadError) return;
-  const entry = models.value[index];
-  if (!entry) return;
+  const entry = models.value[index]!;
   editingIndex.value = index;
-  // Unwrap only the outer proxy; custom is opaque JSON referenced as-is, and the editor replaces it whole instead of mutating it.
-  const raw = plainOuter<BackendModelConfig>(entry);
-  editingBaseline = raw;
+  editingBaseline = entry;
   Object.assign(draft, {
-    name: raw.name,
-    displayName: raw.displayName,
-    baseUrl: raw.baseUrl,
-    apiKeys: [...raw.apiKeys],
-    modelName: raw.modelName,
-    timeout: raw.timeout,
-    maxRetries: raw.maxRetries,
-    temperature: raw.temperature ?? null,
-    topP: raw.topP ?? null,
-    maxTokens: raw.maxTokens ?? null,
-    maxCompletionTokens: raw.maxCompletionTokens ?? null,
+    name: entry.name,
+    displayName: entry.displayName,
+    baseUrl: entry.baseUrl,
+    apiKeys: [...entry.apiKeys],
+    modelName: entry.modelName,
+    maxTokens: entry.maxTokens,
+    contextWindow: entry.contextWindow,
+    // The timeout is read as an ISO-8601 duration (e.g. PT5M); missing means empty.
+    timeoutSeconds: entry.timeout ? parseIsoDurationSeconds(entry.timeout) : null,
+    maxRetries: entry.maxRetries ?? null,
+    temperature: entry.temperature ?? null,
+    topP: entry.topP ?? null,
+    maxCompletionTokens: entry.maxCompletionTokens ?? null,
   });
-  customParams.value = raw.customRequestParameters ?? {};
+  // custom is opaque JSON referenced as-is; the editor replaces it whole instead of mutating it.
+  customParams.value = entry.customRequestParameters ?? {};
   customRequestParametersValid.value = true;
   dialogVisible.value = true;
 }
 
 function confirmDialog() {
-  if (!draftComplete.value) return;
-  const staged: BackendModelConfig = {
+  const staged: ModelEntry = {
     ...editingBaseline,
     // The config ID is the identity roles refer to, so existing entries cannot change it; the display name can change at any time without affecting references.
     name: draft.name.trim(),
@@ -132,34 +114,23 @@ function confirmDialog() {
     // Keys are a plain array of original values: deleting removes the item, and save and test both submit the draft as-is.
     apiKeys: [...draft.apiKeys],
     modelName: draft.modelName,
-    timeout: draft.timeout,
+    maxTokens: draft.maxTokens,
+    contextWindow: draft.contextWindow,
+    timeout: draft.timeoutSeconds === null ? null : formatTimeout(draft.timeoutSeconds),
     maxRetries: draft.maxRetries,
     temperature: draft.temperature,
     topP: draft.topP,
-    maxTokens: draft.maxTokens,
     maxCompletionTokens: draft.maxCompletionTokens,
     customRequestParameters: customParams.value,
   };
-  if (editingIndex.value < 0) {
-    models.value.push(staged);
-  } else {
-    models.value[editingIndex.value] = staged;
-  }
+  models.value = isNew.value
+    ? [...models.value, staged]
+    : models.value.map((entry, index) => (index === editingIndex.value ? staged : entry));
   customParams.value = {};
   dialogVisible.value = false;
 }
 
-function removeModel(index: number) {
-  models.value.splice(index, 1);
-}
-
-function markSaved() {
-  savedSignature.value = modelSignature();
-}
-
-defineExpose({ markSaved });
-
-function keyStatus(entry: BackendModelConfig): string {
+function keyStatus(entry: ModelEntry): string {
   const count = entry.apiKeys.length;
   return count > 0 ? t("admin.keyCountConfigured", { n: count }) : t("admin.keyMissing");
 }
@@ -170,36 +141,25 @@ function keyStatus(entry: BackendModelConfig): string {
     <div class="card-header">
       <el-icon :size="20"><Cpu /></el-icon>
       <span>{{ t("admin.modelList") }}</span>
-      <el-tag
-        v-if="dirty && !props.loadError && !props.loading"
-        type="warning"
-        size="small"
-        class="dirty-tag"
-      >
-        {{ t("admin.unsaved") }}
-      </el-tag>
       <el-button
         type="primary"
         :icon="Plus"
         size="small"
         class="header-action"
-        :disabled="props.loading || props.saving || !!props.loadError"
+        :disabled="props.disabled"
         @click="openAddDialog"
       >
         {{ t("admin.addModel") }}
       </el-button>
     </div>
     <div class="card-body">
-      <el-skeleton v-if="props.loading" :rows="3" animated />
-      <div v-else-if="props.loadError" class="load-error" role="alert">
-        <span>{{ t("admin.modelListLoadFailed") }}{{ businessConfigSeparator }}{{ props.loadError }}</span>
-        <el-button size="small" @click="emit('retry')">{{ t("common.retry") }}</el-button>
-      </div>
-      <el-empty v-else-if="models.length === 0" :description="t('admin.modelListEmpty')">
-        <el-button type="primary" @click="openAddDialog">{{ t("admin.addModel") }}</el-button>
+      <el-empty v-if="models.length === 0" :description="t('admin.modelListEmpty')">
+        <el-button type="primary" :disabled="props.disabled" @click="openAddDialog">
+          {{ t("admin.addModel") }}
+        </el-button>
       </el-empty>
       <ul v-else class="model-list">
-        <li v-for="(entry, index) in models" :key="entry.name || index" class="model-item">
+        <li v-for="(entry, index) in models" :key="entry.name" class="model-item">
           <div class="model-main">
             <span class="model-name">{{ entry.displayName }}</span>
             <code
@@ -218,34 +178,28 @@ function keyStatus(entry: BackendModelConfig): string {
             <span class="model-keys">{{ keyStatus(entry) }}</span>
           </div>
           <div class="model-actions">
+            <el-button link type="primary" :disabled="props.disabled" @click="emit('test', entry)">
+              {{ t("common.testModel") }}
+            </el-button>
             <el-button
               link
               type="primary"
-              :disabled="props.saving"
-              @click="emit('test', models[index]!)"
+              :disabled="props.disabled"
+              @click="openEditDialog(index)"
             >
-              {{ t("common.testModel") }}
-            </el-button>
-            <el-button link type="primary" :disabled="props.saving" @click="openEditDialog(index)">
               {{ t("common.edit") }}
             </el-button>
-            <el-button link type="danger" :disabled="props.saving" @click="removeModel(index)">
+            <el-button
+              link
+              type="danger"
+              :disabled="props.disabled"
+              @click="emit('remove', index)"
+            >
               {{ t("common.delete") }}
             </el-button>
           </div>
         </li>
       </ul>
-
-      <el-form-item class="form-actions">
-        <el-button
-          type="primary"
-          :loading="props.saving"
-          :disabled="!!props.loadError || props.loading"
-          @click="emit('save')"
-        >
-          {{ t("admin.saveModelList") }}
-        </el-button>
-      </el-form-item>
 
       <el-dialog
         v-model="dialogVisible"
@@ -301,13 +255,38 @@ function keyStatus(entry: BackendModelConfig): string {
           </el-form-item>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12">
+              <el-form-item label="maxTokens">
+                <el-input-number
+                  v-model="draft.maxTokens"
+                  :min="1"
+                  :precision="0"
+                  :placeholder="t('admin.defaultWhenEmpty')"
+                  controls-position="right"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('admin.contextWindow')">
+                <el-input-number
+                  v-model="draft.contextWindow"
+                  :min="1"
+                  :precision="0"
+                  :placeholder="t('admin.defaultWhenEmpty')"
+                  controls-position="right"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <h4 class="dialog-section">{{ t("admin.advancedSettings") }}</h4>
+          <el-row :gutter="24">
+            <el-col :xs="24" :sm="12">
               <el-form-item :label="t('common.timeoutSec')">
                 <el-input-number
-                  :model-value="parseTimeoutSeconds(draft.timeout)"
+                  v-model="draft.timeoutSeconds"
                   :min="1"
+                  :precision="0"
                   :step="10"
                   controls-position="right"
-                  @update:model-value="draft.timeout = formatTimeout($event ?? 300)"
                 />
               </el-form-item>
             </el-col>
@@ -316,13 +295,12 @@ function keyStatus(entry: BackendModelConfig): string {
                 <el-input-number
                   v-model="draft.maxRetries"
                   :min="0"
-                  :step="1"
+                  :precision="0"
                   controls-position="right"
                 />
               </el-form-item>
             </el-col>
           </el-row>
-          <h4 class="dialog-section">{{ t("admin.advancedSettings") }}</h4>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12">
               <el-form-item label="temperature">
@@ -337,13 +315,13 @@ function keyStatus(entry: BackendModelConfig): string {
           </el-row>
           <el-row :gutter="24">
             <el-col :xs="24" :sm="12">
-              <el-form-item label="maxTokens">
-                <el-input-number v-model="draft.maxTokens" controls-position="right" />
-              </el-form-item>
-            </el-col>
-            <el-col :xs="24" :sm="12">
               <el-form-item label="maxCompletionTokens">
-                <el-input-number v-model="draft.maxCompletionTokens" controls-position="right" />
+                <el-input-number
+                  v-model="draft.maxCompletionTokens"
+                  :min="1"
+                  :precision="0"
+                  controls-position="right"
+                />
               </el-form-item>
             </el-col>
           </el-row>

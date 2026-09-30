@@ -109,7 +109,7 @@ export async function matchAnalysisReportCards(params: {
       question,
     });
 
-    const model = createModel({ agentName: modelAgentName("hotReportMatcher") });
+    const model = await createModel({ agentName: modelAgentName("hotReportMatcher") });
     const response = await model.invoke([{ role: "user", content: prompt }], { signal });
     const raw = String(response.content ?? "").trim();
     const cleaned = stripAnalysisTags(raw);

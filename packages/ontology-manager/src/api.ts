@@ -130,6 +130,15 @@ export interface CreateOntologyRelationInput {
   toField?: string;
 }
 
+/** A business knowledge entry (the data engine KnowledgeEntity fields this page reads and writes); status 0 is pending review, 1 approved. */
+export interface BusinessKnowledge {
+  knowledgeID: string;
+  knowledgeTitle: string;
+  knowledgeText: string;
+  knowledgeTags: string[];
+  status: number;
+}
+
 export interface SmartAsset {
   id?: string;
   name: string;
@@ -416,17 +425,28 @@ export function createManagerClient(
     return send("/businessConfig/dataAdapters", { method: "GET" });
   }
 
-  /** Business knowledge (data engine /admin/getBussinessKnowledge etc.), used by the business knowledge page embedded in the Manager. */
-  function listKnowledge() {
-    return post("/admin/getBussinessKnowledge", {});
+  /** Business knowledge list: the data engine returns an object keyed by knowledgeID; older entries may have no tags. */
+  async function listKnowledge(): Promise<BusinessKnowledge[]> {
+    const response = await post("/admin/getBussinessKnowledge", {});
+    const entries = response.data as Record<
+      string,
+      Omit<BusinessKnowledge, "knowledgeTags"> & { knowledgeTags?: string[] }
+    >;
+    return Object.values(entries).map((item) => ({
+      knowledgeID: item.knowledgeID,
+      knowledgeTitle: item.knowledgeTitle,
+      knowledgeText: item.knowledgeText,
+      knowledgeTags: item.knowledgeTags ?? [],
+      status: item.status,
+    }));
   }
 
-  function addKnowledge(payload: Record<string, unknown>) {
-    return post("/admin/addBussinessKnowledge", payload);
-  }
-
-  function editKnowledge(payload: Record<string, unknown>) {
-    return post("/admin/editBussinessKnowledge", payload);
+  /** Create (empty knowledgeID) or edit a business knowledge entry. */
+  function saveKnowledge(knowledge: BusinessKnowledge) {
+    return post(
+      knowledge.knowledgeID ? "/admin/editBussinessKnowledge" : "/admin/addBussinessKnowledge",
+      { ...knowledge }
+    );
   }
 
   function deleteKnowledge(knowledgeID: string) {
@@ -454,8 +474,7 @@ export function createManagerClient(
     getBusinessConfig,
     listDataAdapters,
     listKnowledge,
-    addKnowledge,
-    editKnowledge,
+    saveKnowledge,
     deleteKnowledge,
   };
 }

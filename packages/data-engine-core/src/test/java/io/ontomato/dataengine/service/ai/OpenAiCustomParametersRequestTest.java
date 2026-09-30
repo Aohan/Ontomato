@@ -333,7 +333,6 @@ class OpenAiCustomParametersRequestTest {
         model.setStrictJsonSchema(true);
         model.setSeed(7);
         model.setUser("u");
-        model.setStrictTools(true);
         model.setParallelToolCalls(false);
         model.setStore(true);
         model.setMetadata(Map.of("k", "v"));
@@ -349,7 +348,7 @@ class OpenAiCustomParametersRequestTest {
         custom.put("extra", "x");
         model.setCustomRequestParameters(CustomRequestParameters.normalize(custom));
 
-        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(model, 50000, 50000);
+        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(model, true, 50000);
 
         assertEquals("ok", chatModel.chat(ChatRequest.builder()
                 .messages(UserMessage.from("hello"))
@@ -383,7 +382,9 @@ class OpenAiCustomParametersRequestTest {
 
     @Test
     void sparseFormalModelKeepsDefaultsAndOmitsUnset() {
-        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(productionModel(), 50000, 50000);
+        ModelConfig model = productionModel();
+        model.setMaxTokens(50000);
+        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(model, false, 50000);
 
         assertEquals("ok", chatModel.chat("hello"));
         JSONObject body = JSON.parseObject(requestBody.get());
@@ -396,7 +397,7 @@ class OpenAiCustomParametersRequestTest {
 
     @Test
     void sparseDraftModelKeepsSdkDefaults() {
-        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(productionModel(), null, null);
+        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(productionModel(), false, null);
 
         assertEquals("ok", chatModel.chat("hello"));
         JSONObject body = JSON.parseObject(requestBody.get());
@@ -407,11 +408,12 @@ class OpenAiCustomParametersRequestTest {
     @Test
     void refLiteralPreservedAtFinalExit() {
         ModelConfig model = productionModel();
+        model.setMaxTokens(50000);
         Map<String, Object> custom = new LinkedHashMap<>();
         custom.put("nested", Map.of("$ref", "$"));
         model.setCustomRequestParameters(CustomRequestParameters.normalize(custom));
 
-        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(model, 50000, 50000);
+        ChatModel chatModel = MultiThreadAIChatService.buildChatModel(model, false, 50000);
 
         assertEquals("ok", chatModel.chat("hello"));
         assertSingleJsonObject(requestBody.get());

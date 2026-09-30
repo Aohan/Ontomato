@@ -230,7 +230,7 @@ function buildRepairMessage(errorMessage: string): string {
 }
 
 async function invokeTaskPlannerWithRepair(
-  model: ReturnType<typeof createModel>,
+  model: Awaited<ReturnType<typeof createModel>>,
   messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   historicalQueryRefsById: HistoricalQueryRefsById,
   logContext: { threadId?: string; requestSeq?: number }
@@ -346,7 +346,7 @@ export async function taskPlannerNode(state: GraphState, config?: any): Promise<
       messagesLength: estimateMessagesSize(messages),
     });
 
-    const model = createModel({ agentName: modelAgentName("taskPlanner") });
+    const model = await createModel({ agentName: modelAgentName("taskPlanner") });
     const parsed = await invokeTaskPlannerWithRepair(model, messages, historicalQueryRefsById, {
       threadId: config?.configurable?.thread_id,
       requestSeq: config?.configurable?.requestSeq ?? state.requestSeq,

@@ -76,8 +76,8 @@ describe("shared admin layout", () => {
     expect(el.querySelector(".lang-switch-wrapper")).toBeNull();
   });
 
-  it("a home-style tab (Ontology Manager) hides the sidebar; hides the observe entry without that permission; the language switch follows the app setting", async () => {
-    const granted = new Set(["intelligence-engine"]);
+  it("the home-style tab (Ontology Manager) shows by ontology-modeling and hides the sidebar; the observe entry is hidden without its permission; the language switch follows the app setting", async () => {
+    const granted = new Set(["ontology-modeling"]);
     const { el, tabs, menu } = await mountLayout(
       { ...base, access: { ready: true, can: (p) => granted.has(p) } },
       "/admin/ontology-manager",
@@ -88,6 +88,32 @@ describe("shared admin layout", () => {
     expect(el.querySelector(".admin-aside")).toBeNull();
     expect(el.querySelector(".icon-btn")).toBeNull();
     expect(el.querySelector(".lang-switch-wrapper")).not.toBeNull();
+  });
+
+  it("without ontology-modeling the Ontology Manager tab is hidden (the old group permission intelligence-engine no longer grants it)", async () => {
+    const granted = new Set(["intelligence-engine", "audit-logs"]);
+    const { tabs } = await mountLayout(
+      { ...base, access: { ready: true, can: (p) => granted.has(p) } },
+      "/admin/audit-log"
+    );
+    expect(tabs()).toEqual(["System Management"]);
+  });
+
+  it("group landing: a home-style tab opens its home page, a menu tab opens the group's first visible menu item", async () => {
+    const { el, router } = await mountLayout(base, "/admin/audit-log");
+    const tab = (title: string) =>
+      [...el.querySelectorAll<HTMLElement>(".header-tabs .tab-item")].find(
+        (item) => item.textContent?.trim() === title
+      )!;
+    const settle = () => new Promise((resolve) => setTimeout(resolve));
+    tab("Ontology Manager").click();
+    await settle();
+    expect(router.currentRoute.value.path).toBe("/admin/ontology-manager");
+    expect(el.querySelector(".admin-aside")).toBeNull();
+    tab("System Management").click();
+    await settle();
+    expect(router.currentRoute.value.path).toBe("/admin/audit-log");
+    expect(el.querySelector(".admin-aside")).not.toBeNull();
   });
 
   it("shows loading until permissions load, then selects the current route's group; shows the empty state without any permission", async () => {

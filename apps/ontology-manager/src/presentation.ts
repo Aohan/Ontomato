@@ -123,5 +123,4 @@ export const ossPresentation: ManagerPresentation = {
   maxFitZoom: 1,
   dataBrowserDescription: () => "Browse and inspect data records for the current object type.",
   compactDialogs: true,
-  businessKnowledge: true,
 };

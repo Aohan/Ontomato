@@ -6,6 +6,7 @@ import {
   type ManagerAuthFailureStatus,
   type ManagerCredential,
   type ManagerDataFallbacks,
+  type ManagerKnowledgeTagValues,
   type ManagerPresentation,
 } from "@ontomato/ontology-manager";
 import { ontologyText, type ManagerMessages } from "@ontomato/ontology-manager/i18n";
@@ -32,6 +33,31 @@ export interface ManagerShellProfile {
   dataFallbacks: ManagerDataFallbacks;
   /** This product's Manager presentation values (theme values, node palette, graph interaction, narrow dialogs, etc.). */
   presentation: ManagerPresentation;
+  /** This product's stored values for the business knowledge tags. */
+  knowledgeTagValues: ManagerKnowledgeTagValues;
+}
+
+/**
+ * Information the host gives through the launch URL when embedding: embedded=1 means the Manager is embedded in a host
+ * page; knowledgeGovernanceUrl is the host's knowledge governance page. The address comes from a URL parameter and only
+ * http/https is accepted; anything else counts as absent.
+ */
+function readHostLaunch() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    embedded: params.get("embedded") === "1",
+    knowledgeGovernanceUrl: httpUrl(params.get("knowledgeGovernanceUrl")),
+  };
+}
+
+function httpUrl(value: string | null) {
+  if (!value) return null;
+  try {
+    const url = new URL(value, window.location.href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 export function startManagerShell(profile: ManagerShellProfile) {
@@ -46,11 +72,7 @@ export function startManagerShell(profile: ManagerShellProfile) {
   const { apiBase, initialRoute } = readRuntimeConfig();
   const { view, replaceView } = syncView(initialRoute);
 
-  // When embedded in a host, hide the workspace brand header: the host already provides the "Ontology Manager" tab and back navigation.
-  const embedded = new URLSearchParams(window.location.search).get("embedded") === "1";
-  const presentation: ManagerPresentation = embedded
-    ? { ...profile.presentation, showWorkspaceHeader: false }
-    : profile.presentation;
+  const { embedded, knowledgeGovernanceUrl } = readHostLaunch();
 
   // 401 means authentication expired: clear this tab's credential and stop requests. 402 (license failure) keeps the credential; the component shows the error.
   function onAuthFailure(status: ManagerAuthFailureStatus) {
@@ -71,7 +93,10 @@ export function startManagerShell(profile: ManagerShellProfile) {
             theme: theme.value,
             view: view.value,
             dataFallbacks: profile.dataFallbacks,
-            presentation,
+            presentation: profile.presentation,
+            knowledgeTagValues: profile.knowledgeTagValues,
+            embedded,
+            knowledgeGovernanceUrl,
             "onUpdate:view": replaceView,
             onAuthFailure,
           })

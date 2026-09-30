@@ -32,7 +32,7 @@ export async function judgeAndAnswerByDocs(params: {
     question,
   });
 
-  const model = createModel({ agentName: modelAgentName("hotDataDynamic") });
+  const model = await createModel({ agentName: modelAgentName("hotDataDynamic") });
   const response = await model.invoke([{ role: "user", content: prompt }], {
     signal,
   });

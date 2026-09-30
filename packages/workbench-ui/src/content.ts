@@ -118,11 +118,11 @@ export interface WorkbenchFixedText {
     exportSucceeded: string;
     exportFailed: string;
   };
-  /** Original count text at the end of partial batch-delete failure messages (for both business knowledge, via KnowledgeManager route props, and query examples). */
+  /** Original count text at the end of partial batch-delete failure messages (both query example batch deletes). */
   batchDeleteFailureSuffix: (failed: number, total: number) => string;
   /** Original colon after field labels on query example cards (five places in ExamplesManager.vue); independent of errorPunctuation for request errors. */
   exampleFieldSeparator: string;
-  /** Original separator between error explanations and timeout text on the system config page (six places: BusinessConfig and BackendModelList/SystemModel/Embedding×2/QuerySettings). */
+  /** Original separator between error explanations and timeout text on the system and model configuration pages. */
   businessConfigSeparator: string;
   /** Default PPT section title and extraction failure (analysis/utils/ppt.ts). */
   pptSectionFallback: string;

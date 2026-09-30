@@ -31,7 +31,9 @@ let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
 let dataAdapter: string;
 let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
-let knowledge: Record<string, unknown>[];
+let knowledge: Record<string, Record<string, unknown>>;
+/** Knowledge IDs whose delete returns a business failure. */
+let knowledgeDeleteFails: Set<string>;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -49,17 +51,19 @@ const metas = (classes: string[]) => ({
   },
 });
 
-function respond(url: string): Response {
+function respond(url: string, body?: Record<string, unknown>): Response {
   const path = url.replace(/^.*\/data-query/, "");
   const status = statusFor(path);
   if (status !== 200) return json({ success: false }, status);
+  if (path === "/admin/getBussinessKnowledge") return json({ success: true, data: knowledge });
+  if (path === "/admin/delBussinessKnowledge" && knowledgeDeleteFails.has(String(body?.knowledgeID)))
+    return json({ success: false, message: "locked" });
   if (path === "/admin/getMetas") return json(metasFor(url));
   if (path === "/data/getWholeClassDataByPage")
     return json({ success: true, data: [{ id: "row-1" }], total_count: 1 });
   if (path === "/businessConfig/getConfig") return json({ success: true, data: { dataAdapter } });
   if (path === "/businessConfig/dataAdapters") return json({ success: true, data: dataAdapters });
   if (path === "/function/queryList") return json({ success: true, data: functions });
-  if (path === "/admin/getBussinessKnowledge") return json({ success: true, data: knowledge });
   if (path.endsWith("/queryList")) return json({ success: true, data: [] });
   return json({ success: true, data: {} });
 }
@@ -76,28 +80,33 @@ beforeEach(() => {
   statusFor = () => 200;
   metasFor = () => metas(["Order", "Item"]);
   functions = [];
-  knowledge = [];
   dataAdapter = "mysql";
   dataAdapters = [
     { type: "m3", label: "M3", sql: false, fields: [] },
     { type: "mysql", label: "MySQL", sql: true, fields: ["url", "user", "password"] },
   ];
+  knowledge = {
+    k1: { knowledgeID: "k1", knowledgeTitle: "Refund rule", knowledgeText: "t1", knowledgeTags: ["Business"], status: 1, knowledgeVector: [0.1] },
+    k2: { knowledgeID: "k2", knowledgeTitle: "Legacy note", knowledgeText: "t2", status: 0 },
+  };
+  knowledgeDeleteFails = new Set();
   vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
     const path = url.replace(/^.*\/data-query/, "");
+    const body = init.body === undefined ? undefined : JSON.parse(String(init.body));
     requests.push({
       url,
       method: String(init.method),
       headers: init.headers as Record<string, string>,
-      body: init.body === undefined ? undefined : JSON.parse(String(init.body)),
+      body,
     });
     if (holdPaths.has(path)) {
       return new Promise<Response>((resolve) => {
         const waiting = held.get(path) ?? [];
-        waiting.push({ resolve: () => resolve(respond(url)) });
+        waiting.push({ resolve: () => resolve(respond(url, body)) });
         held.set(path, waiting);
       });
     }
-    return Promise.resolve(respond(url));
+    return Promise.resolve(respond(url, body));
   });
 });
 
@@ -171,7 +180,6 @@ const presentation: ManagerPresentation = {
   maxFitZoom: null,
   dataBrowserDescription: (objectLabel) => `description of ${objectLabel}`,
   compactDialogs: false,
-  businessKnowledge: true,
 };
 
 const base: ManagerHostContext = {
@@ -182,6 +190,9 @@ const base: ManagerHostContext = {
   view: "/playground",
   dataFallbacks: hostFallbacks,
   presentation,
+  knowledgeTagValues: { general: "tag-g", business: "tag-b", tech: "tag-t" },
+  embedded: false,
+  knowledgeGovernanceUrl: null,
 };
 
 const paths = (list = requests) =>
@@ -800,7 +811,7 @@ describe("Manager business knowledge page", () => {
     status: 1,
   };
   beforeEach(() => {
-    knowledge = [refundRule];
+    knowledge = { [refundRule.knowledgeID]: refundRule };
   });
 
   const buttonIn = (root: Element, text: string) =>
@@ -808,7 +819,7 @@ describe("Manager business knowledge page", () => {
       (item) => item.textContent?.trim() === text
     )!;
 
-  it("lists knowledge and adds an entry through the edit dialog inside the instance", async () => {
+  it("lists knowledge and adds an entry through the dialog inside the instance", async () => {
     const { root } = mountHost({ ...base, view: "/knowledge" });
     await settle();
     expect(paths()).toContain("/admin/getBussinessKnowledge");
@@ -816,7 +827,7 @@ describe("Manager business knowledge page", () => {
 
     buttonIn(root(), "Add Knowledge").click();
     await settle();
-    const dialog = openDialog("Edit Knowledge");
+    const dialog = openDialog("Add Knowledge");
     expect(root().contains(dialog)).toBe(true);
     const title = dialog.querySelector("input")!;
     title.value = "Shipping rule";
@@ -869,18 +880,6 @@ describe("Manager business knowledge page", () => {
     expect(confirmDialog()).toBeNull();
     expect(paths()).not.toContain("/admin/delBussinessKnowledge");
   });
-
-  it("a host without the knowledge page shows no entry and the view falls back to the graph", async () => {
-    const { root, views } = mountHost({
-      ...base,
-      presentation: { ...presentation, businessKnowledge: false },
-      view: "/knowledge",
-    });
-    await settle();
-    expect(views.at(-1)).toBe("/playground");
-    expect(root().textContent).not.toContain("Business Knowledge");
-    expect(paths()).not.toContain("/admin/getBussinessKnowledge");
-  });
 });
 
 function openDialog(buttonText: string) {
@@ -896,3 +895,111 @@ function confirmDialog() {
   const overlay = document.querySelector(".manager-confirm")?.closest<HTMLElement>(".el-overlay");
   return overlay && overlay.style.display !== "none" ? overlay : null;
 }
+
+describe("business knowledge page", () => {
+  const knowledgeView = { ...base, view: "/knowledge" };
+  const rowTitles = () =>
+    [...document.querySelectorAll(".knowledge-table .el-table__body tr")].map(
+      (row) => row.querySelectorAll("td")[1]?.textContent?.trim()
+    );
+  const messageText = () => document.querySelector(".el-message")?.textContent?.trim();
+
+  it("standalone shows the brand header and no governance entry; embedded hides the header and shows the entry only with a governance URL, opening it in the top window", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    expect(document.querySelector(".workspace-header")).not.toBeNull();
+    expect(rowTitles()).toEqual(["Refund rule", "Legacy note"]);
+    expect(document.querySelector(".knowledge-actions a")).toBeNull();
+    mountedApps.splice(0).forEach((app) => app.unmount());
+
+    mountHost({ ...knowledgeView, embedded: true });
+    await settle();
+    expect(document.querySelector(".workspace-header")).toBeNull();
+    expect(document.querySelector(".knowledge-actions a")).toBeNull();
+    mountedApps.splice(0).forEach((app) => app.unmount());
+
+    mountHost({
+      ...knowledgeView,
+      embedded: true,
+      knowledgeGovernanceUrl: "http://host.test/admin/knowledge-governance",
+    });
+    await settle();
+    const link = document.querySelector<HTMLAnchorElement>(".knowledge-actions a")!;
+    expect(link.textContent?.trim()).toBe("Knowledge Governance");
+    expect(link.getAttribute("href")).toBe("http://host.test/admin/knowledge-governance");
+    expect(link.getAttribute("target")).toBe("_top");
+  });
+
+  it("create and edit dialogs have different titles; editing submits the entry's own tags and creating offers only the three host tag values", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    clickButton("Add Knowledge");
+    await settle();
+    const addDialog = document.querySelector(".el-dialog")!;
+    expect(addDialog.querySelector(".el-dialog__title")?.textContent).toBe("Add Knowledge");
+    (addDialog.querySelector(".el-select__wrapper") as HTMLElement).click();
+    await settle();
+    const options = [...document.querySelectorAll(".el-select-dropdown__item")].map((item) =>
+      item.textContent?.trim()
+    );
+    expect(options).toEqual(["General", "Business", "Tech"]);
+    clickButton("Cancel");
+    await settle();
+
+    const editButtons = [...document.querySelectorAll(".knowledge-table button")].filter(
+      (button) => button.textContent?.trim() === "Edit"
+    ) as HTMLElement[];
+    editButtons[0]!.click();
+    await settle();
+    const editDialog = [...document.querySelectorAll(".el-dialog")].find(
+      (dialog) => (dialog as HTMLElement).closest<HTMLElement>(".el-overlay")?.style.display !== "none"
+    )!;
+    expect(editDialog.querySelector(".el-dialog__title")?.textContent).toBe("Edit Knowledge");
+    clickButton("Save");
+    await settle();
+    const saved = requests.find((request) => request.url.endsWith("/admin/editBussinessKnowledge"));
+    expect(saved?.body).toEqual({
+      knowledgeID: "k1",
+      knowledgeTitle: "Refund rule",
+      knowledgeText: "t1",
+      knowledgeTags: ["Business"],
+      status: 1,
+    });
+  });
+
+  it("closing the delete confirmation sends no delete and reports no error; a partially failed batch delete reports the count and reloads", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    const deleteButtons = () =>
+      [...document.querySelectorAll(".knowledge-table button")].filter(
+        (button) => button.textContent?.trim() === "Delete"
+      ) as HTMLElement[];
+    deleteButtons()[0]!.click();
+    await settle();
+    expect(confirmDialog()).not.toBeNull();
+    clickButton("Cancel");
+    await settle();
+    expect(confirmDialog()).toBeNull();
+    expect(paths()).not.toContain("/admin/delBussinessKnowledge");
+    expect(document.querySelector(".el-message")).toBeNull();
+
+    knowledgeDeleteFails = new Set(["k2"]);
+    document
+      .querySelectorAll<HTMLInputElement>(".knowledge-table tbody input")
+      .forEach((input) => input.click());
+    await settle();
+    const loads = paths().filter((path) => path === "/admin/getBussinessKnowledge").length;
+    clickButton("Batch Delete");
+    await settle();
+
+    clickButton("OK");
+    await settle();
+    expect(
+      requests
+        .filter((request) => request.url.endsWith("/admin/delBussinessKnowledge"))
+        .map((request) => request.body?.knowledgeID)
+    ).toEqual(["k1", "k2"]);
+    expect(messageText()).toBe("1 of 2 knowledge entries could not be deleted");
+    expect(paths().filter((path) => path === "/admin/getBussinessKnowledge")).toHaveLength(loads + 1);
+  });
+});

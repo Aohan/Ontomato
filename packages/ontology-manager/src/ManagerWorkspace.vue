@@ -154,7 +154,7 @@ function applyRouteState() {
     activeWorkspace.value = "visual-modeling";
     return;
   }
-  if (section === "knowledge" && props.context.presentation.businessKnowledge) {
+  if (section === "knowledge") {
     activeWorkspace.value = "knowledge";
     return;
   }
@@ -339,10 +339,7 @@ onMounted(() => {
 
 <template>
   <main ref="shell" class="ontology-manager-shell">
-    <OntologyWorkspaceHeader
-      v-if="context.presentation.showWorkspaceHeader !== false"
-      @home="changeWorkspace('playground')"
-    />
+    <OntologyWorkspaceHeader v-if="!context.embedded" @home="changeWorkspace('playground')" />
 
     <div class="workspace">
       <OntologyResourceSidebar
@@ -350,7 +347,6 @@ onMounted(() => {
         :active-asset-tab="activeAssetTab"
         :active-model-resource="activeModelResource"
         :counts="resourceCounts"
-        :business-knowledge="context.presentation.businessKnowledge"
         @workspace="changeWorkspace"
         @model-resource="openModelResource"
         @asset="openAsset"

@@ -32,7 +32,7 @@ export async function judgeAndAnswerByStaticDocs(params: {
     question,
   });
 
-  const model = createModel({ agentName: modelAgentName("hotDataStatic") });
+  const model = await createModel({ agentName: modelAgentName("hotDataStatic") });
   const response = await model.invoke([{ role: "user", content: prompt }], {
     signal,
   });

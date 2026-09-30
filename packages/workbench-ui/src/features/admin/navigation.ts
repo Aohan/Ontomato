@@ -1,4 +1,4 @@
-import type { Component } from "vue";
+import type { Component, InjectionKey } from "vue";
 import {
   Activity,
   Blocks,
@@ -12,13 +12,17 @@ import {
   ServerCog,
 } from "lucide-vue-next";
 
-/** Top tabs of the admin console. permission is a public capability id: apps with permissions filter by it; open source runs no permission logic. */
+/**
+ * Top tabs of the admin console. permission is a public capability id: apps with permissions filter by it; open source runs no permission logic.
+ * A tab is visible when it has permission itself or at least one menu item in its group does.
+ */
 export interface AdminGroup {
   key: string;
   titleKey: string;
+  /** For a home-style tab this is the home page's permission: the tab is visible and lands on the home page only with it. */
   permission: string;
   icon: Component;
-  /** Default landing path when the tab is selected (e.g. the Ontology Manager shows its iframe directly without a sidebar menu item). */
+  /** Home-style tab: selecting it opens this page and it has no sidebar menu items (the Ontology Manager shows its iframe directly). */
   homePath?: string;
 }
 
@@ -44,6 +48,9 @@ export interface AdminAccess {
   can(permission: string): boolean;
 }
 
+/** The admin layout hands the app's access check to its pages (entry cards and the Manager entry use it to decide what to show). */
+export const adminAccessKey: InjectionKey<AdminAccess> = Symbol("admin-access");
+
 /** Header display and logout for the signed-in account; open source has no account. */
 export interface AdminAccount {
   readonly userName: string;
@@ -68,7 +75,7 @@ export const adminGroups = {
   dataAssets: {
     key: "data-assets",
     titleKey: "nav.ontologyManager",
-    permission: "intelligence-engine",
+    permission: "ontology-modeling",
     icon: Database,
     homePath: "/admin/ontology-manager",
   },

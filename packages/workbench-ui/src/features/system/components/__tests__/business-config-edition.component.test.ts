@@ -25,7 +25,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (url: string, init: { body?: string }) => {
     sent.push({ url, body: init.body === undefined ? undefined : JSON.parse(init.body) });
     const data = url.endsWith("/businessConfig/getConfig")
-      ? { models: [], agents: {}, lang: storedLang, dataAdapter: "", dataAdapterConnections: {} }
+      ? { agents: { coding: { model: null } }, lang: storedLang, dataAdapter: "", dataAdapterConnections: {} }
       : [];
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { "Content-Type": "application/json" },

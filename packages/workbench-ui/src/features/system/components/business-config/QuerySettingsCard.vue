@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SystemModelConfigResponse } from "@ontomato/contracts/system-model";
+import type { SystemModelConfig } from "@ontomato/contracts/system-model";
 
 import { computed, ref, watch } from "vue";
 import { MessageSquareText } from "lucide-vue-next";
@@ -21,14 +21,13 @@ const props = defineProps<{
   loadError: string;
 }>();
 
-const model = defineModel<SystemModelConfigResponse>("model", { required: true });
+const model = defineModel<SystemModelConfig>("model", { required: true });
 
 const emit = defineEmits<{
   save: [];
   retry: [];
 }>();
 
-// Compare only this section's two fields; the application model draft is saved separately in the model config.
 const savedSignature = ref("");
 const signature = () =>
   JSON.stringify([model.value.abcQuestionMode, model.value.queryTimeoutSeconds]);
@@ -110,7 +109,7 @@ defineExpose({ markSaved });
           :disabled="!!props.loadError || props.loading"
           @click="emit('save')"
         >
-          {{ t("common.save") }}
+          {{ t("common.saveConfig") }}
         </el-button>
       </el-form-item>
     </div>

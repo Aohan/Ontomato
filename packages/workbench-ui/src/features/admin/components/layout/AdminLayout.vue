@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, provide } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import {
   PanelLeftClose,
@@ -15,9 +15,10 @@ import {
 import { useTheme } from "../../../../composables/useTheme";
 import { useLocale } from "../../../../composables/useLocale";
 import { workbenchLanguage } from "../../../../i18n";
-import type { AdminLayoutConfig } from "../../navigation";
+import { adminAccessKey, type AdminLayoutConfig } from "../../navigation";
 
 const props = defineProps<AdminLayoutConfig>();
+provide(adminAccessKey, props.access);
 
 const router = useRouter();
 const route = useRoute();
@@ -52,6 +53,7 @@ function openLangMenu() {
 const collapsed = ref(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1");
 
 // A tab is visible if it has permission itself or at least one menu item in its group does; menu items are filtered one by one.
+// Landing path when switching groups: the home page for a home-style tab, otherwise the group's first visible menu item.
 const navGroups = computed(() =>
   props.groups
     .filter(
@@ -65,7 +67,7 @@ const navGroups = computed(() =>
       const items = props.items
         .filter((item) => item.groupKey === group.key && props.access.can(item.permission))
         .map((item) => ({ path: item.path, title: t(item.titleKey), icon: item.icon }));
-      return { ...group, title: t(group.titleKey), items };
+      return { ...group, title: t(group.titleKey), items, landing: group.homePath ?? items[0]?.path };
     })
 );
 
@@ -80,7 +82,7 @@ const currentGroupItems = computed(() => {
   return group?.items || [];
 });
 
-// Only home-style tabs (a homePath and no menu items) hide the sidebar so the content fills the page.
+// Tabs without menu items (home-style tabs) hide the sidebar so the content fills the page.
 const showAside = computed(() => currentGroupItems.value.length > 0);
 
 const activeMenu = computed(() => {
@@ -134,13 +136,10 @@ watch(
 function handleGroupSelect(key: string) {
   activeGroup.value = key;
   const group = navGroups.value.find((g) => g.key === key);
-  if (!group) return;
-  const targetPath = group.homePath || group.items[0]?.path;
-  if (!targetPath) return;
-  const pathsInGroup = [group.homePath, ...group.items.map((item) => item.path)].filter(Boolean);
-  if (!pathsInGroup.includes(route.path)) {
-    router.push(targetPath);
-  }
+  if (!group?.landing) return;
+  const inGroup =
+    route.path === group.homePath || group.items.some((item) => item.path === route.path);
+  if (!inGroup) router.push(group.landing);
 }
 
 function handleMenuSelect(path: string) {

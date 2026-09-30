@@ -83,10 +83,6 @@ public class UserMessageUtil {
     public static final String TOOLS_CALCULATOR_EVALUATOR_INPUT = "{{TOOLS_CALCULATOR_EVALUATOR_INPUT}}";
     public static final String TOOLS_CALCULATOR_EVALUATOR_OUTPUT = "{{TOOLS_CALCULATOR_EVALUATOR_OUTPUT}}";
     
-    public static final String ANALYSIS_QUESTION_SPLITER_PROMPT = "analysis_question_spliter.md";
-    public static final String ANALYSIS_QUESTION_SPLITER_ANALYSIS_FRAMEWORKS = "{{ANALYSIS_FRAMEWORKS}}";
-    public static final String ANALYSIS_QUESTION_SPLITER_THINKING_REQUIREMENT = "{{THINKING_REQUIREMENT}}";
-    
     public static final String JSON_CORRECTOR_PROMPT = "json_corrector.md";
     public static final String JSON_CORRECTOR_WRONG_JSON = "{{WRONG_JSON}}";
     

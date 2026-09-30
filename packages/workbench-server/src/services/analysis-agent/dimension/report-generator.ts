@@ -150,7 +150,7 @@ export class ReportGenerator {
     );
 
     try {
-      const model = createModel({ ...this.modelOptions, agentName: modelAgentName("analysisReport") });
+      const model = await createModel({ ...this.modelOptions, agentName: modelAgentName("analysisReport") });
       logger.info(tApp("analysis.dimension.report-generator.167"), {
         promptLength: estimateTextSize(prompt),
         evidenceCount: evidence.length,
@@ -193,7 +193,7 @@ export class ReportGenerator {
     );
 
     try {
-      const model = createModel({ ...this.modelOptions, agentName: modelAgentName("analysisReport") });
+      const model = await createModel({ ...this.modelOptions, agentName: modelAgentName("analysisReport") });
       logger.info(tApp("analysis.dimension.report-generator.171"), {
         promptLength: estimateTextSize(prompt),
         reportCount: dimensionReports.length,
@@ -363,7 +363,7 @@ export class ReportGenerator {
     );
 
     for await (const chunk of streamWithRetry(async () => {
-      const model = createModel({
+      const model = await createModel({
         ...this.modelOptions,
         stream: true,
         agentName: modelAgentName("analysisReport"),
@@ -399,7 +399,7 @@ export class ReportGenerator {
     );
 
     for await (const chunk of streamWithRetry(async () => {
-      const model = createModel({
+      const model = await createModel({
         ...this.modelOptions,
         stream: true,
         agentName: modelAgentName("analysisReport"),

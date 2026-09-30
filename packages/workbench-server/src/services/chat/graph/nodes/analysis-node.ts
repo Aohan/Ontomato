@@ -30,7 +30,7 @@ async function matchExecutableAnalysisSkills(
   registry: SkillRegistryManager,
   query: string,
   data: Record<string, unknown>[],
-  services: { createModel: (opts?: number | ModelOptions) => any }
+  services: { createModel: (opts?: number | ModelOptions) => Promise<any> | any }
 ): Promise<{ skill: SkillMeta; confidence: number; reason: string }[]> {
   const executableSkills = registry.getSkills({
     type: SkillType.EXECUTABLE,
@@ -68,7 +68,7 @@ async function matchExecutableAnalysisSkills(
   }
 
   try {
-    const model = services.createModel({ agentName: modelAgentName("analysis") });
+    const model = await services.createModel({ agentName: modelAgentName("analysis") });
     const skillDescriptions = executableSkills
       .map(
         (s) =>
@@ -357,7 +357,7 @@ export async function analysisNode(state: GraphState, config?: any): Promise<Gra
         ? tApp("queryFixed.20", { v0: (stringifyWithLimit(computedResults, 2500)) })
         : "";
 
-    const model = createModel({ agentName: modelAgentName("analysis") });
+    const model = await createModel({ agentName: modelAgentName("analysis") });
     const promptHistory = resolveAgentPromptHistory(config, state.messages || []);
     const messagesForLLM = buildAgentPromptMessages({
       systemPrompt: renderPrompt("standard-chat.analysis.answer.system", { methodologyContent }),

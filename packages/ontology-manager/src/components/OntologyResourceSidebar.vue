@@ -22,7 +22,6 @@ defineProps<{
   activeAssetTab: AssetTab;
   activeModelResource: ModelResource;
   counts: OntologyResourceCounts;
-  businessKnowledge: boolean;
 }>();
 
 defineEmits<{
@@ -149,7 +148,7 @@ defineEmits<{
         </button>
       </section>
 
-      <section v-if="businessKnowledge" class="nav-group">
+      <section class="nav-group">
         <button
           :class="['nav-item', { active: activeWorkspace === 'knowledge' }]"
           @click="$emit('knowledge')"

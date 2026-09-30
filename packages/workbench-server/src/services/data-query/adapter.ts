@@ -251,7 +251,7 @@ export async function createFieldDisplayPlan(
   const fallback = fallbackDisplayPlan(headers, options.locale);
 
   try {
-    const model = createModel({ temperature: 0.1, agentName: modelAgentName("fieldAdapter") });
+    const model = await createModel({ temperature: 0.1, agentName: modelAgentName("fieldAdapter") });
     const prompt = renderPrompt(
       "data-query.field-semantics.user",
       {

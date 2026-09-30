@@ -54,36 +54,20 @@ ontomato:
         timeout: PT300S
         temperature: 0.0
         top-p: 0.1
-        strict-tools: false
-        log-requests: true
-        log-responses: true
-      - name: default-tool
-        base-url: ${BACKEND_LLM_BASE_URL:}
-        api-keys: ${BACKEND_LLM_API_KEY:}
-        model-name: ${BACKEND_LLM_MODEL:}
-        timeout: PT300S
-        temperature: 0.0
-        top-p: 0.1
-        strict-tools: true
         log-requests: true
         log-responses: true
     agents:
-      normalChat:
+      query:
         model: default
-        actorCopies: 10
-      questionSpliter:
+      coding:
         model: default
-        actorCopies: 2
-      cleverNormalChat:
-        model: default
-        actorCopies: 5
-      pythonChat:
-        model: default
-        actorCopies: 5
-      toolChat:
-        model: default-tool
-        actorCopies: 5
         skill-dir: ""
+      general:
+        model: default
+      diagnosis:
+        model: default
+      knowledgeGovernance:
+        model: default
 
 logging:
   level:

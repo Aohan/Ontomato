@@ -136,7 +136,9 @@ export function createWorkbenchApp(mounts: WorkbenchMounts = {}): Express {
     res.setHeader("Expires", "0");
     res.setHeader("Referrer-Policy", "no-referrer");
     try {
-      await runWithLogContext({ domainId }, async () => {
+      await runWithLogContext(
+        { domainId, token: verification.token, apiKey: verification.apiKey },
+        async () => {
         await skillRegistryManager.forDomain(domainId);
         express.static(skillRegistryManager.getDomainSkillsRoot(domainId), { fallthrough: false })(
           req,

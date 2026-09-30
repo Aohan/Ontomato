@@ -141,7 +141,7 @@ public class ActionServiceImpl implements ActionService {
 					originalQuestion,
 					sandboxId,
 					userMessage,
-					ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+					ModelResolver.resolve(businessConfig, AgentRole.CODING, langService),
 					domainId);
 			
 			// The delivery only comes from the submission registration, and no longer implicitly reads the files left by the last test
@@ -394,7 +394,7 @@ public class ActionServiceImpl implements ActionService {
 					originalQuestion,
 					sessionId,
 					userMessage,
-					ModelResolver.resolve(businessConfig, AgentRole.CLEVER_NORMAL_CHAT),
+					ModelResolver.resolve(businessConfig, AgentRole.CODING, langService),
 					domainId);
 			
 			// Strip the ```json wrapper

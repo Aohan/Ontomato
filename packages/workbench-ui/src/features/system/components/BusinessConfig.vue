@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import type {
-  SystemModelConfigResponse as SystemModelConfig,
-} from "@ontomato/contracts/system-model";
+import type { SystemModelConfig } from "@ontomato/contracts/system-model";
 
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
@@ -15,37 +13,24 @@ import QuerySettingsCard from "./business-config/QuerySettingsCard.vue";
 import SkillDirConfigCard from "./business-config/SkillDirConfigCard.vue";
 import ExamplesManager from "../../admin/components/intelligence-engine/ExamplesManager.vue";
 import {
-  agentKeys,
-  type BackendAgentConfig,
   type BusinessConfig,
   type DataAdapterInfo,
   type GeneralConfigKey,
+  type SystemSettings,
 } from "../types";
 import type { BusinessConfigProps } from "../business-config";
 
+// System config page: query settings, skill directory, general config, data adapter and query examples; models live on the model configuration page.
 const props = defineProps<BusinessConfigProps>();
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
 
-function emptyBackendAgent(): BackendAgentConfig {
-  return { model: "", actorCopies: 1 };
-}
-
 const loading = ref(false);
 const backendLoadError = ref("");
-const systemLoadError = ref("");
 const querySettingsRef = ref<{ markSaved: () => void } | null>(null);
 
-let config = reactive<BusinessConfig>({
-  models: [],
-  agents: {
-    normalChat: emptyBackendAgent(),
-    questionSpliter: emptyBackendAgent(),
-    cleverNormalChat: emptyBackendAgent(),
-    pythonChat: emptyBackendAgent(),
-    toolChat: emptyBackendAgent(),
-  },
-  embeddingModelProperties: null,
+// Draft of the general config, language and data adapter, bound two-way by the cards.
+const config = reactive<SystemSettings>({
   knowledgeMaxResult: 10,
   toolAndPythonRetry: 0,
   dslCookerTries: 1,
@@ -56,7 +41,9 @@ let config = reactive<BusinessConfig>({
   dataAdapter: "",
   dataAdapterConnections: {},
 });
+// Data adapters installed in this edition's backend, loaded together with the business config.
 const dataAdapters = ref<DataAdapterInfo[]>([]);
+// Skill directory draft: kept when loading or saving fails and untouched by navigation.
 const skilldir = ref("");
 
 async function loadConfig() {
@@ -70,14 +57,8 @@ async function loadConfig() {
     if (res?.success) {
       dataAdapters.value = adaptersRes.data;
       const data = res.data as BusinessConfig;
-      config.models = data.models ?? [];
-      const savedAgents = data.agents;
-      for (const role of agentKeys) {
-        const saved = savedAgents?.[role];
-        config.agents[role] = saved ? { ...emptyBackendAgent(), ...saved } : emptyBackendAgent();
-      }
-      skilldir.value = savedAgents?.toolChat?.skilldir ?? "";
-      config.embeddingModelProperties = data.embeddingModelProperties ?? null;
+      // The skill directory hangs on the coding role and is empty when unset.
+      skilldir.value = data.agents.coding.skilldir ?? "";
       config.knowledgeMaxResult = data.knowledgeMaxResult ?? 10;
       config.toolAndPythonRetry = data.toolAndPythonRetry ?? 0;
       config.dslCookerTries = data.dslCookerTries ?? 1;
@@ -161,6 +142,7 @@ async function saveDataAdapter() {
   savingAdapter.value = true;
   try {
     const adapter = dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
+    // Submit only the connection fields declared by the type; for types with fields, the card form builds the connection object.
     const connection = config.dataAdapterConnections[adapter.type];
     await adminApi.useDataAdapter({
       type: adapter.type,
@@ -175,55 +157,47 @@ async function saveDataAdapter() {
   }
 }
 
-let systemModel = reactive<SystemModelConfig>({
-  models: [],
-  agents: { default: { model: "" }, diagnosis: { model: "" } },
+// Query settings live in the Node system model file and hold only the query mode and total time limit.
+const querySettings = reactive<SystemModelConfig>({
   abcQuestionMode: "harness",
   queryTimeoutSeconds: 600,
-  hasCustomConfig: false,
 });
+const loadingQuerySettings = ref(false);
+const querySettingsLoadError = ref("");
+const savingQuerySettings = ref(false);
 
-const loadingSystemModel = ref(false);
+function applyQuerySettings(data: SystemModelConfig) {
+  querySettings.abcQuestionMode = data.abcQuestionMode;
+  querySettings.queryTimeoutSeconds = data.queryTimeoutSeconds;
+}
 
-async function loadSystemModelConfig() {
-  loadingSystemModel.value = true;
-  systemLoadError.value = "";
+async function loadQuerySettings() {
+  loadingQuerySettings.value = true;
+  querySettingsLoadError.value = "";
   try {
     const res = await adminApi.getSystemModelConfig();
-    if (res?.success) {
-      Object.assign(systemModel, res.data as SystemModelConfig);
+    if (res.success) {
+      applyQuerySettings(res.data as SystemModelConfig);
     } else {
-      systemLoadError.value = res?.message || t("admin.loadConfigFailed");
+      querySettingsLoadError.value = res.message || t("admin.loadConfigFailed");
     }
   } catch (e: any) {
-    systemLoadError.value = e.message || t("admin.loadConfigFailed");
-    ElMessage.error(e.message || t("admin.loadConfigFailed"));
+    querySettingsLoadError.value = e.message || t("admin.loadConfigFailed");
   } finally {
-    loadingSystemModel.value = false;
+    loadingQuerySettings.value = false;
   }
 }
 
-const savingQuerySettings = ref(false);
-
 async function saveQuerySettings() {
-  if (loadingSystemModel.value || systemLoadError.value) {
-    if (systemLoadError.value) ElMessage.error(systemLoadError.value);
-    return;
-  }
   savingQuerySettings.value = true;
   try {
-    const res = await adminApi.saveSystemModelConfig({
-      abcQuestionMode: systemModel.abcQuestionMode,
-      queryTimeoutSeconds: systemModel.queryTimeoutSeconds,
-    });
-    if (res?.success) {
-      const saved = res.data as SystemModelConfig;
-      systemModel.abcQuestionMode = saved.abcQuestionMode;
-      systemModel.queryTimeoutSeconds = saved.queryTimeoutSeconds;
+    const res = await adminApi.saveSystemModelConfig({ ...querySettings });
+    if (res.success) {
+      applyQuerySettings(res.data as SystemModelConfig);
       querySettingsRef.value?.markSaved();
       ElMessage.success(t("admin.configSaveSuccess"));
     } else {
-      ElMessage.error(res?.message || t("admin.saveFailed"));
+      ElMessage.error(res.message || t("admin.saveFailed"));
     }
   } catch (e: any) {
     ElMessage.error(e.message || t("admin.saveFailed"));
@@ -234,7 +208,7 @@ async function saveQuerySettings() {
 
 onMounted(() => {
   loadConfig();
-  loadSystemModelConfig();
+  loadQuerySettings();
 });
 </script>
 
@@ -242,12 +216,12 @@ onMounted(() => {
   <div class="system-config-container">
     <QuerySettingsCard
       ref="querySettingsRef"
-      v-model:model="systemModel"
-      :loading="loadingSystemModel"
+      v-model:model="querySettings"
+      :loading="loadingQuerySettings"
       :saving="savingQuerySettings"
-      :load-error="systemLoadError"
+      :load-error="querySettingsLoadError"
       @save="saveQuerySettings"
-      @retry="loadSystemModelConfig"
+      @retry="loadQuerySettings"
     />
 
     <div v-if="backendLoadError" class="config-load-error" role="alert">
@@ -281,7 +255,7 @@ onMounted(() => {
       @save="saveDataAdapter"
     />
 
-    <div v-if="queryExamples" class="admin-card config-card examples-card">
+    <div class="admin-card config-card examples-card">
       <div class="card-header">
         <el-icon :size="20"><MessagesSquare /></el-icon>
         <span>{{ t("nav.queryExamples") }}</span>
