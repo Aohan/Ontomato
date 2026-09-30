@@ -60,4 +60,23 @@ public interface DataAdapter {
 	 */
 	public JSONArray queryVectorAttr(Map<String, Object> classDef, String attrName, String objectId) throws Exception;
 
+	/**
+	 * Resolve the sandbox-scoped class (table) name for the given plain class name.
+	 *
+	 * <p>M3 adapters strip the namespace segment from {@code /namespace/ClassName} and return
+	 * {@code /sandboxId/ClassName}; relational adapters simply prefix the plain class name
+	 * ({@code sandboxId + className}). This mirrors exactly how each adapter names its business
+	 * table inside a sandbox, so vector-table names stay aligned with reads.</p>
+	 */
+	public String sandboxClassName(String sandboxId, String className);
+
+	/**
+	 * Resolve the sandbox-scoped object id for the given plain object id.
+	 *
+	 * <p>M3 adapters prefix the id ({@code sandboxId + objectId}), matching the id value the M3
+	 * store actually holds for a sandbox object; relational adapters leave the plain primary-key
+	 * value unchanged (they never prefix the id column).</p>
+	 */
+	public String sandboxObjectId(String sandboxId, String objectId);
+
 }

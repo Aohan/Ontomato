@@ -532,6 +532,16 @@ public class GaussDBAdapter implements DataAdapter {
 	}
 
 	@Override
+	public String sandboxClassName(String sandboxId, String className) {
+		return sandboxId + className;
+	}
+
+	@Override
+	public String sandboxObjectId(String sandboxId, String objectId) {
+		return objectId;
+	}
+
+	@Override
 	public void validateClassNameFormat(String className) throws Exception {
 	}
 
