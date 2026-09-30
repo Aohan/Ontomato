@@ -33,9 +33,9 @@ jobs:
     env:
       ARCH: ${{ matrix.arch }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
 
@@ -56,7 +56,7 @@ jobs:
           docker pull pgvector/pgvector:pg18
           docker compose up -d --wait --wait-timeout 300
           for port in 3000 3005; do
-            curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-connrefused \
+            curl --fail --silent --show-error --retry 20 --retry-delay 3 --retry-all-errors \
               --output /dev/null "http://127.0.0.1:$port/"
           done
 
