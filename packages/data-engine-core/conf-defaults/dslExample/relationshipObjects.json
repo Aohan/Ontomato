@@ -1,0 +1,11 @@
+[{
+		"idx": 1,
+		"variable": "account1",
+		"class": "/BankAccount"
+	},
+	{
+		"idx": 2,
+		"variable": "account2",
+		"class": "/BankAccount"
+	}
+]

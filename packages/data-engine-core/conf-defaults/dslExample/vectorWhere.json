@@ -1,0 +1,10 @@
+{
+	"field": "feature_vector",
+	"query_vector": [
+		0.1,
+		0.2,
+		0.3
+	],
+	"threshold": 0.8,
+	"top_k": 10
+}

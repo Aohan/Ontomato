@@ -1,0 +1,35 @@
+# Docker Engine 26+ offline assembly of the Java product: COPY the whole root of
+# the pre-imported app image into /app of the pre-imported runtime image, then run
+# the pairing checker the runtime selected (PAIR_CONTRACT); no source
+# compilation, no dependency installation, no network.
+# The application image is architecture-independent (scratch + files): this stage
+# pins the $BUILDPLATFORM reference, so assembly does not depend on the platform
+# recorded in the app image. The only architecture source is EXPECTED_ARCH.
+# APP_COMPONENT names the product (public datarag-opensource). An edition whose
+# checker owns a license mode rule requires EXPECTED_LICENSE_MODE; the public
+# checker does not read it.
+ARG RUNTIME_IMAGE
+ARG APP_IMAGE
+ARG EXPECTED_ARCH
+ARG APP_COMPONENT
+
+FROM --platform=$BUILDPLATFORM ${APP_IMAGE} AS app_source
+
+FROM ${RUNTIME_IMAGE}
+
+ARG EXPECTED_ARCH
+ARG EXPECTED_LICENSE_MODE
+ARG APP_COMPONENT
+
+# A composite of two separately built images: clear the inherited image
+# version label instead of reporting the runtime's.
+LABEL io.runtime.kind="composite" \
+      io.runtime.component="${APP_COMPONENT}" \
+      org.opencontainers.image.title="${APP_COMPONENT}" \
+      org.opencontainers.image.version=""
+
+# Everything at the root of the app image is copied into /app: future new directories in the app image need no change to this Dockerfile.
+COPY --from=app_source / /app/
+
+RUN EXPECTED_ARCH="${EXPECTED_ARCH:?EXPECTED_ARCH is required}" \
+    python "$PAIR_CONTRACT" assemble

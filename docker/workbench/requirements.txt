@@ -1,0 +1,6 @@
+# Runtime dependencies of Python calculation/report generation, not build tools.
+numpy==1.26.4
+pandas==1.5.3
+python-dateutil==2.9.0.post0
+pytz==2026.4
+six==1.17.0

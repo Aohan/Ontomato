@@ -1,0 +1,55 @@
+import type { WorkbenchProduct } from "@ontomato/workbench-server/product/types";
+
+export const ossProduct: WorkbenchProduct = {
+  proxyMountPath: "/ontomato",
+  logFileName: "ontomato.log",
+  llmLogFileName: "ontomato_llm.jsonl",
+  migrationLockKey: "ontomato:postgres-business-migrations",
+  subgraphFence: "ontomato-subgraph",
+  mcpClientName: "ontomato",
+  analysisMcpServerName: "ontomato-analysis-agents",
+  opsMcpServerName: "ontomato-ops-agent",
+  systemMcpCatalogName: "ontomato-mcp",
+  serviceDisplayName: "Ontomato",
+  emailFooter: "This email was sent automatically by Ontomato",
+  logDirEnvName: "ONTOMATO_LOG_DIR",
+  smtpFromAddress: "noreply@ontomato.local",
+  logSource: "ontomato",
+  appLogSourceType: "ontomato-app",
+  llmLogSourceType: "ontomato-llm",
+  logIdPatterns: {
+    sessionId: /session[\s_-]*id\s*[=::-]\s*([a-zA-Z0-9_-]+)/i,
+    backendNodeId: /backend[\s_-]*node[\s_-]*id\s*[=::-]\s*([a-zA-Z0-9_.:-]+)/i,
+  },
+  chartFieldAnnotationPattern: /\s*[()(][^))]*[))]\s*/g,
+  datasetClassPathPatterns: {
+    line: /^(\/[^\s,,]+)/,
+    tableCell: /^(\/[^\s,,|]+)/,
+  },
+  diagnosisWorkspaceNames: {
+    rawLogs: "raw-logs",
+    prompts: "prompts",
+    diagnostics: "diagnostics",
+    subTurns: "sub-turns",
+    upstreamTurns: "upstream-turns",
+    queryLogicFile: "query_logic.md",
+  },
+  serviceHealthNames: {
+    backendGroup: "Backend",
+    backendDefault: "backend",
+    frontendGroup: "Frontend",
+    frontendDefault: "frontend",
+  },
+  groupColumnHeader: "group",
+  primaryDimensionHeaders: {
+    exact: ["district name", "district", "name"],
+    contains: ["region", "district", "city", "province"],
+  },
+  userDataKeywords: { data: ["data", "value"], option: ["option"] },
+  migrationCopy: {
+    recordsMustBeObjects: (field) => `${field} must be an array of objects`,
+    summaryTitle: "Comprehensive Summary",
+    dimensionValueSeparator: ": ",
+    conversionFailed: (message) => `Legacy process records could not be converted: ${message}`,
+  },
+};

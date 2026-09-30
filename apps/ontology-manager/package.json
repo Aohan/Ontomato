@@ -1,0 +1,30 @@
+{
+  "name": "@ontomato/ontology-manager-app",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./shell": "./src/shell.ts"
+  },
+  "scripts": {
+    "dev": "vite --port 5174",
+    "build": "vite build",
+    "preview": "vite preview --port 4174",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ontomato/ontology-manager": "workspace:*",
+    "element-plus": "2.13.6",
+    "vue": "3.5.30"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "@vitejs/plugin-vue": "5.2.4",
+    "happy-dom": "20.14.3",
+    "typescript": "5.9.3",
+    "vite": "5.4.21",
+    "vitest": "1.6.0",
+    "vue-tsc": "3.2.6"
+  }
+}

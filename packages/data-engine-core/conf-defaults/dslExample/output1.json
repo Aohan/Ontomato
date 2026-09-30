@@ -1,0 +1,53 @@
+{
+	"to_user": true,
+	"fields": [{
+			"as": "suspect_id",
+			"variable": "temp01",
+			"field": "suspect_id",
+			"function": "count"
+		},
+		{
+			"as": "suspect_status",
+			"variable": "temp01",
+			"field": "suspect_status",
+			"function": "sum",
+			"distinct": true
+		},
+		{
+			"as": "suspect_city",
+			"variable": "temp01",
+			"field": "suspect_city"
+		}
+	],
+	"sort": {
+		"fields": [{
+				"variable": "temp01",
+				"field": "created_at",
+				"order": "desc"
+			},
+			{
+				"variable": "temp01",
+				"field": "priority",
+				"order": "asc"
+			}
+		]
+	},
+	"limit": {
+		"count": 100,
+		"offset": 0
+	},
+	"group_by": {
+		"fields": [{
+			"variable": "temp01",
+			"field": "category"
+		}],
+		"having": [{
+			"variable": "temp01",
+			"field": "suspect_id",
+			"function": "count",
+			"distinct": true,
+			"operator": ">",
+			"value": 5
+		}]
+	}
+}

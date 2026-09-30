@@ -1,0 +1,619 @@
+/*
+ * The Manager's own theme: applies only inside the component root .ontology-manager, with light/dark set by the theme prop
+ * (is-dark on the root); it neither reads nor changes the host html/body. The host only needs the Element Plus base styles
+ * (element-plus/dist/index.css). Values were taken from the element-plus 2.13.6 light and dark variables and from the tokens
+ * and component rules the Manager used in the original workbench theme.css, style.css and admin-common.css; they are now
+ * maintained here. Brand and neutral colour variables whose values differ per product are not in this file: the host
+ * supplies them as a group per theme via presentation.themeProperties and the component binds them on its root (see
+ * OntologyManager.vue). This file keeps only variables and rules shared by both products.
+ */
+
+.ontology-manager {
+  color-scheme: light;
+  --font-sans:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  --el-font-family: var(--font-sans);
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-loose: 2;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.5rem;
+  --radius-full: 9999px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --el-color-success-light-3: #95d475;
+  --el-color-success-light-5: #b3e19d;
+  --el-color-success-light-7: #d1edc4;
+  --el-color-success-dark-2: #529b2e;
+  --el-color-warning-light-3: #eebe77;
+  --el-color-warning-light-5: #f3d19e;
+  --el-color-warning-light-7: #f8e3c5;
+  --el-color-warning-dark-2: #b88230;
+  --el-color-danger-light-3: #f89898;
+  --el-color-danger-light-5: #fab6b6;
+  --el-color-danger-light-7: #fcd3d3;
+  --el-color-danger-dark-2: #c45656;
+  --el-color-error: #f56c6c;
+  --el-color-error-light-3: #f89898;
+  --el-color-error-light-5: #fab6b6;
+  --el-color-error-light-7: #fcd3d3;
+  --el-color-error-light-8: #fde2e2;
+  --el-color-error-light-9: #fef0f0;
+  --el-color-error-dark-2: #c45656;
+  --el-color-info-light-3: #b1b3b8;
+  --el-color-info-light-5: #c8c9cc;
+  --el-color-info-light-7: #dedfe0;
+  --el-color-info-dark-2: #73767a;
+  --el-box-shadow: 0px 12px 32px 4px #0000000a, 0px 8px 20px #00000014;
+  --el-box-shadow-light: 0px 0px 12px #0000001f;
+  --el-box-shadow-lighter: 0px 0px 6px #0000001f;
+  --el-box-shadow-dark:
+    0px 16px 48px 16px #00000014, 0px 12px 32px #0000001f, 0px 8px 16px -8px #00000029;
+  --el-text-color-disabled: #c0c4cc;
+  --el-border-color-darker: #cdd0d6;
+  --el-fill-color-darker: #e6e8eb;
+  --el-fill-color-blank: transparent;
+  --el-mask-color: #ffffffe6;
+  --el-mask-color-extra-light: #ffffff4d;
+  --on-primary: #ffffff;
+  /*
+   * Colour variables that EP derives with var() on :root are evaluated on html with the host theme and then inherited,
+   * so they are redeclared on the component root with the original expressions to follow this instance's light/dark
+   * (element-plus 2.13.6 index.css :root).
+   */
+  --el-disabled-bg-color: var(--el-fill-color-light);
+  --el-disabled-text-color: var(--el-text-color-placeholder);
+  --el-disabled-border-color: var(--el-border-color-light);
+  --el-border-color-hover: var(--el-text-color-disabled);
+  --el-border: var(--el-border-width) var(--el-border-style) var(--el-border-color);
+  --el-svg-monochrome-grey: var(--el-border-color);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-relaxed);
+  color: var(--el-text-color-regular);
+}
+
+.ontology-manager.is-dark {
+  color-scheme: dark;
+  --el-color-success-light-3: #4e8e2f;
+  --el-color-success-light-5: #3e6b27;
+  --el-color-success-light-7: #2d481f;
+  --el-color-success-dark-2: #85ce61;
+  --el-color-warning-light-3: #a77730;
+  --el-color-warning-light-5: #7d5b28;
+  --el-color-warning-light-7: #533f20;
+  --el-color-warning-dark-2: #ebb563;
+  --el-color-danger-light-3: #b25252;
+  --el-color-danger-light-5: #854040;
+  --el-color-danger-light-7: #582e2e;
+  --el-color-danger-dark-2: #f78989;
+  --el-color-error-light-3: #b25252;
+  --el-color-error-light-5: #854040;
+  --el-color-error-light-7: #582e2e;
+  --el-color-error-light-8: #412626;
+  --el-color-error-light-9: #2a1d1d;
+  --el-color-error-dark-2: #f78989;
+  --el-color-info-light-3: #6b6d71;
+  --el-color-info-light-5: #525457;
+  --el-color-info-light-7: #393a3c;
+  --el-color-info-dark-2: #a6a9ad;
+  --el-box-shadow: 0px 12px 32px 4px #0000005c, 0px 8px 20px #000000b8;
+  --el-box-shadow-light: 0px 0px 12px #000000b8;
+  --el-box-shadow-lighter: 0px 0px 6px #000000b8;
+  --el-box-shadow-dark: 0px 16px 48px 16px #000000b8, 0px 12px 32px #000, 0px 8px 16px -8px #000;
+  --el-text-color-disabled: #6c6e72;
+  --el-border-color-darker: #636466;
+  --el-fill-color-darker: #424243;
+  --el-mask-color: #000c;
+  --el-mask-color-extra-light: #0000004d;
+}
+
+.ontology-manager,
+.ontology-manager * {
+  box-sizing: border-box;
+  outline: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.ontology-manager:not(.is-dark) .el-button {
+  --el-button-disabled-text-color: undefined;
+}
+
+.ontology-manager.is-dark .el-button {
+  --el-button-disabled-text-color: #ffffff80;
+}
+
+.ontology-manager:not(.is-dark) .el-empty {
+  --el-empty-fill-color-0: var(--el-color-white);
+  --el-empty-fill-color-1: #fcfcfd;
+  --el-empty-fill-color-2: #f8f9fb;
+  --el-empty-fill-color-3: #f7f8fc;
+  --el-empty-fill-color-4: #eeeff3;
+  --el-empty-fill-color-5: #edeef2;
+  --el-empty-fill-color-6: #e9ebef;
+  --el-empty-fill-color-7: #e5e7e9;
+  --el-empty-fill-color-8: #e0e3e9;
+  --el-empty-fill-color-9: #d5d7de;
+}
+
+.ontology-manager.is-dark .el-empty {
+  --el-empty-fill-color-0: var(--el-color-black);
+  --el-empty-fill-color-1: #4b4b52;
+  --el-empty-fill-color-2: #36383d;
+  --el-empty-fill-color-3: #1e1e20;
+  --el-empty-fill-color-4: #262629;
+  --el-empty-fill-color-5: #202124;
+  --el-empty-fill-color-6: #212224;
+  --el-empty-fill-color-7: #1b1c1f;
+  --el-empty-fill-color-8: #1c1d1f;
+  --el-empty-fill-color-9: #18181a;
+}
+
+/* A container query cannot target the container itself, so font-size token overrides go on the root's direct children (workspace and popper container) and inherit downwards. */
+@container ontology-manager (max-width: 768px) {
+  .ontology-manager > * {
+    --text-base: 0.875rem;
+    --text-lg: 1rem;
+    --text-xl: 1.125rem;
+    --text-2xl: 1.25rem;
+    --text-3xl: 1.5rem;
+  }
+}
+
+:where(.ontology-manager) .toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: var(--el-bg-color);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--el-border-color);
+  flex-wrap: wrap;
+}
+
+:where(.ontology-manager) .toolbar .el-button {
+  margin-left: 0;
+}
+
+:where(.ontology-manager) .toolbar .el-button + .el-button {
+  margin-left: 0;
+}
+
+:where(.ontology-manager) .toolbar .el-input,
+:where(.ontology-manager) .toolbar .el-select,
+:where(.ontology-manager) .toolbar .el-date-picker {
+  --search-width: 240px;
+}
+
+/* safe: a dialog taller than this instance starts at the top so the title and bottom buttons can be scrolled to in EP's scrollable overlay instead of being centred past the top edge. */
+:where(.ontology-manager) .el-overlay-dialog {
+  display: flex !important;
+  align-items: safe center !important;
+  justify-content: safe center !important;
+}
+
+:where(.ontology-manager) .el-dialog {
+  border-radius: var(--radius-2xl) !important;
+  padding: 0;
+  box-shadow: var(--shadow-dropdown) !important;
+  margin: 0 !important;
+}
+
+:where(.ontology-manager) .el-dialog__header {
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg) !important;
+  border-bottom: 1px solid var(--el-border-color-light) !important;
+  margin: 0 !important;
+}
+
+:where(.ontology-manager) .el-dialog__title {
+  font-size: var(--text-xl) !important;
+  font-weight: var(--font-bold) !important;
+  color: var(--el-text-color-primary) !important;
+}
+
+:where(.ontology-manager) .el-dialog__body {
+  padding: var(--spacing-xl) !important;
+}
+
+:where(.ontology-manager) .el-dialog__footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: var(--spacing-md) !important;
+  padding: var(--spacing-lg) var(--spacing-xl) !important;
+  border-top: 1px solid var(--el-border-color-light) !important;
+}
+
+:where(.ontology-manager) .el-dialog__footer .el-button {
+  margin: 0 !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+:where(.ontology-manager) .el-drawer {
+  border-radius: var(--radius-2xl) 0 0 var(--radius-2xl) !important;
+}
+
+:where(.ontology-manager) .el-drawer__header {
+  padding: var(--spacing-xl) !important;
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid var(--el-border-color-light) !important;
+}
+
+:where(.ontology-manager) .el-drawer__body {
+  padding: var(--spacing-xl) !important;
+}
+
+:where(.ontology-manager) .el-drawer__footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: var(--spacing-md) !important;
+  padding: var(--spacing-lg) var(--spacing-xl) !important;
+  border-top: 1px solid var(--el-border-color-light) !important;
+}
+
+:where(.ontology-manager) .el-drawer__footer .el-button {
+  margin: 0 !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+:where(.ontology-manager) .el-form--label-top .el-form-item__label,
+:where(.ontology-manager) .el-form .el-form-item__label {
+  font-weight: var(--font-medium) !important;
+}
+
+:where(.ontology-manager) .zoom-controls .el-button {
+  margin: 0;
+}
+
+:where(.ontology-manager) .el-table__cell {
+  padding: 12px 16px !important;
+}
+
+:where(.ontology-manager) .el-button {
+  transition: all var(--transition-base);
+  font-weight: var(--font-medium);
+}
+
+:where(.ontology-manager) .el-button.is-link:hover,
+:where(.ontology-manager) .el-button.is-text:hover {
+  background-color: transparent !important;
+}
+
+:where(.ontology-manager) .el-button--primary {
+  box-shadow: var(--shadow-primary);
+}
+
+:where(.ontology-manager) .el-button--primary:hover {
+  box-shadow: var(--shadow-primary-hover);
+}
+
+:where(.ontology-manager) .el-button + .el-button {
+  margin-left: var(--spacing-sm);
+}
+
+:where(.ontology-manager) .toolbar .el-button + .el-button {
+  margin-left: 0;
+}
+
+:where(.ontology-manager) .el-popper.is-dark,
+:where(.ontology-manager) .el-popper.is-light,
+:where(.ontology-manager) .el-tooltip__popper {
+  max-width: 400px !important;
+  font-size: var(--text-sm) !important;
+  line-height: 1.5 !important;
+}
+
+:where(.ontology-manager) .el-popper.is-dark,
+:where(.ontology-manager) .el-tooltip__popper[data-popper-placement] {
+  background: color-mix(in srgb, var(--el-text-color-primary) 85%, #000) !important;
+  color: var(--el-bg-color) !important;
+  border: none !important;
+  box-shadow: var(--el-shadow-md) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+:where(.ontology-manager) .el-popper.is-light {
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 100%, #fff) !important;
+  color: var(--el-text-color-primary) !important;
+  border: 1px solid var(--el-border-color) !important;
+  box-shadow: var(--el-shadow) !important;
+}
+
+:where(.ontology-manager) .el-table .el-tooltip__popper {
+  max-width: 300px !important;
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: var(--radius-full);
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar-thumb {
+  background: var(--el-border-color-dark);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 40px;
+  transition: background var(--transition-fast);
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar-thumb:hover {
+  background: var(--el-text-color-placeholder);
+  background-clip: padding-box;
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar-thumb:active {
+  background: var(--el-text-color-secondary);
+  background-clip: padding-box;
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar-button {
+  display: none;
+}
+
+:where(.ontology-manager) ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.ontology-manager.is-dark ::-webkit-scrollbar-thumb {
+  background: var(--el-text-color-disabled);
+  background-clip: padding-box;
+}
+
+.ontology-manager.is-dark ::-webkit-scrollbar-thumb:hover {
+  background: var(--el-text-color-secondary);
+  background-clip: padding-box;
+}
+
+.ontology-manager.is-dark ::-webkit-scrollbar-thumb:active {
+  background: var(--el-text-color-regular);
+  background-clip: padding-box;
+}
+
+:where(.ontology-manager) .el-table__body-wrapper::-webkit-scrollbar,
+:where(.ontology-manager) .el-scrollbar__wrap::-webkit-scrollbar,
+:where(.ontology-manager) .el-select-dropdown .el-scrollbar__wrap::-webkit-scrollbar,
+:where(.ontology-manager) .el-cascader-menu__wrap::-webkit-scrollbar,
+:where(.ontology-manager) .el-picker-panel__body-wrapper::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+:where(.ontology-manager) .el-table__body-wrapper::-webkit-scrollbar-track,
+:where(.ontology-manager) .el-scrollbar__wrap::-webkit-scrollbar-track,
+:where(.ontology-manager) .el-select-dropdown .el-scrollbar__wrap::-webkit-scrollbar-track,
+:where(.ontology-manager) .el-cascader-menu__wrap::-webkit-scrollbar-track,
+:where(.ontology-manager) .el-picker-panel__body-wrapper::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:where(.ontology-manager) .el-table__body-wrapper::-webkit-scrollbar-thumb,
+:where(.ontology-manager) .el-scrollbar__wrap::-webkit-scrollbar-thumb,
+:where(.ontology-manager) .el-select-dropdown .el-scrollbar__wrap::-webkit-scrollbar-thumb,
+:where(.ontology-manager) .el-cascader-menu__wrap::-webkit-scrollbar-thumb,
+:where(.ontology-manager) .el-picker-panel__body-wrapper::-webkit-scrollbar-thumb {
+  background: var(--el-border-color-dark);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+:where(.ontology-manager) .el-table__body-wrapper::-webkit-scrollbar-thumb:hover,
+:where(.ontology-manager) .el-scrollbar__wrap::-webkit-scrollbar-thumb:hover,
+:where(.ontology-manager) .el-select-dropdown .el-scrollbar__wrap::-webkit-scrollbar-thumb:hover,
+:where(.ontology-manager) .el-cascader-menu__wrap::-webkit-scrollbar-thumb:hover,
+:where(.ontology-manager) .el-picker-panel__body-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--el-text-color-placeholder);
+  background-clip: padding-box;
+}
+
+:where(.ontology-manager) * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--el-border-color-dark) transparent;
+}
+
+.ontology-manager.is-dark * {
+  scrollbar-color: var(--el-text-color-disabled) transparent;
+}
+
+:where(.ontology-manager) .el-table.admin-table {
+  background: var(--el-bg-color);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--el-border-color);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+:where(.ontology-manager) .el-table.admin-table::before {
+  height: 0;
+}
+
+:where(.ontology-manager) .el-table.admin-table th.el-table__cell {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--el-border-color-dark);
+  padding: 0 var(--spacing-lg);
+  height: 44px;
+}
+
+:where(.ontology-manager) .el-table.admin-table th.el-table__cell .cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:where(.ontology-manager) .el-table.admin-table td.el-table__cell {
+  background-color: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: var(--text-sm);
+  border-bottom: 1px solid var(--el-border-color-light);
+  transition: background-color var(--transition-fast);
+  padding: 0 var(--spacing-lg);
+  height: 48px;
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-table__body tr:last-child td.el-table__cell {
+  border-bottom: none;
+}
+
+:where(.ontology-manager)
+  .el-table.admin-table--striped
+  .el-table__body
+  tr.el-table__row--striped
+  td.el-table__cell {
+  background-color: var(--el-fill-color-extra-light) !important;
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-table__body tr:hover > td.el-table__cell {
+  background-color: var(--el-fill-color-light) !important;
+}
+
+:where(.ontology-manager)
+  .el-table.admin-table--striped
+  .el-table__body
+  tr.el-table__row--striped:hover
+  > td.el-table__cell {
+  background-color: var(--el-fill-color) !important;
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-table__body tr.current-row > td.el-table__cell {
+  background-color: var(--el-fill-color) !important;
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-table__fixed::before,
+:where(.ontology-manager) .el-table.admin-table .el-table__fixed-right::before {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-table__empty-block {
+  background-color: var(--el-bg-color);
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-table__empty-text {
+  color: var(--el-text-color-secondary);
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-tag {
+  white-space: nowrap;
+  margin-right: var(--spacing-xs);
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-button-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+}
+
+:where(.ontology-manager) .el-table.admin-table .el-space {
+  flex-wrap: nowrap;
+  gap: var(--spacing-xs);
+}
+
+:where(.ontology-manager) .el-table.admin-table td.el-table__cell.operation-cell {
+  padding: 0 var(--spacing-sm) !important;
+  vertical-align: middle !important;
+}
+
+:where(.ontology-manager) .el-table.admin-table th.el-table__cell.operation-cell .cell {
+  display: flex;
+  justify-content: center;
+}
+
+:where(.ontology-manager) .el-table.admin-table td.el-table__cell.operation-cell .cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  flex-wrap: nowrap;
+}
+
+:where(.ontology-manager) .el-table.admin-table .operation-cell .el-button {
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  height: auto;
+  min-height: auto;
+  line-height: 1.5;
+  font-weight: var(--font-medium);
+  font-size: var(--text-xs);
+  transition: all var(--transition-fast);
+}
+
+:where(.ontology-manager) .el-table.admin-table .operation-cell .el-button.is-link {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+:where(.ontology-manager) .el-table.admin-table .operation-cell .el-button.is-link:hover {
+  background: var(--el-fill-color-light);
+}
+
+:where(.ontology-manager) .el-table.admin-table .operation-cell .el-button.is-link:active {
+  background: var(--el-fill-color);
+}
+
+:where(.ontology-manager) .el-table.admin-table .operation-cell .el-button.is-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--el-color-primary) 20%, transparent);
+  background: var(--el-fill-color-light);
+}
+
+:where(.ontology-manager) .el-table.admin-table .operation-cell .el-button + .el-button {
+  margin-left: 0;
+}
+
+:where(.ontology-manager) .el-table.admin-table .cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+  line-height: 1.5;
+}
+
+:where(.ontology-manager) .admin-table {
+  width: 100%;
+}

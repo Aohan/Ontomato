@@ -1,0 +1,12 @@
+<original-question>
+{{question}}
+</original-question>
+<judgment-requirements>
+{{judgment}}
+</judgment-requirements>
+{{expectedAnswerBlock}}
+<automated-test-result-snapshot>
+{{finalAnswerSnapshot}}
+</automated-test-result-snapshot>
+{{expectedLogicBlock}}
+{{actualLogicBlock}}

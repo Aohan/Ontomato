@@ -1,0 +1,16 @@
+[{
+	"as": "suspect_metrics",
+	"variable": "temp01",
+	"field": "suspect_metrics",
+	"time_range": {
+		"start": "2023-01-01 00:00:00",
+		"end": "2023-12-31 23:59:59"
+	},
+	"conditions": [{
+		"metric": "name",
+		"operator": "=",
+		"value": "xxx"
+	}],
+	"function": "sum",
+	"interval": "1d"
+}]

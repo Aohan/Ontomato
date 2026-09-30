@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>io.ontomato</groupId>
+    <artifactId>ontomato</artifactId>
+    <version>${revision}</version>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>packages/data-engine-core</module>
+        <module>packages/data-adapters/postgresql</module>
+        <module>packages/data-adapters/mysql</module>
+        <module>packages/data-adapters/oracle</module>
+        <module>packages/data-adapters/sqlserver</module>
+        <module>packages/data-adapters/db2</module>
+        <module>packages/data-adapters/gaussdb</module>
+        <module>packages/data-adapters/duckdb</module>
+        <module>apps/data-engine</module>
+    </modules>
+
+    <properties>
+        <revision>4.0.0-dev</revision>
+        <!-- spring-boot:run executes in every module selected with -am; only apps/data-engine turns it on. -->
+        <spring-boot.run.skip>true</spring-boot.run.skip>
+        <java.version>21</java.version>
+        <maven.compiler.source>21</maven.compiler.source>
+        <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <langchain4j.version>1.13.0</langchain4j.version>
+        <langchain4j-beta.version>1.13.0-beta23</langchain4j-beta.version>
+        <!-- Host dev Python for the spring-boot:run configuration below: the MCP/skills venv of the
+             inheriting app, relative to it. This property is its only source; the Windows profile at
+             the end of this file swaps in the Scripts/python.exe layout. -->
+        <datarag.venv.python>.venv/bin/python</datarag.venv.python>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-spring-boot-starter</artifactId>
+                <version>${langchain4j-beta.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
+                <version>${langchain4j-beta.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-http-client-spring-restclient</artifactId>
+                <version>${langchain4j-beta.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-mcp</artifactId>
+                <version>${langchain4j-beta.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.langchain4j</groupId>
+                <artifactId>langchain4j-skills</artifactId>
+                <version>${langchain4j-beta.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.fastjson2</groupId>
+                <artifactId>fastjson2</artifactId>
+                <version>2.0.57</version>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.fastjson2</groupId>
+                <artifactId>fastjson2-extension-spring6</artifactId>
+                <version>2.0.57</version>
+            </dependency>
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations</artifactId>
+                <version>2.2.40</version>
+            </dependency>
+            <dependency>
+                <groupId>mysql</groupId>
+                <artifactId>mysql-connector-java</artifactId>
+                <version>8.0.28</version>
+            </dependency>
+            <dependency>
+                <groupId>org.postgresql</groupId>
+                <artifactId>postgresql</artifactId>
+                <version>42.7.3</version>
+            </dependency>
+            <dependency>
+                <groupId>com.pgvector</groupId>
+                <artifactId>pgvector</artifactId>
+                <version>0.1.6</version>
+            </dependency>
+            <dependency>
+                <groupId>com.oracle.database.jdbc</groupId>
+                <artifactId>ojdbc8</artifactId>
+                <version>21.15.0.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.microsoft.sqlserver</groupId>
+                <artifactId>mssql-jdbc</artifactId>
+                <version>12.8.1.jre11</version>
+            </dependency>
+            <!-- Overrides the Spring Boot BOM (12.1.0.0) for the db2 adapter and every app that installs it. -->
+            <dependency>
+                <groupId>com.ibm.db2</groupId>
+                <artifactId>jcc</artifactId>
+                <version>11.5.9.0</version>
+            </dependency>
+            <dependency>
+                <groupId>org.opengauss</groupId>
+                <artifactId>opengauss-jdbc</artifactId>
+                <version>5.1.0-og</version>
+            </dependency>
+            <dependency>
+                <groupId>org.duckdb</groupId>
+                <artifactId>duckdb_jdbc</artifactId>
+                <version>1.5.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-core</artifactId>
+                <version>5.8.36</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-crypto</artifactId>
+                <version>5.8.36</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-dependency-plugin</artifactId>
+                    <version>3.11.0</version>
+                </plugin>
+                <!-- Host dev run (apps/data-engine/dev.mjs), pluginManagement only so package keeps the thin jar.
+                     ${project.basedir} is the inheriting app: .dev is its data root (conf first on the
+                     classpath, like /deploy in the container) and .venv its MCP/skills Python
+                     (datarag.venv.python, Scripts/python.exe on Windows). -->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <mainClass>io.ontomato.dataengine.RAGMain</mainClass>
+                        <workingDirectory>${project.basedir}/.dev</workingDirectory>
+                        <additionalClasspathElements>
+                            <additionalClasspathElement>${project.basedir}/.dev/conf</additionalClasspathElement>
+                        </additionalClasspathElements>
+                        <systemPropertyVariables>
+                            <ontomato.data-engine.pythonpath>${project.basedir}/${datarag.venv.python}</ontomato.data-engine.pythonpath>
+                        </systemPropertyVariables>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <!-- JDK 23+ no longer auto-discovers Lombok from the classpath; put it on the explicit
+                 annotation processor path so @Data/@Slf4j etc. are generated during compilation. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <!-- Windows virtualenv layout for datarag.venv.python; the POSIX default above is unchanged. -->
+        <profile>
+            <id>windows-venv</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <properties>
+                <datarag.venv.python>.venv/Scripts/python.exe</datarag.venv.python>
+            </properties>
+        </profile>
+    </profiles>
+</project>

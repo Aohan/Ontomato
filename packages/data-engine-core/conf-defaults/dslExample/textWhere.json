@@ -1,0 +1,6 @@
+{
+	"fields": [],
+	"query": "sensor malfunction",
+	"operator": "match",
+	"boost": 1.0
+}

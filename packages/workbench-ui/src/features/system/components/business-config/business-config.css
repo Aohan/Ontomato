@@ -1,0 +1,464 @@
+.config-card {
+  margin-bottom: 0;
+}
+
+.config-form :deep(.el-form-item__label),
+.model-editor-form :deep(.el-form-item__label) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  word-break: keep-all;
+}
+
+.config-form :deep(.el-form-item__label) {
+  min-width: 160px;
+  flex-shrink: 0;
+}
+
+.config-card .card-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  color: var(--el-text-color-primary);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+
+.config-card .card-header .el-icon {
+  color: var(--el-color-primary);
+  flex-shrink: 0;
+}
+
+.card-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.dirty-tag {
+  margin-left: var(--spacing-sm);
+}
+
+.header-action {
+  margin-left: auto;
+}
+
+.load-error {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--el-color-danger-light-5);
+  border-radius: var(--radius-md);
+  background: var(--el-color-danger-light-9);
+  color: var(--el-color-danger);
+  font-size: var(--text-sm);
+  flex-wrap: wrap;
+}
+
+.model-list {
+  list-style: none;
+  margin: 0 0 var(--spacing-md);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.model-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-md);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* Name, IDs, URL and key count sit together on the left (wrapping when narrow); the row actions stay on the right. */
+.model-info {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-md);
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.model-name {
+  font-weight: var(--font-medium);
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--el-text-color-regular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The URL is the longest field: it is the one truncated (full value in its tooltip). */
+.model-url {
+  max-width: 420px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--el-text-color-regular);
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+}
+
+.model-keys {
+  flex: 0 0 auto;
+  font-size: var(--text-sm);
+  color: var(--el-text-color-regular);
+}
+
+.model-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+/* Role grid: one cell per role (name above, select below filling the cell); three columns when wide, then two, then one. */
+.role-grid {
+  --role-grid-gap: var(--spacing-lg);
+  list-style: none;
+  margin: 0 0 var(--spacing-lg);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(280px, calc((100% - 2 * var(--role-grid-gap)) / 3)), 1fr)
+  );
+  gap: var(--spacing-md) var(--role-grid-gap);
+}
+
+.role-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.role-cell .el-select {
+  width: 100%;
+}
+
+.role-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.role-name {
+  font-weight: var(--font-medium);
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+}
+
+.role-info {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+}
+
+.dialog-section {
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--el-text-color-primary);
+}
+
+/* The dialog root node of Element Plus does not carry the caller's scoped attribute. */
+:global(.model-dialog .el-dialog__body) {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* On narrow screens, split info and actions into separate lines so full fields stay readable and buttons stay reachable. */
+@media (max-width: 640px) {
+  .config-form :deep(.el-col) {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  .model-info {
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+
+  .model-name,
+  .model-id,
+  .model-url {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .model-url {
+    max-width: 100%;
+  }
+
+  .model-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+
+  .model-actions :deep(.el-button),
+  .api-keys-wrap :deep(.el-button),
+  .form-actions :deep(.el-button),
+  .card-header-actions .el-button,
+  .header-action {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .model-editor-form :deep(.el-form-item) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .model-editor-form :deep(.el-form-item__label) {
+    width: auto !important;
+    height: auto;
+    justify-content: flex-start;
+    line-height: 1.5;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .model-editor-form :deep(.el-form-item__content),
+  .config-form :deep(.el-form-item__content) {
+    margin-left: 0 !important;
+  }
+
+  /* On narrow screens numeric controls and save buttons may wrap so no row's save entry is clipped. */
+  .inline-control {
+    flex-wrap: wrap;
+  }
+}
+
+.card-body {
+  padding: 0;
+}
+
+/* Unify the table style inside cards with the overall admin panel look */
+.config-card :deep(.el-table) {
+  margin-bottom: var(--spacing-lg);
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.config-card :deep(.el-table)::before {
+  height: 0;
+}
+
+.config-card :deep(.el-table th.el-table__cell) {
+  background-color: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+}
+
+.config-card :deep(.el-table th.el-table__cell .cell),
+.config-card :deep(.el-table td.el-table__cell .cell) {
+  white-space: nowrap;
+}
+
+.config-card :deep(.el-table td.el-table__cell) {
+  font-size: var(--text-sm);
+}
+
+.config-card :deep(.operation-cell .cell) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  flex-wrap: nowrap;
+}
+
+.config-card :deep(.operation-cell .el-button) {
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 0;
+}
+
+.form-actions {
+  padding-top: var(--spacing-md);
+  margin-bottom: 0 !important;
+}
+
+.form-actions :deep(.el-form-item__content) {
+  border-top: 1px solid var(--el-border-color-light);
+  padding-top: var(--spacing-lg);
+  margin-left: 0 !important;
+  justify-content: flex-end;
+}
+
+.question-mode-select {
+  width: 160px;
+  max-width: 100%;
+}
+
+.question-mode-select :deep(.el-select__selected-item) {
+  min-width: 0;
+}
+
+.question-mode-select :deep(.el-select__selected-item span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-keys-wrap {
+  width: 100%;
+}
+
+.api-key-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.api-key-input {
+  flex: 1;
+}
+
+.inline-control {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.inline-control .el-input-number {
+  flex-shrink: 0;
+}
+
+.custom-request-parameters-item :deep(.el-form-item__content) {
+  margin-left: 0 !important;
+}
+
+.custom-request-parameters-editor {
+  width: 100%;
+  --el-collapse-border-color: var(--el-border-color-lighter);
+}
+
+.custom-request-parameters-editor :deep(.el-collapse-item__header) {
+  min-height: 42px;
+  height: auto;
+  padding: 0 var(--spacing-md);
+  font-size: inherit;
+}
+
+.custom-request-parameters-editor :deep(.el-collapse-item__title) {
+  min-width: 0;
+}
+
+.custom-request-parameters-editor :deep(.el-collapse-item__wrap) {
+  border-bottom: 0;
+}
+
+.custom-request-parameters-editor :deep(.el-collapse-item__content) {
+  padding: var(--spacing-md) 0 0;
+}
+
+.custom-request-parameters-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-width: 0;
+  width: 100%;
+  padding-right: var(--spacing-sm);
+}
+
+.custom-request-parameters-title {
+  flex: 0 0 auto;
+  font-weight: var(--font-medium);
+}
+
+.custom-request-parameters-summary {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--el-text-color-regular);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-request-parameters-editor :deep(textarea) {
+  font-family: var(--el-font-family-monospace, ui-monospace, SFMono-Regular, Consolas, monospace);
+  line-height: 1.5;
+}
+
+.custom-request-parameters-hint {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--el-text-color-regular);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.custom-request-parameters-editor.is-invalid :deep(.el-collapse-item__header),
+.custom-request-parameters-editor.is-invalid .custom-request-parameters-summary {
+  color: var(--el-color-danger);
+}
+
+/* Give the general settings label column enough room without unnecessarily narrowing the controls. */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .config-form :deep(.el-col) {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Switch paired settings to one column before their controls become cramped. */
+@media (max-width: 760px) {
+  .config-card :deep(.el-col) {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .config-form :deep(.el-form-item) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .config-form :deep(.el-form-item__label) {
+    align-self: flex-start;
+    width: max-content !important;
+    max-width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+    height: auto;
+    margin-bottom: var(--spacing-xs);
+    line-height: 1.5;
+  }
+
+  .config-form :deep(.el-form-item__content) {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+}

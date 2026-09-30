@@ -1,0 +1,76 @@
+# DataRAG large runtime image: Debian base + JRE21 + Python 3.10 + third-party dependencies and platform native libraries.
+# Carries only runtime inputs. Application jars, default configuration, skills and license material stay out of this image.
+# The product entry assembles the context: lib/, mcp/mcpserver.py, requirements-py310.txt, runtime-arch.txt,
+# and bin/ containing the shared entrypoint/contract helpers and the explicitly selected product checker;
+# for the third-party notices under /licenses also maven-licenses.json (from the Maven export),
+# tools/third_party_notices.py and the public repository's LICENSE and NOTICE.
+ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
+ARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy@sha256:61d6c7b34d36aee3f45d043101259f97f3c6d428dc2a6f75513789983c5e254f
+ARG PIP_INDEX_URL=https://pypi.org/simple
+
+FROM ${JRE_IMAGE} AS jre
+
+FROM ${PYTHON_RUNTIME_IMAGE} AS runtime-files
+
+ARG PIP_INDEX_URL
+ARG PAIR_CONTRACT
+
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH=/opt/java/openjdk/bin:$PATH
+ENV LANG=C.UTF-8
+ENV PAIR_CONTRACT=${PAIR_CONTRACT}
+
+COPY --from=jre /opt/java/openjdk /opt/java/openjdk
+
+COPY requirements-py310.txt /tmp/requirements-py310.txt
+# The pinned list is the whole installed set (it is part of the compatibility
+# fingerprint): --no-deps installs only it, and pip check fails if it misses one.
+RUN pip install --no-cache-dir --no-deps -i "${PIP_INDEX_URL}" -r /tmp/requirements-py310.txt \
+    && pip check \
+    && python -c "import pandas, requests, numpy, mcp, sympy" \
+    && rm -rf /usr/local/lib/python3.10/site-packages/pip* /usr/local/lib/python3.10/site-packages/setuptools* /usr/local/lib/python3.10/site-packages/pkg_resources /usr/local/bin/pip* \
+    && python -c "import pandas, requests, numpy, mcp, sympy"
+# pip/setuptools are used only during the build above: at runtime python runs only calculation scripts and the MCP service (pip is unavailable).
+RUN if python -m pip --version >/dev/null 2>&1; then echo "pip still present, must be removed from runtime" >&2; exit 1; fi
+
+COPY mcp/mcpserver.py /opt/datarag/mcp/mcpserver.py
+COPY lib/ /opt/datarag/lib/
+COPY bin/ /opt/datarag/bin/
+COPY runtime-arch.txt /opt/datarag/runtime-arch
+COPY requirements-py310.txt /opt/datarag/requirements.txt
+COPY runtime-contract.json /opt/datarag/runtime-contract.json
+# Third-party notices of what this image installs, under /licenses, outside the runtime contract
+# inputs: every file under lib/ joined with the export's Maven license records (lib/ itself stays
+# byte-identical to the export), and the distributions pip left installed. The system section
+# names where the base images keep their own.
+COPY LICENSE NOTICE /licenses/
+RUN --mount=type=bind,source=maven-licenses.json,target=/tmp/maven-licenses.json \
+    --mount=type=bind,source=tools/third_party_notices.py,target=/tmp/third_party_notices.py \
+    python /tmp/third_party_notices.py /licenses/THIRD_PARTY_NOTICES.txt --python --jars /opt/datarag/lib /tmp/maven-licenses.json <<'EOF'
+Debian packages of the python:3.10-slim-bookworm base: /usr/share/doc/<package>/copyright
+Python 3.10 interpreter and standard library: /usr/local/lib/python3.10/LICENSE.txt
+Eclipse Temurin 21 JRE (copied alone from the eclipse-temurin JRE image): /opt/java/openjdk/NOTICE
+and /opt/java/openjdk/legal/
+EOF
+RUN chmod 0755 /opt/datarag/bin/container-entrypoint.sh \
+ && case "$PAIR_CONTRACT" in \
+      /*) ;; \
+      *) echo "PAIR_CONTRACT must be an absolute path" >&2; exit 1 ;; \
+    esac \
+ && test -f "$PAIR_CONTRACT" \
+ && PYTHONDONTWRITEBYTECODE=1 python "$PAIR_CONTRACT" verify-runtime /opt/datarag \
+ && rm -rf /opt/datarag/bin/__pycache__
+
+FROM runtime-files AS runtime
+ARG RUNTIME_COMPAT_FINGERPRINT
+RUN test -n "$RUNTIME_COMPAT_FINGERPRINT" \
+ && printf '%s' "$RUNTIME_COMPAT_FINGERPRINT" > /opt/datarag/runtime-compat-fingerprint
+
+WORKDIR /deploy
+ENTRYPOINT ["/opt/datarag/bin/container-entrypoint.sh"]
+CMD []
+
+# Same runtime with the JVM argument an edition's native library needs; the entrypoint
+# passes CMD to the JVM. Selected explicitly by the entry (the public edition uses runtime).
+FROM runtime AS runtime-native
+CMD ["-Djna.library.path=/opt/datarag/lib"]

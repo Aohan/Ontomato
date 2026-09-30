@@ -1,0 +1,22 @@
+/* Document-level rules of the standalone shell (the html/body/#app part of the original ontology-manager/src/style.css); the component height comes from here. */
+html,
+body,
+#app {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--el-bg-color-page);
+}
+
+#app {
+  height: 100vh;
+}
+
+.manager-shell-status {
+  margin: 0;
+  padding: 24px;
+  color: var(--el-text-color-regular);
+}

@@ -1,0 +1,20 @@
+[{
+		"from": 1,
+		"to": 0,
+		"type": [
+			"*"
+		],
+		"min_hops": 1,
+		"max_hops": -1
+	},
+	{
+		"from": 1,
+		"to": 2,
+		"type": [
+			"contain",
+			"connect"
+		],
+		"min_hops": 1,
+		"max_hops": 1
+	}
+]

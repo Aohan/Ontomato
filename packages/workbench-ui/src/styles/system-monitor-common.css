@@ -1,0 +1,76 @@
+/* Rules shared by the system monitor page and the service-panels slot panels (originally declared in SystemMonitor.vue, moved unchanged to follow the actual DOM consumers); both components reference this with <style scoped src>. */
+.section-card {
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  overflow: hidden;
+}
+
+.section-card :deep(.el-card__header) {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.section-card :deep(.el-card__body) {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.service-table {
+  width: 100%;
+  background: var(--el-bg-color);
+}
+
+/* Table column width optimization */
+.service-table :deep(.el-table__header th) {
+  padding: 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background-color: var(--el-fill-color-light);
+}
+
+.service-table :deep(.el-table__body td) {
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+/* stripe row color with enhanced contrast */
+.service-table :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background-color: var(--el-fill-color-lighter);
+}
+
+.service-table :deep(.el-table--enable-row-hover .el-table__body tr:hover > td) {
+  background-color: var(--el-color-primary-light-9);
+}
+
+.service-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.status-running {
+  color: var(--el-color-success);
+}
+
+.status-stopped {
+  color: var(--el-color-danger);
+}

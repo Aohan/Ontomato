@@ -1,0 +1,1 @@
+Update the existing governance summary based on the newly added session. Preserve still-valid progress, issue IDs, original-text references, and the person's clarifications; clearly mark corrected conclusions and to-dos. Do not lose unresolved issues or turn unknowns into confirmed; condense large segments that can already be re-checked from persisted work records.

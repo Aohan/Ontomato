@@ -1,0 +1,32 @@
+# Docker Engine 26+ offline assembly of the Node product: COPY the pre-imported
+# app image into the pre-imported runtime image. No source compilation, no
+# dependency installation, no network; application content or check changes do
+# not require editing this file.
+# The app image is architecture-independent (scratch with files only): its stage
+# is pinned to $BUILDPLATFORM so the assembly never depends on the app image's
+# recorded platform. The only architecture source is EXPECTED_ARCH (deployment ARCH).
+# APP_COMPONENT names the product (public ontomato; a private caller passes its own).
+ARG RUNTIME_IMAGE
+ARG APP_IMAGE
+ARG EXPECTED_ARCH
+ARG APP_COMPONENT
+
+FROM --platform=$BUILDPLATFORM ${APP_IMAGE} AS app-source
+FROM ${RUNTIME_IMAGE}
+
+ARG EXPECTED_ARCH
+ARG APP_COMPONENT
+
+# A composite of two separately built images: clear the inherited image
+# version label instead of reporting the runtime's.
+LABEL io.runtime.kind="composite" \
+      io.runtime.component="${APP_COMPONENT}" \
+      org.opencontainers.image.title="${APP_COMPONENT}" \
+      org.opencontainers.image.version=""
+
+# Copy application files into /app
+COPY --from=app-source / /app/
+
+# The runtime owns pairing: compatibility fingerprint, family, the expected
+# architecture and no broken links under /app.
+RUN node /runtime/scripts/workbench/runtime-contract.mjs assemble "${EXPECTED_ARCH:?EXPECTED_ARCH is required}"

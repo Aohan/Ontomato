@@ -1,0 +1,6 @@
+ontomato:
+  data-engine:
+    mcp-clients:
+      - client-name: mcpcli1
+        client-version: v1.0.0
+        sse-server: http://127.0.0.1:18500/sse
