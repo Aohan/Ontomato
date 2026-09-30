@@ -16,7 +16,7 @@ A structured explanation consists of several `code segments`. The shapes below u
   }
 }
 ```
-- `kind`: indicates the kind of this code; the enum values are `QUERY`, `CREATE_OBJECT`, `UPDATE_OBJECT`, `DELETE_OBJECT`, `CREATE_EDGE`, `DELETE_EDGE`, `COMPUTE`, `EXTERNAL_CALL`, `BRANCH`, `LOOP`, `TRY_CATCH`, `ERROR_HANDLING`, `CUSTOM`, and the following sections explain each type one by one
+- `kind`: indicates the kind of this code; the enum values are `QUERY`, `CREATE_OBJECT`, `UPDATE_OBJECT`, `DELETE_OBJECT`, `CREATE_EDGE`, `DELETE_EDGE`, `APPEND_VECTOR`, `UPDATE_VECTOR`, `DELETE_VECTOR`, `COMPUTE`, `EXTERNAL_CALL`, `BRANCH`, `LOOP`, `TRY_CATCH`, `ERROR_HANDLING`, `CUSTOM`, and the following sections explain each type one by one
 
 ## `QUERY` `code segment` Definition
 Corresponds to the query logic part in the code that makes an http call to the `/writeFunctionOperation/query` interface. If the call to the `/writeFunctionOperation/query` interface exists in the code as a common function, `codeRange` does not need to cover the code of that common function.
@@ -261,6 +261,67 @@ Corresponds to the relationship deletion logic part in the code that makes an ht
 }
 ```
 
+## `APPEND_VECTOR` `code segment` Definition
+Corresponds to the vector-file append logic part in the code that makes an http call to the `/writeFunctionOperation/appendVector` interface. If the call to the `/writeFunctionOperation/appendVector` interface exists in the code as a common function, `codeRange` does not need to cover the code of that common function.
+```
+{
+  "id": "s1",
+  "kind": "APPEND_VECTOR",
+  "title": "Title",
+  "narrative": "Natural language explanation of this code",
+  "codeRange": {
+    "start": 30, // start line number of the code
+    "end": 40, // end line number of the code
+  },
+  "class": "object class",
+  "attrName": "vector attribute name",
+  "objectIdFrom": "some Parameter or the result of some code segment", // where the value of the object id comes from
+  "textFrom": "some Parameter or the result of some code segment", // where the vector content text comes from
+  "estRows": "estimated number of vector files to append"
+}
+```
+
+## `UPDATE_VECTOR` `code segment` Definition
+Corresponds to the vector-file update logic part in the code that makes an http call to the `/writeFunctionOperation/updateVector` interface. If the call to the `/writeFunctionOperation/updateVector` interface exists in the code as a common function, `codeRange` does not need to cover the code of that common function.
+```
+{
+  "id": "s1",
+  "kind": "UPDATE_VECTOR",
+  "title": "Title",
+  "narrative": "Natural language explanation of this code",
+  "codeRange": {
+    "start": 30, // start line number of the code
+    "end": 40, // end line number of the code
+  },
+  "class": "object class",
+  "attrName": "vector attribute name",
+  "objectIdFrom": "some Parameter or the result of some code segment", // where the value of the object id comes from
+  "fileIdFrom": "some Parameter or the result of some code segment", // where the file id (last path segment) comes from
+  "textFrom": "some Parameter or the result of some code segment", // where the new vector content text comes from
+  "estRows": "estimated number of vector files to update"
+}
+```
+
+## `DELETE_VECTOR` `code segment` Definition
+Corresponds to the vector-file deletion logic part in the code that makes an http call to the `/writeFunctionOperation/deleteVector` interface. If the call to the `/writeFunctionOperation/deleteVector` interface exists in the code as a common function, `codeRange` does not need to cover the code of that common function.
+```
+{
+  "id": "s1",
+  "kind": "DELETE_VECTOR",
+  "title": "Title",
+  "narrative": "Natural language explanation of this code",
+  "codeRange": {
+    "start": 30, // start line number of the code
+    "end": 40, // end line number of the code
+  },
+  "class": "object class",
+  "attrName": "vector attribute name",
+  "objectIdFrom": "some Parameter or the result of some code segment", // where the value of the object id comes from
+  "fileIdFrom": "some Parameter or the result of some code segment", // where the file id (last path segment) comes from
+  "estRows": "estimated number of vector files to delete"
+}
+```
+
 ## `COMPUTE` `code segment` Definition
 Corresponds to the computation and data processing logic in the code
 ```
@@ -417,7 +478,7 @@ You can use the tool `readCode` to read the code. At the beginning you can read 
 # Output Content
 The output contains three parts: `code segments`, operations in business context, and `negative effects`
 - `code segments`: an array of code segments
-- Operations in business context: the operations performed on different types of objects; operations include creating, modifying, and deleting objects and creating and deleting relationships. Do not write query operations separately here, because the purpose of all queries in an action is to find objects that meet some conditions and perform write operations on them, so you should write them as operations in business language according to the meaning of the code.
+- Operations in business context: the operations performed on different types of objects; operations include creating, modifying, and deleting objects, creating and deleting relationships, and appending, updating and deleting vector files. Do not write query operations separately here, because the purpose of all queries in an action is to find objects that meet some conditions and perform write operations on them, so you should write them as operations in business language according to the meaning of the code.
 - The possible hidden `negative effects` of this code
 
 # Output Format
@@ -430,6 +491,9 @@ The output contains three parts: `code segments`, operations in business context
         "add what objects...",
         "create what relationship between objects meeting what conditions and objects meeting what conditions...",
         "delete the relationship between objects meeting what conditions and objects meeting what conditions...",
+        "append a vector file to which vector attribute of which objects...",
+        "update a vector file of which vector attribute of which objects...",
+        "delete a vector file of which vector attribute of which objects...",
         ...
     ],
     "negativeEffect":"negative effects, hidden risks..."

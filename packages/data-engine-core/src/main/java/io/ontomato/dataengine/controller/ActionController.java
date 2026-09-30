@@ -1,13 +1,21 @@
 package io.ontomato.dataengine.controller;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -172,13 +180,33 @@ public class ActionController {
 	
 	@PostMapping("/action/execute")
     @ResponseBody
-    public JSONObject execute(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
+    public JSONObject execute(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang,
+    		@RequestParam("id") String id,
+    		@RequestParam("param") String paramJson,
+    		@RequestParam(value = "file", required = false) List<MultipartFile> files) {
 		JSONObject ret = new JSONObject();
+		List<Path> tempFiles = new ArrayList<Path>();
 		try {
 			UserDataPermission curUserDataPermission = identityService.getCurrentUserDataPermission();
 	    	User user = SystemUtils.getCurUser();
-			String id = param.getString("id");
-			JSONObject p = param.getJSONObject("param");
+			JSONObject p = JSONObject.parseObject(paramJson);
+			if (files != null && !files.isEmpty()) {
+				for (String key : p.keySet()) {
+					Object value = p.get(key);
+					if (value instanceof JSONObject) {
+						JSONObject vectorValue = (JSONObject) value;
+						String uploadFile = vectorValue.getString("uploadFile");
+						if (uploadFile != null && !"".equals(uploadFile.trim())) {
+							int idx = Integer.parseInt(uploadFile.trim());
+							MultipartFile file = files.get(idx);
+							Path saved = saveTempFile(file);
+							tempFiles.add(saved);
+							vectorValue.put("uploadFilePath", saved.toAbsolutePath().toString());
+							vectorValue.remove("uploadFile");
+						}
+					}
+				}
+			}
 			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
     		int timeoutMinutes = Long.valueOf(businessConfig.getDslCookerTimeout() / 60000).intValue();
 			if (timeoutMinutes <= 0) {
@@ -194,8 +222,25 @@ public class ActionController {
 			log.error(e.getMessage(), e);
 			ret.put("success", false);
 			ret.put("message", e.getMessage());
+		} finally {
+			for (Path tempFile : tempFiles) {
+				try {
+					Files.deleteIfExists(tempFile);
+				} catch (Exception e) {
+					log.error(e.getMessage(), e);
+				}
+			}
 		}
 		return ret;
+	}
+	
+	private Path saveTempFile(MultipartFile file) throws Exception {
+		File dir = new File("conf/abcProgramWorkspaces/");
+		dir.mkdirs();
+		String name = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
+		Path saved = Paths.get(dir.getPath(), name);
+		Files.copy(file.getInputStream(), saved);
+		return saved;
 	}
 	
 }

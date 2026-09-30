@@ -1,5 +1,6 @@
 package io.ontomato.dataengine.service;
 
+import java.io.InputStream;
 import java.util.Map;
 
 import com.alibaba.fastjson2.JSONArray;
@@ -18,5 +19,11 @@ public interface WriteFunctionOperationService {
 	public void deleteEdge(String relationName, String sourceClassName, String sourceObjId, String targetClassName, String targetObjId, String sandboxId, String domainId) throws Exception;
 	
 	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId) throws Exception;
+	
+	public void appendVector(String className, String attrName, String objectId, String content, InputStream is, String suffix, String sandboxId, String domainId) throws Exception;
+	
+	public void updateVector(String className, String attrName, String objectId, String fileId, String content, InputStream is, String sandboxId, String domainId) throws Exception;
+	
+	public void deleteVector(String className, String attrName, String objectId, String fileId, String sandboxId, String domainId) throws Exception;
 	
 }

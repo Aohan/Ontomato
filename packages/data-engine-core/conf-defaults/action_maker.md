@@ -153,7 +153,7 @@ You can use the following tools in the process of generating a write function:
 2. **Explore production database data**: `queryDistinctAttrValue` (performs a like filter on an attribute of an object class and then a deduplicated query), used to probe the real values of varchar/text attributes in the production database.
 3. **Execute DSL on the production database**: `executeDslFile` (executes the DSL file in the current workspace on the **production database**), used to query a small batch of real data from the production database, ** be sure to add a limit **. First write the DSL into a JSON file in the workspace and then execute it by file name (or complete it in one step by using `runAfter="executeDslFile"` with `writeFile`).
 4. **Sandbox tools** (used to build the test environment and verify the write results):
-   - `prepareTestData`: persists the object data and relationship data to be imported into the sandbox to a json file (** prepareTestData only prepares test data; it does not import the test data into the sandbox **).
+   - `prepareTestData`: persists the object data, relationship data and vector data to be imported into the sandbox to a json file (** prepareTestData only prepares test data; it does not import the test data into the sandbox **).
    - `importTestData`: after clearing the sandbox data, imports the data just persisted by prepareTestData into the sandbox.
    - `query`: executes the DSL file in the current workspace in the **sandbox**, used to view the data in the sandbox (only accepts a file relative path).
 5. **Test and execute the write function**: `test` (executes the write function Python file in the current workspace, obtaining the print output and/or runtime error; you must give both the file relative path and the object list of the parameter definitions, do not pass the full code text, it can only be called on its own and cannot be triggered via `runAfter`; only `executeDslFile` and `query` can be triggered via `runAfter`).
@@ -166,7 +166,7 @@ This Agent generates **one** write function for one natural language write opera
 
 ## Step 1: Explore the Schema and Production Database Data
 Carefully understand the user requirement and clarify the goal of the write operation:
-1. **Write operation type**: whether the requirement is "add/update/delete objects" or "create/delete relationships (edges)"; it may be one of these or a combination of several.
+1. **Write operation type**: whether the requirement is "add/update/delete objects", "create/delete relationships (edges)" or "append/update/delete vector files"; it may be one of these or a combination of several.
 2. **Input parameters (variable parts)**: which parts of the requirement are "variable"; they will serve as the parameters of the write function (such as "the name of the added employee", "the target department transferred to", etc.).
 3. **Involved object classes**: which object classes the write operation will touch.
 
@@ -190,16 +190,33 @@ All testing and DEBUG of the write function are carried out in the **sandbox env
        {"relationName": "belongs_to", "sourceObjId": "1001", "targetObjId": "2001"}
      ]
      ```
+   - Vector data (`vectorDatas`): an array, each element contains `className`, `objectId`, `attrName`, `text`, and optional `fileId`. `className`/`objectId` must already exist in the object data, `attrName` must be a vector attribute of that class, and `text` is the vector content used for embedding. This is only needed when the write function operates on vector attributes. For example:
+     ```json
+     [
+       {"className": "/hospital/room", "objectId": "1001", "attrName": "photo", "text": "a bright ward", "fileId": "ward1001.jpg"}
+     ]
+     ```
 3. Use the `importTestData` tool to import the persisted data into the sandbox (the sandbox is cleared first and then imported).
 4. Use the `query` tool (sandbox) to view the data in the sandbox and confirm that the test data meets expectations.
 
 ## Step 3: Determine the Parameter Definitions
 For each input parameter identified in step 1, form a parameter definition (used by the `test` and `submitAction` tools, passed in as structured parameters). If the write function has no parameters, an empty array `[]` is enough. Each parameter definition contains:
 - `name`: the parameter key name
-- `type`: the parameter type; the options are `TYPE_STRING`, `TYPE_NUMBER`, `TYPE_TIME`, `TYPE_STRING_ARRAY`, `TYPE_NUMBER_ARRAY`, `TYPE_TIME_ARRAY`
+- `type`: the parameter type; the options are `TYPE_STRING`, `TYPE_NUMBER`, `TYPE_TIME`, `TYPE_STRING_ARRAY`, `TYPE_NUMBER_ARRAY`, `TYPE_TIME_ARRAY`, `TYPE_VECTOR`
 - `description`: the parameter explanation
 - `value`: the sample value of the parameter, used to fill in the parameter during `test`; for "association/query" type parameters, take a value that really exists in the sandbox test data you prepared, and for "add" type parameters it can be a reasonable sample value
 - `className`: the complete class name of the object class corresponding to the parameter; if there is no corresponding class name, give an empty string
+For a `TYPE_VECTOR` parameter, its `value` is an object describing one vector file to attach to an object's vector attribute:
+```json
+{
+  "className": "the class of the vector attribute",
+  "attrName": "the vector attribute name",
+  "fileId": "the file id (last path segment), only needed for update/delete",
+  "text": "the vector content used for embedding"
+}
+```
+`className` and `attrName` are required; `fileId` may be empty when the parameter is used by `appendVector`; `text` may be empty when used by `deleteVector`. The `uploadFilePath` (absolute path of the uploaded file) is filled in automatically by the system at execution time, so it does not need to be provided here. The object the vector file attaches to is decided by the program code (not this parameter): the code usually gets the object id from another parameter or a query, then passes it as the `objectId` argument to the vector primitive. The top-level `className` field of this parameter definition (see the bullet above) should be the class that owns the vector attribute, i.e. the same class as `value.className`.
+
 For example:
 ```json
 [
@@ -220,7 +237,7 @@ python your_program.py sandboxId domainId parameterFilePath
 - `parameterFilePath`: the absolute path of the input parameter file. The content of the input parameter file is a JSON object whose key is the parameter name and whose value is the parameter value (that is, the `value` of each parameter in the parameter definitions you finally determined). **A write function with no parameters does not need to read the content of the input parameter file**, but the program must still receive these three runtime parameters in a fixed order at the beginning
 
 ### Fixed Program Scaffold
-The program must be written based on the scaffold below, which already contains helper functions for 5 write-data interfaces and 1 query-data interface:
+The program must be written based on the scaffold below, which already contains helper functions for 8 write-data interfaces and 1 query-data interface:
 
 ```python
 import sys
@@ -306,6 +323,34 @@ def deleteEdge(relationName: str, sourceClassName: str, sourceObjId: str,
     _check(resp)
 
 
+def appendVector(className: str, attrName: str, objectId: str, text: str, filePath: str):
+    """Append a vector file to the object's vector attribute; text is the vector content used for embedding, filePath is the local file path to upload"""
+    url = f"{BASE}/appendVector"
+    with open(filePath, "rb") as f:
+        resp = requests.post(url, data={"className": className, "attrName": attrName, "objectId": objectId,
+                                        "text": text, "sandboxId": sandboxId, "domainId": domainId},
+                             files={"file": f}).json()
+    _check(resp)
+
+
+def updateVector(className: str, attrName: str, objectId: str, fileId: str, text: str, filePath: str):
+    """Update an existing vector file of the object's vector attribute; fileId is the file id (last path segment), text is the new vector content, filePath is the local file path to upload"""
+    url = f"{BASE}/updateVector"
+    with open(filePath, "rb") as f:
+        resp = requests.post(url, data={"className": className, "attrName": attrName, "objectId": objectId,
+                                        "fileId": fileId, "text": text, "sandboxId": sandboxId, "domainId": domainId},
+                             files={"file": f}).json()
+    _check(resp)
+
+
+def deleteVector(className: str, attrName: str, objectId: str, fileId: str):
+    """Delete an existing vector file from the object's vector attribute; fileId is the file id (last path segment)"""
+    url = f"{BASE}/deleteVector"
+    resp = requests.post(url, json={"className": className, "attrName": attrName, "objectId": objectId,
+                                    "fileId": fileId, "sandboxId": sandboxId, "domainId": domainId}).json()
+    _check(resp)
+
+
 # ============ Your write function logic ============
 try:
     # Read each parameter from params, for example:
@@ -330,6 +375,16 @@ try:
 
     # Example: delete a relationship edge
     # deleteEdge("belongs_to", "/hospital/room", "1001", "/hospital/dept", "2001")
+
+    # Example: append a vector file to an object's vector attribute
+    # paper = params["paper"]  # a TYPE_VECTOR parameter; its value is a dict with className/attrName/fileId/text/uploadFilePath
+    # appendVector(paper["className"], paper["attrName"], "1001", paper["text"], paper["uploadFilePath"])
+
+    # Example: update an existing vector file (fileId is the last path segment read from the object's vector attribute)
+    # updateVector(paper["className"], paper["attrName"], "1001", paper["fileId"], paper["text"], paper["uploadFilePath"])
+
+    # Example: delete an existing vector file
+    # deleteVector(paper["className"], paper["attrName"], "1001", paper["fileId"])
 
 except Exception as e:
     traceback.print_exc()

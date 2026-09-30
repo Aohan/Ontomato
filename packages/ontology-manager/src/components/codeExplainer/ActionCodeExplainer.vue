@@ -153,6 +153,9 @@ function kindLabelOf(kind: SegmentKind): string {
   --seg-DELETE_OBJECT: #b91c1c;
   --seg-CREATE_EDGE: #4d7c0f;
   --seg-DELETE_EDGE: #c2410c;
+  --seg-APPEND_VECTOR: #0e7490;
+  --seg-UPDATE_VECTOR: #155e75;
+  --seg-DELETE_VECTOR: #be123c;
   --seg-COMPUTE: #6d28d9;
   --seg-EXTERNAL_CALL: #b45309;
   --seg-BRANCH: #a16207;
@@ -185,6 +188,9 @@ function kindLabelOf(kind: SegmentKind): string {
   --seg-DELETE_OBJECT: #fca5a5;
   --seg-CREATE_EDGE: #bef264;
   --seg-DELETE_EDGE: #fdba74;
+  --seg-APPEND_VECTOR: #67e8f9;
+  --seg-UPDATE_VECTOR: #22d3ee;
+  --seg-DELETE_VECTOR: #fda4af;
   --seg-COMPUTE: #c4b5fd;
   --seg-EXTERNAL_CALL: #fcd34d;
   --seg-BRANCH: #fde047;

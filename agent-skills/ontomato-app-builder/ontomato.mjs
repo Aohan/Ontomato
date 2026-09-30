@@ -209,9 +209,28 @@ async function assetCommand(api, prefix, argv) {
     return;
   }
   if (sub === "execute") {
+    const files = [];
+    if (prefix === "action") {
+      for (let f = takeOption(rest, "--file"); f != null; f = takeOption(rest, "--file")) files.push(f);
+    }
     if (rest[0] == null) die(`${prefix} execute requires an id`);
     // A MetricView or Action without parameters is called with an empty parameter object.
     const param = rest[1] == null ? {} : JSON.parse(readInput(rest[1]));
+    if (prefix === "action") {
+      // Action execution is a form: `param` travels as a JSON string and each --file is one `file` part,
+      // which a vector parameter refers to by its position ("uploadFile": "0").
+      const form = new FormData();
+      form.append("id", rest[0]);
+      form.append("param", JSON.stringify(param));
+      for (const f of files) form.append("file", new Blob([fs.readFileSync(f)]), path.basename(f));
+      const res = await fetch(`${api.envUrl}/api/data-query/action/execute`, {
+        method: "POST",
+        headers: headers(api),
+        body: form,
+      });
+      printData(await readJson(res));
+      return;
+    }
     printData(await requestJson(api, "POST", `/${prefix}/execute`, { id: rest[0], param }));
     return;
   }
@@ -264,6 +283,7 @@ function usage() {
   metric-view save <json|@file>
   metric-view delete <id>
   action generate|execute|find|get|save|delete ...   (same arguments as metric-view)
+  action execute <id> [<param json|@file>] [--file <path> ...]
   ask <question>`);
 }
 

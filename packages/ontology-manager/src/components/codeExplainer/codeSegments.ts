@@ -111,7 +111,7 @@ export interface CodeSegment {
 export type NormalizeResult = { ok: true; segments: CodeSegment[] } | { ok: false };
 
 /*
- * The 13 kinds are listed only here: the SegmentKind discriminant, colour variables and localized message keys
+ * The 16 kinds are listed only here: the SegmentKind discriminant, colour variables and localized message keys
  * all derive from it. Entry validation guarantees the kind is one of them, so there is no "unknown kind" afterwards.
  */
 export const KIND_TEXT_KEYS = {
@@ -121,6 +121,9 @@ export const KIND_TEXT_KEYS = {
   DELETE_OBJECT: "kindDeleteObject",
   CREATE_EDGE: "kindCreateEdge",
   DELETE_EDGE: "kindDeleteEdge",
+  APPEND_VECTOR: "kindAppendVector",
+  UPDATE_VECTOR: "kindUpdateVector",
+  DELETE_VECTOR: "kindDeleteVector",
   COMPUTE: "kindCompute",
   EXTERNAL_CALL: "kindExternalCall",
   BRANCH: "kindBranch",
@@ -254,7 +257,7 @@ function normalizeSegment(value: unknown): CodeSegment | undefined {
 
 /**
  * The only boundary entry: normalizes the codeSegments (unknown) returned by `queryById` into a segment tree.
- * Only the entry levels are validated: a non-empty array; each segment's kind is one of the 13, id/title are strings,
+ * Only the entry levels are validated: a non-empty array; each segment's kind is one of the 16, id/title are strings,
  * codeRange is two numbers, and child arrays are well-formed. Any invalid part (including an empty array) fails the
  * whole tree and the caller shows "invalid explanation data" instead of silently treating it as empty.
  */
