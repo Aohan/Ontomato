@@ -10,7 +10,6 @@ export interface SkillInfo {
   path: string;
   version: string;
   outputType?: string;
-  supportedChartTypes?: string[];
   useCases?: string[];
 }
 
