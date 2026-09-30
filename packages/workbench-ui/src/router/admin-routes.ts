@@ -12,12 +12,13 @@ export function managerViewQuery(query: Record<string, unknown>): Record<string,
   return picked;
 }
 
-const managerMeta = { group: "data-assets", permission: "ontology-modeling" };
+const managerMeta = { group: "data-assets", permissions: ["ontology-modeling"] };
 
 /*
  * Shared /admin child route records. Each app lists them explicitly in the original order (its own pages go between the
  * shared ones), with no registration or ordering framework. meta keeps only fields with consumers: group (layout tab
- * lookup), permission (app guards) and category (skill page category); the original title/icon/hidden had no reader.
+ * lookup), permissions (app guards; any one of them grants access) and category (skill page category); the original
+ * title/icon/hidden had no reader.
  */
 export const adminRoutes = {
   root: { path: "", name: "AdminRoot", redirect: "/admin/ontology-manager" },
@@ -50,31 +51,32 @@ export const adminRoutes = {
   },
   hotData: {
     path: "hot-data",
-    redirect: "/admin/analysis?section=reports",
-    meta: { group: "app-capabilities", permission: "hot-data" },
+    redirect: "/admin/analysis-plans",
+    meta: { group: "app-capabilities", permissions: ["hot-data"] },
   },
   metricViews: {
     path: "metric-views",
     redirect: "/admin/ontology-manager?view=assets",
-    meta: { permission: "ontology-modeling" },
+    meta: { permissions: ["ontology-modeling"] },
   },
-  // Originally hidden route (no menu item).
+  // No menu item: the layout highlights the menu and tab of the page it was opened from (the from query).
   knowledgeGovernance: {
     path: "knowledge-governance/:sessionId?",
     name: "KnowledgeGovernance",
     component: () => import("../features/knowledge-governance/GovernancePage.vue"),
-    meta: { group: "app-capabilities", permission: "business-knowledge" },
+    meta: { permissions: ["business-knowledge"] },
   },
   // Business knowledge moved into the Ontology Manager; the old route redirects to the Manager's knowledge page.
   knowledge: {
     path: "knowledge",
     redirect: "/admin/ontology-manager?view=knowledge",
-    meta: { group: "data-assets", permission: "business-knowledge" },
+    meta: { group: "data-assets", permissions: ["business-knowledge"] },
   },
   examples: {
     path: "examples",
-    redirect: "/admin/system-config",
-    meta: { group: "platform-management", permission: "query-examples" },
+    name: "QueryExamples",
+    component: () => import("../features/admin/components/intelligence-engine/ExamplesManager.vue"),
+    meta: { group: "platform-management", permissions: ["query-examples"] },
   },
   actionManagement: {
     path: "action-management",
@@ -89,60 +91,72 @@ export const adminRoutes = {
   analysis: {
     path: "analysis",
     name: "Analysis",
-    component: () => import("../features/admin/components/ApplicationManagement.vue"),
-    meta: { group: "app-capabilities", permission: "analysis-agent" },
+    component: () => import("../features/admin/components/AnalysisAgentManager.vue"),
+    meta: { group: "app-capabilities", permissions: ["analysis-agent"] },
+  },
+  analysisPlans: {
+    path: "analysis-plans",
+    name: "AnalysisPlans",
+    component: () => import("../features/admin/components/hot-report/HotReportManager.vue"),
+    meta: { group: "app-capabilities", permissions: ["hot-data"] },
+  },
+  systemAgents: {
+    path: "system-agents",
+    name: "SystemAgents",
+    component: () => import("../features/admin/components/SystemAgents.vue"),
+    meta: { group: "app-capabilities", permissions: ["observer", "business-knowledge"] },
   },
   mcpService: {
     path: "mcp-service",
     name: "McpService",
     component: () => import("../features/mcp/components/McpManager.vue"),
-    meta: { group: "app-capabilities", permission: "mcp-service" },
+    meta: { group: "app-capabilities", permissions: ["mcp-service"] },
   },
   skills: {
     path: "skills",
     name: "SkillLibrary",
     component: () => import("../features/skills/components/SkillLibrary.vue"),
-    meta: { group: "app-capabilities", permission: "skill-management" },
+    meta: { group: "app-capabilities", permissions: ["skill-management"] },
   },
   skillsAnalysis: {
     path: "skills/analysis",
     redirect: "/admin/skills?tab=analysis",
-    meta: { group: "app-capabilities", category: "analysis", permission: "analytical-skills" },
+    meta: { group: "app-capabilities", category: "analysis", permissions: ["analytical-skills"] },
   },
   skillsVisualization: {
     path: "skills/visualization",
     redirect: "/admin/skills?tab=visualization",
-    meta: { group: "app-capabilities", category: "visualization", permission: "visualization-skills" },
+    meta: { group: "app-capabilities", category: "visualization", permissions: ["visualization-skills"] },
   },
   modelConfig: {
     path: "model-config",
     name: "ModelConfig",
     component: () => import("../features/system/components/ModelConfig.vue"),
-    meta: { group: "platform-management", permission: "system-config" },
+    meta: { group: "platform-management", permissions: ["system-config"] },
   },
   // Edition values (BusinessConfigProps) are passed by the app as props on the route record.
   businessConfig: {
     path: "system-config",
     name: "SystemConfig",
     component: () => import("../features/system/components/BusinessConfig.vue"),
-    meta: { group: "platform-management", permission: "system-config" },
+    meta: { group: "platform-management", permissions: ["system-config"] },
   },
   auditLog: {
     path: "audit-log",
     name: "AuditLog",
     component: () => import("../features/admin/components/platform-operations/AuditLogManager.vue"),
-    meta: { group: "platform-management", permission: "audit-logs" },
+    meta: { group: "platform-management", permissions: ["audit-logs"] },
   },
   feedbackRecords: {
     path: "feedback-records",
     name: "FeedbackRecords",
     component: () => import("../features/admin/components/platform-operations/FeedbackRecords.vue"),
-    meta: { group: "platform-management", permission: "audit-logs" },
+    meta: { group: "platform-management", permissions: ["audit-logs"] },
   },
   systemMonitor: {
     path: "system-monitor",
     name: "SystemMonitor",
     component: () => import("../features/admin/components/platform-operations/SystemMonitor.vue"),
-    meta: { group: "platform-management", permission: "system-monitoring" },
+    meta: { group: "platform-management", permissions: ["system-monitoring"] },
   },
 } satisfies Record<string, RouteRecordRaw>;

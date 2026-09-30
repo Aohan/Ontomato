@@ -21,9 +21,12 @@ async function mountLayout(config: AdminLayoutConfig, path: string, switchEnable
       en: {
         nav: {
           ontologyManager: "Ontology Manager",
+          agentsAndSkills: "Agents and Skills",
+          systemAgents: "System Agents",
           systemManagement: "System Management",
           auditLogs: "Audit Logs",
         },
+        navDescription: { auditLogs: "Operation logs" },
         admin: { loadingMenuPermission: "Loading", noAvailableMenuPermission: "No access" },
         common: { dataGovernance: "Data Governance" },
         user: { logout: "Logout" },
@@ -40,7 +43,9 @@ async function mountLayout(config: AdminLayoutConfig, path: string, switchEnable
         props: config,
         children: [
           { path: "ontology-manager", component: page, meta: { group: "data-assets" } },
+          { path: "system-agents", component: page, meta: { group: "app-capabilities" } },
           { path: "audit-log", component: page, meta: { group: "platform-management" } },
+          { path: "knowledge-governance/:sessionId?", name: "KnowledgeGovernance", component: page },
         ],
       },
     ],
@@ -53,7 +58,9 @@ async function mountLayout(config: AdminLayoutConfig, path: string, switchEnable
   await nextTick();
   const tabs = () => [...el.querySelectorAll(".header-tabs .tab-item")].map((t) => t.textContent?.trim());
   const menu = () => [...el.querySelectorAll(".admin-menu .menu-item-title")].map((t) => t.textContent?.trim());
-  return { el, router, tabs, menu };
+  const activeTab = () => el.querySelector(".tab-item.active")?.textContent?.trim();
+  const activeMenu = () => el.querySelector(".admin-menu .is-active .menu-item-title")?.textContent?.trim();
+  return { el, router, tabs, menu, activeTab, activeMenu };
 }
 
 const base: AdminLayoutConfig = {
@@ -147,6 +154,54 @@ describe("shared admin layout", () => {
     expect(el.querySelector(".user-name")?.textContent).toBe("alice");
     (el.querySelector(".logout-btn") as HTMLElement).click();
     expect(logout).toHaveBeenCalledOnce();
+  });
+
+  it("a menu item shows with any one of its permissions (system agents: observer or business-knowledge)", async () => {
+    const config = (granted: string[]): AdminLayoutConfig => ({
+      ...base,
+      groups: [adminGroups.appCapabilities],
+      items: [adminMenuItems.systemAgents],
+      access: { ready: true, can: (p) => granted.includes(p) },
+    });
+    expect((await mountLayout(config(["observer"]), "/admin/system-agents")).menu()).toEqual(["System Agents"]);
+    expect((await mountLayout(config(["business-knowledge"]), "/admin/system-agents")).menu()).toEqual([
+      "System Agents",
+    ]);
+    const none = await mountLayout(config([]), "/admin/system-agents");
+    expect(none.el.querySelector(".permission-empty")).not.toBeNull();
+  });
+
+  it("menu pages show their title and description above the content; the home-style page does not", async () => {
+    const { el } = await mountLayout(base, "/admin/audit-log");
+    expect(el.querySelector(".admin-page-heading h1")?.textContent).toBe("Audit Logs");
+    expect(el.querySelector(".admin-page-heading p")?.textContent).toBe("Operation logs");
+    const home = await mountLayout(base, "/admin/ontology-manager");
+    expect(home.el.querySelector(".admin-page-heading")).toBeNull();
+  });
+
+  it("knowledge governance highlights the tab and menu of the page it was opened from; without a valid from, system agents", async () => {
+    const config: AdminLayoutConfig = {
+      ...base,
+      groups: [adminGroups.dataAssets, adminGroups.appCapabilities, adminGroups.platformManagement],
+      items: [adminMenuItems.systemAgents, adminMenuItems.auditLog],
+    };
+    const fromManager = await mountLayout(
+      config,
+      "/admin/knowledge-governance?from=" + encodeURIComponent("/admin/ontology-manager?view=knowledge")
+    );
+    expect(fromManager.activeTab()).toBe("Ontology Manager");
+    expect(fromManager.el.querySelector(".admin-aside")).toBeNull();
+    expect(fromManager.el.querySelector(".admin-page-heading")).toBeNull();
+
+    for (const path of [
+      "/admin/knowledge-governance?from=/admin/system-agents",
+      "/admin/knowledge-governance",
+      "/admin/knowledge-governance?from=https://example.com/admin/",
+    ]) {
+      const layout = await mountLayout(config, path);
+      expect(layout.activeTab()).toBe("Agents and Skills");
+      expect(layout.activeMenu()).toBe("System Agents");
+    }
   });
 
   it("hidden navigation (restricted licensing): only back, title, theme and account, and the page still renders", async () => {

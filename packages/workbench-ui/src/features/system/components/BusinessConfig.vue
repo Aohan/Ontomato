@@ -3,7 +3,6 @@ import type { SystemModelConfig } from "@ontomato/contracts/system-model";
 
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
-import { MessagesSquare } from "lucide-vue-next";
 import { adminApi } from "../../admin";
 import { useI18n } from "vue-i18n";
 import { workbenchContent } from "../../../content";
@@ -11,7 +10,6 @@ import DataAdapterConfigCard from "./business-config/DataAdapterConfigCard.vue";
 import GeneralConfigCard from "./business-config/GeneralConfigCard.vue";
 import QuerySettingsCard from "./business-config/QuerySettingsCard.vue";
 import SkillDirConfigCard from "./business-config/SkillDirConfigCard.vue";
-import ExamplesManager from "../../admin/components/intelligence-engine/ExamplesManager.vue";
 import {
   type BusinessConfig,
   type DataAdapterInfo,
@@ -20,7 +18,7 @@ import {
 } from "../types";
 import type { BusinessConfigProps } from "../business-config";
 
-// System config page: query settings, skill directory, general config, data adapter and query examples; models live on the model configuration page.
+// System config page: query settings, skill directory, general config and data adapter; models live on the model configuration page, query examples on their own page.
 const props = defineProps<BusinessConfigProps>();
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
@@ -254,16 +252,6 @@ onMounted(() => {
       :disabled="loading || !!backendLoadError"
       @save="saveDataAdapter"
     />
-
-    <div class="admin-card config-card examples-card">
-      <div class="card-header">
-        <el-icon :size="20"><MessagesSquare /></el-icon>
-        <span>{{ t("nav.queryExamples") }}</span>
-      </div>
-      <div class="card-body">
-        <ExamplesManager />
-      </div>
-    </div>
   </div>
 </template>
 
@@ -289,25 +277,5 @@ onMounted(() => {
   color: var(--el-color-danger);
   font-size: var(--text-sm);
   flex-wrap: wrap;
-}
-
-.examples-card {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.examples-card :deep(.examples-manager) {
-  height: auto;
-  min-height: 520px;
-  overflow: visible;
-}
-
-.examples-card :deep(.examples-manager .sub-tabs),
-.examples-card :deep(.examples-manager .sub-tabs .el-tabs__content),
-.examples-card :deep(.examples-manager .sub-tabs .el-tab-pane),
-.examples-card :deep(.examples-manager .card-grid) {
-  height: auto;
-  overflow: visible;
 }
 </style>

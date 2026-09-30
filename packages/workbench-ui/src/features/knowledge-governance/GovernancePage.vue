@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import { ArrowLeft, BookOpen, FileText, Send, Square } from "lucide-vue-next";
 import { renderAgentMarkdown } from "../../utils/agent-markdown";
 import { useGovernance } from "./useGovernance";
+import { governanceReturnPath } from "./return-path";
 
 const { t } = useI18n();
 const router = useRouter(),
@@ -62,9 +63,13 @@ watch(panel, async (value) => {
   await nextTick();
   panelElement.value?.scrollIntoView({ block: "start" });
 });
+// Switching sessions keeps the from query so Back still returns to the entry page.
+function sessionLocation(sessionId: string) {
+  return { name: "KnowledgeGovernance", params: { sessionId }, query: { from: route.query.from } };
+}
 async function begin() {
   const id = await start();
-  if (id) await router.push({ name: "KnowledgeGovernance", params: { sessionId: id } });
+  if (id) await router.push(sessionLocation(id));
 }
 async function send(text = input.value) {
   if (await respond(text)) input.value = "";
@@ -91,7 +96,7 @@ function closeHistory(event: MouseEvent) {
         <button
           class="kg-icon"
           :aria-label="t('governance.back')"
-          @click="router.push('/admin/knowledge')"
+          @click="router.push(governanceReturnPath(route.query))"
         >
           <ArrowLeft :size="18" />
         </button>
@@ -125,7 +130,7 @@ function closeHistory(event: MouseEvent) {
             <RouterLink
               v-for="round in rounds"
               :key="round.id"
-              :to="{ name: 'KnowledgeGovernance', params: { sessionId: round.id } }"
+              :to="sessionLocation(round.id)"
             >
               {{ new Date(round.createdAt).toLocaleString() }} ·
               {{ t(`governance.${round.status}`) }}

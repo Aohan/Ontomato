@@ -32,8 +32,12 @@ const managerUrl = computed(() => {
   if (config.localeMessage) url.searchParams.set("locale", initialLocale);
   url.searchParams.set("embedded", "1");
   // Absolute URL of the business knowledge governance page: the Manager shows an entry on its knowledge page and opens it in the top window; not passed without governance permission.
+  // from makes the governance page return to (and highlight) the Manager's knowledge page.
   if (access.can("business-knowledge")) {
-    const governance = router.resolve({ name: "KnowledgeGovernance" }).href;
+    const governance = router.resolve({
+      name: "KnowledgeGovernance",
+      query: { from: "/admin/ontology-manager?view=knowledge" },
+    }).href;
     url.searchParams.set("knowledgeGovernanceUrl", new URL(governance, window.location.origin).href);
   }
   const token = authHost().getToken();
