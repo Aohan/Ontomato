@@ -17,3 +17,6 @@ apps/data-engine/.venv/
 packages/data-engine-core/.classpath
 packages/data-engine-core/.project
 packages/data-engine-core/.settings/
+packages/data-adapters/*/.classpath
+packages/data-adapters/*/.project
+packages/data-adapters/*/.settings/

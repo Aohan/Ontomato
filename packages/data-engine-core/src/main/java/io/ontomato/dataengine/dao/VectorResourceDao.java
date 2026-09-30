@@ -35,6 +35,10 @@ public class VectorResourceDao extends BaseDao {
 
 	private String dirName = "vectorResource";
 
+	private String generateIndexNamePrefix(String tmpNamespace) {
+		return "vector-" + tmpNamespace.replace("/", "_");
+	}
+
 	private String generateIndexName(String className, String attrName, String domainId) {
 		return "vector-" + className.replace("/", "_") + "-" + attrName + "-" + domainId;
 	}
@@ -243,7 +247,30 @@ public class VectorResourceDao extends BaseDao {
 				+ "object_id VARCHAR(256), "
 				+ "brief_vector vector(" + dims + ")"
 				+ ")");
+		// 删目录下所有文件(不用递归)然后建目录
 		log.info("<<<rebuild " + indexName + " vector dimension: " + dims);
+	}
+	
+	public void truncateNamespace(String tmpNamespace, String domainId) {
+//		"SELECT current_schema();"
+//		String prefix = generateIndexNamePrefix(tmpNamespace);
+//		for (query("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';")) {
+//			if (tableName.startsWith(prefix) && tableName.endsWith("-" + domainId)) {
+//				delete from table_name
+//				删目录下所有文件(不用递归)
+//			}
+//		}
+	}
+	
+	public void dropNamespace(String tmpNamespace, String domainId) {
+//		"SELECT current_schema();"
+//		String prefix = generateIndexNamePrefix(tmpNamespace);
+//		for (query("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';")) {
+//			if (tableName.startsWith(prefix) && tableName.endsWith("-" + domainId)) {
+//				drop table table_name
+//				删目录下所有文件(不用递归)和目录本身
+//			}
+//		}
 	}
 
 }
