@@ -109,8 +109,11 @@ export function createOpsAgentMcpServer(
             const started = await diagnosisManager.startChat(
               targetSessionId,
               trimmedMessage,
-              identity.token,
-              identity.domainId
+              {
+                domainId: identity.domainId,
+                token: identity.token,
+                apiKey: identity.apiKey,
+              }
             );
             if (!started.ok) {
               return textJson({

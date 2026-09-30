@@ -14,6 +14,7 @@ const DEFAULT_BACKEND_NODE_TIMEOUT_MS = 60_000;
 
 export interface BackendNodeRequestOptions {
   token?: string;
+  apiKey?: string;
   userId?: string;
   locale?: string;
   signal?: AbortSignal;
@@ -180,7 +181,8 @@ async function getText(
   options: BackendNodeRequestOptions = {}
 ): Promise<string> {
   const response = await backendGet(endpoint, url, {
-    token: options.token || environment.queryKey(),
+    token: options.token,
+    apiKey: options.apiKey || (!options.token ? environment.queryKey() : undefined),
     userId: options.userId,
     locale: options.locale,
     timeoutMs: options.timeoutMs ?? DEFAULT_BACKEND_NODE_TIMEOUT_MS,

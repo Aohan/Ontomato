@@ -3,15 +3,14 @@ import fs from "node:fs";
 import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { buildTurnWorkspace } from "../../workspaces/builder";
 import { deleteWorkspace, getWorkspacePath, loadManifest } from "../../workspaces/store";
-import type { TkHolder } from "./tk-holder";
-import { workbenchIdentity } from "../../../../../identity/installed";
+import type { CallerHolder } from "./caller-holder";
 import { getCheckpointer } from "../../../../../infrastructure/connection";
 import { parseTurnKeyOrThrow } from "../../workspaces/turn-resolver";
 import { tApp } from "../../../../../i18n";
 
 
 /** Rebuild one Turn workspace and hand its location back to the agent. */
-export function createCollectTurnArtifactsTool(tkHolder: TkHolder): AgentTool {
+export function createCollectTurnArtifactsTool(callerHolder: CallerHolder): AgentTool {
   return {
     name: "collect_turn_artifacts",
     description:
@@ -29,16 +28,6 @@ export function createCollectTurnArtifactsTool(tkHolder: TkHolder): AgentTool {
     },
     async execute(_toolCallId, params, signal) {
       signal?.throwIfAborted();
-      if (!tkHolder.current) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: tApp("diag.observe.agent.tools.collect-turn-artifacts-tool.2"),
-            },
-          ],
-        };
-      }
       const turnKey = typeof params.turnKey === "string" ? params.turnKey.trim() : "";
       if (!turnKey) {
         return {
@@ -47,7 +36,8 @@ export function createCollectTurnArtifactsTool(tkHolder: TkHolder): AgentTool {
       }
 
       try {
-        const domainId = await workbenchIdentity().resolveCollectDomain(tkHolder.current, signal);
+        const domainId = callerHolder.current?.domainId;
+        if (!domainId) throw new Error("Diagnosis caller domain is required");
         const checkpointer = getCheckpointer();
         if (!checkpointer) throw new Error("Thread storage unavailable");
         await checkpointer.verifyThreadDomain(parseTurnKeyOrThrow(turnKey).threadId, domainId);
@@ -70,7 +60,8 @@ export function createCollectTurnArtifactsTool(tkHolder: TkHolder): AgentTool {
         const manifest = await buildTurnWorkspace({
           turnKey,
           domainId,
-          token: tkHolder.current,
+          token: callerHolder.current?.token,
+          apiKey: callerHolder.current?.apiKey,
           signal,
         });
         signal?.throwIfAborted();

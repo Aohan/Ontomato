@@ -2,7 +2,7 @@ import type { SessionContext } from "@ontomato/contracts/diagnosis";
 import type { ModelConfig } from "../../../../core/agent-loop/types";
 import { Agent, type AgentTool, type HarnessRun } from "../../../../core/agent-loop/index";
 import type { DiagnosisAgentRole } from "./role-loader";
-import type { TkHolder } from "./tools/tk-holder";
+import type { CallerHolder } from "./tools/caller-holder";
 import { createDiagnosisRuntimeCapabilities } from "./runtime-registry";
 import { sessionSystemPrompt } from "./prompt-context";
 import { createDispatchAgentTool } from "./tools/dispatch-agent-tool";
@@ -17,7 +17,7 @@ export interface ManagedSession {
   context?: SessionContext;
   /** Domain of the request that started the current response. Not a stored permission. */
   domainId?: string;
-  tkHolder: TkHolder;
+  callerHolder: CallerHolder;
   latestResponse?: SessionResponseStream;
   currentExecution?: Promise<void>;
   turnId?: string;
@@ -49,7 +49,7 @@ export function createManagedSession(sessionId: string, context?: SessionContext
     skillsIndex: runtime.skillsIndex,
     roles: runtime.roles,
     context,
-    tkHolder: runtime.tkHolder,
+    callerHolder: runtime.callerHolder,
   };
 }
 

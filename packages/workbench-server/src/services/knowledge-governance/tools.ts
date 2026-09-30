@@ -140,7 +140,13 @@ export function createGovernanceTools(
         return result({ ...page, sourceId: id, turns: history.turns });
       },
     },
-    createCollectTurnArtifactsTool({ current: credentials.token }),
+    createCollectTurnArtifactsTool({
+      current: {
+        domainId: credentials.domainId,
+        token: credentials.token,
+        apiKey: credentials.apiKey,
+      },
+    }),
     {
       name: "read_evidence",
       description:

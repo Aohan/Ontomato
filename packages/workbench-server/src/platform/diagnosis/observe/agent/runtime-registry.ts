@@ -1,13 +1,13 @@
 import type { AgentTool } from "../../../../core/agent-loop/index";
 import { loadSkills, formatSkillsIndex, resolveSkillDir, type SkillInfo } from "./skill-loader";
 import { createDiagnosisTools } from "./tools/index";
-import type { TkHolder } from "./tools/tk-holder";
+import type { CallerHolder } from "./tools/caller-holder";
 import { loadDiagnosisAgentRoles, type DiagnosisAgentRole } from "./role-loader";
 
 export interface DiagnosisRuntimeCapabilities {
   tools: AgentTool[];
   skillsIndex: string;
-  tkHolder: TkHolder;
+  callerHolder: CallerHolder;
   roles: DiagnosisAgentRole[];
 }
 
@@ -22,10 +22,10 @@ export function getDiagnosisSkillsIndex(): string {
 }
 
 export function createDiagnosisRuntimeCapabilities(): DiagnosisRuntimeCapabilities {
-  const tkHolder: TkHolder = {};
+  const callerHolder: CallerHolder = {};
   return {
-    tkHolder,
-    tools: createDiagnosisTools(tkHolder),
+    callerHolder,
+    tools: createDiagnosisTools(callerHolder),
     skillsIndex: getDiagnosisSkillsIndex(),
     roles: getDiagnosisAgentRoles(),
   };

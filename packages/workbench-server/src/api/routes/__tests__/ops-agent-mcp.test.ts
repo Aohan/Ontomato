@@ -142,7 +142,11 @@ describe("ops agent MCP router", () => {
     );
 
     expect(mocks.createSession).toHaveBeenCalled();
-    expect(mocks.startChat).toHaveBeenCalledWith("sess-1", "hello", undefined, "default");
+    expect(mocks.startChat).toHaveBeenCalledWith("sess-1", "hello", {
+      domainId: "default",
+      token: undefined,
+      apiKey: undefined,
+    });
     expect(result).toEqual({
       status: "completed",
       sessionId: "sess-1",
@@ -188,8 +192,11 @@ describe("ops agent MCP router", () => {
     expect(mocks.startChat).toHaveBeenCalledWith(
       "sess-existing",
       "more context",
-      undefined,
-      "default"
+      {
+        domainId: "default",
+        token: undefined,
+        apiKey: undefined,
+      }
     );
     expect(result).toEqual({
       status: "completed",

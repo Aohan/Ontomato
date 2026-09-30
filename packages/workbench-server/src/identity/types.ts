@@ -47,11 +47,6 @@ export interface WorkbenchIdentity {
     domainId?: string | null;
   }): Promise<{ userId: string; domainId: string }>;
   /**
-   * Re-collects artifacts. The caller already required a non-empty tk.
-   * Enterprise verifies this token's domain; OSS does not interpret the token and uses domain default.
-   */
-  resolveCollectDomain(token: string, signal?: AbortSignal): Promise<string>;
-  /**
    * Enterprise: the API Key in tool parameters wins, then the API Key in the request, then the token.
    * OSS never reads these credentials and stays on the fixed system/default, nor writes the caller's API Key into the task.
    */

@@ -9,7 +9,7 @@ import { getBackendConfig } from "../../backend-config-fetcher";
 import { resolveSkillDir } from "../skill-loader";
 import { m3DiagnosticSupport } from "../../m3-support";
 import { runtimeDefaults } from "../../../../../runtime/defaults";
-import type { TkHolder } from "./tk-holder";
+import type { CallerHolder } from "./caller-holder";
 import { tApp } from "../../../../../i18n";
 
 
@@ -30,7 +30,7 @@ function queryLanguage(dataAdapter: string): string {
   return dataAdapter === "m3" && m3 ? m3.queryLanguage : tApp("diag.observe.agent.tools.data-query-execute-tool.0", { p0: dataAdapter });
 }
 
-export function createDataQueryExecuteTool(tkHolder: TkHolder): AgentTool {
+export function createDataQueryExecuteTool(callerHolder: CallerHolder): AgentTool {
   const dataAdapter = getBackendConfig()?.dataAdapter || runtimeDefaults().defaultDataAdapter;
   const language = queryLanguage(dataAdapter);
   let description =
@@ -60,18 +60,6 @@ export function createDataQueryExecuteTool(tkHolder: TkHolder): AgentTool {
       required: ["query"],
     },
     async execute(_toolCallId, params, signal) {
-      const tk = tkHolder.current;
-      if (!tk) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: tApp("diag.observe.agent.tools.data-query-execute-tool.5"),
-            },
-          ],
-        };
-      }
-
       const query = typeof params.query === "string" ? params.query.trim() : "";
       if (!query) {
         return { content: [{ type: "text", text: tApp("diag.observe.agent.tools.data-query-execute-tool.6") }] };
@@ -87,7 +75,13 @@ export function createDataQueryExecuteTool(tkHolder: TkHolder): AgentTool {
           ENDPOINT,
           url,
           { sql: query },
-          { token: tk, timeoutMs: 30_000, retries: 1, signal }
+          {
+            token: callerHolder.current?.token,
+            apiKey: callerHolder.current?.apiKey,
+            timeoutMs: 30_000,
+            retries: 1,
+            signal,
+          }
         );
         let json: Record<string, unknown> = {};
         try {

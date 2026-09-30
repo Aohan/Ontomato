@@ -2,7 +2,7 @@ import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
-import type { TkHolder } from "./tk-holder";
+import type { CallerHolder } from "./caller-holder";
 import { tApp } from "../../../../../i18n";
 
 
@@ -237,7 +237,7 @@ function formatConfig(
  * to a single top-level section. tk is read from the per-session holder at
  * execute time.
  */
-export function createViewAppConfigTool(tkHolder: TkHolder): AgentTool {
+export function createViewAppConfigTool(callerHolder: CallerHolder): AgentTool {
   return {
     name: "view_app_config",
     description:
@@ -253,18 +253,6 @@ export function createViewAppConfigTool(tkHolder: TkHolder): AgentTool {
       },
     },
     async execute(_toolCallId, params) {
-      const tk = tkHolder.current;
-      if (!tk) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: tApp("diag.observe.agent.tools.view-app-config-tool.14"),
-            },
-          ],
-        };
-      }
-
       const apiConfig = getApiConfig();
       if (!apiConfig.baseUrl) {
         return {
@@ -280,7 +268,8 @@ export function createViewAppConfigTool(tkHolder: TkHolder): AgentTool {
       try {
         const url = buildUrl(apiConfig, ENDPOINT);
         const resp = await backendGet(ENDPOINT, url, {
-          token: tk,
+          token: callerHolder.current?.token,
+          apiKey: callerHolder.current?.apiKey,
           timeoutMs: 15_000,
           retries: 1,
         });
