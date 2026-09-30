@@ -12,7 +12,7 @@ describe("oss identity", () => {
     expect(workbenchIdentity().requireDomainId({})).toBe("default");
   });
 
-  it("does not verify a saved task token or a collect token", async () => {
+  it("does not verify a saved task token", async () => {
     const fetchMock = vi.fn(async () => {
       throw new Error("must not verify");
     });
@@ -22,7 +22,6 @@ describe("oss identity", () => {
       domainId: "row-domain",
       token: "saved-token",
     });
-    await expect(workbenchIdentity().resolveCollectDomain("any-token")).resolves.toBe("default");
     expect(fetchMock).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });

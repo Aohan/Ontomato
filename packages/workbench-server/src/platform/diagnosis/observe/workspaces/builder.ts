@@ -38,6 +38,7 @@ export interface BuildTurnWorkspaceOptions {
   turnKey: string;
   domainId: string;
   token?: string;
+  apiKey?: string;
   signal?: AbortSignal;
 }
 
@@ -50,7 +51,7 @@ export interface BuildTurnWorkspaceOptions {
 export async function buildTurnWorkspace(
   options: BuildTurnWorkspaceOptions
 ): Promise<WorkspaceManifest> {
-  const { turnKey, token, domainId } = options;
+  const { turnKey, token, apiKey, domainId } = options;
   options.signal?.throwIfAborted();
   const checkpointer = getCheckpointer();
   if (!checkpointer) throw new Error("Thread storage unavailable");
@@ -93,6 +94,7 @@ export async function buildTurnWorkspace(
       taskId: composition?.taskId,
       compositeRun,
       token,
+      apiKey,
       signal: options.signal,
     });
 

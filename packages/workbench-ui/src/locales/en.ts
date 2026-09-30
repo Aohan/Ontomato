@@ -745,6 +745,9 @@ export default {
     "discoveryFailed": "Could not discover tools. Check the service URL and headers, then retry.",
     "agentService": "Agent service",
     "publishedAuthHint": "No API key is required to discover agents, start tasks or retrieve results in the open-source edition.",
+    "opsAgentService": "Operations agent service",
+    "opsPublishedAuthHint": "No API key is required in the open-source edition. Call send with a message to start a session; pass the returned sessionId to continue it, and call send with only the sessionId to fetch the result of a run that is still in progress.",
+    "availableTools": "Available tools",
     "noTools": "This service has no tools yet."
   },
   "task": {

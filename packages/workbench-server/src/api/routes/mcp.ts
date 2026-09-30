@@ -1,5 +1,6 @@
 import { Request, Response, Router } from "express";
 import { getAnalysisAgentMcpToolCatalog } from "./analysis-agent-mcp";
+import { getOpsAgentMcpToolCatalog } from "./ops-agent-mcp";
 import { buildMcpSystemToolsResponse, buildMcpToolsResponse } from "../../services/mcp/catalog";
 import { asyncHandler } from "../utils/http";
 import mcpServicesRouter from "./mcp-services";
@@ -10,7 +11,11 @@ router.use("/services", mcpServicesRouter);
 router.get(
   "/system/tools",
   asyncHandler(async (req: Request, res: Response) => {
-    const response = await buildMcpSystemToolsResponse(req, await getAnalysisAgentMcpToolCatalog());
+    const [analysisTools, opsTools] = await Promise.all([
+      getAnalysisAgentMcpToolCatalog(),
+      getOpsAgentMcpToolCatalog(),
+    ]);
+    const response = await buildMcpSystemToolsResponse(req, analysisTools, opsTools);
     res.json(response);
   })
 );

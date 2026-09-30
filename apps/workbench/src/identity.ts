@@ -39,10 +39,6 @@ export const ossIdentity: WorkbenchIdentity = {
     return { userId: "system", domainId: input.domainId || "default" };
   },
 
-  async resolveCollectDomain() {
-    return "default";
-  },
-
   async resolveMcpCaller() {
     return { userId: "system", domainId: "default" };
   },
@@ -63,6 +59,8 @@ export const ossIdentity: WorkbenchIdentity = {
   guardMcpServiceManagement: pass,
 
   observeAccess: pass,
+
+  async assertObserveAccess() {},
 
   requireDomainId() {
     return "default";

@@ -22,6 +22,7 @@ import { diagnosisSessions } from "./diagnosis-sessions";
 import { DIAGNOSIS_COMPACTION_PROMPT_KEYS, diagnosisSummaryNote } from "./compaction/index";
 import { bindResponseAgent, createManagedSession, type ManagedSession } from "./session-runtime";
 import { executeResponse, logger } from "./session-response";
+import type { DiagnosisCallerIdentity } from "./tools/caller-identity";
 import { tApp } from "../../../../i18n";
 
 
@@ -104,55 +105,54 @@ export class DiagnosisSessionManager {
   async startChat(
     sessionId: string,
     message: string,
-    tk?: string,
-    domainId?: string
+    caller: DiagnosisCallerIdentity
   ): Promise<StartChatResult> {
-    return runWithLogContext({ domainId, token: tk }, async () => {
-      const row = await diagnosisSessions.get(sessionId);
-      if (!row)
-        return { ok: false, status: 404, code: "SESSION_NOT_FOUND", error: "Session not found" };
-      if (row.responseStatus === "running")
-        return {
-          ok: false,
-          status: 409,
-          code: "RESPONSE_BUSY",
-          error: "Session response already running",
-        };
-      let captured: ModelConfig;
-      let contextWindow: number;
-      try {
-        const entry = await resolveModelForRole("diagnosis");
-        captured = {
-          baseUrl: entry.baseUrl,
-          apiKey: entry.apiKey,
-          modelName: entry.modelName,
-          maxTokens: entry.maxTokens,
-          modelKwargs: entry.customRequestParameters,
-        };
-        contextWindow = entry.contextWindow;
-      } catch (error) {
-        if (error instanceof ModelNotConfiguredError)
-          return { ok: false, status: 400, code: "MODEL_NOT_CONFIGURED", error: error.message };
-        throw error;
-      }
-      let turnId: string;
-      try {
-        turnId = (await harnessSessions.beginTurn(sessionId)).turnId;
-      } catch (error) {
-        if (error instanceof HarnessSessionBusyError)
-          return { ok: false, status: 409, code: "RESPONSE_BUSY", error: error.message };
-        throw error;
-      }
-      const stream = new SessionResponseStream();
-      let managed: ManagedSession | undefined;
-      try {
-        managed = createManagedSession(sessionId, row.context);
-        managed.domainId = domainId;
-        managed.tkHolder.current = tk;
-        managed.latestResponse = stream;
-        managed.turnId = turnId;
-        this.sessions.get(sessionId)?.agent?.dispose();
-        this.sessions.set(sessionId, managed);
+    return runWithLogContext(
+      { domainId: caller.domainId, token: caller.token, apiKey: caller.apiKey },
+      async () => {
+        const row = await diagnosisSessions.get(sessionId);
+        if (!row)
+          return { ok: false, status: 404, code: "SESSION_NOT_FOUND", error: "Session not found" };
+        if (row.responseStatus === "running")
+          return {
+            ok: false,
+            status: 409,
+            code: "RESPONSE_BUSY",
+            error: "Session response already running",
+          };
+        let captured: ModelConfig;
+        let contextWindow: number;
+        try {
+          const entry = await resolveModelForRole("diagnosis");
+          captured = {
+            baseUrl: entry.baseUrl,
+            apiKey: entry.apiKey,
+            modelName: entry.modelName,
+            maxTokens: entry.maxTokens,
+            modelKwargs: entry.customRequestParameters,
+          };
+          contextWindow = entry.contextWindow;
+        } catch (error) {
+          if (error instanceof ModelNotConfiguredError)
+            return { ok: false, status: 400, code: "MODEL_NOT_CONFIGURED", error: error.message };
+          throw error;
+        }
+        let turnId: string;
+        try {
+          turnId = (await harnessSessions.beginTurn(sessionId)).turnId;
+        } catch (error) {
+          if (error instanceof HarnessSessionBusyError)
+            return { ok: false, status: 409, code: "RESPONSE_BUSY", error: error.message };
+          throw error;
+        }
+        const stream = new SessionResponseStream();
+        let managed: ManagedSession | undefined;
+        try {
+          managed = createManagedSession(sessionId, row.context, caller);
+          managed.latestResponse = stream;
+          managed.turnId = turnId;
+          this.sessions.get(sessionId)?.agent?.dispose();
+          this.sessions.set(sessionId, managed);
         const run = await createHarnessRun(harnessSessions, {
           sessionId,
           turnId,

@@ -14,6 +14,7 @@ import { listMcpTools } from "./client";
 
 const logger = createLogger("api:mcp");
 const ANALYSIS_AGENT_MCP_SUFFIX = "/mcp/analysis-agents";
+const OPS_AGENT_MCP_SUFFIX = "/mcp/ops-agent";
 
 export type McpRequestLocation = { protocol: string; headers: Record<string, unknown> };
 
@@ -41,6 +42,10 @@ function getAnalysisAgentMcpUrl(req: McpRequestLocation): string {
   return host ? `${proto}://${host}${path}` : path;
 }
 
+function getOpsAgentMcpUrl(req: McpRequestLocation): string {
+  return `${analysisAgentPublicServiceRoot(req)}${OPS_AGENT_MCP_SUFFIX}`;
+}
+
 /** Strips the trailing `/mcp/analysis-agents` from the external MCP address to get the service root with the same mount prefix as `/api`. */
 export function analysisAgentPublicServiceRoot(req: McpRequestLocation): string {
   const mcpUrl = getAnalysisAgentMcpUrl(req);
@@ -56,10 +61,12 @@ export function analysisReportPdfDownloadUrl(serviceRoot: string, taskId: string
 
 export async function buildMcpSystemToolsResponse(
   req: McpRequestLocation,
-  analysisAgentMcpTools: McpToolDesc[]
+  analysisAgentMcpTools: McpToolDesc[],
+  opsAgentMcpTools: McpToolDesc[]
 ): Promise<SystemMcpToolsResponse> {
   const mcpServerUrl = getSystemMcpUrl();
   const analysisMcpUrl = getAnalysisAgentMcpUrl(req);
+  const opsMcpUrl = getOpsAgentMcpUrl(req);
   const product = workbenchProduct();
   const services: SystemMcpService[] = [
     {
@@ -67,6 +74,12 @@ export async function buildMcpSystemToolsResponse(
       title: `${product.serviceDisplayName} Agents MCP`,
       mcpUrl: analysisMcpUrl,
       tools: analysisAgentMcpTools.map(toolToClient),
+    },
+    {
+      name: product.opsMcpServerName,
+      title: `${product.serviceDisplayName} Ops Agent MCP`,
+      mcpUrl: opsMcpUrl,
+      tools: opsAgentMcpTools.map(toolToClient),
     },
   ];
   let tools: Awaited<ReturnType<typeof listMcpTools>> = [];
@@ -118,3 +131,4 @@ export async function buildMcpToolsResponse(
     };
   }
 }
+

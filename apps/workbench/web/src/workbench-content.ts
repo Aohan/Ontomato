@@ -46,6 +46,7 @@ export const workbenchContent: WorkbenchContent = {
     /data results for <strong>"([^"\n]+)"<\/strong> are as follows:|(?:Based on the steps above, |For <strong>)<strong>«([^»]+)»<\/strong> the data results are as follows:|For <strong>«([^»]+)»<\/strong> the results are as follows:/g,
   skillListSeparator: ",",
   analysisMcpServerName: ossProduct.analysisMcpServerName,
+  opsMcpServerName: ossProduct.opsMcpServerName,
   agentDialogDisplay: { requireAsteriskPosition: "right", fitInputWidth: true, labelWrap: true },
   analysisAgentLoadErrorSeparator: ": ",
   skillDebugEchartsInput: JSON.stringify(

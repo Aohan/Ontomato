@@ -41,6 +41,8 @@ export interface WorkbenchContent {
   skillListSeparator: string;
   /** Analysis agent MCP server name, the same value as Node product.analysisMcpServerName: identifies that server among published services on the MCP page (McpManager.vue). */
   analysisMcpServerName: string;
+  /** Operations agent MCP server name, the same value as Node product.opsMcpServerName: identifies that server the same way (McpManager.vue). */
+  opsMcpServerName: string;
   /**
    * Original display of the agent edit dialog (AgentCreateDialog); the chat and admin entries pass the same value: the
    * open-source chat layout and the admin "analysis agents" page (AnalysisAgentManager, whose own form labels also follow

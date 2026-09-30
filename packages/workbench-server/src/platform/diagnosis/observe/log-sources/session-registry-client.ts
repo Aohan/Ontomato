@@ -57,7 +57,9 @@ export async function lookupSessionRegistryRows(
   const url = `${buildUrl(apiConfig, SESSION_REGISTRY_ENDPOINT)}?sessionId=${encodeURIComponent(sessionId)}`;
   try {
     const resp = await backendGet(SESSION_REGISTRY_ENDPOINT, url, {
-      token: options.token || environment.queryKey(),
+      // Without any caller credential the configured query key is sent as before.
+      token: options.token || (options.apiKey ? undefined : environment.queryKey()),
+      apiKey: options.apiKey,
       userId: options.userId,
       locale: options.locale,
       timeoutMs: options.timeoutMs ?? 60_000,
