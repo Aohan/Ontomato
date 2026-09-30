@@ -7,7 +7,7 @@ import {
   type HarnessTurnStatus,
 } from "../../infrastructure/harness-sessions";
 import { renderPrompt, getPromptTemplate } from "../../core/prompts/loader";
-import { resolveModelForRole } from "../../config/model-resolver";
+import { ModelNotConfiguredError, resolveModelForRole } from "../../config/model-resolver";
 import { runWithLogContext } from "../../logging/log-context";
 import { createLogger } from "../../logging/logger";
 import { HttpError } from "../../utils/errors";
@@ -177,8 +177,11 @@ export class GovernanceRuntime {
     } catch (error) {
       terminal = signal.aborted ? "cancelled" : "failed";
       if (!signal.aborted) {
+        // 角色未配置模型时直接给出已本地化的原因，其余失败仍用通用提示。
         record.error =
-          "The governance response could not finish. Saved work is retained; please retry.";
+          error instanceof ModelNotConfiguredError
+            ? error.message
+            : "The governance response could not finish. Saved work is retained; please retry.";
         logger.error("Governance response failed", { sessionId: record.id, error: String(error) });
       }
     }
