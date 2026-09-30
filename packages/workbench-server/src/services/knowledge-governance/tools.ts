@@ -141,11 +141,9 @@ export function createGovernanceTools(
       },
     },
     createCollectTurnArtifactsTool({
-      current: {
-        domainId: credentials.domainId,
-        token: credentials.token,
-        apiKey: credentials.apiKey,
-      },
+      domainId: credentials.domainId,
+      token: credentials.token,
+      apiKey: credentials.apiKey,
     }),
     {
       name: "read_evidence",

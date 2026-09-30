@@ -3,14 +3,14 @@ import fs from "node:fs";
 import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { buildTurnWorkspace } from "../../workspaces/builder";
 import { deleteWorkspace, getWorkspacePath, loadManifest } from "../../workspaces/store";
-import type { CallerHolder } from "./caller-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { getCheckpointer } from "../../../../../infrastructure/connection";
 import { parseTurnKeyOrThrow } from "../../workspaces/turn-resolver";
 import { tApp } from "../../../../../i18n";
 
 
 /** Rebuild one Turn workspace and hand its location back to the agent. */
-export function createCollectTurnArtifactsTool(callerHolder: CallerHolder): AgentTool {
+export function createCollectTurnArtifactsTool(caller: DiagnosisCallerIdentity): AgentTool {
   return {
     name: "collect_turn_artifacts",
     description:
@@ -36,8 +36,7 @@ export function createCollectTurnArtifactsTool(callerHolder: CallerHolder): Agen
       }
 
       try {
-        const domainId = callerHolder.current?.domainId;
-        if (!domainId) throw new Error("Diagnosis caller domain is required");
+        const domainId = caller.domainId;
         const checkpointer = getCheckpointer();
         if (!checkpointer) throw new Error("Thread storage unavailable");
         await checkpointer.verifyThreadDomain(parseTurnKeyOrThrow(turnKey).threadId, domainId);
@@ -60,8 +59,8 @@ export function createCollectTurnArtifactsTool(callerHolder: CallerHolder): Agen
         const manifest = await buildTurnWorkspace({
           turnKey,
           domainId,
-          token: callerHolder.current?.token,
-          apiKey: callerHolder.current?.apiKey,
+          token: caller.token,
+          apiKey: caller.apiKey,
           signal,
         });
         signal?.throwIfAborted();

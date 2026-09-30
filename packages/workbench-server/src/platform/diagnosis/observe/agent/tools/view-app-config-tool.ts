@@ -2,7 +2,7 @@ import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
-import type { CallerHolder } from "./caller-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { tApp } from "../../../../../i18n";
 
 
@@ -237,7 +237,7 @@ function formatConfig(
  * to a single top-level section. tk is read from the per-session holder at
  * execute time.
  */
-export function createViewAppConfigTool(callerHolder: CallerHolder): AgentTool {
+export function createViewAppConfigTool(caller: DiagnosisCallerIdentity): AgentTool {
   return {
     name: "view_app_config",
     description:
@@ -268,8 +268,8 @@ export function createViewAppConfigTool(callerHolder: CallerHolder): AgentTool {
       try {
         const url = buildUrl(apiConfig, ENDPOINT);
         const resp = await backendGet(ENDPOINT, url, {
-          token: callerHolder.current?.token,
-          apiKey: callerHolder.current?.apiKey,
+          token: caller.token,
+          apiKey: caller.apiKey,
           timeoutMs: 15_000,
           retries: 1,
         });

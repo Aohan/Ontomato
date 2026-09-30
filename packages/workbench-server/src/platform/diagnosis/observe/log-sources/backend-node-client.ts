@@ -181,8 +181,9 @@ async function getText(
   options: BackendNodeRequestOptions = {}
 ): Promise<string> {
   const response = await backendGet(endpoint, url, {
-    token: options.token,
-    apiKey: options.apiKey || (!options.token ? environment.queryKey() : undefined),
+    // Without any caller credential the configured query key is sent as before.
+    token: options.token || (options.apiKey ? undefined : environment.queryKey()),
+    apiKey: options.apiKey,
     userId: options.userId,
     locale: options.locale,
     timeoutMs: options.timeoutMs ?? DEFAULT_BACKEND_NODE_TIMEOUT_MS,

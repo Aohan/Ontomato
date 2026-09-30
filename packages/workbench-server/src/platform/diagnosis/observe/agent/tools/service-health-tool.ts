@@ -2,7 +2,7 @@ import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
-import type { CallerHolder } from "./caller-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { m3DiagnosticSupport } from "../../m3-support";
 import { workbenchProduct } from "../../../../../product/installed";
 import { tApp } from "../../../../../i18n";
@@ -300,7 +300,7 @@ function formatReport(status: SystemStatus): string {
  * does not list those services. tk is read from the
  * per-session holder at execute time. Read-only: never starts/stops services.
  */
-export function createServiceHealthTool(callerHolder: CallerHolder): AgentTool {
+export function createServiceHealthTool(caller: DiagnosisCallerIdentity): AgentTool {
   return {
     name: "service_health",
     description:
@@ -325,8 +325,8 @@ export function createServiceHealthTool(callerHolder: CallerHolder): AgentTool {
       try {
         const url = buildUrl(apiConfig, ENDPOINT);
         const resp = await backendGet(ENDPOINT, url, {
-          token: callerHolder.current?.token,
-          apiKey: callerHolder.current?.apiKey,
+          token: caller.token,
+          apiKey: caller.apiKey,
           timeoutMs: 15_000,
           retries: 1,
         });

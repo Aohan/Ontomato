@@ -22,7 +22,7 @@ import { diagnosisSessions } from "./diagnosis-sessions";
 import { DIAGNOSIS_COMPACTION_PROMPT_KEYS, diagnosisSummaryNote } from "./compaction/index";
 import { bindResponseAgent, createManagedSession, type ManagedSession } from "./session-runtime";
 import { executeResponse, logger } from "./session-response";
-import type { DiagnosisCallerIdentity } from "./tools/caller-holder";
+import type { DiagnosisCallerIdentity } from "./tools/caller-identity";
 import { tApp } from "../../../../i18n";
 
 
@@ -148,9 +148,7 @@ export class DiagnosisSessionManager {
         const stream = new SessionResponseStream();
         let managed: ManagedSession | undefined;
         try {
-          managed = createManagedSession(sessionId, row.context);
-          managed.domainId = caller.domainId;
-          managed.callerHolder.current = caller;
+          managed = createManagedSession(sessionId, row.context, caller);
           managed.latestResponse = stream;
           managed.turnId = turnId;
           this.sessions.get(sessionId)?.agent?.dispose();

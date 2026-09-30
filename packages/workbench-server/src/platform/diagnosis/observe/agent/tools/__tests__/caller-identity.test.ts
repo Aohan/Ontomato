@@ -57,7 +57,7 @@ describe("diagnosis tools caller identity", () => {
     };
 
     // 1) Service health tool forwards apiKey
-    const healthTool = createServiceHealthTool({ current: caller });
+    const healthTool = createServiceHealthTool(caller);
     await healthTool.execute("call-health", {});
 
     expect(mocks.backendGet).toHaveBeenCalledWith(
@@ -70,7 +70,7 @@ describe("diagnosis tools caller identity", () => {
     );
 
     // 2) Collect tool uses session domain and forwards apiKey to buildTurnWorkspace
-    const collectTool = createCollectTurnArtifactsTool({ current: caller });
+    const collectTool = createCollectTurnArtifactsTool(caller);
     await collectTool.execute("call-collect", { turnKey: "turn.thread-1.0" });
 
     expect(mocks.verifyThreadDomain).toHaveBeenCalledWith("thread-1", "test-domain");
@@ -89,7 +89,7 @@ describe("diagnosis tools caller identity", () => {
       domainId: "default",
     };
 
-    const healthTool = createServiceHealthTool({ current: caller });
+    const healthTool = createServiceHealthTool(caller);
     await healthTool.execute("call-health-oss", {});
 
     expect(mocks.backendGet).toHaveBeenCalledWith(

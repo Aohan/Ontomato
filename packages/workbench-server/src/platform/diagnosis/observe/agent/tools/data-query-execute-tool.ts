@@ -9,7 +9,7 @@ import { getBackendConfig } from "../../backend-config-fetcher";
 import { resolveSkillDir } from "../skill-loader";
 import { m3DiagnosticSupport } from "../../m3-support";
 import { runtimeDefaults } from "../../../../../runtime/defaults";
-import type { CallerHolder } from "./caller-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { tApp } from "../../../../../i18n";
 
 
@@ -30,7 +30,7 @@ function queryLanguage(dataAdapter: string): string {
   return dataAdapter === "m3" && m3 ? m3.queryLanguage : tApp("diag.observe.agent.tools.data-query-execute-tool.0", { p0: dataAdapter });
 }
 
-export function createDataQueryExecuteTool(callerHolder: CallerHolder): AgentTool {
+export function createDataQueryExecuteTool(caller: DiagnosisCallerIdentity): AgentTool {
   const dataAdapter = getBackendConfig()?.dataAdapter || runtimeDefaults().defaultDataAdapter;
   const language = queryLanguage(dataAdapter);
   let description =
@@ -76,8 +76,8 @@ export function createDataQueryExecuteTool(callerHolder: CallerHolder): AgentToo
           url,
           { sql: query },
           {
-            token: callerHolder.current?.token,
-            apiKey: callerHolder.current?.apiKey,
+            token: caller.token,
+            apiKey: caller.apiKey,
             timeoutMs: 30_000,
             retries: 1,
             signal,

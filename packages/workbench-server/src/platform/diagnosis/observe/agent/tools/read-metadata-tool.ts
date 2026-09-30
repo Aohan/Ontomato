@@ -2,7 +2,7 @@ import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet, backendPost } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
-import type { CallerHolder } from "./caller-holder";
+import type { DiagnosisCallerIdentity } from "./caller-identity";
 import { tApp } from "../../../../../i18n";
 
 
@@ -103,7 +103,7 @@ function hasJsonRule(data: Record<string, unknown>): boolean {
  * (`POST /admin/getschemamarkdown-v2`). tk is read from the per-session holder at
  * execute time.
  */
-export function createReadMetadataTool(callerHolder: CallerHolder): AgentTool {
+export function createReadMetadataTool(caller: DiagnosisCallerIdentity): AgentTool {
   return {
     name: "read_metadata",
     description:
@@ -139,8 +139,8 @@ export function createReadMetadataTool(callerHolder: CallerHolder): AgentTool {
         const resp =
           format === "json"
             ? await backendGet(endpoint, url, {
-                token: callerHolder.current?.token,
-                apiKey: callerHolder.current?.apiKey,
+                token: caller.token,
+                apiKey: caller.apiKey,
                 timeoutMs: 15_000,
                 retries: 1,
               })
@@ -149,8 +149,8 @@ export function createReadMetadataTool(callerHolder: CallerHolder): AgentTool {
                 url,
                 {},
                 {
-                  token: callerHolder.current?.token,
-                  apiKey: callerHolder.current?.apiKey,
+                  token: caller.token,
+                  apiKey: caller.apiKey,
                   timeoutMs: 15_000,
                   retries: 1,
                 }

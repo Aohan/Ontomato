@@ -1,13 +1,12 @@
 import type { AgentTool } from "../../../../core/agent-loop/index";
 import { loadSkills, formatSkillsIndex, resolveSkillDir, type SkillInfo } from "./skill-loader";
 import { createDiagnosisTools } from "./tools/index";
-import type { CallerHolder } from "./tools/caller-holder";
+import type { DiagnosisCallerIdentity } from "./tools/caller-identity";
 import { loadDiagnosisAgentRoles, type DiagnosisAgentRole } from "./role-loader";
 
 export interface DiagnosisRuntimeCapabilities {
   tools: AgentTool[];
   skillsIndex: string;
-  callerHolder: CallerHolder;
   roles: DiagnosisAgentRole[];
 }
 
@@ -21,11 +20,11 @@ export function getDiagnosisSkillsIndex(): string {
   return formatSkillsIndex(cachedSkills);
 }
 
-export function createDiagnosisRuntimeCapabilities(): DiagnosisRuntimeCapabilities {
-  const callerHolder: CallerHolder = {};
+export function createDiagnosisRuntimeCapabilities(
+  caller: DiagnosisCallerIdentity
+): DiagnosisRuntimeCapabilities {
   return {
-    callerHolder,
-    tools: createDiagnosisTools(callerHolder),
+    tools: createDiagnosisTools(caller),
     skillsIndex: getDiagnosisSkillsIndex(),
     roles: getDiagnosisAgentRoles(),
   };

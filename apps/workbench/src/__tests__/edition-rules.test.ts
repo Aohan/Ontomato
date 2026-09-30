@@ -272,7 +272,7 @@ describe("open-source edition rules", () => {
   });
 
   it("C5: reports service health with this edition's groups and M3 rules", async () => {
-    const tool = createServiceHealthTool({ current: { domainId: "default", token: "tk" } });
+    const tool = createServiceHealthTool({ domainId: "default", token: "tk" });
     mocks.upstream["/maintenance/getserviceinfo"] = {
       m3: { services: [{ name: "m3-parser", status: "stopped" }, { name: "m3-core", status: "running" }] },
       backend: { service: { status: "stopped" } },
@@ -311,7 +311,7 @@ describe("open-source edition rules", () => {
 
     withAdapter({});
     expect(await fetchBackendConfig("tk")).toEqual({ dataAdapter: "sql" });
-    expect(createDataQueryExecuteTool({ current: { domainId: "default", token: "tk" } }).description).toContain(
+    expect(createDataQueryExecuteTool({ domainId: "default", token: "tk" }).description).toContain(
       "The current data adapter is sql; please submit sql dialect SQL"
     );
 
@@ -321,14 +321,14 @@ describe("open-source edition rules", () => {
     fs.writeFileSync(reference, "reference");
     withAdapter({ dataAdapter: "m3" });
     await fetchBackendConfig("tk");
-    const m3Description = createDataQueryExecuteTool({ current: { domainId: "default", token: "tk" } }).description;
+    const m3Description = createDataQueryExecuteTool({ domainId: "default", token: "tk" }).description;
     expect(m3Description).toContain("The current data adapter is m3; please submit m3 dialect SQL");
     expect(m3Description).not.toContain("MQL");
     expect(m3Description).not.toContain(reference);
 
     withAdapter({ dataAdapter: "mysql" });
     expect(await fetchBackendConfig("tk")).toEqual({ dataAdapter: "mysql" });
-    expect(createDataQueryExecuteTool({ current: { domainId: "default", token: "tk" } }).description).toContain(
+    expect(createDataQueryExecuteTool({ domainId: "default", token: "tk" }).description).toContain(
       "The current data adapter is mysql; please submit mysql dialect SQL"
     );
   });
