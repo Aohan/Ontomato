@@ -31,7 +31,7 @@ vi.mock("@ontomato/workbench-server/infrastructure/postgres", async (importOrigi
 vi.mock("@ontomato/workbench-server/core/skills/registry/manager", () => ({
   skillRegistryManager: {
     forDomain: async () => ({
-      getSkills: () => [{ id: "bar-skill", manifest: { title: "Bar", supportedChartTypes: ["bar"] } }],
+      getSkills: () => [{ id: "bar-skill", manifest: { title: "Bar" } }],
     }),
   },
 }));
