@@ -8,7 +8,7 @@ installWorkbenchContent(workbenchContent);
 const reasons = (type: string) =>
   new EchartsGenerator().generateWithHealth(type, "t", {}, []).health.reasons;
 
-// 公开方法 generateWithHealth 按本版装配返回原因原句；多图表共用句带出各自图表名。
+// The public method generateWithHealth returns the original reason sentences for this edition's assembly; sentences shared by several charts carry each chart's name.
 it("returns this edition's original health reasons", () => {
   expect(reasons("radar")).toEqual([
     "radar: radar.indicator is empty",

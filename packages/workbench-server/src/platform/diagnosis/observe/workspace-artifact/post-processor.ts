@@ -24,7 +24,7 @@ import type { PostProcessStatusFile, PostProcessStatusItem } from "../types";
  *  3.  Two-path prompt extraction + merge + write:
  *      - Frontend (data-agent LLM logs) — independent, slotId="front"
  *      - Backend agent-llm structured logs — slotId="s1"
- *      → unified writer outputs all conversations to 提示词/
+ *      → unified writer outputs all conversations to prompts/
  *  4.  Extract errors -> errors.log
  *  5.  Extract MQLS logic -> mqls_logic.md (diagnostic-events only)
  *  6.  Generate summary.md as a lightweight diagnostic evidence index
@@ -60,7 +60,7 @@ export interface WorkspaceArtifactLogResult {
   backendLogCount: number;
   backendAgentLlmCount?: number;
   backendDiagnosticEventCount?: number;
-  /** 逐个后端会话的取回状态 */
+  /** Retrieval status per backend session */
   backendSessions: WorkspaceBackendSessionEvidence[];
   backendLogMessage?: string;
 }
@@ -80,10 +80,10 @@ export interface BuildWorkspaceArtifactInput {
   taskId?: string;
   artifactDir: string;
   metadata: WorkspaceArtifactSummaryMetadata;
-  /** 查询记录里的后端会话列表 */
+  /** Backend session list in the query record */
   backendSessions?: QueryBackendSession[];
   backendTimeWindow?: BackendLogTimeWindow;
-  /** 问数实际起止（来自 turn run），随工作区生成时间一起写进 manifest */
+  /** Actual query start/end (from the turn run), written into the manifest together with the workspace generation time */
   turnStartedAt?: string;
   turnEndedAt?: string;
   frontendLogTimeWindow?: LogFileTimeWindow;
@@ -143,7 +143,7 @@ export async function buildWorkspaceArtifact(
   let logCollectionError: string | undefined;
 
   if (input.records) {
-    // 日志是环境级证据，不按域过滤记录。
+    // Logs are environment-level evidence; records are not filtered by domain.
     collectedRecords = includeFrontendLogs
       ? input.records
       : input.records.filter((record) => record.source === "backend");
@@ -240,7 +240,7 @@ interface ArtifactPostProcessingInput {
   taskId?: string;
   metadata: WorkspaceArtifactSummaryMetadata;
   logResult: WorkspaceArtifactLogResult;
-  /** 提示词还原与逻辑抽取按这些会话号（含派生号）过滤 */
+  /** Prompt restoration and logic extraction filter by these session numbers (including derived ones) */
   backendSessionIds: string[];
   records: ParsedLogRecord[];
   includeFrontendLogs: boolean;
@@ -423,7 +423,7 @@ function buildEvidenceStatusItems(input: {
     })
   );
 
-  // 后端会话相关条目按查询记录里的会话列表、逐“会话 + 节点”写（设计 7、12）。
+  // Backend-session entries are written per session + node from the query record's session list (design 7, 12).
   const sessions = logResult.backendSessions;
   recordStatus(items, "backend_sessions", buildBackendSessionsStatus(sessions));
 
@@ -467,7 +467,7 @@ function buildEvidenceStatusItems(input: {
   return items;
 }
 
-/** 会话列表条目：逐会话逐节点写明时间窗、条数、取消与缺失原因，详情一并进 post_process_status。 */
+/** Session list entries: per session and per node, the time window, count, cancellation, and missing reasons; details also land in post_process_status. */
 function buildBackendSessionsStatus(
   sessions: WorkspaceBackendSessionEvidence[]
 ): PostProcessStatusItem {
@@ -603,7 +603,7 @@ function inferLogResultFromRecords(
     backendLogCount: records.filter((record) => record.source === "backend").length,
     backendAgentLlmCount: 0,
     backendDiagnosticEventCount: 0,
-    // 调用方直接给出记录时不做后端采集，只保留查询记录定位到的会话与节点。
+    // When the caller provides records directly, no backend collection runs; only the sessions and nodes located by the query record are kept.
     backendSessions: backendSessions.map((session) => ({
       branch: session.branch,
       sessionId: session.sessionId,

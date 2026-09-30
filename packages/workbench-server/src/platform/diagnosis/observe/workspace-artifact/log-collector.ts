@@ -12,11 +12,11 @@ import type { QueryBackendSession } from "@ontomato/contracts/query-execution";
  * APIs for backend evidence if configured.
  *
  * Output:
- *   {artifactDir}/原始日志/app.log
- *   {artifactDir}/原始日志/llm-calls.jsonl
- *   {artifactDir}/原始日志/backend.log (one file per node; backend-<node>.log when several)
- *   {artifactDir}/原始日志/agent-llm.jsonl (optional)
- *   {artifactDir}/原始日志/diagnostic-events.jsonl (optional)
+ *   {artifactDir}/raw-logs/app.log
+ *   {artifactDir}/raw-logs/llm-calls.jsonl
+ *   {artifactDir}/raw-logs/backend.log (one file per node; backend-<node>.log when several)
+ *   {artifactDir}/raw-logs/agent-llm.jsonl (optional)
+ *   {artifactDir}/raw-logs/diagnostic-events.jsonl (optional)
  */
 
 import fs from "node:fs";
@@ -62,7 +62,7 @@ export interface LogCollectorInput {
   workspaceId: string;
   turnKey?: string;
   taskId?: string;
-  /** 查询记录里的后端会话列表；诊断按“会话 + 节点”取证 */
+  /** Backend session list in the query record; diagnosis collects evidence by session + node */
   backendSessions?: QueryBackendSession[];
   backendTimeWindow?: BackendLogTimeWindow;
   frontendLogTimeWindow?: LogFileTimeWindow;
@@ -86,9 +86,9 @@ export interface LogCollectorResult {
   backendLogCount: number;
   backendAgentLlmCount: number;
   backendDiagnosticEventCount: number;
-  /** 逐个后端会话、逐个节点的取回状态 */
+  /** Retrieval status per backend session and per node */
   backendSessions: WorkspaceBackendSessionEvidence[];
-  /** backend.log 的收取说明：未定位到会话、无时间窗或逐节点失败 */
+  /** backend.log collection notes: session not located, no time window, or per-node failures */
   backendLogMessage?: string;
   records: ParsedLogRecord[];
 }
@@ -100,7 +100,7 @@ interface BackendCollectionResult {
   sessions: WorkspaceBackendSessionEvidence[];
 }
 
-/** 同一节点上各取证单位时间窗的并集，以及该节点的后端地址。 */
+/** Union of the evidence units' time windows on the same node, plus that node's backend address. */
 interface BackendNodeLogWindow {
   baseUrl: string;
   minTs: number;
@@ -209,8 +209,8 @@ export async function collectLogs(input: LogCollectorInput): Promise<LogCollecto
     logger.debug("Frontend LLM log collection skipped", { workspaceId, turnKey, taskId });
   }
 
-  // backendSessions 由调用方从 PostgreSQL query_runs 解析。记录级 sessionId 不用于驱动
-  // 后端取证（见 d4ba5739）：记录了业务 sessionId 的 Turn 一定已把它写进查询记录。
+  // backendSessions is parsed by the caller from PostgreSQL query_runs. Record-level sessionIds never drive
+  // backend evidence collection (see d4ba5739): a turn that recorded a business sessionId has already written it into the query record.
   result.records = [...appRecords, ...llmRecords];
 
   // Step 3: Backend logs via datarag Node API (optional)
@@ -270,10 +270,10 @@ function writeLines(filePath: string, lines: string[]): void {
 }
 
 /**
- * 按“会话 + 节点”取证（设计 7、12）：查路由表得到该会话的全部路由行，每个路由行
- * 各自取 agent-llm 与 diagnostic-events；没有路由行时用查询记录的节点与问数时间窗。
- * backend.log 按节点收取，时间窗取该节点上各取证单位窗口的并集。查询记录一个会话
- * 都没有时，按问数时间窗向默认后端收取。一个单位失败不影响其他单位。
+ * Evidence collection by session + node (design 7, 12): the routing table yields all routing rows for the session, and each row
+ * fetches its own agent-llm and diagnostic-events; without a routing row the query record's node and query time window are used.
+ * backend.log is collected per node, with the time window being the union of that node's evidence-unit windows. When the query
+ * record has no session at all, backend.log is collected from the default backend using the query time window. One unit failing never affects the others.
  */
 async function collectBackendLogs(input: {
   logDir: string;
@@ -376,7 +376,7 @@ async function collectBackendLogs(input: {
     });
   }
 
-  // 查询记录一个会话都没有（含路由表重建后无记录）：按问数时间窗向默认后端收取 backend.log。
+  // The query record has no session at all (including after routing-table rebuild): collect backend.log from the default backend using the query time window.
   if (input.sessions.length === 0) {
     const window = buildBackendInfoTimeWindow(undefined, backendTimeWindow, Date.now());
     const baseUrl = resolveBackendNodeBaseUrl(cfg, undefined);
@@ -413,7 +413,7 @@ async function collectBackendLogs(input: {
   };
 }
 
-/** 按节点收取后端运行日志：时间窗取该节点上各取证单位窗口的并集，一个节点一个文件。 */
+/** Collects backend runtime logs per node: the time window is the union of that node's evidence-unit windows, one file per node. */
 async function collectBackendLogByNode(input: {
   logDir: string;
   workspaceId: string;
@@ -467,7 +467,7 @@ async function collectBackendLogByNode(input: {
   return { infoCount, infoRecords, infoMessage };
 }
 
-/** 只有一个节点时沿用 backend.log，多节点时文件名带节点标识。 */
+/** Keeps backend.log with a single node; with several nodes the file name carries the node identifier. */
 function backendLogFileName(nodeKey: string, singleNode: boolean): string {
   if (singleNode) return "backend.log";
   return `backend-${nodeKey.replace(/[^a-zA-Z0-9._=-]/g, "_")}.log`;
@@ -521,7 +521,7 @@ function finiteTimestamp(value: number | undefined): number | null {
   return value !== undefined && Number.isFinite(value) ? value : null;
 }
 
-/** 取证窗口的说明：路由查询失败、无路由行或路由行未登记起止时，改用查询记录节点与问数时间窗。 */
+/** Explanation of the evidence window: when the routing query failed, no routing row exists, or the row has no registered start/end, the query record's node and query time window are used instead. */
 function describeWindowSource(
   row: SessionRegistryRow | undefined,
   lookupError: string | undefined

@@ -19,7 +19,7 @@ const config = ontologyManagerEntryConfig();
 const initialTheme = isDark.value ? "dark" : "light";
 const initialLocale = currentLocale.value;
 
-// 凭据只在启动 query 里交给 Manager；更新靠路由变化或重新进入时重建 iframe 地址（整页重载）。
+// The credential is handed to the Manager only in the launch query; updates rebuild the iframe URL on route changes or re-entry (a full reload).
 const managerUrl = computed(() => {
   if (!ONTOLOGY_MANAGER_URL) return "";
   const url = new URL(ONTOLOGY_MANAGER_URL, window.location.origin);
@@ -31,7 +31,7 @@ const managerUrl = computed(() => {
   url.searchParams.set("theme", initialTheme);
   if (config.localeMessage) url.searchParams.set("locale", initialLocale);
   url.searchParams.set("embedded", "1");
-  // 业务知识治理页的绝对地址：Manager 据此在业务知识页显示入口并在顶层窗口打开；无治理权限不传。
+  // Absolute URL of the business knowledge governance page: the Manager shows an entry on its knowledge page and opens it in the top window; not passed without governance permission.
   if (access.can("business-knowledge")) {
     const governance = router.resolve({ name: "KnowledgeGovernance" }).href;
     url.searchParams.set("knowledgeGovernanceUrl", new URL(governance, window.location.origin).href);

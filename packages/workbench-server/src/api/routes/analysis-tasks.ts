@@ -68,7 +68,7 @@ function subscribeToTaskStream(
         }
         res.write(`data: ${JSON.stringify(payload)}\n\n`);
 
-        // 任务状态事件只在终态发出，收到即结束本次订阅。
+        // Task status events are emitted only for terminal states; receiving one ends this subscription.
         if (isAnalysisTaskLifecycleEvent(event)) {
           clearInterval(heartbeatInterval);
           res.end();
@@ -86,7 +86,7 @@ function subscribeToTaskStream(
   );
 }
 
-/** 出口视图只省略主管/工人的内部思考；探测结果正文另按分析域策略替换。 */
+/** The exit view omits only supervisor/worker internal thinking; probing result bodies are replaced separately under the analysis domain's policy. */
 function toVisibleMessages(messages: Parameters<typeof toEgressMessages>[0]): EgressMessage[] {
   return toEgressMessages(messages, { thinking: "omit", toolResultContent: "full" }).map(
     (message) =>
@@ -98,8 +98,8 @@ function toVisibleMessages(messages: Parameters<typeof toEgressMessages>[0]): Eg
 }
 
 /**
- * 回合出口：消息转出口视图，工人审计与证据引用不进常规读取；
- * 活动问题按本回合自己的线程与受理序号补查询执行事实（与报告快照同一读取规则）。
+ * Turn exit: messages become the exit view, while worker audit and evidence references stay out of ordinary reads;
+ * activity questions get query execution facts filled in by this turn's own thread and acceptance sequence (the same read rule as report snapshots).
  */
 async function toClientTurn(
   turn: AnalysisConversationTurnRecord,
@@ -113,7 +113,7 @@ async function toClientTurn(
   };
 }
 
-/** 已落库的任务终态按统一形状表达；非终态任务不发任务状态事件。 */
+/** Persisted task terminal states are expressed in one uniform shape; non-terminal tasks never emit task status events. */
 function buildTerminalEventFromTask(task: AnalysisTask) {
   if (!isAnalysisTaskTerminalStatus(task.status)) return null;
   return buildAnalysisTaskTerminalEvent({
@@ -122,15 +122,15 @@ function buildTerminalEventFromTask(task: AnalysisTask) {
     resultSummary: task.resultSummary,
     resultReport: task.resultReport,
     finalAnswer: task.analysisPayload?.finalAnswer,
-    // 终态属于最近一次受理的运行；带上它的受理序号，按回合订阅的页面才收得到。
+    // The terminal state belongs to the most recently accepted run; only with its acceptance sequence can turn-subscribed pages receive it.
     requestSeq: task.requestSeq,
   });
 }
 
 /**
- * 订阅回合的终态只按该回合自己的运行记录/回合事实表达：
- * 指定受理序号时绝不借用别的运行终态；缺省时按当前运行。
- * 已受理但未终态 → running（订阅等待）；没有任何该回合事实 → unknown（明确终止）。
+ * A subscribed turn's terminal state is expressed only through that turn's own run record/turn facts:
+ * with an acceptance sequence given, another run's terminal state is never borrowed; without one, the current run applies.
+ * Accepted but not terminal → running (the subscription waits); no facts for that turn → unknown (an explicit termination).
  */
 async function resolveSubscribedTurnTerminal(
   task: AnalysisTask,
@@ -176,8 +176,8 @@ async function resolveSubscribedTurnTerminal(
 }
 
 /**
- * 订阅建立与状态读取之间任务可能已经结束，回查一次补发终态。
- * 非终态状态不再发事件——历史上这里会发出前端无人处理的 `task_pending`。
+ * The task may finish between subscription setup and the status read; re-check once and re-emit the terminal state.
+ * Non-terminal states no longer emit events — historically this emitted `task_pending` that no frontend consumer handled.
  */
 async function emitTerminalIfAlreadyFinished(taskId: string, domainId: string): Promise<void> {
   const task = await getAnalysisTaskService().getTask(taskId, domainId);
@@ -203,7 +203,7 @@ function parsePagination(req: Request): { limit: number; offset: number } {
 
 /**
  * GET /api/analysis-tasks
- * 获取分析任务列表（分页摘要，不返回报告正文和溯源 payload）
+ * Lists analysis tasks (paginated summaries; no report body or provenance payload)
  */
 router.get(
   "/",
@@ -238,7 +238,7 @@ router.get(
 
 /**
  * GET /api/analysis-tasks/agent/:agentId/counts
- * 获取指定分析智能体的任务统计
+ * Gets task statistics for one analysis agent
  */
 router.get(
   "/agent/:agentId/counts",
@@ -254,8 +254,8 @@ router.get(
 );
 
 /**
- * 定时入口的对外形状不变：同一个 id 空间下既可能是报告任务行，也可能是定时规则。
- * 读取按任务形状统一表达，写入按 `rule` 分流到规则存储。
+ * The schedule entry's external shape is unchanged: one id space may hold either a report task row or a schedule rule.
+ * Reads are expressed uniformly in task shape; writes are routed by `rule` into the rule store.
  */
 interface OwnedTaskEntity {
   task: AnalysisTask;
@@ -287,7 +287,7 @@ async function getOwnedTask(req: Request): Promise<OwnedTaskEntity> {
 
 /**
  * GET /api/analysis-tasks/:id
- * 获取单个任务详情
+ * Gets one task's details
  */
 router.get(
   "/:id",
@@ -307,7 +307,7 @@ router.get(
 
 /**
  * GET /api/analysis-tasks/:id/report.pdf
- * 下载该任务最新一次运行的报告 PDF。`/:id` 只匹配一段，不会匹配这条两段路径。
+ * Downloads the report PDF of the task's latest run. `/:id` matches a single segment and never this two-segment path.
  */
 router.get(
   "/:id/report.pdf",
@@ -324,7 +324,7 @@ router.get(
 
 /**
  * GET /api/analysis-tasks/:id/turns
- * 常规会话的逐轮事实；消息按出口视图返回，工人审计与证据引用不进常规读取。
+ * Per-turn facts of a regular session; messages return in the exit view, while worker audit and evidence references stay out of ordinary reads.
  */
 router.get(
   "/:id/turns",
@@ -333,7 +333,7 @@ router.get(
     const turns = await getAnalysisTaskService().listConversationTurns(owned.task.id);
     const visibleTurns = await Promise.all(
       turns.map((turn) =>
-        // 每个回合按自己的受理序号读自己的查询事实，不用任务最新序号回填。
+        // Each turn reads its own query facts by its own acceptance sequence, never backfilled with the task's latest sequence.
         toClientTurn(turn, { threadId: owned.task.threadId, requestSeq: turn.requestSeq })
       )
     );
@@ -343,7 +343,7 @@ router.get(
 
 /**
  * POST /api/analysis-tasks/:id/turns
- * 受理常规会话的新一轮；运行中的同一会话不能受理，返回 409。
+ * Accepts a new turn of a regular session; the same session while running cannot be accepted and answers 409.
  */
 router.post(
   "/:id/turns",
@@ -374,7 +374,7 @@ router.post(
 
 /**
  * GET /api/analysis-tasks/:id/runs
- * 过去每次运行的状态与结果；当前报告仍唯一从分析产物读取。
+ * Status and result of each past run; the current report is still read only from analysis artifacts.
  */
 router.get(
   "/:id/runs",
@@ -386,8 +386,8 @@ router.get(
       return;
     }
 
-    // 追问快照的 requestSeq 与深度分析运行共用线程序号。按相邻运行的序号区间
-    // 归档，避免重跑后把上一次运行的追问挂到最新运行下面。
+    // Follow-up snapshots share the thread sequence with deep-analysis runs. They are archived by the sequence intervals between adjacent runs
+    // so that after a re-run the previous run's follow-ups are not attached beneath the latest run.
     const snapshots = await listChatRenderSnapshots(owned.task.threadId);
     const followUps = snapshots.filter(
       (item) => item.snapshot?.mode === "follow-up" && Number.isInteger(item.requestSeq)
@@ -406,7 +406,7 @@ router.get(
           break;
         }
       }
-      // 老运行没有 requestSeq 时无法安全归属，宁可不展示，也不能串到最新 run。
+      // Old runs without requestSeq cannot be attributed safely; showing nothing beats leaking them into the latest run.
       if (targetIndex < 0) continue;
 
       const run = enriched[targetIndex];
@@ -440,7 +440,7 @@ router.get(
 
 /**
  * GET /api/analysis-tasks/:id/trajectory/:activityId
- * 一个循环活动及其取证问题事实：常规会话读该轮，报告任务读当前分析产物。
+ * One loop activity with its evidence question facts: regular sessions read the turn; report tasks read the current analysis artifacts.
  */
 router.get(
   "/:id/trajectory/:activityId",
@@ -464,7 +464,7 @@ router.get(
 
 /**
  * GET /api/analysis-tasks/:id/trajectory/:activityId/subagent
- * 按派遣活动身份读取一个工人的完整子轨迹；列表与常规溯源不预加载内部审计。
+ * Reads one worker's complete sub-trajectory by dispatch activity identity; lists and ordinary provenance never preload internal audit.
  */
 router.get(
   "/:id/trajectory/:activityId/subagent",
@@ -497,7 +497,7 @@ const CreateTaskSchema = z.object({
 
 /**
  * POST /api/analysis-tasks
- * 创建分析任务
+ * Creates an analysis task
  */
 router.post(
   "/",
@@ -521,7 +521,7 @@ router.post(
       throw new HttpError(400, "name is required for analysis tasks");
     }
 
-    // 带定时的创建是在注册一条定时规则，不是在建一次报告运行。
+    // Creating with a schedule registers a schedule rule; it does not build one report run.
     if (body.scheduleEnabled) {
       const rule = await getAnalysisScheduleRuleService().register({
         agentId: body.agentId,
@@ -566,7 +566,7 @@ router.post(
     );
 
     if (body.executeImmediately) {
-      // 常规会话按回合受理；报告任务交给执行编排器。
+      // Regular sessions are accepted per turn; report tasks go to the execution orchestrator.
       if (task.reportDeliverableEnabled === false) {
         await startConversationTurn(task.id, task.domainId, body.question, {
           token: authReq.token,
@@ -585,7 +585,7 @@ router.post(
 
 /**
  * POST /api/analysis-tasks/:id/execute
- * 手动执行分析任务
+ * Runs an analysis task manually
  */
 router.post(
   "/:id/execute",
@@ -620,7 +620,7 @@ router.post(
       return;
     }
 
-    // 常规会话的下一次执行是一条新回合；受理序号是这一轮的稳定身份。
+    // A regular session's next execution is a new turn; the acceptance sequence is that turn's stable identity.
     if (task.reportDeliverableEnabled === false) {
       const requestSeq = await startConversationTurn(
         task.id,
@@ -645,7 +645,7 @@ router.post(
 
 /**
  * POST /api/analysis-tasks/:id/cancel
- * 取消正在运行的任务
+ * Cancels a running task
  */
 router.post(
   "/:id/cancel",
@@ -658,7 +658,7 @@ router.post(
       throw new HttpError(400, t("api.taskAlreadyCancelled"));
     }
 
-    // 对正在运行的任务，先发送 abort 信号再更新状态；没有已受理的运行时不改运行历史
+    // For a running task, send the abort signal before updating status; with no accepted run, the run history is never touched
     const openRunId = task.status === "running" ? currentAnalysisRunId(task.runHistory) : undefined;
     if (task.status === "running") {
       cancelAnalysisTaskRun(task.id);
@@ -676,7 +676,7 @@ router.post(
 
 /**
  * PUT /api/analysis-tasks/:id
- * 更新分析任务；给报告任务加定时等于注册一条以它为模板的定时规则。
+ * Updates an analysis task; adding a schedule to a report task equals registering a schedule rule templated on it.
  */
 router.put(
   "/:id",
@@ -731,7 +731,7 @@ router.put(
 
 /**
  * DELETE /api/analysis-tasks/:id
- * 删除分析任务
+ * Deletes an analysis task
  */
 router.delete(
   "/:id",
@@ -756,7 +756,7 @@ router.delete(
 
 /**
  * GET /api/analysis-tasks/:id/messages
- * 获取任务的会话消息
+ * Gets a task's conversation messages
  */
 router.get(
   "/:id/messages",
@@ -764,7 +764,7 @@ router.get(
     const owned = await getOwnedTask(req);
     const { task } = owned;
 
-    // 回看快照由唯一权威产物读时派生：与实时终态视图同一份字段，写侧不再另存一份。
+    // The review snapshot is derived at read time from the single authoritative artifact: the same fields as the live terminal-state view, with no second copy on the write side.
     const payload = task.analysisPayload;
     const provenance = payload ? await buildTaskProvenance(task) : null;
     const taskSnapshot = payload
@@ -804,8 +804,8 @@ router.get(
         if (taskSnapshot?.requestSeq === snapshotRowItem.requestSeq) continue;
         const snapshot = snapshotRowItem.snapshot || {};
         if (snapshot.mode !== "follow-up") continue;
-        // 只恢复当前执行之后产生的追问。旧 run 的追问属于旧 run，
-        // 不能因为它们共享同一个 threadId 就混入重跑后的最新会话。
+        // Restore only follow-ups produced after the current execution. An old run's follow-ups belong to that old run,
+        // and sharing the same threadId never mixes them into the latest session after a re-run.
         if (
           latestRun &&
           (currentExecutionSeq === undefined || snapshotRowItem.requestSeq <= currentExecutionSeq)
@@ -838,7 +838,7 @@ router.get(
 
 /**
  * GET /api/analysis-tasks/:id/stream
- * SSE 流式连接，实时接收任务执行事件
+ * SSE streaming connection receiving task execution events in real time
  */
 router.get(
   "/:id/stream",
@@ -852,7 +852,7 @@ router.get(
 
       let unsubscribe = () => {};
       const since = parseLastTaskEventSeq(req);
-      // 常规会话按受理序号订阅：同一会话的旧连接不接收新回合的事件。
+      // Regular sessions subscribe by acceptance sequence: old connections of the same session never receive new turns' events.
       const requestSeq =
         req.query.requestSeq === undefined ? undefined : Number(req.query.requestSeq);
 
@@ -871,8 +871,8 @@ router.get(
       });
 
       /**
-       * 下发订阅回合自己的终态后收尾；该回合已受理但未终态时订阅等待它自己的终态；
-       * 该回合没有任何事实时按既有 SSE 错误协议明确终止，不用无限等待也不会拿别的运行终态冒充。
+       * Finish after emitting the subscribed turn's own terminal state; when the turn is accepted but not terminal the subscription waits for its own terminal state;
+       * when the turn has no facts at all, terminate explicitly per the existing SSE error protocol instead of waiting forever or passing off another run's terminal state.
        */
       const deliverSubscribedTerminalOrWait = async (subject: AnalysisTask): Promise<void> => {
         const resolved = await resolveSubscribedTurnTerminal(subject, requestSeq);
@@ -976,7 +976,7 @@ router.get(
           }
         }, 500);
       } else {
-        // 任务已是终态：按订阅回合自己的事实下发终态，绝不借用别的运行。
+        // The task is already terminal: emit the terminal state from the subscribed turn's own facts, never borrowed from another run.
         await deliverSubscribedTerminalOrWait(task);
       }
     } catch (error: unknown) {

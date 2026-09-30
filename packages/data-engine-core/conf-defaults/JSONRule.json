@@ -5,5 +5,5 @@
 	},
 	"classDef":[ 
 	],
-	"datasetdesc":"该数据集构建了医院空间管理的完整对象模型，涵盖医院、院区、建筑、楼层、房间及人员等10个核心类。通过明确定义层级包含关系与属性字段，实现了从院区到房间的空间结构化管理，并关联使用部门、管理人员及人员信息，支持精细化的空间资源与人员配置分析。"
+	"datasetdesc":"This dataset builds a complete object model for hospital space management, covering 10 core classes such as hospital, campus, building, floor, room and personnel. By clearly defining hierarchical containment relationships and attribute fields, it realizes structured spatial management from campus to room, and associates the using department, managing personnel and personnel information, supporting refined analysis of space resources and personnel allocation."
 }

@@ -1,10 +1,10 @@
 /**
- * LLM 日志里的 Agent 身份与诊断显示名。
+ * Agent identity inside LLM logs and diagnosis display names.
  *
- * 本服务各模型调用按语义角色取本版 agentName；agentName 写进 LLM 日志，是持久化标识，
- * 两版各装迁出前的原值，不随请求语言或 APP_DEFAULT_LOCALE 变化。诊断按同一份目录把
- * 本服务与 DataRAG 后端日志里的 agentName 解释成显示名，查不到的按原名显示。
- * 未改过名的固定名字（Skill-*、Dashboard-*、API-TitleGenerator 等）仍由调用处直接写。
+ * Each model call in this service takes this edition's agentName by semantic role; agentName is written into LLM logs as a persisted identifier.
+ * Each edition installs its pre-migration original values, independent of request language or APP_DEFAULT_LOCALE. Diagnosis interprets the
+ * agentName in this service's and the data engine backend's logs into display names via the same catalog, falling back to the raw name when absent.
+ * Fixed names that were never renamed (Skill-*, Dashboard-*, API-TitleGenerator, etc.) are still written directly at call sites.
  */
 export type ModelAgentRole =
   | "taskPlanner"
@@ -27,11 +27,11 @@ export type ModelAgentRole =
   | "analysisLoopSubAgent";
 
 export interface ModelAgentCatalog {
-  /** 角色写入日志的 agentName；源目录收录的角色另有显示名。 */
+  /** The agentName a role writes into logs; roles listed in the catalog also carry a display name. */
   roles: Record<ModelAgentRole, { agentName: string; displayName?: string }>;
-  /** 本服务日志里不属于上述角色的名字：固定名与历史名。 */
+  /** Names in this service's logs outside the roles above: fixed names and historical names. */
   otherDisplayNames: Record<string, string>;
-  /** DataRAG 后端 agent-llm 日志的 agentName。 */
+  /** agentName of the data engine backend's agent-llm logs. */
   backendDisplayNames: Record<string, string>;
 }
 

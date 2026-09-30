@@ -143,7 +143,7 @@ const allSkills = ref<AnalysisSkill[]>([]);
 const showCreateDialog = ref(false);
 const editingAgent = ref<AnalysisAgent | null>(null);
 
-// 获取所有可视化技能
+// Load all visualization skills
 const allVisualizationSkills = ref<AnalysisSkill[] | null>(null);
 
 async function loadVisualizationSkills() {
@@ -284,7 +284,7 @@ function editAgent(agent: AnalysisAgent) {
   showCreateDialog.value = true;
 }
 
-// 删除智能体
+// Delete an agent
 async function deleteAgent(agent: AnalysisAgent) {
   try {
     await ElMessageBox.confirm(
@@ -375,7 +375,7 @@ onMounted(() => {
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-/* 表单项标签：企业原不换行，开源原换行（随 agentDialogDisplay.labelWrap，与编辑弹窗同一输入） */
+/* Form item labels wrap or not according to agentDialogDisplay.labelWrap (the same input as the edit dialog) */
 .analysis-agent-manager--label-nowrap :deep(.el-form-item__label) {
   white-space: nowrap !important;
 }
@@ -420,7 +420,7 @@ onMounted(() => {
   gap: var(--spacing-sm);
 }
 
-/* 弹窗标题居左 */
+/* Left-align the dialog title */
 .agent-edit-dialog :deep(.el-dialog__header) {
   padding-right: var(--el-dialog-padding);
 }

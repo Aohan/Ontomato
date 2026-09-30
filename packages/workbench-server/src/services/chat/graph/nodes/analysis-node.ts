@@ -39,7 +39,7 @@ async function matchExecutableAnalysisSkills(
 
   if (executableSkills.length === 0) return [];
 
-  // 分析数据特征
+  // Analyze data characteristics
   const rowCount = data.length;
   const fields = Array.from(new Set(data.flatMap((row) => Object.keys(row || {}))));
   const dataView = buildModelDataView(data);
@@ -311,7 +311,7 @@ export async function analysisNode(state: GraphState, config?: any): Promise<Gra
 
     let methodologyContent = "";
     for (const match of selectedKnowledgeSkills) {
-      // 检查 skill 对象是否有效
+      // Check whether the skill object is valid
       if (!match || !match.skill) {
         logger.warn(tApp("queryFixed.18", { v0: (JSON.stringify(match)) }));
         continue;

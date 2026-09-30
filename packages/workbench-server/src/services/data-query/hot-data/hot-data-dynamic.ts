@@ -9,12 +9,12 @@ import type { HotJudgeResult } from "./hot-data-utils";
 const logger = createLogger("hot-data-dynamic");
 
 /**
- * 判断"热数据片段 + 业务知识"是否足以完整回答问题（动态指标）
+ * Decides whether "hot data snippets + business knowledge" are sufficient to answer the question completely (dynamic metrics)
  *
- * 动态指标判断更严格：
- * 1. 结果形式必须匹配（用户要数字，卡片给列表 = 不匹配）
- * 2. 核心实体必须对齐（用户问科研经费，卡片是教职工人数 = 不匹配）
- * 3. 约束条件必须完备（用户每个条件，卡片必须显性包含且值一致）
+ * Dynamic-metric judgment is stricter:
+ * 1. Result form must match (user asks for a number, card gives a list = mismatch)
+ * 2. Core entity must align (user asks research funding, card shows staff headcount = mismatch)
+ * 3. Constraints must be complete (every user condition must be explicitly contained in the card with a consistent value)
  */
 export async function judgeAndAnswerByDocs(params: {
   question: string;

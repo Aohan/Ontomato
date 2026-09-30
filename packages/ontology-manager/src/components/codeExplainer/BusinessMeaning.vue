@@ -3,8 +3,8 @@ import type { BusinessMeaning } from "./codeSegments";
 import { useOntologyText } from "../../context";
 
 /*
- * 业务含义展示：只收规范化后的业务含义与是否有未保存修改，
- * 不调接口、不读全局状态。两部分都空时由调用方整节省略。
+ * Business meaning display: receives only the normalized business meaning and whether there are unsaved changes;
+ * calls no API and reads no global state. The caller omits the whole section when both parts are empty.
  */
 defineProps<{ meaning: BusinessMeaning | null; stale: boolean }>();
 

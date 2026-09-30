@@ -3,12 +3,12 @@ import type {
   AnalysisReportSummaryPosition,
 } from "@ontomato/contracts/analysis-agent";
 /**
- * 分析智能体的配置与执行形态。
+ * Analysis agent configuration and execution form.
  */
 
 /**
- * 执行形态：维度编排（默认）或循环执行。
- * 显式配置在智能体上，不随发起入口或单次请求切换。
+ * Execution form: dimension orchestration (default) or loop execution.
+ * The form is configured explicitly on the agent and never switches with the entry point or a single request.
  */
 
 export const ANALYSIS_AGENT_EXECUTION_MODES: readonly AnalysisAgentExecutionMode[] = [

@@ -83,8 +83,8 @@ class DatasetSchemaService {
   }
 
   /**
-   * 按当前问题获取最新数据集说明。
-   * 基础说明失败时直接抛错；类属性和关系补充失败时保留本次基础说明。
+   * Fetches the latest dataset description for the current question.
+   * A base-description failure throws directly; failures while supplementing class attributes and relationships keep the base description.
    */
   async getSchemaForQuestion(
     question: string,

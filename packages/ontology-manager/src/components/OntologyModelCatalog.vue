@@ -289,7 +289,7 @@ onMounted(() => {
 
 <style scoped>
 .model-catalog {
-  /* 两版原值由宿主给出：企业 100%，开源原无此声明（auto）。 */
+  /* The value is supplied by the host presentation (open source: auto). */
   min-height: var(--manager-model-catalog-min-height);
   padding: var(--spacing-xl) var(--spacing-2xl);
   background: var(--el-bg-color);

@@ -1,28 +1,28 @@
-1. 每个问题用一个 JSON 对象表示，包含两个属性：problem（问题文本）和 answer（查询计划）。
+1. Represent each question as one JSON object with two properties: problem (the question text) and answer (the query plan).
 
-2. problem属性的值是提问的问题
+2. The value of the problem attribute is the question asked
 
-3. answer 是包含 steps 数组的对象。按顺序执行这些步骤；只有一步查询时，steps 仍然是只含一个步骤对象的数组。
+3. answer is an object containing a steps array. Execute the steps in order; a single-step query still uses an array containing one step object.
 
-4. 每个单步查询，由graph 和 output 对象组成，graph描述查询规则，output描述查询的输出结果。
+4. Each single-step query consists of a graph and an output object; graph describes the query rules and output describes the output result of the query.
 
-5. graph查询规则，包括patterns的list结构和pattern_logic
+5. The graph query rules include the list structure of patterns and pattern_logic
 
-	5.1 patterns的list结构描述查询条件，pattern_logic表示多个patterns间的and或者or的逻辑关系
+	5.1 The list structure of patterns describes the query conditions; pattern_logic represents the and/or logical relationship between multiple patterns
 
-	5.2 patterns是一个list结构，描述多个查询条件，每个查询条件由objects、{$replace_relationship_key}组成。
+	5.2 patterns is a list structure that describes multiple query conditions; each query condition consists of objects, {$replace_relationship_key}.
 
-		5.2.1 objects是list结构，表示类对象的查询条件，每个类的查询条件是一个object的json结构，由idx、variable、class、conditions组成
+		5.2.1 objects is a list structure that represents the query conditions of class objects; the query condition of each class is a json structure of an object, consisting of idx, variable, class and conditions
 
-		5.2.2 idx是objects list内的顺序id，每个类的查询条件顺序id不可重复
+		5.2.2 idx is the sequential id within the objects list; the sequential id of the query condition of each class must not be duplicated
 
-		5.2.3 variable是存储这个类查询结果的变量名
+		5.2.3 variable is the variable name that stores the query result of this class
 
-		5.2.4 class是指从哪个类中查询符合条件的对象
+		5.2.4 class specifies from which class the objects matching the conditions are queried
 
-		5.2.5 conditions表示查询条件，由properties、{$replace_text_key}{$replace_vector_key}{$replace_timeseries_key}组成，多条件类型共存时为`AND`逻辑.如果没有条件conditions可省略，properties、{$replace_text_key}{$replace_vector_key}{$replace_timeseries_key}中有一项时，conditions不可省略，未设置的查询条件视为无条件约束.
+		5.2.5 conditions represents the query conditions and consists of properties, {$replace_text_key}{$replace_vector_key}{$replace_timeseries_key}and when multiple condition types coexist the logic is `AND`. If there are no conditions, conditions may be omitted; when one of properties, {$replace_text_key}{$replace_vector_key}{$replace_timeseries_key}is present, conditions must not be omitted, and a query condition type that is not set is regarded as having no constraint.
 
-			5.2.5.1 properties表示类属性的查询条件，可以由多个属性条件或单个属性条件组成。当是单属性条件时，由field、operator、value组成，field表示属性名，operator表示逻辑运算符，包括“=”、“!=”、“>”、“>=”、“<”、“<=”、“between”、“like”、“in”、“is”、“is not”，value表示逻辑运算的值，当operator是between时value是一个二元数组，当operator是in时value是一个多元数组，当operator是is或is not时value是null。当由多个属性组成时，由 "operator": "logic"字段表示，且 多个属性由 "and"/"or"/"not" 字段的list结构表示，list结构内就是多个单属性条件。
+			5.2.5.1 properties represents the query conditions of class attributes and may consist of multiple attribute conditions or a single attribute condition. For a single attribute condition it consists of field, operator and value; field is the attribute name, operator is the logical operator, including "=", "!=", ">", ">=", "<", "<=", "between", "like", "in", "is" and "is not", and value is the value of the logical operation. When operator is between, value is a two-element array; when operator is in, value is a multi-element array; when operator is is or is not, value is null. When it consists of multiple attributes, it is represented by the "operator": "logic" field, and the multiple attributes are represented by the list structure of the "and"/"or"/"not" fields; inside the list structure are multiple single-attribute conditions.
 
 {$replace_text_main_rule}
 
@@ -32,17 +32,17 @@
 
 {$replace_relationship_main_rule}
 
-	5.3 pattern_logic表示patterns的list元素内每个条件间的逻辑关系，可以设为 and或者or
+	5.3 pattern_logic represents the logical relationship between each condition within the list elements of patterns, and can be set to and or or
 
-6. output输出结果描述，由to_user、fields、{$replace_cStep_save_table_key}{$replace_cStep_sort_key}{$replace_cStep_limit_key}{$replace_cStep_group_by_key}组成
+6. output describes the output result and consists of to_user, fields, {$replace_cStep_save_table_key}{$replace_cStep_sort_key}{$replace_cStep_limit_key}{$replace_cStep_group_by_key}
 
-	6.1 to_user的值，true表示这个step的查询结果直接输出给用户，false表示存到临时表作为下一个step的参数
+	6.1 The value of to_user: true means the query result of this step is output directly to the user, and false means it is stored in a temporary table as the parameter of the next step
 
 {$replace_cStep_save_table_rule}
 
-	6.3 fields表示输出的字段列表，list结构，每个字段由variable、field{$replace_cStep_four_basic_math_key}、as、{$replace_cStep_function_key}{$replace_cStep_select_distinct_key}组成， variable表示取objects中哪个对象的variable，field表示取variable对象中的哪个属性，as表示输出转为的别名，{$replace_cStep_select_distinct_rule}
+	6.3 fields represents the output field list, a list structure; each field consists of variable, field{$replace_cStep_four_basic_math_key}, as, {$replace_cStep_function_key}{$replace_cStep_select_distinct_key}variable specifies which object variable in objects to take, field specifies which attribute of the variable object to take, as is the alias the output is converted to, {$replace_cStep_select_distinct_rule}
    
-		6.3.1 如果非bucket类型字段不需要分组汇聚操作时，可直接输出
+		6.3.1 If a non-bucket type field does not need a group aggregation operation, it can be output directly
 
 {$replace_cStep_group_by_rule}
 

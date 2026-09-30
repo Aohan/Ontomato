@@ -1,59 +1,62 @@
 /**
- * 应用静态装配的工作台内容：两版迁出前各自的原值，不随界面语言变化，也不从 Node 词包推导。
- * 分三类：与 Node 同一事实的产品字面量、历史匹配规则（原样保留，其中已知的旧不一致也不修）、
- * 独立的界面固定文案与 console 文案。已有 t 键的文字仍走词条；错误拼接标点另由 errorPunctuation 提供。
+ * Workbench content supplied statically by the app: each edition's original values from before extraction, independent
+ * of the UI locale and not derived from the Node message bundle. Three kinds: product literals that are the same fact as
+ * in Node, historical matching rules (kept as-is, including known old inconsistencies), and standalone fixed UI and
+ * console text. Text that already has a t key still uses messages; error joining punctuation comes from errorPunctuation.
  */
 import type { PromptTranscriptFormat } from "@ontomato/contracts/observe";
 
 export interface WorkbenchContent {
-  /** 子图代码块围栏，与 Node product.subgraphFence 为同一值（MessageContent/utils/markdown.ts）。 */
+  /** Subgraph code block fence, the same value as Node product.subgraphFence (MessageContent/utils/markdown.ts). */
   subgraphFence: string;
-  /** 产品显示名，与 Node product.serviceDisplayName 为同一值：PPT 作者/公司、外观设置的默认品牌名。 */
+  /** Product display name, the same value as Node product.serviceDisplayName: PPT author/company and the default brand name in appearance settings. */
   serviceDisplayName: string;
-  /** “当前问答线程”在 sessionStorage 中的键前缀（持久化值，chat/utils/current-qa-thread.ts）。 */
+  /** Key prefix of the "current Q&A thread" in sessionStorage (a persisted value, chat/utils/current-qa-thread.ts). */
   currentQaThreadStoragePrefix: string;
-  /** 分析报告 PDF 下载文件名前缀（analysis store、SnapshotContent）。 */
+  /** File name prefix of downloaded analysis report PDFs (analysis store, SnapshotContent). */
   reportPdfFilePrefix: string;
-  /** 识别“综合总结”章节的标题集合（utils/analysis-report.ts）。 */
+  /** Headings that identify the "overall summary" section (utils/analysis-report.ts). */
   comprehensiveSummaryTitles: readonly string[];
-  /** 识别种子默认智能体的名称与说明，匹配到时改显当前语言的默认文案（agentDisplay、AnalysisTaskPanel）。 */
+  /** Name and description that identify the seeded default agent; on a match the current locale's default text is shown instead (agentDisplay, AnalysisTaskPanel). */
   defaultAgentNames: readonly string[];
   defaultAgentDescriptions: readonly string[];
-  /** 热卡正文里的问答标记：取问题行、去掉问题行与回答标记（query-view/utils/thinkingUtils.ts）。 */
+  /** Q&A markers in hot card bodies: pick the question line and strip the question line and answer marker (query-view/utils/thinkingUtils.ts). */
   hotCardQa: { question: RegExp; questionLine: RegExp; answerLine: RegExp };
-  /** 热卡参数替换说明“原条件…替换为…”（HotCardDetail.vue）。 */
+  /** Hot card parameter replacement note "original condition … replaced with …" (HotCardDetail.vue). */
   hotCardConditionReplacement: RegExp;
-  /** 回答正文里推断图表类型与“要可视化”的关键词（MessageContent/utils/markdown.ts）。 */
+  /** Keywords in answer bodies used to infer the chart type and the "wants a visualization" intent (MessageContent/utils/markdown.ts). */
   chartIntentKeywords: {
     trend: readonly string[];
     proportion: readonly string[];
     correlation: readonly string[];
     visualization: readonly string[];
   };
-  /** 子图步骤表的条件与字段：拆分、空值识别与展示连接符（SubgraphView.vue）。 */
+  /** Conditions and fields of the subgraph step table: splitting, empty-value detection and display separators (SubgraphView.vue). */
   subgraphListItems: { split: RegExp; empty: RegExp; join: string };
-  /** 质检结果中“步骤 N”标签（QcInlineResult.vue）。 */
+  /** "Step N" label in quality check results (QcInlineResult.vue). */
   qcStepLabel: RegExp;
-  /** 从回答前文取当前子问题的模板短语（MessageContent/index.vue）。 */
+  /** Template phrase for taking the current sub-question from the preceding answer text (MessageContent/index.vue). */
   answerSubject: RegExp;
-  /** 技能列表的连接符（analysis/utils/loop-activity.ts）。 */
+  /** Separator of skill lists (analysis/utils/loop-activity.ts). */
   skillListSeparator: string;
-  /** 分析智能体 MCP 服务名，与 Node product.analysisMcpServerName 为同一值：MCP 页已发布服务里识别该服务（McpManager.vue）。 */
+  /** Analysis agent MCP server name, the same value as Node product.analysisMcpServerName: identifies that server among published services on the MCP page (McpManager.vue). */
   analysisMcpServerName: string;
   /**
-   * 智能体编辑弹窗（AgentCreateDialog）的原展示，聊天与管理两个入口传同一值：开源聊天布局与管理页
-   * “分析智能体”（AnalysisAgentManager，其本页表单标签规则也按 labelWrap）都原样传给弹窗；
-   * 开源原为必填星号在右、MCP 下拉随输入框宽、标签换行；企业原全部省略、标签不换行（企业聊天布局不传）。
+   * Original display of the agent edit dialog (AgentCreateDialog); the chat and admin entries pass the same value: the
+   * open-source chat layout and the admin "analysis agents" page (AnalysisAgentManager, whose own form labels also follow
+   * labelWrap) both pass it to the dialog as-is. Open source: required asterisk on the right, MCP dropdown as wide as the
+   * input, wrapping labels; when omitted, all are left unset and labels do not wrap.
    */
   agentDialogDisplay: { requireAsteriskPosition?: "right"; fitInputWidth?: boolean; labelWrap?: boolean };
-  /** 分析智能体列表加载失败提示里“加载失败”与错误信息之间的原分隔（AnalysisAgentManager.vue）。 */
+  /** Original separator between "failed to load" and the error message in the analysis agent list load failure message (AnalysisAgentManager.vue). */
   analysisAgentLoadErrorSeparator: string;
-  /** 技能调试 echarts 技能的默认输入示例（原 JSON.stringify(…, null, 2) 结果，SkillDebugDialog.vue），不随界面语言变化。 */
+  /** Default input example for debugging the echarts skill (the original JSON.stringify(…, null, 2) result, SkillDebugDialog.vue), independent of the UI locale. */
   skillDebugEchartsInput: string;
   /**
-   * 观察页（/observe）的产品协议值：实时日志左栏的应用日志源，与 Node product.logSource 同一值（LiveLogsPage.vue）；
-   * 提示词产物的标记词/轮次规则，与 Node 产物协议 WorkspaceArtifactText 为同一对象（FilePreview → 阅读解析）；
-   * 提示词目录名，与 Node product.diagnosisWorkspaceNames.prompts 同一值（按路径判断是否提示词产物）。
+   * Product protocol values of the observe page (/observe): the application log source in the live log sidebar, the same
+   * value as Node product.logSource (LiveLogsPage.vue); the marker words/turn rules of prompt artifacts, the same object as
+   * the Node artifact protocol WorkspaceArtifactText (FilePreview → reading parser); and the prompt directory name, the same
+   * value as Node product.diagnosisWorkspaceNames.prompts (used to tell prompt artifacts by path).
    */
   observe: {
     appLogSource: string;
@@ -65,15 +68,15 @@ export interface WorkbenchContent {
   dashboard: DashboardVisuals;
 }
 
-/** 原源码写死的界面文字（两版各自的原句）。 */
+/** UI text that was hard-coded in the original source (each edition's own sentences). */
 export interface WorkbenchFixedText {
-  /** 分析与追问 SSE 连接失败（analysis/api.ts）。 */
+  /** SSE connection failure for analysis and follow-ups (analysis/api.ts). */
   sseConnectionFailed: string;
-  /** 分析运行 SSE 断开（analysis/api.ts）。 */
+  /** Analysis run SSE disconnected (analysis/api.ts). */
   connectionFailed: string;
-  /** 分析执行记录切换（AnalysisChatView.vue）。 */
+  /** Switching between analysis runs (AnalysisChatView.vue). */
   runSwitcher: { label: string; previous: string; next: string };
-  /** 回答与报告的赞踩反馈（ChatView.vue、AnalysisReportView.vue）。 */
+  /** Like/dislike feedback on answers and reports (ChatView.vue, AnalysisReportView.vue). */
   feedback: {
     cancelled: string;
     cancelFailed: string;
@@ -91,8 +94,9 @@ export interface WorkbenchFixedText {
     dislike: string;
   };
   /**
-   * 平台反馈记录页的原句（FeedbackRecords.vue）：列标题、详情、筛选占位、CSV 表头与来源单元格、提示。
-   * 同一原句在页面各处共用一个字段；评价的赞/踩取上面 feedback.like/dislike（两版原句相同）。
+   * Original sentences of the platform feedback records page (FeedbackRecords.vue): column titles, details, filter
+   * placeholders, CSV headers and source cells, and messages. The same sentence shares one field across the page; the
+   * like/dislike ratings use feedback.like/dislike above.
    */
   feedbackRecords: {
     sourceQa: string;
@@ -114,26 +118,27 @@ export interface WorkbenchFixedText {
     exportSucceeded: string;
     exportFailed: string;
   };
-  /** 批量删除部分失败提示末尾的计数原文（问数示例两类批删）。 */
+  /** Original count text at the end of partial batch-delete failure messages (both query example batch deletes). */
   batchDeleteFailureSuffix: (failed: number, total: number) => string;
-  /** 问数示例卡片字段标签后的原冒号（ExamplesManager.vue 五处）；与请求错误的 errorPunctuation 各自独立。 */
+  /** Original colon after field labels on query example cards (five places in ExamplesManager.vue); independent of errorPunctuation for request errors. */
   exampleFieldSeparator: string;
-  /** 系统配置与模型配置页错误说明与超时文本的原分隔（BusinessConfig 及 BackendModelList/SystemModel/Embedding×2/QuerySettings 六处）。 */
+  /** Original separator between error explanations and timeout text on the system and model configuration pages. */
   businessConfigSeparator: string;
-  /** PPT 章节标题缺省与提炼失败（analysis/utils/ppt.ts）。 */
+  /** Default PPT section title and extraction failure (analysis/utils/ppt.ts). */
   pptSectionFallback: string;
   pptOutlineFailed: string;
-  /** 新建仪表盘失败（dashboard/api.ts）。 */
+  /** Dashboard creation failure (dashboard/api.ts). */
   createDashboardFailed: string;
-  /** 技能列表响应格式无效（skills/api.ts）。 */
+  /** Invalid skill list response format (skills/api.ts). */
   skillsListInvalid: string;
-  /** 空错误信息的展示（query-view/utils/display-error.ts）。 */
+  /** Display of an empty error message (query-view/utils/display-error.ts). */
   unknownError: string;
-  /** 热卡弹窗标题中的条数（HotCardModal.vue）。 */
+  /** Item count in the hot card dialog title (HotCardModal.vue). */
   cardCount: (label: string, count: number) => string;
   /**
-   * 观察页写死的原句：聊天诊断入口自动发送的消息（ObserveLayout.vue）、欢迎页快捷问题的提交值（WelcomePage.vue，
-   * 显示用 t 键）、产物详情的“已取消”标签/文件加载失败/大文件截断提示（ArtifactDetail.vue）、测试批次恢复日志（TestPage.vue）。
+   * Sentences hard-coded in the observe page: the message the chat diagnosis entry sends automatically (ObserveLayout.vue),
+   * the submitted values of welcome page quick questions (WelcomePage.vue; the display uses t keys), the "cancelled" label,
+   * file load failure and large-file truncation notes of artifact details (ArtifactDetail.vue), and the test batch resume log (TestPage.vue).
    */
   observe: {
     autoTurnDiagnosisMessage: string;
@@ -150,7 +155,7 @@ export interface WorkbenchFixedText {
   };
 }
 
-/** 原源码写死的 console 文案（两版各自的原句）。 */
+/** Console text that was hard-coded in the original source (each edition's own sentences). */
 export interface WorkbenchConsoleText {
   deepAnalysisConnected: string;
   deepAnalysisParseFailed: string;
@@ -174,26 +179,26 @@ export interface WorkbenchConsoleText {
   reportChartMarkerUnmatched: (label: string) => string;
 }
 
-/** 仪表盘图表的品牌配色与两处展示（dashboard/components 与 utils）。 */
+/** Brand colours of dashboard charts and two display details (dashboard/components and utils). */
 export interface DashboardVisuals {
-  /** echarts 注册的主题名（原值）。 */
+  /** Theme name registered with echarts (original value). */
   themeName: string;
-  /** 系列色，主题 color 与按序取色共用。 */
+  /** Series colours, shared by the theme color and sequential colour picking. */
   series: readonly string[];
-  /** 主题里随明暗变化的颜色；某一版原本不随明暗变化的项两种情况返回同值。 */
+  /** Theme colours that change with light/dark; items that originally did not change in an edition return the same value in both cases. */
   themeColors(isDark: boolean): DashboardThemeColors;
-  /** 柱状渐变：系列色 → [顶部, 底部]。 */
+  /** Bar gradient: series colour → [top, bottom]. */
   barGradients: Readonly<Record<string, readonly [string, string]>>;
-  /** 面积渐变：系列色 → 三段不透明度；未登记颜色用 defaultAreaGradient。 */
+  /** Area gradient: series colour → three opacity stops; unregistered colours use defaultAreaGradient. */
   areaGradients: Readonly<Record<string, readonly [string, string, string]>>;
   defaultAreaGradient: readonly [string, string, string];
-  /** 放大弹窗的图表主题：企业原用 echarts 默认主题，开源原先注册并使用仪表盘主题。 */
+  /** Chart theme of the zoom dialog: either echarts' default theme or (open source) the registered dashboard theme. */
   zoomChartTheme: "default" | "dashboard";
-  /** 图表与指标卡加载遮罩：企业原为 Element Plus 默认底色，开源原为透明。 */
+  /** Loading mask of charts and metric cards: the Element Plus default background or (open source) transparent. */
   loadingMask: "default" | "transparent";
   /**
-   * 生成器里写死、不随明暗变化的配色：主色 RGB（各处阴影透明度保持原值）、
-   * 标签与次级标签色、雷达分隔线、仪表盘轨道与刻度。
+   * Colours hard-coded in the generator that do not change with light/dark: the primary RGB (shadow opacities keep their
+   * original values), label and secondary label colours, radar split lines, and gauge track and ticks.
    */
   chartColors: {
     primaryRgb: string;
@@ -202,12 +207,12 @@ export interface DashboardVisuals {
     radarSplitLine: string;
     gaugeTrack: string;
   };
-  /** 生成器的两处 tooltip 原句：值与占比、树图的值与占比行。 */
+  /** The generator's two original tooltip sentences: value with share, and the value/share line of tree maps. */
   chartTooltips: {
     valueWithPercent(value: string, percent: string): string;
     valueWithShare(key: string, value: string, percent: string): string;
   };
-  /** 图表健康检查返回的原因原句；chart 为原句开头的图表类型名，数值为原句里的计数。 */
+  /** Original reason sentences returned by the chart health check; chart is the chart type name at the start of the sentence and the numbers are the counts in it. */
   healthReasons: DashboardHealthReasons;
 }
 
@@ -245,10 +250,10 @@ export interface DashboardThemeColors {
   splitLine: string;
   border: string;
   visualMap: readonly string[];
-  /** K 线阳线颜色与边框（两版原本都相同）。 */
+  /** Candlestick rising colour and border (originally the same in both editions). */
   kPositive: string;
   timelineLine: string;
-  /** 时间轴节点、控件与标签（两版原本都相同）。 */
+  /** Timeline nodes, controls and labels (originally the same in both editions). */
   timelineAccent: string;
   timelineCheck: string;
 }
@@ -259,7 +264,7 @@ export function installWorkbenchContent(next: WorkbenchContent): void {
   content = next;
 }
 
-/** 模块级代码在调用时读取（不在模块求值时读取）。 */
+/** Module-level code reads this at call time (not at module evaluation). */
 export function workbenchContent(): WorkbenchContent {
   if (!content) throw new Error("Workbench content is not installed");
   return content;

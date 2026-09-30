@@ -4,8 +4,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, expect, it, vi } from "vitest";
 
-// 真实 dotenv + 应用自己的 env.ts/root.ts，放进临时产品布局：只读产品根 .env，
-// 与 cwd 无关，进程已有变量不被覆盖。不接触仓内任何 .env。
+// Real dotenv plus the app's own env.ts/root.ts, placed into a temporary product layout: reads only the product root .env,
+// independent of cwd, and never overrides existing process variables. Touches no .env inside the repository.
 const appDir = fileURLToPath(new URL("../../", import.meta.url));
 const productRoot = fs.mkdtempSync(path.join(os.tmpdir(), "product-env-"));
 const tempApp = path.join(productRoot, "apps", "workbench");

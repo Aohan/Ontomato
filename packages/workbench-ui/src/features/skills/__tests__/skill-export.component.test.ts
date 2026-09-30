@@ -7,7 +7,7 @@ import { workbenchI18n } from "../../../i18n";
 import { installAuthHost } from "../../../utils/auth";
 import SkillManager from "../components/SkillManager.vue";
 import { anonymousAuthHost } from "../../../../../../apps/workbench/web/src/auth";
-// 认证宿主：凭据与登录用户可变，其余方法沿用已验的匿名宿主；每例后恢复匿名宿主。
+// Auth host: credential and signed-in user are mutable, other methods reuse the verified anonymous host; the anonymous host is restored after each test.
 const credentials: { token: string | null; apiKey: string | null } = { token: null, apiKey: null };
 let userInfo: { userId: string; domainId: string } | null = null;
 const i18n = workbenchI18n();

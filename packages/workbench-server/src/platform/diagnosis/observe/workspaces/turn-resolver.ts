@@ -116,8 +116,8 @@ export async function resolveTurnWorkspaceContext(
   ]);
 
   const snapshot = snapshots.find((item) => item.requestSeq === turn.requestSeq);
-  // 子 Turn 与父 Turn 共享线程与请求序号，线程消息和回复快照都属于父 Turn。
-  // 子 Turn 的问题与回复只能来自它自己的查询事实，否则会显示成父 Turn 的回复。
+  // Sub-turns share thread and request sequence with the parent turn; thread messages and reply snapshots belong to the parent turn.
+  // A sub-turn's question and reply can only come from its own query facts, or they would render as the parent turn's reply.
   const text =
     sourceKind && sourceRef
       ? resolveSubTurnText(queryRun)
@@ -208,7 +208,7 @@ export interface TurnActualTimes {
   endedAt?: string;
 }
 
-/** 问数实际起止（turn run），不带日志时间窗的补边，供 manifest 与工作区生成时间分开记录。 */
+/** Actual query start/end (turn run), without log time-window padding, kept separate from the workspace generation time in the manifest. */
 export function resolveTurnRunActualTimes(turnRun?: TurnRun | null): TurnActualTimes | undefined {
   if (!turnRun) return undefined;
   const startedAt = toIsoString(turnRun.startedAt);
@@ -315,7 +315,7 @@ function resolveAssistantAnswer(messages: ThreadMessage[], requestSeq: number): 
   return undefined;
 }
 
-/** 子 Turn 的问题与最终回复只来自它自己的查询运行；缺失即证据缺口，不回退到父 Turn。 */
+/** A sub-turn's question and final reply come only from its own query run; a missing one is an evidence gap with no fallback to the parent turn. */
 function resolveSubTurnText(queryRun?: QueryRun | null): {
   question?: string;
   finalAnswer?: string;

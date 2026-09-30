@@ -31,7 +31,7 @@ import ResultsPage from "../results/ResultsPage.vue";
 import CaseArtifactPage from "../results/CaseArtifactPage.vue";
 import DslTestPage from "../dsl-test/DslTestPage.vue";
 
-/** 头部账号由宿主传入（企业读登录用户，开源为 null）；DSL 结果区的扩展页签经 dsl-result-tabs 插槽放回原位置。 */
+/** The header account comes from the host (null in open source); extra DSL result tabs go back to their original place through the dsl-result-tabs slot. */
 defineProps<{ account: ObserveAccount | null }>();
 
 const router = useRouter();

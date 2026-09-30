@@ -15,7 +15,7 @@ import type { OntologyObject } from "../api";
 import { useManagerClient, useOntologyText } from "../context";
 
 const { ot } = useOntologyText();
-// 原挂到 body 的对话框改挂本实例根内的弹层容器（与下拉同一容器），随本实例主题与生命周期。
+// The dialog, originally appended to body, mounts in the popper container inside this instance's root (shared with dropdowns) and follows this instance's theme and lifecycle.
 const { selector: overlayTarget } = usePopperContainerId();
 const { message } = useManagerFeedback();
 const { createOntologyRelation } = useManagerClient();

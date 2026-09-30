@@ -9,9 +9,10 @@ coverage/
 !.env.example
 .DS_Store
 __pycache__/
-# 工作台运行数据（apps/workbench 以仓根为产品运行根）
+# Workbench runtime data (apps/workbench uses the repository root as its product runtime root)
 /data/
-# Java 数据引擎本机开发：运行数据根与 MCP/技能 Python 环境（apps/data-engine/.env 由上面的 .env 规则忽略）
+# Java data engine local development: the runtime data root and the MCP/skill Python
+# environment (apps/data-engine/.env is ignored by the .env rules above)
 apps/data-engine/.dev/
 apps/data-engine/.venv/
 packages/data-engine-core/.classpath

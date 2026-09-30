@@ -1,7 +1,7 @@
 import { qualifiedTable } from "../../postgres.js";
 import type { QueryableClient } from "../helpers.js";
 
-/** 分析智能体级的热报告开关：关闭后分析链路跳过热报告匹配，始终按当前配置重新分析。 */
+/** Per-agent hot report switch: when off, the analysis pipeline skips hot report matching and always re-analyzes with the current configuration. */
 export async function ensureAnalysisAgentHotReportSchema(client: QueryableClient): Promise<void> {
   await client.query(`
     ALTER TABLE ${qualifiedTable("analysis_agents")}

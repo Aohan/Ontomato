@@ -39,7 +39,7 @@ node ontomato.mjs schema <class> [<class> ...]
 node ontomato.mjs relationships <class> [<class> ...]
 node ontomato.mjs distinct-values <class> <attribute> [--like <pattern>] [--limit <n>]
 node ontomato.mjs execute-dsl @query.json
-node ontomato.mjs ask [--lang zh] "How many orders were placed last month?"
+node ontomato.mjs ask [--lang <tag>] "How many orders were placed last month?"
 ```
 
 | Command | Backend call | Returns |

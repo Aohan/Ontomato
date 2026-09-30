@@ -13,16 +13,16 @@ import {
 } from "lucide-vue-next";
 
 /**
- * 管理后台顶部页签。permission 是公开的能力标识：企业权限据此过滤，开源不执行权限算法。
- * 页签本身有权限或组内至少一个菜单项有权限时可见。
+ * Top tabs of the admin console. permission is a public capability id: apps with permissions filter by it; open source runs no permission logic.
+ * A tab is visible when it has permission itself or at least one menu item in its group does.
  */
 export interface AdminGroup {
   key: string;
   titleKey: string;
-  /** 首页型页签即首页页面的权限：有它才可见、才落到首页。 */
+  /** For a home-style tab this is the home page's permission: the tab is visible and lands on the home page only with it. */
   permission: string;
   icon: Component;
-  /** 首页型页签：选中即进入该页，无左侧菜单项（Ontology Manager 直接展示 iframe）。 */
+  /** Home-style tab: selecting it opens this page and it has no sidebar menu items (the Ontology Manager shows its iframe directly). */
   homePath?: string;
 }
 
@@ -34,7 +34,7 @@ export interface AdminMenuItem {
   groupKey: string;
 }
 
-/** 只执行动作、不含菜单项的页签（企业“数据治理”跳转）。排在分组页签之前。 */
+/** Tabs that only run an action and have no menu items (e.g. a "data governance" jump). Placed before the grouped tabs. */
 export interface AdminActionTab {
   key: string;
   titleKey: string;
@@ -42,24 +42,24 @@ export interface AdminActionTab {
   select(): void;
 }
 
-/** 应用的访问判定：ready 为权限已加载；开源恒就绪、恒可访问。 */
+/** The app's access check: ready means permissions are loaded; open source is always ready and always allowed. */
 export interface AdminAccess {
   readonly ready: boolean;
   can(permission: string): boolean;
 }
 
-/** 管理布局把应用的访问判定交给其下页面（入口卡、Manager 入口按它决定显示什么）。 */
+/** The admin layout hands the app's access check to its pages (entry cards and the Manager entry use it to decide what to show). */
 export const adminAccessKey: InjectionKey<AdminAccess> = Symbol("admin-access");
 
-/** 已登录账号的头部显示与退出（企业）；开源无账号。 */
+/** Header display and logout for the signed-in account; open source has no account. */
 export interface AdminAccount {
   readonly userName: string;
   logout(): void;
 }
 
 /**
- * 管理布局的装配输入。navigationHidden 为企业授权受限时的精简布局：
- * 只保留返回、标题、主题与账号，不显示页签、侧栏与加载/无权限状态。
+ * Assembly input of the admin layout. navigationHidden is the reduced layout used when licensing is restricted:
+ * only back, title, theme and account remain; tabs, sidebar and loading/no-permission states are hidden.
  */
 export interface AdminLayoutConfig {
   access: AdminAccess;
@@ -70,7 +70,7 @@ export interface AdminLayoutConfig {
   navigationHidden: boolean;
 }
 
-/** 已迁入的公共页签与菜单项；应用按原顺序显式列出所用的项。 */
+/** Shared tabs and menu items; each app lists the ones it uses explicitly in the original order. */
 export const adminGroups = {
   dataAssets: {
     key: "data-assets",

@@ -224,7 +224,7 @@ async function doImport(file: File, overwrite = false) {
         );
         await doImport(file, true);
       } catch {
-        // 用户取消
+        // Cancelled by the user
       }
       return;
     }

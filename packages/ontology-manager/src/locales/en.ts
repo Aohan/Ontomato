@@ -1,4 +1,4 @@
-// 与工作台共用措辞、由 Manager 实际使用的词条；取自企业基线 web/src/locales/en.ts 原值。
+// Messages whose wording is shared with the workbench and that the Manager actually uses; values taken from the original web/src/locales/en.ts.
 export default {
   admin: {
     deleteFailed: "Delete Failed",

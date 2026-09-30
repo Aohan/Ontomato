@@ -24,7 +24,7 @@ import { tApp } from "../../../i18n";
 const logger = createLogger("deep-analysis-artifacts");
 type ActivityFields = Partial<Omit<AnalysisActivity, "seq" | "revision" | "startedAt" | "status">>;
 
-/** 阶段文案属于服务端进度；并发维度按全局前置条件推进。 */
+/** Stage copy is server-side progress; concurrent dimensions advance on global preconditions. */
 function getDimensionProgressLabel(
   activities: readonly AnalysisActivity[],
   sections: readonly AnalysisSection[]
@@ -83,10 +83,10 @@ function mergeQuestions(
   return [...questions.values()];
 }
 
-/** 两形态同一累积器：整活动更新、分节增量和范围图表分别只有一条事件通道。 */
+/** One accumulator for both forms: whole-activity updates, section deltas, and scoped charts each have exactly one event channel. */
 export function createDeepAnalysisArtifactStore(target: {
   taskId?: string;
-  /** 受理时捕获的运行身份；产物与终态按它确认是否仍可写当前任务。 */
+  /** Run identity captured at acceptance; artifacts and terminal states use it to confirm the current task is still writable. */
   identity?: AnalysisRunIdentity;
   requestSeq?: number;
   executionMode: DeepAnalysisTaskPayload["executionMode"];
@@ -365,7 +365,7 @@ export function createDeepAnalysisArtifactStore(target: {
         runState: { ...payload.runState, status, error },
       };
       progress();
-      // 最终产物与任务终态同一次写入；失败必须传播，不能发成功终态。
+      // The final artifact and the task terminal state are one write; failure must propagate and never publish a successful terminal state.
       await persist();
       emitState();
       return payload;

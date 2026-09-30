@@ -66,7 +66,7 @@ function taskStatusLabel(status?: string): string {
       </span>
     </div>
     <div class="right-actions">
-      <!-- 应用布局追加的动作（企业的图谱入口），排在最前。 -->
+      <!-- Actions appended by the app layout (e.g. a graph entry), placed first. -->
       <slot name="header-actions" />
       <template v-if="isAnalysis">
         <button

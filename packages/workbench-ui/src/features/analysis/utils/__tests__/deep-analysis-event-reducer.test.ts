@@ -18,7 +18,7 @@ const state = (
 ): AnalysisStreamEvent => ({
   type: "analysis_run_state",
   executionMode: "dimension",
-  content: { revision, status, progress: { done, total: 100, label: "取证" } },
+  content: { revision, status, progress: { done, total: 100, label: "gathering evidence" } },
   timestamp: revision,
 });
 const section = (
@@ -33,15 +33,15 @@ const section = (
   content: { revision, markdown, mode, offset, sectionId: "d1", order: 0, status },
 });
 
-// 被测公开面：流事件归约后的页面快照；可观察结果：顺序、正文、失败事实及终态。
+// Public surface under test: the page snapshot after reducing stream events; observable result: order, body, failure facts and final state.
 describe("generic analysis event reducer", () => {
   it("upserts whole activities by identity in plan order and rejects late or duplicate snapshots", () => {
     const terminal = evidence({
       revision: 5,
       status: "completed",
       questions: [
-        { questionId: "q1", question: "销量", status: "completed", dataCount: 2 },
-        { questionId: "q2", question: "同比", status: "failed", error: "不可用" },
+        { questionId: "q1", question: "sales", status: "completed", dataCount: 2 },
+        { questionId: "q2", question: "year over year", status: "failed", error: "unavailable" },
       ],
     });
     const snapshot = reduce([
@@ -76,28 +76,28 @@ describe("generic analysis event reducer", () => {
 
   it("preserves partial failure and terminal report text across repeated appends and late drafts", () => {
     const snapshot = reduce([
-      section(1, "甲", "append"),
-      section(1, "甲", "append"),
-      section(2, "乙", "append", 1),
-      section(5, "甲乙", "replace", 0, "failed"),
-      section(6, "迟到", "append", 2),
+      section(1, "X", "append"),
+      section(1, "X", "append"),
+      section(2, "Y", "append", 1),
+      section(5, "XY", "replace", 0, "failed"),
+      section(6, "late", "append", 2),
     ]);
     expect(snapshot?.deepAnalysis?.sections).toEqual([
-      expect.objectContaining({ sectionId: "d1", markdown: "甲乙", status: "failed" }),
+      expect.objectContaining({ sectionId: "d1", markdown: "XY", status: "failed" }),
     ]);
   });
 
   it("recovers a missing append and loop reorder from the authoritative section replacement", () => {
     const snapshot = reduce([
-      section(3, "后段", "append", 4),
-      section(2, "前段", "append"),
-      section(4, "前段后段", "replace", 0, "success"),
+      section(3, "back", "append", 4),
+      section(2, "front ", "append"),
+      section(4, "front back", "replace", 0, "success"),
     ]);
-    expect(snapshot?.deepAnalysis?.sections[0].markdown).toBe("前段后段");
+    expect(snapshot?.deepAnalysis?.sections[0].markdown).toBe("front back");
   });
 
   it("locates query thinking by activity and question, while preserving the other question", () => {
-    const thinkingState = { summary: "正在查数", status: "running" as const, branches: [] };
+    const thinkingState = { summary: "querying data", status: "running" as const, branches: [] };
     const snapshot = reduce([
       activity(),
       {
@@ -127,7 +127,7 @@ describe("generic analysis event reducer", () => {
         scopeId: "d1",
         charts: [],
         diagnostics: [
-          { scopeId: "d1", reason: "no_viable_plan", message: "不可用", severity: "info" },
+          { scopeId: "d1", reason: "no_viable_plan", message: "unavailable", severity: "info" },
         ],
       },
     };

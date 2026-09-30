@@ -5,8 +5,9 @@ import type {
 } from "@ontomato/contracts/model-settings";
 
 /**
- * 模型配置页编辑的模型条目：以 getModelSettings 读取的条目为底，未上控件的字段（organizationId 等）随快照原样往返。
- * 读取时未设置的可选项可能为 null；新建或清空的 maxTokens / contextWindow 以 null 提交，默认值由 Java 读取归一化补上。
+ * A model entry edited on the model configuration page: based on the entry read by getModelSettings, with fields that
+ * have no controls (organizationId etc.) round-tripped as-is in the snapshot. Unset optional fields may be null when
+ * read; new or cleared maxTokens / contextWindow are submitted as null and Java's read normalization fills the defaults.
  */
 export type ModelEntry = Omit<
   BackendModelConfig,
@@ -21,7 +22,7 @@ export type ModelEntry = Omit<
   maxCompletionTokens?: number | null;
 };
 
-/** 五个角色的模型引用草稿：配置 ID，或未配置（null）；与 saveModelSettings 请求的 agents 同形。 */
+/** Draft model references of the five roles: a config ID or not configured (null); same shape as agents in the saveModelSettings request. */
 export type RoleModels = Record<ModelRole, string | null>;
 
 export interface EmbeddingModelConfig {
@@ -32,23 +33,23 @@ export interface EmbeddingModelConfig {
   customHeaders?: Record<string, string> | null;
 }
 
-/** 数据适配器连接可填的字段；每种适配器实际需要哪些由后端列表的 fields 给出。 */
+/** Fields a data adapter connection can have; which ones each adapter needs comes from fields in the backend list. */
 export type DataAdapterField = "url" | "user" | "password";
 
-/** 某种适配器已保存的连接（业务配置 dataAdapterConnections 的值）。 */
+/** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
 export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
 
-/** 本版本已安装的数据适配器（GET /businessConfig/dataAdapters 的一项）。 */
+/** A data adapter installed in this edition (one item of GET /businessConfig/dataAdapters). */
 export interface DataAdapterInfo {
   type: string;
   label: string;
   sql: boolean;
   fields: DataAdapterField[];
-  /** 输入框示例（只含有示例的字段），由适配器模块声明。 */
+  /** Input examples (only for fields that have one), declared by the adapter module. */
   examples: Partial<Record<DataAdapterField, string>>;
 }
 
-/** 系统配置页编辑的通用参数、语言与数据适配器。 */
+/** General parameters, language and data adapter edited on the system config page. */
 export interface SystemSettings {
   knowledgeMaxResult: number;
   toolAndPythonRetry: number;
@@ -61,7 +62,7 @@ export interface SystemSettings {
   dataAdapterConnections: Record<string, DataAdapterConnection>;
 }
 
-/** GET /businessConfig/getConfig 中两页读取的部分：系统配置页读取通用设置与技能目录，模型配置页读取 Embedding。 */
+/** The parts of GET /businessConfig/getConfig the two pages read: the system config page reads general settings and the skill directory, the model configuration page reads Embedding. */
 export interface BusinessConfig extends SystemSettings {
   agents: Record<ModelRole, BackendAgentConfig>;
   embeddingModelProperties: EmbeddingModelConfig | null;

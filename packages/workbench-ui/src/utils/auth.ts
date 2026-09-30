@@ -6,25 +6,28 @@ export type WorkbenchUserInfo = Partial<
 >;
 
 /**
- * 应用装配的认证宿主。共享代码只经这里读取当前凭据，并把非成功响应交宿主裁决；
- * 企业由登录会话实现，开源无认证（凭据恒为空、不接管任何状态）。
+ * Authentication host supplied by the app. Shared code reads the current credential only through it and lets the host
+ * decide on unsuccessful responses; an app may implement it with a login session, while open source has no
+ * authentication (the credential is always empty and no state is taken over).
  */
 export interface WorkbenchAuthHost {
   getToken(): string | null;
   getApiKey(): string | null;
   /**
-   * 请求得到非成功状态时由宿主决定是否改抛自己的错误（并执行其导航副作用）；返回 null 走通用 HTTP 错误。
-   * credential 是该请求发出时捕获的 token || apiKey，供宿主判断响应是否属于已被替换的旧凭据。
+   * On an unsuccessful status the host decides whether to throw its own error instead (and run its navigation side
+   * effects); returning null uses the generic HTTP error. credential is the token || apiKey captured when the request was
+   * sent, so the host can tell whether the response belongs to a credential that has since been replaced.
    */
   responseStatusError(status: number, credential: string | null): Error | null;
-  /** 当前登录用户：聊天线程归属与“当前线程”记忆键只读这四项；开源无登录为 null。 */
+  /** Current signed-in user: chat thread ownership and the "current thread" memory key read only these four fields; null in open source, which has no login. */
   getUserInfo(): WorkbenchUserInfo | null;
   /**
-   * 流未建立连接时询问会话是否仍有效（并发合并、凭据已换返回 unreachable 由宿主负责）；
-   * 调用方仍自行核对发起时捕获的凭据。开源恒为 valid。
+   * Asks whether the session is still valid when a stream failed to connect (the host merges concurrent calls and
+   * returns unreachable when the credential has changed); callers still check the credential captured at start.
+   * Always valid in open source.
    */
   verifySessionOnce(): Promise<WorkbenchSessionVerdict>;
-  /** 认证失效的唯一出口；开源无认证，不做任何事。 */
+  /** The single exit for expired authentication; does nothing in open source, which has no authentication. */
   handleAuthExpired(): void;
 }
 

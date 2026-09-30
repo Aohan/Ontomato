@@ -21,7 +21,7 @@ afterAll(() => {
 describe("analysis text before configure", () => {
   it("imports report, chart, and skill factories before a language is configured", async () => {
     const trajectory = createDeepAnalysisArtifactStore({ executionMode: "loop" });
-    expect(() => dimensionSectionTitle({ dimensionName: "区域", dimensionValue: "华东" })).toThrow(
+    expect(() => dimensionSectionTitle({ dimensionName: "Région", dimensionValue: "Est" })).toThrow(
       "Workbench i18n is not configured"
     );
 

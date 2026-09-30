@@ -34,8 +34,8 @@ const emit = defineEmits<{
   "auth-failure": [status: ManagerAuthFailureStatus];
 }>();
 /*
- * 本工作区实例拥有请求客户端与提示/确认：根组件在宿主换了 API 入口或凭据时重建工作区，
- * 旧实例卸载时客户端停止发送、确认按取消结束、消息关闭。
+ * This workspace instance owns the request client and messages/confirmations. The root component rebuilds the workspace
+ * when the host changes API entry or credential; on unmount the client stops sending, confirmations end as cancelled and messages close.
  */
 const context = props.context;
 const { loadOntology, loadSmartAssets } = provideManagerContext(context, (status) =>
@@ -43,8 +43,8 @@ const { loadOntology, loadSmartAssets } = provideManagerContext(context, (status
 );
 const shell = ref<HTMLElement>();
 provideManagerFeedback(shell);
-const t = (key: SharedKey) => sharedText(context.locale, key);
-/** 宿主传入的 view 取代原 hash 路由：路径定位工作区与资源，查询串承载 from/focus/id/back。 */
+const t = (key: SharedKey) => sharedText(context.messages, key);
+/** The host-supplied view replaces the original hash routing: the path locates the workspace and resource, the query carries from/focus/id/back. */
 const route = computed(() => {
   const [path, query = ""] = context.view.split("?");
   return { path, query: new URLSearchParams(query) };
@@ -256,7 +256,7 @@ function returnToAssetCatalog() {
 }
 
 /*
- * 宿主的 view 是唯一定位来源：嵌入系统可直接打开指定资源，是否写回地址栏与历史由宿主决定。
+ * The host's view is the only source of location: an embedding system can open a resource directly and decides whether to write the address bar and history.
  */
 watch(
   () => context.view,
@@ -325,6 +325,9 @@ const workspaceTitle = computed(() => {
   }
   if (activeWorkspace.value === "visual-modeling") {
     return { title: t("nav.visualModeling"), description: "" };
+  }
+  if (activeWorkspace.value === "knowledge") {
+    return { title: t("nav.businessKnowledge"), description: "" };
   }
   return { title: t("nav.ontologyModeling"), description: "" };
 });

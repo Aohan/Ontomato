@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { streamDeepAnalysis, streamFollowUp, streamTaskExecution } from "../api";
 import { installAuthHost } from "../../../utils/auth";
 
-// 原用例替身化企业认证模块；共享代码现经应用宿主取凭据，这里装入同样的替身。
+// The original test doubled the auth module; shared code now gets credentials from the app host, so the same double is installed here.
 const host = {
   getApiKey: vi.fn((): string | null => null),
   getToken: vi.fn((): string | null => null),
@@ -42,12 +42,12 @@ describe("credential-only analysis stream URLs", () => {
 
   it("keeps reusable deep-analysis and follow-up streams credential-only", () => {
     vi.mocked(getApiKey).mockReturnValue("api-key-a");
-    streamDeepAnalysis("问题", {
+    streamDeepAnalysis("question", {
       agentId: "agent-a",
       threadId: "thread-a",
       token: "token-a",
     });
-    streamFollowUp("追问", {
+    streamFollowUp("follow-up", {
       agentId: "agent-a",
       threadId: "thread-a",
       token: "token-a",

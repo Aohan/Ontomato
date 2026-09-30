@@ -32,7 +32,7 @@ const ABC_PROGRAM_EXECUTE_TIMEOUT_MS = 3 * 60_000;
 const ABC_PROGRAM_REQUEST_INTERVAL_MS = 500;
 const execFileAsync = promisify(execFile);
 
-/** 热重放的执行结果 = 执行事实 + 业务执行状态，执行字段不在此重复声明。 */
+/** Hot replay execution result = execution facts + business execution state; execution fields are not re-declared here. */
 export interface AbcReplayExecutionResult extends AnalysisQueryFact {
   status: "completed" | "failed";
   error?: string;
@@ -77,7 +77,7 @@ export interface ExecuteAbcReplayPlanParams {
 export interface ExecuteSavedAbcReplayParams extends Omit<ExecuteAbcReplayPlanParams, "plan"> {
   replayPlan?: HotReportReplayPlan;
   savedDsl?: unknown;
-  /** 二级拆解痕迹取自执行事实，字段不在此重新声明 */
+  /** Second-level decomposition traces come from the execution facts; fields are not re-declared here */
   savedAbcTrace?: Pick<
     QueryExecutionFact,
     "abcSubQuestions" | "abcDsls" | "abcCodes" | "abcOutKeyRefs"
@@ -199,7 +199,7 @@ function toResult(items: ReplayItem[], plan: HotReportReplayPlan): AbcReplayExec
   const errors = items
     .filter((item) => item.status !== "completed" && item.error)
     .map((item) => item.error as string);
-  // 展示正文与结果表格同一份：重放结果的正文就是各数据集的标题与条数说明。
+  // Display body and result table are one and the same: a replay result's body is each dataset's title and row-count description.
   const markdownTable = items
     .map((item) => `### ${item.title}\n\n${table(item.title, item.rows, item.error)}`)
     .join("\n\n");
@@ -275,7 +275,7 @@ function mergeDirectDslReplayResults(
   const abcDsls =
     savedAbcTrace?.abcDsls ||
     results.map((result) => result.dsl).filter((item) => item !== undefined);
-  // 有结果时，详情与本次成功的数据集一起收集；不能把失败项或未执行的旧程序配给它。
+  // When results exist, details are collected together with this run's successful datasets; failed items or unexecuted stale programs must never be attached to it.
   const abcCodes =
     datasets.length > 0
       ? completedResults.flatMap((result) =>
@@ -290,7 +290,7 @@ function mergeDirectDslReplayResults(
       : savedAbcTrace?.abcOutKeyRefs;
 
   if (completedResults.length === 0) {
-    // 展示正文与结果表格同一份。
+    // Display body and result table are one and the same.
     const markdownTable =
       results.length > 1
         ? buildDirectDslDatasetPreviews(results)
@@ -340,7 +340,7 @@ function mergeDirectDslReplayResults(
     status: "completed",
     data,
     dsl,
-    // 展示正文与结果表格同一份。
+    // Display body and result table are one and the same.
     fullContent: markdownTable,
     markdownTable,
     datasets,
@@ -464,11 +464,11 @@ export async function executeAbcProgram(params: {
       const dataRows = rawData
         .map((row) => `| ${columns.map((col) => String(row[col] ?? "")).join(" | ")} |`)
         .join("\n");
-      // 展示正文与结果表格同一份。
+      // Display body and result table are one and the same.
       baseResult.fullContent =
         baseResult.markdownTable = `${headerRow}\n${separatorRow}\n${dataRows}`;
     } else {
-      // 展示正文与结果表格同一份。
+      // Display body and result table are one and the same.
       baseResult.fullContent = baseResult.markdownTable = tApp("analysis.dimension.abc-replay.45", { subQuestion: subQuestion });
     }
 

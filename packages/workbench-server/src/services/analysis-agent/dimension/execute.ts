@@ -5,11 +5,11 @@ import type {
   ProvenanceInfo,
 } from "@ontomato/contracts/analysis-charts";
 /**
- * 维度形态的执行阶段：按计划逐维度取证、出图、跑技能并流式产出维度报告。
+ * Execution stage of the dimension form: per dimension, collects evidence, renders charts, runs skills, and streams dimension reports.
  *
- * 维度之间按 `dimensionQueryConcurrency` 并发，子问题之间按 `subQuestionQueryConcurrency`
- * 并发；单个子问题或单个维度失败被隔离为局部失败，只有取消会中断整条运行。
- * 报告按计划顺序排序后落进产物，事件按实际完成顺序下发。
+ * Dimensions run concurrently under `dimensionQueryConcurrency` and sub-questions under `subQuestionQueryConcurrency`;
+ * a single sub-question or dimension failure is isolated as a local failure, and only cancellation interrupts the whole run.
+ * Reports are sorted into plan order before landing in artifacts; events go out in actual completion order.
  */
 
 import type { Dataset } from "../../data-query/adapter";
@@ -97,10 +97,10 @@ function runWithAnalysisSubQuestionTurn<T>(
 }
 
 /**
- * 一次深度分析的分析阶段：选计划、逐维度执行、写产物。
+ * Analysis stage of one deep analysis: select the plan, execute per dimension, write artifacts.
  *
- * 与拆前的 analysisAgent 节点等价——预期内的终止（取消、无可交付报告）以 errors
- * 返回，意料外的异常在这里统一收敛成同样的错误形状。
+ * Equivalent to the pre-split analysisAgent node — expected terminations (cancellation, no deliverable report) return via errors,
+ * and unexpected exceptions converge here into the same error shape.
  */
 export async function runAnalysisStage(
   ctx: DimensionRunContext,
@@ -217,7 +217,7 @@ async function runDimensionStage(
     }
   };
 
-  /** 热匹配子问题：用已保存的重放计划 / Harness 程序 / DSL 重新取数，不再走 ABC 规划。 */
+  /** Hot-matched sub-question: re-fetches data with the saved replay plan / harness program / DSL instead of ABC planning. */
   const executeHotQuestion = async (
     question: DimensionalizedQuestion
   ): Promise<SubQuestionBranchResult> => {
@@ -303,7 +303,7 @@ async function runDimensionStage(
           }
         )
     );
-    // 分析的工作流、报告与运行呈现都不消费质检，登记后不等它结算。
+    // Analysis workflows, reports, and run presentation never consume the quality check; after registering we do not wait for its settlement.
     if (pendingQualityCheck) ctx.lateFacts.register(pendingQualityCheck);
     return result;
   };
@@ -383,7 +383,7 @@ async function runDimensionStage(
     return { result, datasets };
   };
 
-  /** 报告生成失败与维度整体失败共用一份失败报告的发布路径。 */
+  /** Report generation failure and whole-dimension failure share one failed-report publishing path. */
   const publishFailedReport = (plannedDimension: PlannedDimension, errorMessage: string): void => {
     const failedReport = {
       dimensionId: plannedDimension.dimensionId,
@@ -770,7 +770,7 @@ async function runDimensionStage(
     allPlannedDimensionsWithResults.push(output.plannedDimensionWithResults);
   }
 
-  // 事件按完成顺序下发，产物按计划顺序落库。
+  // Events go out in completion order; artifacts persist in plan order.
   const orderedDimensionResults = sortByPlannedDimensionOrder(allDimensionResults);
   const orderedPlannedDimensions = sortByPlannedDimensionOrder(allPlannedDimensionsWithResults);
   const orderedReports = sortByPlannedDimensionOrder(dimensionReports);

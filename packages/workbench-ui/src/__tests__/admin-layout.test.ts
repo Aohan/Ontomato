@@ -65,8 +65,8 @@ const base: AdminLayoutConfig = {
   navigationHidden: false,
 };
 
-describe("共享管理布局", () => {
-  it("开源装配：全部页签、当前路由所在组的菜单、观测入口；无账号、无语言切换", async () => {
+describe("shared admin layout", () => {
+  it("open-source assembly: all tabs, the current route group's menu and the observe entry; no account and no language switch", async () => {
     const { el, tabs, menu } = await mountLayout(base, "/admin/audit-log");
     expect(tabs()).toEqual(["Ontology Manager", "System Management"]);
     expect(el.querySelector(".tab-item.active")?.textContent?.trim()).toBe("System Management");
@@ -76,7 +76,7 @@ describe("共享管理布局", () => {
     expect(el.querySelector(".lang-switch-wrapper")).toBeNull();
   });
 
-  it("首页型页签（Ontology Manager）按 ontology-modeling 显示且隐藏左侧栏；无观测权限不显示观测入口；语言切换按应用开关", async () => {
+  it("the home-style tab (Ontology Manager) shows by ontology-modeling and hides the sidebar; the observe entry is hidden without its permission; the language switch follows the app setting", async () => {
     const granted = new Set(["ontology-modeling"]);
     const { el, tabs, menu } = await mountLayout(
       { ...base, access: { ready: true, can: (p) => granted.has(p) } },
@@ -90,7 +90,7 @@ describe("共享管理布局", () => {
     expect(el.querySelector(".lang-switch-wrapper")).not.toBeNull();
   });
 
-  it("没有 ontology-modeling 时不显示 Ontology Manager 页签（旧分组权限 intelligence-engine 不再放行）", async () => {
+  it("without ontology-modeling the Ontology Manager tab is hidden (the old group permission intelligence-engine no longer grants it)", async () => {
     const granted = new Set(["intelligence-engine", "audit-logs"]);
     const { tabs } = await mountLayout(
       { ...base, access: { ready: true, can: (p) => granted.has(p) } },
@@ -99,7 +99,7 @@ describe("共享管理布局", () => {
     expect(tabs()).toEqual(["System Management"]);
   });
 
-  it("切组落点：首页型页签进入首页，菜单型页签进入组内第一个可见菜单项", async () => {
+  it("group landing: a home-style tab opens its home page, a menu tab opens the group's first visible menu item", async () => {
     const { el, router } = await mountLayout(base, "/admin/audit-log");
     const tab = (title: string) =>
       [...el.querySelectorAll<HTMLElement>(".header-tabs .tab-item")].find(
@@ -116,7 +116,7 @@ describe("共享管理布局", () => {
     expect(el.querySelector(".admin-aside")).not.toBeNull();
   });
 
-  it("权限未加载显示加载中，就绪后定位到当前路由所在组；全无权限显示空态", async () => {
+  it("shows loading until permissions load, then selects the current route's group; shows the empty state without any permission", async () => {
     const access = reactive({ ready: false, can: () => true });
     const { el } = await mountLayout({ ...base, access }, "/admin/audit-log");
     expect(el.querySelector(".permission-loading")?.textContent).toContain("Loading");
@@ -128,7 +128,7 @@ describe("共享管理布局", () => {
     expect(none.el.querySelector(".permission-empty")?.textContent).toContain("No access");
   });
 
-  it("动作页签排在分组前、只执行动作不成为当前页签；账号显示与退出", async () => {
+  it("action tabs come before groups and only run their action without becoming current; account display and logout", async () => {
     const select = vi.fn();
     const logout = vi.fn();
     const { el, tabs } = await mountLayout(
@@ -149,7 +149,7 @@ describe("共享管理布局", () => {
     expect(logout).toHaveBeenCalledOnce();
   });
 
-  it("导航隐藏（企业授权受限）：只有返回、标题、主题与账号，页面照常渲染", async () => {
+  it("hidden navigation (restricted licensing): only back, title, theme and account, and the page still renders", async () => {
     const { el } = await mountLayout(
       { ...base, navigationHidden: true, account: { userName: "alice", logout: () => {} } },
       "/admin/audit-log"

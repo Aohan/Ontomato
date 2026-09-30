@@ -3,15 +3,15 @@ import { createDeepAnalysisArtifactStore } from "./artifacts";
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
 import type { RequestIdentity } from "@ontomato/contracts/identity";
 /**
- * 分析任务运行编排器：一次深度分析运行的唯一实现。
+ * Analysis task run orchestrator: the only implementation of one deep-analysis run.
  *
- * 页面对话流、定时调度和 MCP 三个入口只负责各自的触发面（HTTP/SSE 壳、轮询与 claim、
- * 超时触发），任务从 running 到终态之间的编排——执行、事件发布、结果组装、终态写入、
- * 邮件通知和取消语义——都在这里，入口不再各写一份。
+ * The three entry points — page conversation stream, scheduled dispatch, and MCP — own only their trigger surfaces (HTTP/SSE shells, polling and claim,
+ * timeout firing). The orchestration between running and the terminal state — execution, event publishing, result assembly, terminal-state writing,
+ * email notification, and cancellation semantics — lives here, so entry points stop re-implementing it.
  *
- * 两条不变量：
- * - 执行事件只经 `TaskEventBus`（按 taskId）发布，这是任务执行事件的唯一通道；
- * - 执行失败以 `AnalysisTaskRunOutcome` 返回；终态持久化故障继续抛出，不伪装完成。
+ * Two invariants:
+ * - Execution events are published only through `TaskEventBus` (by taskId), the single channel for task execution events;
+ * - Execution failure returns as `AnalysisTaskRunOutcome`; terminal-state persistence failures keep throwing and are never disguised as completion.
  */
 
 import { createLogger } from "../../../logging/logger";
@@ -36,8 +36,8 @@ import { tApp } from "../../../i18n";
 const logger = createLogger("analysis-task-runner");
 
 /**
- * 本进程内正在运行的任务；条目同时承载本次运行受理时捕获的身份。
- * 新运行登记会取代旧条目，旧运行据此判定自己已被取代，不再发终态事件或清理通道。
+ * Tasks currently running in this process; each entry also carries the run identity captured at acceptance.
+ * Registering a new run supersedes the old entry; the old run detects it has been superseded and stops emitting terminal events or cleaning channels.
  */
 interface ActiveAnalysisRun {
   controller: AbortController;
@@ -47,19 +47,19 @@ interface ActiveAnalysisRun {
 const activeRuns = new Map<string, ActiveAnalysisRun>();
 
 export interface AnalysisTaskRunRequest {
-  /** 已创建或已 claim 的任务行，由编排器推进到 running 与终态 */
+  /** The task row already created or claimed, advanced to running and the terminal state by the orchestrator */
   task: AnalysisTask;
-  /** 入口已解析好的分析智能体 */
+  /** The analysis agent already resolved by the entry point */
   agent: AnalysisAgent;
-  /** 在线入口已验证的身份；离线任务仅持有保存的 tk，须在运行内验证。 */
+  /** Identity already verified by an online entry; an offline task only holds the saved tk and must verify inside the run. */
   verifiedIdentity?: Pick<RequestIdentity, "userId" | "domainId">;
-  /** MCP 入口的用户 API key；页面与调度用任务行上的 token */
+  /** The user API key for the MCP entry; page and scheduler use the token on the task row */
   apiKey?: string;
-  /** 入口提供的外部取消触发；AbortController 仍由编排器持有 */
+  /** External cancellation trigger provided by the entry; the AbortController stays with the orchestrator */
   cancelSignal?: AbortSignal;
-  /** 超时中止毫秒数；到点按取消处理，取消原因写入终态 */
+  /** Abort timeout in milliseconds; on expiry treated as cancellation, with the reason written into the terminal state */
   timeoutMs?: number;
-  /** 常规会话的当前轮；提供时按会话回合运行，终态同时收口该轮。 */
+  /** The current turn of a regular session; when provided the run executes as a conversation turn and the terminal state also finalizes that turn. */
   conversationTurn?: AnalysisConversationTurnRecord;
 }
 
@@ -69,13 +69,13 @@ export type AnalysisTaskRunOutcome =
   | { status: "failed"; error: unknown };
 
 export interface AnalysisTaskRunHandle {
-  /** 已置为 running 的任务行 */
+  /** The task row already set to running */
   task: AnalysisTask;
-  /** 本次运行的终态；终态持久化故障会 reject */
+  /** This run's terminal state; terminal-state persistence failures reject */
   completion: Promise<AnalysisTaskRunOutcome>;
 }
 
-/** 中止指定任务的运行；任务不在本进程运行时返回 false。 */
+/** Aborts the run of the given task; returns false when the task is not running in this process. */
 export function cancelAnalysisTaskRun(taskId: string): boolean {
   const entry = activeRuns.get(taskId);
   if (!entry || entry.controller.signal.aborted) return false;
@@ -84,20 +84,19 @@ export function cancelAnalysisTaskRun(taskId: string): boolean {
   return true;
 }
 
-/** 本次运行是否仍是该任务登记的运行；被新运行取代后不再对外产生终态或清理动作。 */
+/** Whether this run is still the run registered for the task; once superseded by a new run it stops producing terminal states or cleanup actions. */
 function isActiveRun(taskId: string, entry: ActiveAnalysisRun): boolean {
   return activeRuns.get(taskId) === entry;
 }
 
-/** 只有仍是该任务登记的运行时才向任务通道发事件；被取代的旧运行不得污染新运行的流。 */
+/** Events reach the task channel only while this run is still the registered run; a superseded old run must never pollute the new run's stream. */
 function emitRunEvent(taskId: string, entry: ActiveAnalysisRun, event: AnalysisStreamEvent): void {
   if (isActiveRun(taskId, entry)) taskEventBus.emit(taskId, event);
 }
 
 /**
- * 启动一次任务运行：先把任务推进到 running 并返回运行中的任务行，
- * 执行本身在 `completion` 上继续。入口需要立即回应（MCP 提交、页面 run_started）
- * 时用返回的任务行，需要等待结果时 await `completion`。
+ * Starts one task run: advances the task to running and returns the running task row first, while execution itself continues on `completion`.
+ * Entry points use the returned row when they must answer immediately (MCP submission, page run_started) and await `completion` when they need the result.
  */
 export function startAnalysisTaskRun(
   request: AnalysisTaskRunRequest
@@ -116,7 +115,7 @@ export function startAnalysisTaskRun(
         identity: currentAnalysisRunIdentity(task.runHistory, request.conversationTurn?.requestSeq),
       };
       activeRuns.set(task.id, entry);
-      // 新运行从干净的通道开始：旧运行的事件缓冲与清理计时不属于它。
+      // A new run starts from a clean channel: the old run's event buffers and cleanup timers do not belong to it.
       taskEventBus.beginRun(task.id);
 
       const threadId = task.threadId || `task-${task.id}`;
@@ -128,8 +127,8 @@ export function startAnalysisTaskRun(
         }
       }
 
-      // 受理（tryStartTask / claimConversationTurn）已原子置为 running 并追加运行记录，
-      // 这里不再补一次没有身份的 running 写：那会在取消与新运行之间把终态改回运行中。
+      // Acceptance (tryStartTask / claimConversationTurn) already set running atomically and appended the run record,
+      // so no extra identity-less running write happens here: that would flip a terminal state back to running between cancellation and a new run.
       return { task, completion: executeRun(request, entry, threadId) };
     }
   );
@@ -144,7 +143,7 @@ async function executeRun(
   const { controller, identity: runIdentity } = entry;
   const question = request.conversationTurn?.userMessage || task.question || task.name;
 
-  /** 超时是一种取消原因，取消后由统一终态路径落库，不另写一份终态。 */
+  /** A timeout is one kind of cancellation reason; after cancellation the unified terminal-state path persists it, never a second terminal-state writer. */
   let cancelReason: string | undefined;
   const timeout = request.timeoutMs
     ? setTimeout(() => {
@@ -218,7 +217,7 @@ async function finishCompleted(
   if (!artifacts) throw new Error(t("analysis.missingArtifacts"));
   const { resultSummary, resultReport, chartHtmls } = buildDeepAnalysisTaskResult(artifacts);
 
-  // 已被新运行取代的旧运行不再向任务通道发终态，避免结束新运行的订阅。
+  // An old run superseded by a new run no longer publishes terminal states to the task channel, avoiding ending the new run's subscriptions.
   emitRunEvent(
     task.id,
     entry,
@@ -316,7 +315,7 @@ async function finishCancelled(
   return { status: "cancelled" };
 }
 
-/** 工作流尚未落终态（含初始化失败）时，仍经同一产物机制完成服务端收口。 */
+/** When the workflow has not persisted a terminal state (including initialization failure), server-side finalization still completes through the same artifact mechanism. */
 async function persistTermination(
   request: AnalysisTaskRunRequest,
   status: "failed" | "cancelled",
@@ -325,15 +324,15 @@ async function persistTermination(
 ): Promise<void> {
   const identity = entry.identity;
   const task = await getAnalysisTaskService().getTask(request.task.id, request.task.domainId);
-  // 只有当前任务行仍属于本次运行时，它才是本运行的已写正文与受理序号；
-  // 被新运行取代时不借用新运行的正文/序号，也不重复写新运行已经落定的终态。
+  // Only while the current task row still belongs to this run does it hold this run's written body and acceptance sequence;
+  // once superseded, the run neither borrows the new run's body/sequence nor rewrites the terminal state the new run has already settled.
   const belongsToRun = task
     ? isCurrentAnalysisRun(readAnalysisRunHistory(task.runHistory), identity ?? {})
     : false;
   const currentPayload = task?.analysisPayload;
   if (request.conversationTurn) {
-    // 运行在工作流落终态之前失败/取消时，回合不能留在 running。
-    // 先于“产物已终态”的早退收口，且只收口仍为 running 的该轮；真实落库错误照常抛出。
+    // When a run fails or is cancelled before the workflow persists a terminal state, the turn must not stay running.
+    // This precedes the "artifacts already terminal" early exit and finalizes only the turn still running; real persistence errors still throw.
     const turns = await getAnalysisTaskService().listConversationTurns(request.task.id);
     const pendingTurn = turns.find(
       (turn) => turn.requestSeq === request.conversationTurn!.requestSeq
@@ -348,7 +347,7 @@ async function persistTermination(
   }
   if (belongsToRun && task?.status === status && currentPayload?.runState.status === status) return;
   if (!belongsToRun) {
-    // 已被新运行取代：只补本运行自己的终态状态，不重造产物、不借用新运行的正文与序号。
+    // Superseded by a new run: only this run's own terminal status is backfilled — artifacts are not rebuilt, and the new run's body and sequence are never borrowed.
     if (identity) {
       await getAnalysisTaskService().updateTaskStatus(request.task.id, status, {
         identity,

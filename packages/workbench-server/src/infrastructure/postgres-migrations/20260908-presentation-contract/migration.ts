@@ -29,7 +29,7 @@ export async function ensurePresentationContractSchema(client: QueryableClient):
   );
 }
 
-/** 旧字段仅在这次迁移边界读取；运行路径只接受共享契约。 */
+/** Old fields are read only at this migration boundary; the runtime path accepts only the shared contract. */
 function convertPayload(
   row: {
     id: string;

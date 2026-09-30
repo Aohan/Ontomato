@@ -1,1 +1,1 @@
-		6.3.3 **多个数字类型字段做四则运算，只能出现在临时表的output中，不能出现在第一个step中**如果需要多个数字类型字段做四则运算时，只由expr和as属性组成，expr表示四则运算的数学表达式，as表示输出转为的别名
+		6.3.3 **Arithmetic operations on multiple numeric type fields may only appear in the output of a temporary table and must not appear in the first step** If arithmetic operations on multiple numeric type fields are needed, the item consists only of the expr and as attributes; expr is the mathematical expression of the arithmetic operation, and as is the alias the output is converted to

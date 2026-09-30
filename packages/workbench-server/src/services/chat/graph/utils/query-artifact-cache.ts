@@ -105,7 +105,7 @@ export function getQueryArtifactCache(config?: any): QueryArtifactCache | undefi
   return config?.configurable?.queryArtifactCache;
 }
 
-/** 本次运行登记迟到事实的位置，与查询产物缓存同为请求内运行时载体。 */
+/** Where this run registers late facts; like the query artifact cache, a request-scoped runtime carrier. */
 export function resolvePendingLateFacts(config?: any): PendingLateFacts | undefined {
   return config?.configurable?.pendingLateFacts;
 }
@@ -173,7 +173,7 @@ export async function resolveAnalysisData(
   | undefined
 > {
   const currentQueryResult = await resolveCurrentQueryResult(state, config);
-  // 行与字段展示计划取自同一个选中数据集。
+  // Rows and the field display plan come from the same selected dataset.
   const currentDataset = selectedDatasetFromQueryResult(currentQueryResult);
   const currentRows = rowsFromDataset(currentDataset);
   const currentDatasets = currentQueryResult?.datasets;

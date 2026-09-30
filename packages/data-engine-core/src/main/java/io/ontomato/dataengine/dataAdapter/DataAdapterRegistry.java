@@ -29,7 +29,7 @@ public class DataAdapterRegistry {
 	public DataAdapterProvider provider(String type) {
 		DataAdapterProvider provider = providers.get(type);
 		if (provider == null) {
-			throw new IllegalArgumentException("本版本未安装该数据适配器: " + type);
+			throw new IllegalArgumentException("Data adapter not installed in this edition: " + type);
 		}
 		return provider;
 	}

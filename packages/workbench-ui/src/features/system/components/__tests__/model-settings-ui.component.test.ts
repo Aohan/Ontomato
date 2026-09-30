@@ -27,7 +27,7 @@ const sent = vi.hoisted(() => ({
   system: null as unknown,
 }));
 
-// 模拟 Java 模型库：读取返回副本；保存原子落库并按读取归一化补 maxTokens / contextWindow 默认值。
+// Simulates the Java model library: reads return a copy; saves are stored atomically and filled with the maxTokens / contextWindow defaults as read normalization does.
 const server = vi.hoisted(() => ({
   models: [] as Array<Record<string, unknown>>,
   agents: {} as Record<string, string | null>,
@@ -233,7 +233,7 @@ function entry(name: string, extra: Partial<ModelEntry> = {}): ModelEntry {
   };
 }
 
-/** 新增弹窗：输入依次是配置 ID、显示名、连接地址，之后是 Key 行与 API 模型标识。 */
+/** Add dialog: inputs are config ID, display name and URL, followed by the key rows and the API model id. */
 async function fillNewModel(dialog: Pick<ReturnType<typeof mount>, "findAll">, id: string) {
   await dialog.findAll("input")[0]!.setValue(id);
   await dialog.findAll("input")[1]!.setValue(`Model ${id}`);
@@ -244,7 +244,7 @@ async function fillNewModel(dialog: Pick<ReturnType<typeof mount>, "findAll">, i
   await inputs[4]!.setValue("new-model");
 }
 
-/** 列表卡以 v-model 整表替换：挂载时把更新写回 props，模拟父页的浅引用。 */
+/** The list card replaces the whole list through v-model: updates are written back to props on mount, simulating the parent's shallow ref. */
 function mountList(models: ModelEntry[], extra: Record<string, unknown> = {}) {
   const wrapper: ReturnType<typeof mount> = track(
     mount(ModelListCard, {
@@ -269,7 +269,7 @@ async function mountModelPage() {
   return wrapper;
 }
 
-/** 系统配置页：问数设置、技能目录等其他配置；问数示例另有自己的接口，这里替身。 */
+/** System config page: query settings, skill directory and other config; query examples have their own API and are doubled here. */
 async function mountSystemPage() {
   const wrapper = track(
     mount(BusinessConfig, {
@@ -319,7 +319,7 @@ describe("model list card", () => {
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     const inputs = wrapper.findAll("section input");
     expect((inputs[0]!.element as HTMLInputElement).value).toBe("");
-    // maxTokens 与上下文窗口留空，由 Java 补默认值，前端不持有默认值。
+    // maxTokens and the context window stay empty; Java fills the defaults and the frontend holds none.
     const numbers = wrapper.findAll("section .el-input-number input");
     expect(numbers.map((input) => (input.element as HTMLInputElement).value)).toEqual(
       Array(7).fill("")
@@ -338,7 +338,7 @@ describe("model list card", () => {
     await button(wrapper, t("admin.doneEdit"))!.trigger("click");
     expect(listModels(wrapper)[0]).toMatchObject({ name: "qwen-main", displayName: "Qwen Max" });
 
-    // 新建时 ID 可填；ID、显示名与连接三项都填写后才能加入列表。
+    // The ID is editable when creating; the entry joins the list only after the ID, display name and the three connection fields are filled in.
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     const dialog = wrapper.find("section");
     const confirm = () => button(dialog, t("admin.addModel"))!;
@@ -357,7 +357,7 @@ describe("model list card", () => {
 
   it("reveals the full fake key and deletes several keys without shifting the rest", async () => {
     const wrapper = mountList([entry("qwen-main", { apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"] })]);
-    // 列表只显示数量，不出现密钥原文。
+    // The list shows only the count, never the key text.
     expect(wrapper.text()).not.toContain("sk-fake");
     expect(wrapper.text()).toContain(t("admin.keyCountConfigured", { n: 3 }));
 
@@ -395,7 +395,7 @@ describe("role models card", () => {
       diagnosis: null,
       knowledgeGovernance: null,
     });
-    // 选项渲染在下拉浮层的 content 插槽里，这里让 tooltip 桩一并渲染它。
+    // Options render in the dropdown popper's content slot, so the tooltip stub renders it too.
     const wrapper = track(
       mount(RoleModelsCard, {
         props: { roles, models, disabled: false },
@@ -503,7 +503,7 @@ describe("embedding model card", () => {
     const updated = wrapper.emitted("update:model")![0]![0] as EmbeddingModelConfig;
     expect(updated.baseUrl).toBe("https://proxy.example/v1");
     expect(updated.timeout).toBe("PT300S");
-    // 弹窗只覆盖展示的4个字段，customHeaders 等未展示字段必须原样保留。
+    // The dialog overwrites only the 4 displayed fields; fields not shown, such as customHeaders, must be kept as-is.
     expect(updated.customHeaders).toEqual({ "X-Embed-Key": "keep" });
     await button(wrapper, t("common.saveConfig"))!.trigger("click");
     expect(wrapper.emitted("save")).toHaveLength(1);
@@ -533,7 +533,7 @@ describe("embedding model card", () => {
 });
 
 describe("password visibility with the real dialog", () => {
-  // 不替换 ElDialog/teleport：验证真实关闭销毁与密钥行重建后，密码输入回到默认隐藏。
+  // ElDialog/teleport are not replaced: after a real close/destroy and rebuilt key rows, password inputs return to hidden by default.
   const realDialog = { plugins: [i18n, ElementPlus], stubs: { transition: false } };
   const settle = async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -633,7 +633,7 @@ describe("model config page", () => {
     await button(list, t("admin.addModel"))!.trigger("click");
     await fillNewModel(list.find("section"), "fresh");
     await button(list.find("section"), t("admin.addModel"))!.trigger("click");
-    // 选项取当前草稿：新加的模型未保存也能立刻选。
+    // Options come from the current draft: a newly added model can be selected before saving.
     expect(page.findComponent(RoleModelsCard).props("models")).toMatchObject([{ name: "fresh" }]);
     roleSelect(page, "query").vm.$emit("update:modelValue", "fresh");
     roleSelect(page, "general").vm.$emit("update:modelValue", "fresh");
@@ -669,7 +669,7 @@ describe("model config page", () => {
         knowledgeGovernance: null,
       },
     });
-    // 成功后按返回的 data 整体回填（含 Java 补上的默认值），未保存标记清除。
+    // On success the returned data is filled back as a whole (including Java's defaults) and the unsaved marker clears.
     expect(page.findComponent(ModelListCard).props("models")).toMatchObject([
       { name: "fresh", maxTokens: 50000, contextWindow: 256000 },
     ]);
@@ -684,7 +684,7 @@ describe("model config page", () => {
     const payload = sent.settings as { models: unknown[]; agents: Record<string, unknown> };
     expect(Object.keys(payload)).toEqual(["models", "agents"]);
     expect(Object.keys(payload.agents)).toEqual([...MODEL_ROLES]);
-    // 角色只带配置 ID，技能目录不随模型保存提交。
+    // Roles carry only config IDs; the skill directory is not submitted with the model save.
     expect(payload.agents).toEqual(fixtures.agents);
     expect(payload.models).toHaveLength(2);
   });
@@ -752,7 +752,7 @@ describe("model config page", () => {
     const list = page.findComponent(ModelListCard);
     await button(list, t("common.edit"))!.trigger("click");
     const numbers = list.findAll("section .el-input-number input");
-    // 依次是 maxTokens、上下文窗口、超时、重试、temperature、topP、maxCompletionTokens。
+    // In order: maxTokens, context window, timeout, retries, temperature, topP, maxCompletionTokens.
     expect(numbers.map((input) => (input.element as HTMLInputElement).value)).toEqual([
       "50000",
       "256000",
@@ -777,7 +777,7 @@ describe("model config page", () => {
     await list.find("section").findAll(trash)[1]!.trigger("click");
     await button(list, t("admin.doneEdit"))!.trigger("click");
 
-    // 测试用当前草稿，不保存。
+    // Test with the current draft without saving.
     await button(list, t("common.testModel"))!.trigger("click");
     const testDialog = page.findAll("section").at(-1)!;
     await testDialog.find("textarea").setValue("hello");
@@ -806,7 +806,7 @@ describe("model config page", () => {
       logResponses: false,
     });
     expect(JSON.stringify(saved.customRequestParameters)).toBe(OPAQUE_CUSTOMS);
-    // 未编辑的条目原样提交。
+    // Unedited entries are submitted as-is.
     expect((sent.settings as { models: unknown[] }).models[1]).toEqual(fixtures.models[1]);
   });
 

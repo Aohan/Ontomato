@@ -8,7 +8,7 @@ const stream = vi.hoisted(() => ({
   onerror: null,
   close: vi.fn(),
 }));
-// 原 mock 旧 auth 的 getToken；页面现经认证宿主取同一 token。
+// Originally mocked getToken of the old auth module; the page now gets the same token through the auth host.
 vi.mock("../../../../../utils/auth", () => ({ authHost: () => ({ getToken: () => "test-token" }) }));
 vi.mock("../../../api", () => ({
   diagnosisApi: {
@@ -39,7 +39,7 @@ it("parses shared run events into visible question logs and verdict totals", asy
         type: "case_start",
         runId: "run-1",
         timestamp: 1,
-        data: { caseId: "case-1", question: "共享事件问题", index: 0 },
+        data: { caseId: "case-1", question: "shared event question", index: 0 },
       },
       {
         type: "progress",
@@ -55,7 +55,7 @@ it("parses shared run events into visible question logs and verdict totals", asy
     ];
     for (const event of events) stream.onmessage?.({ data: JSON.stringify(event) } as MessageEvent);
     await flushPromises();
-    expect(wrapper.text()).toContain("共享事件问题");
+    expect(wrapper.text()).toContain("shared event question");
     expect(wrapper.text()).toContain("correct=1");
   } finally {
     wrapper.unmount();

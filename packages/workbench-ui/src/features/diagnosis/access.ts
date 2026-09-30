@@ -1,13 +1,13 @@
 import type { InjectionKey } from "vue";
 
 /**
- * 回合诊断入口的可见性，由应用装配：企业按 observer 权限显示，并在按钮挂载时按需加载菜单权限；
- * 开源的 /observe 没有权限门，入口对所有用户可见。
+ * Visibility of the turn diagnosis entry, supplied by the app: an app may gate it on a permission and load menu
+ * permissions when the button mounts; the open-source /observe has no permission gate, so the entry is visible to all users.
  */
 export interface TurnDiagnosisAccess {
-  /** 按钮挂载时调用（原 onMounted 时机）。 */
+  /** Called when the button mounts (the original onMounted timing). */
   prepare(): void;
-  /** 渲染时读取；随应用权限状态的响应式变化更新。 */
+  /** Read during render; updates reactively with the app's permission state. */
   visible(): boolean;
 }
 

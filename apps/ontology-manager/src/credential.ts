@@ -4,10 +4,11 @@ const TOKEN_KEY = "ontology_manager_token";
 const API_KEY_KEY = "ontology_manager_api_key";
 
 /**
- * 启动凭据只保存在当前标签页的 sessionStorage，不读写主系统的长期 token。
- * 地址带 tk 或 apiKey 参数（含空值）即一次新的启动：有效 tk 优先，否则有效 apiKey，
- * 两者都空就是显式清除；新值总是替换本标签页的旧凭据。完全不带这两个参数（刷新）沿用会话。
- * 消费后只从地址栏移除这两个参数，其余 query 与 hash 保留。
+ * The launch credential is kept only in this tab's sessionStorage; the main system's long-lived token is never read or written.
+ * A URL with a tk or apiKey parameter (even empty) is a new launch: a non-empty tk wins, otherwise a non-empty apiKey,
+ * and both empty means an explicit clear; the new value always replaces this tab's old credential. Without either
+ * parameter (a reload) the session is kept. After consumption only these two parameters are removed from the address
+ * bar; the rest of the query and the hash stay.
  */
 export function consumeLaunchCredential() {
   const url = new URL(window.location.href);
@@ -22,7 +23,7 @@ export function consumeLaunchCredential() {
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-/** 本标签页当前凭据，token 优先；都没有时用应用给定的默认（开源匿名，企业 null）。 */
+/** This tab's current credential, token first; without either, the app-supplied default (anonymous or null). */
 export function sessionCredential(noCredential: ManagerCredential | null): ManagerCredential | null {
   const token = sessionStorage.getItem(TOKEN_KEY);
   if (token) return { type: "token", token };

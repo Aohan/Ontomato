@@ -1,4 +1,4 @@
-/* 独立外壳的文档级规则（原 ontology-manager/src/style.css 的 html/body/#app 部分）；组件高度由这里给定。 */
+/* Document-level rules of the standalone shell (the html/body/#app part of the original ontology-manager/src/style.css); the component height comes from here. */
 html,
 body,
 #app {

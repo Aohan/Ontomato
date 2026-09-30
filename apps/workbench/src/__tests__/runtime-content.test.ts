@@ -5,10 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installContentLayout, installWorkbenchProduct } from "@ontomato/workbench-server";
 import { workbenchServerResourceRoot } from "@ontomato/workbench-server/content/resources";
 import { syncRuntimeDefaultResources } from "@ontomato/workbench-server/platform/runtime-defaults";
-import { readKnowledgeMarkdown } from "@ontomato/workbench-server/platform/diagnosis/observe/agent/knowledge-store";
-import { loadSkills, resolveSkillDir } from "@ontomato/workbench-server/platform/diagnosis/observe/agent/skill-loader";
 import { ossContentLayout } from "../content";
+import { configureOssI18n } from "../i18n";
 import { ossProduct } from "../product";
+
+// knowledge-store and skill-loader reach core/skills/manifest's module-level tApp,
+// so they must be imported only after the OSS i18n assembly (the suite's established pattern).
+configureOssI18n();
+const { readKnowledgeMarkdown } = await import(
+  "@ontomato/workbench-server/platform/diagnosis/observe/agent/knowledge-store"
+);
+const { loadSkills, resolveSkillDir } = await import(
+  "@ontomato/workbench-server/platform/diagnosis/observe/agent/skill-loader"
+);
 
 let runtimeRoot: string;
 let tempDirs: string[] = [];
@@ -32,7 +41,7 @@ afterEach(() => {
 });
 
 describe("open-source runtime default resources", () => {
-  // 持久运行目录里已有的额外文件与旧默认文件：同步后读取方看到新默认值，额外文件保留。
+  // Extra files and stale default files already in the persistent runtime directory: after syncing, readers see the new defaults and extra files are kept.
   it("syncs the assembled defaults into the persistent data directory that readers use", async () => {
     installContentLayout(ossContentLayout(runtimeRoot));
     fs.mkdirSync(data("knowledge"), { recursive: true });

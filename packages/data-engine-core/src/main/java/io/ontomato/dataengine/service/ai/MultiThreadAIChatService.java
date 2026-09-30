@@ -125,6 +125,7 @@ public class MultiThreadAIChatService {
 
 	/**
 	 * The single entry point for building chat models: the model configuration drives the SDK, with strictTools determined by the caller branch.
+	 * Custom JSON is not preprocessed by the SDK and is overwritten as a whole at the final HTTP exit (see OntomatoHttpClientBuilder).
 	 */
 	static ChatModel buildChatModel(ModelConfig model, boolean strictTools, Integer defaultMaxCompletionTokens) {
 		return OpenAiChatModel.builder()

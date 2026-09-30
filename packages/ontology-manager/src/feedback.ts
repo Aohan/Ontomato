@@ -17,9 +17,10 @@ interface PendingConfirm {
 }
 
 /**
- * 工作区实例的提示与确认：消息挂在本实例根元素内（跟随本实例主题），确认框是本实例内的声明式对话框。
- * 工作区卸载（宿主换了 API 入口或凭据、或组件被移除）时关闭本实例的消息、按取消结束未答复的确认，
- * 之后的调用不再显示；不影响同页其他 Manager 实例，也不改 html/body。
+ * Messages and confirmations for a workspace instance: messages mount inside this instance's root element (following its
+ * theme) and confirmations are declarative dialogs inside the instance. When the workspace unmounts (the host changed API
+ * entry or credential, or the component was removed), its messages close, unanswered confirmations end as cancelled and
+ * later calls show nothing; other Manager instances on the page and html/body are unaffected.
  */
 function createManagerFeedback(target: Ref<HTMLElement | undefined>) {
   const handles = new Set<MessageHandler>();
@@ -37,7 +38,7 @@ function createManagerFeedback(target: Ref<HTMLElement | undefined>) {
     handles.add(handle);
   }
 
-  /** 与原 ElMessageBox.confirm 相同的约定：确认时 resolve，取消或关闭时以 "cancel" reject。 */
+  /** Same contract as the original ElMessageBox.confirm: resolves on confirm, rejects with "cancel" on cancel or close. */
   function confirm(message: string, title: string) {
     return new Promise<void>((resolve, reject) => {
       state.pending = {
@@ -75,7 +76,7 @@ export type ManagerFeedback = ReturnType<typeof createManagerFeedback>;
 
 const feedbackKey: InjectionKey<ManagerFeedback> = Symbol("ontology-manager-feedback");
 
-/** 由工作区在 setup 中调用一次；target 是工作区根元素。 */
+/** Called once by the workspace in setup; target is the workspace root element. */
 export function provideManagerFeedback(target: Ref<HTMLElement | undefined>) {
   const feedback = createManagerFeedback(target);
   provide(feedbackKey, feedback);
@@ -85,6 +86,6 @@ export function provideManagerFeedback(target: Ref<HTMLElement | undefined>) {
 
 export function useManagerFeedback() {
   const feedback = inject(feedbackKey);
-  if (!feedback) throw new Error("Ontology Manager 组件必须挂载在工作区内");
+  if (!feedback) throw new Error("Ontology Manager components must be mounted inside the workspace");
   return feedback;
 }

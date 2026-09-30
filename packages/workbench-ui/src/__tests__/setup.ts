@@ -1,7 +1,8 @@
 /**
- * 共享用例的装配前提：与开源入口 startWorkbenchWeb 相同，先装认证宿主、错误标点、工作台内容与语言，
- * 模块级代码才可在调用时读取。取开源应用的原值（匿名宿主、正式 en 词包、开源工作台内容）；
- * 用例需要另一版原值时在各自文件里覆盖对应项。
+ * Assembly prerequisites of the shared tests: like the open-source entry startWorkbenchWeb, install the auth host, error
+ * punctuation, workbench content and language first so module-level code can read them at call time. Uses the
+ * open-source app values (anonymous host, the real en messages, open-source workbench content); tests that need other
+ * values override the relevant item in their own file.
  */
 import en from "element-plus/es/locale/lang/en";
 import publicEn from "../locales/en";

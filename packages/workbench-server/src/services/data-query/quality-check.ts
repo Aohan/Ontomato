@@ -22,8 +22,8 @@ export interface StreamSelfCheckOptions {
 }
 
 /**
- * 流式质检（SSE）
- * 调用后端 /check/queryBySessionId 接口，实时接收质检进度和最终结果
+ * Streaming quality check (SSE)
+ * Calls the backend /check/queryBySessionId endpoint and receives quality-check progress and the final result in real time
  */
 export async function streamSelfCheckSSE(
   options: StreamSelfCheckOptions
@@ -47,7 +47,7 @@ export async function streamSelfCheckSSE(
   const consumeEvent = (parsed: any) => {
     if (!parsed || typeof parsed !== "object") return;
 
-    // 步骤事件
+    // Step events
     const hasSummary = typeof parsed.summary === "string" && parsed.summary.trim().length > 0;
     const hasMeaning = typeof parsed.meaning === "string" && parsed.meaning.trim().length > 0;
 
@@ -60,7 +60,7 @@ export async function streamSelfCheckSSE(
       onStep?.(step);
     }
 
-    // 结论事件
+    // Conclusion events
     const hasConclusion =
       typeof parsed.conclusion === "string" && parsed.conclusion.trim().length > 0;
     const hasScore = typeof parsed.score !== "undefined" && parsed.score !== null;
@@ -99,7 +99,7 @@ export async function streamSelfCheckSSE(
     onError?.(error);
   }
 
-  // 有过程但无结尾
+  // Has progress but no conclusion
   if (!finishedPushed && sawAnyStep) {
     logger.warn(tApp("queryFixed.270"));
   }

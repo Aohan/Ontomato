@@ -43,8 +43,8 @@ function hotJudgeProtocolError(key: string, raw: string): Error {
 }
 
 /**
- * 静态与动态判定提示词约定同一输出形状。只有 isAnswerable=false 是合法不足；
- * 空回复、解析不出 JSON、isAnswerable 不是布尔、可回答却没有有效卡片都是协议违约。
+ * The static and dynamic judgment prompts agree on one output shape. Only isAnswerable=false is a legitimate insufficiency;
+ * empty replies, unparseable JSON, a non-boolean isAnswerable, or answerable without valid cards are protocol violations.
  */
 export function interpretHotJudgeReply(content: unknown): HotJudgeResult {
   const raw = String(content ?? "").trim();
@@ -88,7 +88,7 @@ export const BRANCH_CN: Record<BranchKey, string> = {
   abc: t("query.branch.abc"),
 };
 
-/** MetricView 同步返回体、结果帧和热卡片快照共用的失败形状。 */
+/** Failure shape shared by the MetricView synchronous response body, result frames, and hot-card snapshots. */
 export function assertMetricViewSuccess(json: unknown): void {
   if (!json || typeof json !== "object" || Array.isArray(json)) return;
   const record = json as Record<string, unknown>;
@@ -98,9 +98,9 @@ export function assertMetricViewSuccess(json: unknown): void {
 }
 
 /**
- * 解析 MetricView 返回体（同步返回体与动态热数据流的结果帧同形）为热数据项。
- * 同步与流式两处调用方共用：后端返回体三形态（data / result / 顶层数组）兼容与
- * md + http(s) url 过滤是同一规则，一处漂移另一处会静默丢卡。
+ * Parses a MetricView response body (the synchronous body and the result frames of the dynamic hot-data stream share one shape) into hot data items.
+ * Shared by both the synchronous and streaming callers: compatibility with the three backend body forms (data / result / top-level array) and
+ * the md + http(s) url filter are one rule; if either copy drifts the other silently drops cards.
  */
 export function parseMetricViewItems(json: unknown): HotDataItem[] {
   assertMetricViewSuccess(json);
@@ -180,8 +180,8 @@ export interface StreamDocumentsResult {
 }
 
 /**
- * 按流读取动态热数据（/metricView/generateGeneralContent）：首帧 {sessionId, nodeId}
- * 报号，最后一帧是原同步接口的返回体。对结果帧的处理与同步返回体一致。
+ * Reads dynamic hot data as a stream (/metricView/generateGeneralContent): the first frame reports {sessionId, nodeId}
+ * and the last frame is the response body of the original synchronous endpoint. Result frames are handled exactly like the synchronous body.
  */
 export async function streamDocuments(params: {
   endpoint: string;
@@ -191,7 +191,7 @@ export async function streamDocuments(params: {
   locale?: string;
   signal?: AbortSignal;
   apiKey?: string;
-  /** 首帧会话位置一到就上报，不等流结束（问数后端会话的定位与取消·设计 3、6） */
+  /** Reports the session location as soon as the first frame arrives, without waiting for the stream to end (backend session locating and cancellation · design 3, 6) */
   onBackendLocation: (location: { sessionId: string; backendNodeId?: string }) => void;
 }): Promise<StreamDocumentsResult> {
   const config = getApiConfig();
@@ -221,8 +221,8 @@ export async function streamDocuments(params: {
     }
   }
 
-  // 按约定最后一帧必须是结果帧：流正常结束却没收到结果帧是协议错误，
-  // 返回空列表会被当成"没命中"掩盖故障，必须抛错。
+  // By convention the last frame must be a result frame: a stream that ends normally without one is a protocol error.
+  // Returning an empty list would mask the failure as "no hit", so it must throw.
   if (resultFrame === undefined) {
     throw new Error(tApp("queryFixed.258"));
   }
@@ -266,8 +266,8 @@ export async function findKnowledge(params: {
 }
 
 /**
- * 过滤出可用的热数据卡片
- * 有效的热数据项需要包含非空 md 内容和合法的 url
+ * Filters out usable hot data cards
+ * A valid hot data item needs non-empty md content and a legal url
  */
 export function normalizeHotDocs(items: HotDataItem[]): HotDataItem[] {
   return items.filter((item) => {
@@ -278,14 +278,14 @@ export function normalizeHotDocs(items: HotDataItem[]): HotDataItem[] {
 }
 
 /**
- * 计算命中条数（从热数据 payload 中统计）
+ * Counts hit entries (tallied from the hot data payload)
  */
 export function calcHitCountFromPayload(items: HotDataItem[]): number {
   return items.length;
 }
 
 /**
- * 格式化直接回答详情（用于 thinking buffer 展示）
+ * Formats direct-answer details (for thinking buffer display)
  */
 export function formatDirectAnswerDetail(params: {
   branch: BranchKey;

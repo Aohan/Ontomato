@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { presentation } from "@ontomato/contracts/__tests__/presentation-fixtures";
 import {
   buildReportFromDeepAnalysis,
@@ -9,37 +9,19 @@ import {
   orderReportSections,
   updateParsedReportContent,
 } from "../analysis-report";
-import { installWorkbenchContent, workbenchContent } from "../../content";
-
-// 原用例为企业前端：综合总结标题按企业原识别集合（迁出前 web/src/utils/analysis-report.ts）。
-beforeAll(() =>
-  installWorkbenchContent({
-    ...workbenchContent(),
-    comprehensiveSummaryTitles: [
-      "综合总结",
-      "綜合總結",
-      "Comprehensive Summary",
-      "総合サマリー",
-      "ملخص شامل",
-      "Résumé complet",
-      "Umfassende Zusammenfassung",
-      "Riepilogo completo",
-    ],
-  })
-);
 
 describe("analysis report sections", () => {
   it("moves the comprehensive summary to the front only when configured", () => {
     const sections = [
-      { id: "dimension-1", content: "维度一" },
-      { id: "summary", content: "综合总结" },
-      { id: "dimension-2", content: "维度二" },
+      { id: "dimension-1", content: "Dimension one" },
+      { id: "summary", content: "Comprehensive Summary" },
+      { id: "dimension-2", content: "Dimension two" },
     ];
 
     expect(orderReportSections(sections)).toEqual(sections);
     expect(orderReportSections(sections, "top")).toEqual([sections[1], sections[0], sections[2]]);
-    expect(moveSummaryMarkdownToTop("正文\n\n---\n\n# 综合总结\n\n结论")).toBe(
-      "# 综合总结\n\n结论\n\n---\n\n正文"
+    expect(moveSummaryMarkdownToTop("Body\n\n---\n\n# Comprehensive Summary\n\nConclusion")).toBe(
+      "# Comprehensive Summary\n\nConclusion\n\n---\n\nBody"
     );
   });
 
@@ -54,29 +36,29 @@ describe("analysis report sections", () => {
           order: 0,
           revision: 1,
           markdown: "BBBB",
-          title: "区域：华北",
+          title: "Region: North",
           titleLevel: 2,
         },
       ],
     });
     expect(buildReportFromDeepAnalysis(first)).toBe("AAAA");
-    expect(buildReportFromDeepAnalysis(second)).toBe("## 区域：华北\n\nBBBB");
+    expect(buildReportFromDeepAnalysis(second)).toBe("## Region: North\n\nBBBB");
   });
 
   it("keeps concurrent section updates isolated and reuses the untouched chart parse", () => {
     const chartHtml = '<div class="chart-container"><script>echarts.init()</script></div>';
     const data = presentation({
       sections: [
-        { sectionId: "a", order: 0, revision: 1, markdown: "A 首段" },
-        { sectionId: "b", order: 1, revision: 1, markdown: "B 首段\n[chart:dimension:c1]\nB 尾部" },
+        { sectionId: "a", order: 0, revision: 1, markdown: "A first paragraph" },
+        { sectionId: "b", order: 1, revision: 1, markdown: "B first paragraph\n[chart:dimension:c1]\nB tail" },
       ],
       charts: [
         {
           chartId: "c1",
           scopeId: "b",
-          title: "图",
+          title: "Chart",
           chartType: "bar",
-          sourceSubQuestion: "问题",
+          sourceSubQuestion: "Question",
           skillId: "bar",
           dataCount: 1,
           html: chartHtml,
@@ -87,7 +69,7 @@ describe("analysis report sections", () => {
     const parsed = new Map(
       initial.map((s) => [s.id, updateParsedReportContent(undefined, s.content, s.id, true)])
     );
-    data.sections[0].markdown += "\n\n### A 新结论\n\n增长 20%";
+    data.sections[0].markdown += "\n\n### A new conclusion\n\nGrowth 20%";
     const next = new Map(
       buildReportSectionsFromDeepAnalysis(data).map((s) => [
         s.id,
@@ -96,7 +78,7 @@ describe("analysis report sections", () => {
     );
     expect(next.get("b")).toBe(parsed.get("b"));
     expect(
-      next.get("a")?.parts.some((p) => p.type === "text" && p.content.includes("A 新结论"))
+      next.get("a")?.parts.some((p) => p.type === "text" && p.content.includes("A new conclusion"))
     ).toBe(true);
     expect(next.get("b")?.parts.map((p) => p.type)).toContain("chart");
     expect(next.get("b")?.parts.some((p) => p.type === "text" && p.content.includes("```"))).toBe(
@@ -106,7 +88,7 @@ describe("analysis report sections", () => {
 
   it("performs a full parse at terminal and follows only runState for report streaming", () => {
     const content =
-      '正文\n```html\n<div class="chart-container"><script>echarts.init()</script></div>\n```';
+      'Body\n```html\n<div class="chart-container"><script>echarts.init()</script></div>\n```';
     const stale = {
       content,
       isStreaming: true,
@@ -123,7 +105,7 @@ describe("analysis report sections", () => {
       source: "live" as const,
       primaryText: "",
       deepAnalysis: presentation({
-        sections: [{ sectionId: "a", order: 0, revision: 1, markdown: "草稿" }],
+        sections: [{ sectionId: "a", order: 0, revision: 1, markdown: "Draft" }],
       }),
     };
     expect(isDeepAnalysisReportStreaming(snapshot)).toBe(true);
@@ -132,11 +114,11 @@ describe("analysis report sections", () => {
   });
 
   it("shows failure-only reports but leaves action-only tasks without report blocks", () => {
-    const data = presentation({ executionMode: "loop", finalAnswer: "完成动作" });
+    const data = presentation({ executionMode: "loop", finalAnswer: "Action completed" });
     expect(buildReportSectionsFromDeepAnalysis(data)).toEqual([]);
-    data.runState.error = "执行失败";
+    data.runState.error = "Execution failed";
     expect(buildReportSectionsFromDeepAnalysis(data)).toEqual([
-      { id: "failure", content: "执行失败" },
+      { id: "failure", content: "Execution failed" },
     ]);
   });
 });

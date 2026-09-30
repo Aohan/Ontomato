@@ -27,7 +27,7 @@ export interface LoopSkillDeps {
   resolveEvidence: (questionId: string) => LoopSkillEvidenceRecord | undefined;
 }
 
-/** 按智能体选择装配主管与工人共享的技能索引、提示词与工具面。 */
+/** Assembles the skill index, prompts, and tool surface shared by supervisor and workers, per the agent's selection. */
 export async function assembleLoopSkillCapability(deps: LoopSkillDeps) {
   const registry = await skillRegistryManager.forDomain(deps.domainId);
   const availableSkills = registry.getSkills({

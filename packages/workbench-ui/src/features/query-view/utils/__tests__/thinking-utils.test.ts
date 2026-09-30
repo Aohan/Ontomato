@@ -6,14 +6,14 @@ describe("MetricView quality-check display", () => {
     expect(
       tryParseCheckResult({
         score: 86,
-        fittedQuestion: "华东区客户健康度如何？",
-        conclusion: "问题与指标视图匹配",
+        fittedQuestion: "How healthy are customers in the east region?",
+        conclusion: "The question matches the metric view",
       })
     ).toEqual({
       steps: undefined,
       score: 86,
-      fittedQuestion: "华东区客户健康度如何？",
-      conclusion: "问题与指标视图匹配",
+      fittedQuestion: "How healthy are customers in the east region?",
+      conclusion: "The question matches the metric view",
     });
   });
 
@@ -24,7 +24,7 @@ describe("MetricView quality-check display", () => {
   it("keeps an invalid quality-check value diagnosable", () => {
     const invalid = { unexpected: true };
     const display = computeCardDisplayData({
-      md: "# 客户健康度\n问题：客户健康度如何？\n回答：正常",
+      md: "# Customer health\nQuestion: How healthy are customers?\nAnswer: normal",
       originCheckResult: invalid,
     });
 

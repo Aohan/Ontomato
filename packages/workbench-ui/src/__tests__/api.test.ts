@@ -28,7 +28,7 @@ function jsonResponse(status: number, body: unknown) {
   });
 }
 
-describe("共享请求边界", () => {
+describe("shared request boundary", () => {
   beforeEach(() => {
     installWorkbenchI18n({
       supported: ["en"],
@@ -40,7 +40,7 @@ describe("共享请求边界", () => {
       elementLocale: () => en,
     });
     installAuthHost(host);
-    installErrorPunctuation({ detailSeparator: "：", listSeparator: "；" });
+    installErrorPunctuation({ detailSeparator: " — ", listSeparator: " | " });
     credential.token = null;
     credential.apiKey = null;
     statusCalls.length = 0;
@@ -48,7 +48,7 @@ describe("共享请求边界", () => {
     vi.unstubAllGlobals();
   });
 
-  it("token 优先带 tk，只有 apiKey 带 x-api-key，都没有不带凭据头；语言取当前界面语言", async () => {
+  it("a token sends tk first, an apiKey alone sends x-api-key, neither sends no credential header; the language is the current UI locale", async () => {
     const fetchMock = vi.fn(async (..._args: Parameters<typeof fetch>) => jsonResponse(200, { success: true }));
     vi.stubGlobal("fetch", fetchMock);
     credential.token = "tok";
@@ -67,7 +67,7 @@ describe("共享请求边界", () => {
     expect(headers[2]["x-api-key"]).toBeUndefined();
   });
 
-  it("非成功状态交宿主裁决，并给出请求发出时捕获的凭据（请求期间换了登录也不变）", async () => {
+  it("unsuccessful statuses go to the host with the credential captured when the request was sent (unchanged even if the login changes meanwhile)", async () => {
     credential.token = "old";
     statusError = new Error("host error");
     vi.stubGlobal("fetch", async () => {
@@ -78,7 +78,7 @@ describe("共享请求边界", () => {
     expect(statusCalls).toEqual([[401, "old"]]);
   });
 
-  it("宿主不接管时抛通用 ApiRequestError，字段详情按应用标点拼接", async () => {
+  it("without host takeover a generic ApiRequestError is thrown, with field details joined by the app punctuation", async () => {
     vi.stubGlobal("fetch", async () =>
       jsonResponse(400, {
         message: "Invalid",
@@ -91,11 +91,11 @@ describe("共享请求边界", () => {
     const error = await apiPost("/x", {}).catch((e) => e);
     expect(error).toBeInstanceOf(ApiRequestError);
     expect(error.status).toBe(400);
-    expect(error.message).toBe("Invalid：a: bad；b: worse");
+    expect(error.message).toBe("Invalid — a: bad | b: worse");
     expect(statusCalls).toEqual([[400, null]]);
   });
 
-  it("成功响应读完 JSON 时凭据已变化则按会话过期丢弃；未变化则返回，业务失败抛出原消息", async () => {
+  it("if the credential changed by the time a successful response's JSON is read, it is dropped as an expired session; otherwise it is returned, and business failures throw the original message", async () => {
     credential.token = "old";
     vi.stubGlobal("fetch", async () => {
       const res = jsonResponse(200, { success: true, data: 1 });

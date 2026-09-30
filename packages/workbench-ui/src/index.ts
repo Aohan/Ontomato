@@ -29,6 +29,6 @@ export { ObserveLayout } from "./features/diagnosis";
 export type { ObserveAccount } from "./features/diagnosis/components/layout/types";
 export type {
   BusinessConfigAdapterDisplay,
-  BusinessConfigLanguageLabels,
+  BusinessConfigLanguageOption,
   BusinessConfigProps,
 } from "./features/system/business-config";

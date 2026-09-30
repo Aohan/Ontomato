@@ -634,9 +634,11 @@ function isPrimaryDimHeader(h: string): boolean {
 
 function isTimeHeader(h: string): boolean {
   const k = String(h).toLowerCase();
+  // The two escaped literals are Chinese time/date column names matched in
+  // user data; both editions must keep recognizing them.
   return (
-    h === "时间" ||
-    h === "日期" ||
+    h === "\u65f6\u95f4" ||
+    h === "\u65e5\u671f" ||
     k === "time" ||
     k === "date" ||
     k.includes("time") ||

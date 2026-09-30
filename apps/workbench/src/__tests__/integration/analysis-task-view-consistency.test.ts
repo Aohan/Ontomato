@@ -17,7 +17,7 @@ import { installAuthHost } from "@ontomato/workbench-ui/utils/auth";
 import { installWorkbenchContent } from "@ontomato/workbench-ui/content";
 import { anonymousAuthHost } from "../../../web/src/auth";
 import { workbenchContent } from "../../../web/src/workbench-content";
-// 按开源入口 startWorkbenchWeb 装配 store 在调用时读取的认证宿主、工作台内容与语言。
+// The auth host, workbench content, and language that the store assembled by the OSS entry startWorkbenchWeb reads at call time.
 installAuthHost(anonymousAuthHost);
 installWorkbenchContent(workbenchContent);
 installWorkbenchI18n({
@@ -48,7 +48,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// 被测公开面：同一个任务的实时会话和 /messages 恢复；可观察结果：一份公共读模型、没有额外轨迹请求。
+// Public surface under test: the same task's live session and /messages recovery; observable result: one shared read model and no extra trajectory requests.
 it.each(["dimension", "loop"] as const)(
   "%s keeps the same terminal model after refreshing history",
   async (executionMode) => {
@@ -57,12 +57,12 @@ it.each(["dimension", "loop"] as const)(
       onEvent = options.onEvent;
       return () => {};
     });
-    getTaskMessages.mockResolvedValue({ messages: [{ role: "user", content: "问题" }] });
+    getTaskMessages.mockResolvedValue({ messages: [{ role: "user", content: "Question" }] });
     const task = {
       id: "t",
       agentId: "a",
-      name: "任务",
-      question: "问题",
+      name: "Task",
+      question: "Question",
       status: "running",
     } as any;
     const store = useAnalysisStore();
@@ -78,7 +78,7 @@ it.each(["dimension", "loop"] as const)(
         sectionId: "report",
         order: 0,
         revision: 4,
-        markdown: "正文",
+        markdown: "Body",
         status: "success",
         mode: "replace",
         offset: 0,
@@ -102,8 +102,8 @@ it.each(["dimension", "loop"] as const)(
     onEvent({
       type: "task_completed",
       taskId: "t",
-      resultSummary: "正文",
-      resultReport: "正文",
+      resultSummary: "Body",
+      resultReport: "Body",
       timestamp: 6,
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -112,11 +112,11 @@ it.each(["dimension", "loop"] as const)(
       executionMode,
       runState: { status: "completed" },
       activities,
-      sections: [expect.objectContaining({ markdown: "正文" })],
+      sections: [expect.objectContaining({ markdown: "Body" })],
     });
     getTaskMessages.mockResolvedValue({
       messages: [
-        { role: "user", content: "问题" },
+        { role: "user", content: "Question" },
         { role: "assistant", content: live.primaryText, snapshot: { ...live, source: "history" } },
       ],
     });
@@ -130,8 +130,8 @@ const task: AnalysisTaskDetail = {
   id: "t",
   agentId: "a",
   userId: "u",
-  name: "任务",
-  question: "问题",
+  name: "Task",
+  question: "Question",
   description: "",
   status: "running",
   scheduleEnabled: false,
@@ -147,7 +147,7 @@ function taskSnapshot(status: AnalysisActivityStatus, revision = 10): ResponseSn
     mode: "deep-analysis",
     source: "history",
     status: running ? "streaming" : status === "completed" ? "completed" : "failed",
-    primaryText: "正文",
+    primaryText: "Body",
     deepAnalysis: presentation({
       runState: {
         status,
@@ -155,7 +155,7 @@ function taskSnapshot(status: AnalysisActivityStatus, revision = 10): ResponseSn
         progress: {
           done: running ? 45 : 100,
           total: 100,
-          label: running ? "采集指标" : "生成报告",
+          label: running ? "Collect metrics" : "Generate report",
         },
       },
       activities: [
@@ -164,7 +164,7 @@ function taskSnapshot(status: AnalysisActivityStatus, revision = 10): ResponseSn
           status,
           revision,
           finishedAt: running ? undefined : 20,
-          questions: [{ questionId: "q1", question: "销量", status }],
+          questions: [{ questionId: "q1", question: "Sales", status }],
         }),
       ],
       sections: [
@@ -172,7 +172,7 @@ function taskSnapshot(status: AnalysisActivityStatus, revision = 10): ResponseSn
           sectionId: "report",
           order: 0,
           revision,
-          markdown: "正文",
+          markdown: "Body",
           status: running ? undefined : status === "completed" ? "success" : "failed",
         },
       ],
@@ -180,7 +180,7 @@ function taskSnapshot(status: AnalysisActivityStatus, revision = 10): ResponseSn
         {
           chartId: running ? "draft-chart" : "final-chart",
           scopeId: "report",
-          title: "销量",
+          title: "Sales",
           chartType: "bar",
           sourceSubQuestion: "q1",
           html: "<div>chart</div>",
@@ -205,13 +205,13 @@ function taskSnapshot(status: AnalysisActivityStatus, revision = 10): ResponseSn
 function history(snapshot: ResponseSnapshot) {
   return {
     messages: [
-      { role: "user", content: "问题" },
+      { role: "user", content: "Question" },
       { role: "assistant", content: snapshot.primaryText, snapshot },
     ],
   };
 }
 
-// 页面离开时缓存 45%，后台完成但正文相同；恢复不能残留旧活动、节或图表。
+// The page leaves at 45% cached, the backend completes with an identical body; recovery must not leave stale activities, sections, or charts.
 it.each(["retained session", "evicted session"])(
   "reopens a completed task over a running cache from a %s",
   async (cacheKind) => {
@@ -227,7 +227,7 @@ it.each(["retained session", "evicted session"])(
     await vi.advanceTimersByTimeAsync(100);
     if (cacheKind === "evicted session") expect(store.sessions.t).toBeUndefined();
 
-    // 终态权威性不依赖 revision 比本地大，更不依赖正文有变化。
+    // Terminal-state authority never depends on a revision greater than the local one, nor on the body having changed.
     const completed = taskSnapshot("completed", 10);
     getTaskMessages.mockResolvedValue(history(completed));
     await store.openSession({ ...task, status: "completed" });
@@ -245,7 +245,7 @@ it.each(["retained session", "evicted session"])(
   }
 );
 
-// /stream 在任务已结束时只发这个生命周期事件；客户端必须用 /messages 补齐同文终态。
+// When the task has already ended, /stream emits only this lifecycle event; the client must use /messages to complete the same-body terminal state.
 it.each(["completed", "failed", "cancelled"] as const)(
   "%s reconnect restores exactly the same model as reopening the page",
   async (status) => {
@@ -267,8 +267,8 @@ it.each(["completed", "failed", "cancelled"] as const)(
       buildAnalysisTaskTerminalEvent({
         taskId: task.id,
         status,
-        resultSummary: "正文",
-        resultReport: "正文",
+        resultSummary: "Body",
+        resultReport: "Body",
       })
     );
     await vi.waitFor(() => {
@@ -307,12 +307,12 @@ it("replaces the task baseline while preserving an unfinished follow-up tail", a
   const store = useAnalysisStore();
   getTaskMessages.mockResolvedValue(history(taskSnapshot("completed", 10)));
   await store.openSession({ ...task, status: "completed" });
-  store.sessions.t.messages.push({ id: 99, role: "user", content: "继续解释" });
+  store.sessions.t.messages.push({ id: 99, role: "user", content: "Explain more" });
   const followUp: ResponseSnapshot = {
     mode: "standard",
     source: "live",
     status: "streaming",
-    primaryText: "追问草稿",
+    primaryText: "Follow-up draft",
   };
   store.sessions.t.streamingSnapshot = followUp;
   store.sessions.t.isLoading = true;
@@ -320,9 +320,9 @@ it("replaces the task baseline while preserving an unfinished follow-up tail", a
   getTaskMessages.mockResolvedValue(history(terminal));
   await store.loadTaskHistory(task.id);
   expect(store.sessions.t.messages.map((message) => message.content)).toEqual([
-    "问题",
-    "正文",
-    "继续解释",
+    "Question",
+    "Body",
+    "Explain more",
   ]);
   expect(store.sessions.t.messages[1].snapshot).toEqual(terminal);
   expect(store.sessions.t.streamingSnapshot).toEqual(followUp);

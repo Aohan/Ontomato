@@ -7,14 +7,14 @@ import { modelLabel, type ModelEntry, type RoleModels } from "../../types";
 const { t } = useI18n();
 
 const props = defineProps<{
-  /** 当前草稿中的模型：模型与角色一起保存，新加的模型可以立刻选。 */
+  /** Models in the current draft: models and roles are saved together, so a newly added model can be selected immediately. */
   models: Pick<ModelEntry, "name" | "displayName">[];
   disabled: boolean;
 }>();
 
 const roles = defineModel<RoleModels>("roles", { required: true });
 
-// 问数引擎角色由 Java 消费，智能体角色由 Node 消费；两组都从全部模型中选。
+// Query engine roles are consumed by Java and agent roles by Node; both groups choose from all models.
 const roleGroups: { titleKey: string; roles: ModelRole[] }[] = [
   { titleKey: "admin.modelRoleGroups.queryEngine", roles: ["query", "coding"] },
   {
@@ -23,7 +23,7 @@ const roleGroups: { titleKey: string; roles: ModelRole[] }[] = [
   },
 ];
 
-// 清空即“未配置”：保存请求里角色值为 null。
+// Clearing means "not configured": the role value is null in the save request.
 const unsetRole = () => null;
 </script>
 

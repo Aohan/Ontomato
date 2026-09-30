@@ -7,7 +7,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { workbenchI18n } from "../../../../../i18n";
 import DiagnosisPage from "../DiagnosisPage.vue";
 
-// 原全局 i18n 实例改为共享用例 setup 已装配的实例。
+// The original global i18n instance is replaced by the one installed in the shared test setup.
 const i18n = workbenchI18n();
 
 const api = vi.hoisted(() => ({
@@ -67,11 +67,11 @@ beforeEach(() => {
     async (_path: string, _method: string, body: { message: string }) => {
       history.set("s-new", [
         { role: "user", content: body.message },
-        { role: "assistant", content: "诊断结论：缓存失效" },
+        { role: "assistant", content: "Diagnosis: cache invalidated" },
       ]);
       return streamResponse([
         { type: "response_started", message: body.message },
-        { type: "token", content: "诊断结论：缓存失效" },
+        { type: "token", content: "Diagnosis: cache invalidated" },
         { type: "response_end", status: "completed" },
       ]);
     }
@@ -87,30 +87,30 @@ it("sends a diagnosis message without any model picker or per-session model bind
   expect(wrapper.findComponent({ name: "ElSelect" }).exists()).toBe(false);
   expect(wrapper.findComponent({ name: "ElDropdown" }).exists()).toBe(false);
 
-  await wrapper.find("textarea").setValue("接口变慢");
+  await wrapper.find("textarea").setValue("API got slower");
   await wrapper.find(".chat-input-action").trigger("click");
   await flushPromises();
 
   expect(api.post).toHaveBeenCalledWith("/observe/agent/sessions", {
-    title: "接口变慢",
+    title: "API got slower",
     context: { page: "general" },
   });
   expect(api.fetch).toHaveBeenCalledWith(
     "/observe/agent/chat",
     "POST",
-    { sessionId: "s-new", message: "接口变慢" },
+    { sessionId: "s-new", message: "API got slower" },
     expect.anything()
   );
   expect(api.get.mock.calls.map(([path]) => path)).toEqual([
     "/observe/agent/sessions/s-new/history",
   ]);
-  expect(wrapper.text()).toContain("诊断结论：缓存失效");
+  expect(wrapper.text()).toContain("Diagnosis: cache invalidated");
 });
 
 it("restores a session's history from the route without model state", async () => {
   history.set("s-old", [
-    { role: "user", content: "昨天的告警" },
-    { role: "assistant", content: "已定位到慢查询" },
+    { role: "user", content: "Yesterday's alert" },
+    { role: "assistant", content: "Slow query located" },
   ]);
   const wrapper = await mountAt("/observe/diagnosis?sessionId=s-old");
   wrappers.push(wrapper);
@@ -118,7 +118,7 @@ it("restores a session's history from the route without model state", async () =
   expect(api.get.mock.calls.map(([path]) => path)).toEqual([
     "/observe/agent/sessions/s-old/history",
   ]);
-  expect(wrapper.text()).toContain("昨天的告警");
-  expect(wrapper.text()).toContain("已定位到慢查询");
+  expect(wrapper.text()).toContain("Yesterday's alert");
+  expect(wrapper.text()).toContain("Slow query located");
   expect(wrapper.findComponent({ name: "ElSelect" }).exists()).toBe(false);
 });

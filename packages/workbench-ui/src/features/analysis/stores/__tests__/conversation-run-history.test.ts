@@ -54,7 +54,7 @@ function sessionTask(patch: Record<string, unknown> = {}) {
     id: "saved",
     agentId: "harness",
     userId: "owner",
-    name: "会话",
+    name: "conversation-task",
     description: "",
     reportDeliverableEnabled: false,
     status: "completed",
@@ -80,7 +80,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// 被测公开面：常规智能体的任务列表；可观察结果：只列无报告会话，不混入报告任务。
+// Public surface under test: task list of a regular agent; observable result: only sessions without reports are listed, report tasks are not mixed in.
 it("separates regular-agent conversations from report tasks", async () => {
   const store = useAnalysisStore();
   await store.loadAgents();
@@ -95,7 +95,7 @@ it("separates regular-agent conversations from report tasks", async () => {
   );
 });
 
-// 被测公开面：常规会话首条指令与后续指令；可观察结果：首条建任务、后续走 /turns。
+// Public surface under test: first and later instructions of a regular session; observable result: the first creates the task, later ones go through /turns.
 it("starts a conversation from the composer and continues it over /turns", async () => {
   vi.useFakeTimers();
   const created = sessionTask({ id: "new", status: "running" });
@@ -105,17 +105,17 @@ it("starts a conversation from the composer and continues it over /turns", async
   const store = useAnalysisStore();
   await store.loadAgents();
   await store.selectAgent("harness");
-  store.updateActiveInput("查库存");
+  store.updateActiveInput("check stock");
   await store.sendCurrentMessage();
 
   expect(createTask).toHaveBeenCalledWith(
-    expect.objectContaining({ agentId: "harness", question: "查库存", executeImmediately: true })
+    expect.objectContaining({ agentId: "harness", question: "check stock", executeImmediately: true })
   );
   expect(store.currentTask?.id).toBe("new");
   expect(streamTaskExecution).toHaveBeenCalledWith("new", expect.anything());
 });
 
-// 被测公开面：常规会话后续指令；可观察结果：走 /turns 并带上服务端受理的回合号。
+// Public surface under test: later instructions of a regular session; observable result: they go through /turns with the turn number the server accepted.
 it("continues a saved conversation over /turns instead of the report follow-up endpoint", async () => {
   vi.useFakeTimers();
   const saved = sessionTask({ status: "completed" });
@@ -126,9 +126,9 @@ it("continues a saved conversation over /turns instead of the report follow-up e
   await store.loadAgents();
   await store.selectAgent("harness");
   await store.openSession(saved as never);
-  await store.sendMessage("saved", "继续");
+  await store.sendMessage("saved", "continue");
 
-  expect(continueConversation).toHaveBeenCalledWith("saved", "继续");
+  expect(continueConversation).toHaveBeenCalledWith("saved", "continue");
   expect(streamFollowUp).not.toHaveBeenCalled();
   expect(streamTaskExecution).toHaveBeenCalledWith(
     "saved",
@@ -136,15 +136,15 @@ it("continues a saved conversation over /turns instead of the report follow-up e
   );
 });
 
-// 被测公开面：运行历史选择与报告读取；可观察结果：报告正文只在报告视图，
-// 对话视图没有快照时不伪造 assistant 消息。
+// Public surface under test: run history selection and report reading; observable result: the report body appears only in the report view,
+// and the chat view does not fake an assistant message without a snapshot.
 it("keeps a past run's report out of the conversation view", async () => {
-  const task = sessionTask({ reportDeliverableEnabled: true, resultReport: "当前报告" });
+  const task = sessionTask({ reportDeliverableEnabled: true, resultReport: "current-report" });
   listTaskPage.mockResolvedValue({ tasks: [task], total: 1, limit: 50, offset: 0 });
   getTask.mockResolvedValue(task);
   listRuns.mockResolvedValue([
-    { id: "run-1", status: "failed", resultReport: "第一次报告" },
-    { id: "run-2", status: "completed", resultReport: "第二次报告" },
+    { id: "run-1", status: "failed", resultReport: "first-report" },
+    { id: "run-2", status: "completed", resultReport: "second-report" },
   ]);
 
   const store = useAnalysisStore();
@@ -155,13 +155,13 @@ it("keeps a past run's report out of the conversation view", async () => {
 
   store.selectRun(0);
   expect(store.isSelectedLatestRun).toBe(false);
-  expect(store.reportSections).toEqual([{ id: "run:run-1", content: "第一次报告" }]);
-  expect(store.reportContent).toBe("第一次报告");
-  expect(store.selectedRunMessages.at(-1)?.content).not.toBe("第一次报告");
+  expect(store.reportSections).toEqual([{ id: "run:run-1", content: "first-report" }]);
+  expect(store.reportContent).toBe("first-report");
+  expect(store.selectedRunMessages.at(-1)?.content).not.toBe("first-report");
 });
 
-// 被测公开面：回看读模型的回合身份；可观察结果：常规会话各轮带服务端线程与受理序号，
-// 诊断入口据此定位 Turn。
+// Public surface under test: turn identity of the replay read model; observable result: each turn of a regular session carries the server thread and accepted sequence number,
+// which the diagnosis entry uses to locate the Turn.
 it("carries the server thread and request sequence into replayed conversation turns", async () => {
   const saved = sessionTask({ threadId: "thread-9" });
   listTaskPage.mockResolvedValue({ tasks: [saved], total: 1, limit: 50, offset: 0 });
@@ -169,11 +169,11 @@ it("carries the server thread and request sequence into replayed conversation tu
   getTurns.mockResolvedValue([
     {
       requestSeq: 4,
-      userMessage: "查库存",
+      userMessage: "check stock",
       status: "completed",
       messages: [],
       activities: [],
-      finalAnswer: "库存正常",
+      finalAnswer: "stock is normal",
       charts: [],
       chartDiagnostics: [],
       createdAt: 1,
@@ -190,7 +190,7 @@ it("carries the server thread and request sequence into replayed conversation tu
   });
 });
 
-// 被测公开面：历史运行回看；可观察结果：选中的旧运行按任务线程与该运行的受理序号定位 Turn。
+// Public surface under test: replaying a past run; observable result: the selected old run locates its Turn by the task thread and that run's accepted sequence number.
 it("identifies a selected past run by the task thread and that run's request sequence", async () => {
   const task = sessionTask({ reportDeliverableEnabled: true, threadId: "thread-r" });
   listTaskPage.mockResolvedValue({ tasks: [task], total: 1, limit: 50, offset: 0 });
@@ -209,12 +209,12 @@ it("identifies a selected past run by the task thread and that run's request seq
   });
 });
 
-// 被测公开面：失败任务的交付件判定；可观察结果：已生成正文仍可交付，不因终态失败而清空。
+// Public surface under test: deliverable check of a failed task; observable result: an already generated body stays deliverable and is not cleared by the failed final state.
 it("keeps generated report content available after a failure", async () => {
   const task = sessionTask({
     reportDeliverableEnabled: true,
     status: "failed",
-    resultSummary: "已生成的部分报告",
+    resultSummary: "partially generated report",
   });
   listTaskPage.mockResolvedValue({ tasks: [task], total: 1, limit: 50, offset: 0 });
   getTask.mockResolvedValue(task);
@@ -224,10 +224,10 @@ it("keeps generated report content available after a failure", async () => {
   await store.selectTask(task as never, () => {});
 
   expect(store.hasReportArtifact).toBe(true);
-  expect(store.reportContent).toBe("已生成的部分报告");
+  expect(store.reportContent).toBe("partially generated report");
 });
 
-// 被测公开面：重跑；可观察结果：沿用同一任务身份重启执行并回到该任务的会话。
+// Public surface under test: rerun; observable result: execution restarts with the same task identity and returns to that task's session.
 it("reruns a task in place and resets its session", async () => {
   vi.useFakeTimers();
   const task = sessionTask({ status: "completed", reportDeliverableEnabled: true });

@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick } from "vue";
 
-/** 组件替身：记录外壳交给组件的 props，并能代组件发出事件。 */
+/** Component double: records the props the shell hands to the component and can emit events on its behalf. */
 const host = vi.hoisted(() => ({
   props: null as Record<string, unknown> | null,
   emit: null as ((event: string, ...args: unknown[]) => void) | null,
 }));
 
-// 组件整体替身：组件自身已有测试，这里只核对外壳交给组件的 props、组件事件的承接与所用状态词条。
+// The whole component is doubled (it has its own tests); this file only checks the props the shell hands over, how component events are handled, and the status messages used.
 vi.mock("@ontomato/ontology-manager", async () => {
   const { defineComponent, h } = await import("vue");
   const OntologyManager = defineComponent({
@@ -15,6 +15,7 @@ vi.mock("@ontomato/ontology-manager", async () => {
       apiBase: { type: String, required: true },
       credential: { type: Object, required: true },
       locale: { type: String, required: true },
+      messages: { type: Object, required: true },
       theme: { type: String, required: true },
       view: { type: String, required: true },
       dataFallbacks: { type: Object, required: true },
@@ -30,11 +31,10 @@ vi.mock("@ontomato/ontology-manager", async () => {
       return () => h("div", { class: "manager-double" });
     },
   });
-  const ontologyText = (locale: string, key: string, params?: object) =>
-    `${locale}:${key}${params ? JSON.stringify(params) : ""}`;
-  return { OntologyManager, ontologyText };
+  return { OntologyManager };
 });
 
+const { englishMessages } = await import("@ontomato/ontology-manager/i18n");
 const { isolateShellPerTest } = await import("./isolation");
 const { ossProfile } = await import("../profile");
 const { ossPresentation } = await import("../presentation");
@@ -50,7 +50,7 @@ function start(url: string) {
   startManagerShell(ossProfile);
 }
 
-describe("开源独立外壳", () => {
+describe("open-source standalone shell", () => {
   beforeEach(() => {
     sessionStorage.clear();
     localStorage.clear();
@@ -58,12 +58,13 @@ describe("开源独立外壳", () => {
     window.__ONTOLOGY_MANAGER_CONFIG__ = { API_BASE: "/custom-base/api/", INITIAL_ROUTE: "" };
   });
 
-  it("无参数时显式匿名，固定 en 与开源数据默认值，apiBase 取 config.js", () => {
+  it("without parameters: explicit anonymous, fixed en with English messages and open-source data defaults, apiBase from config.js", () => {
     start("/?view=assets");
     expect(host.props).toMatchObject({
       apiBase: "/custom-base/api",
       credential: { type: "anonymous" },
       locale: "en",
+      messages: englishMessages,
       theme: "light",
       view: "/assets/metrics",
       dataFallbacks: {
@@ -78,7 +79,7 @@ describe("开源独立外壳", () => {
     });
     expect(host.props?.embedded).toBe(false);
     expect(host.props?.knowledgeGovernanceUrl).toBeNull();
-    // 开源展示原值（b6437c86）：同一静态对象交给组件。
+    // Open-source presentation values (b6437c86): the same static object is handed to the component.
     expect(host.props?.presentation).toBe(ossPresentation);
     expect(ossPresentation).toMatchObject({
       nodePalette: ["#639c2d", "#8bbf4a", "#d79b3b", "#58a968", "#d46b57", "#84956f"],
@@ -91,7 +92,7 @@ describe("开源独立外壳", () => {
     );
   });
 
-  it("宿主嵌入参数：embedded=1 与 http(s) 治理地址交给组件，其他协议的地址当作没有", () => {
+  it("host launch parameters: embedded=1 and an http(s) governance URL reach the component; URLs with other schemes count as absent", () => {
     start("/?embedded=1&knowledgeGovernanceUrl=http%3A%2F%2Fhost.test%2Fadmin%2Fknowledge-governance");
     expect(host.props?.embedded).toBe(true);
     expect(host.props?.knowledgeGovernanceUrl).toBe("http://host.test/admin/knowledge-governance");
@@ -99,7 +100,7 @@ describe("开源独立外壳", () => {
     expect(host.props?.knowledgeGovernanceUrl).toBeNull();
   });
 
-  it("显式 tk / apiKey 启动时使用该凭据并从地址移除", () => {
+  it("an explicit tk / apiKey launch uses that credential and removes it from the URL", () => {
     start("/?tk=t1#/data");
     expect(host.props?.credential).toEqual({ type: "token", token: "t1" });
     expect(window.location.search).toBe("");
@@ -108,7 +109,7 @@ describe("开源独立外壳", () => {
     expect(host.props?.credential).toEqual({ type: "apiKey", apiKey: "k1" });
   });
 
-  it("语言固定 en：地址参数、本地偏好与语言消息都不改变，也不写偏好", async () => {
+  it("locale is fixed to en: URL parameters, stored preference and locale messages change nothing and no preference is written", async () => {
     localStorage.setItem("app-locale", "zh-CN");
     start("/?locale=zh-CN");
     for (const type of ["data-agent-locale", "ontomato-locale"]) {
@@ -123,7 +124,7 @@ describe("开源独立外壳", () => {
     expect(document.documentElement.lang).toBe("en");
   });
 
-  it("主题消息使用 ontomato-theme", async () => {
+  it("theme messages use ontomato-theme", async () => {
     start("/");
     window.dispatchEvent(
       new MessageEvent("message", { data: { type: "ontomato-theme", theme: "dark" }, source: window })
@@ -132,7 +133,7 @@ describe("开源独立外壳", () => {
     expect(host.props?.theme).toBe("dark");
   });
 
-  it("组件导航以替换写回 hash", async () => {
+  it("component navigation replaces the hash", async () => {
     start("/");
     const length = window.history.length;
     host.emit?.("update:view", "/objects/Order");
@@ -142,18 +143,18 @@ describe("开源独立外壳", () => {
     expect(window.history.length).toBe(length);
   });
 
-  it("401：清除本标签页凭据，停止渲染组件并提示认证失败；刷新后回到匿名默认", async () => {
+  it("401: clears this tab's credential, stops rendering the component and reports the auth failure; a reload returns to the anonymous default", async () => {
     start("/?tk=t1");
     host.emit?.("auth-failure", 401);
     await nextTick();
     expect(sessionStorage.length).toBe(0);
     expect(document.querySelector(".manager-double")).toBeNull();
-    expect(document.querySelector('[role="alert"]')?.textContent).toBe('en:requestFailedStatus{"status":401}');
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe("Request failed (401)");
     start("/");
     expect(host.props?.credential).toEqual({ type: "anonymous" });
   });
 
-  it("402：保留凭据与组件，不转登录", async () => {
+  it("402: keeps the credential and the component without redirecting to login", async () => {
     start("/?tk=t1");
     host.emit?.("auth-failure", 402);
     await nextTick();

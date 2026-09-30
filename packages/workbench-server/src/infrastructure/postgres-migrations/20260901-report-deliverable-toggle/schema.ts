@@ -1,7 +1,7 @@
 import { qualifiedTable } from "../../postgres.js";
 import type { QueryableClient } from "../helpers.js";
 
-/** 存量与新建智能体默认挂载报告交付件；显式关闭时由循环底座直接交付最终回复。 */
+/** Existing and newly created agents mount the report deliverable by default; when explicitly turned off, the loop base delivers the final reply directly. */
 export async function ensureReportDeliverableToggleSchema(client: QueryableClient): Promise<void> {
   await client.query(`
     ALTER TABLE ${qualifiedTable("analysis_agents")}

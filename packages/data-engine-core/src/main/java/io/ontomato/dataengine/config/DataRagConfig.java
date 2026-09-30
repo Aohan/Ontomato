@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 @Configuration
-@ConfigurationProperties(prefix = "ontomato.datarag")
+@ConfigurationProperties(prefix = "ontomato.data-engine")
 public class DataRagConfig {
 
 	private String serviceId;

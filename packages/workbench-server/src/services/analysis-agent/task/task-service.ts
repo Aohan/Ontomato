@@ -11,11 +11,11 @@ import type {
   AnalysisTaskTriggerSource,
 } from "@ontomato/contracts/analysis-task";
 /**
- * 分析任务行的存储：一行一次报告运行。
+ * Storage of analysis task rows: one row per report run.
  *
- * 报告产物只落 `analysis_payload`（`result_summary` 是列表页的轻量预览），
- * 交付正文由 task-result 读时派生；定时规则不在这张表里，由 schedule-rules 承接。
- * 既有任务列表接口仍然同时展示报告任务与定时规则，合并发生在本模块的列表读模型。
+ * Report artifacts persist only into `analysis_payload` (`result_summary` is the list page's lightweight preview);
+ * the deliverable body is derived at read time by task-result. Schedule rules are not in this table — schedule-rules owns them.
+ * The existing task list endpoints keep showing report tasks and schedule rules together; merging happens in this module's list read model.
  */
 
 import pg from "pg";
@@ -83,7 +83,7 @@ export interface ListTaskSummariesOptions {
   offset?: number;
 }
 
-/** 任务行按列表读模型投影；与 `scheduleRuleTaskFeedSql()` 的列序保持一致。 */
+/** Projects task rows in list read-model order; column order matches `scheduleRuleTaskFeedSql()`. */
 const TASK_FEED_SQL = `SELECT
   id,
   agent_id,
@@ -135,7 +135,7 @@ function mapTaskRow(row: AnalysisTaskRow): AnalysisTask {
     notifyEmail: row.notify_email || undefined,
     notifyOnComplete: row.notify_on_complete,
     resultSummary: row.result_summary || undefined,
-    // 报告正文不再单独存列，按需从唯一权威产物派生。
+    // The report body is no longer stored in its own column; it is derived on demand from the single authoritative artifact.
     resultReport: buildDeepAnalysisTaskResult(analysisPayload).resultReport || undefined,
     analysisPayload,
     requestSeq: row.request_seq ?? undefined,
@@ -160,7 +160,7 @@ export class AnalysisTaskService {
     this.pool = getPostgresPool();
   }
 
-  /** 常规会话的全部回合事实，按受理序号返回；后轮不覆盖前轮。 */
+  /** All turn facts of a regular session, returned in acceptance order; later turns never overwrite earlier ones. */
   async listConversationTurns(taskId: string): Promise<AnalysisConversationTurnRecord[]> {
     const result = await this.pool.query(
       `SELECT request_seq AS "requestSeq", user_message AS "userMessage", status,
@@ -192,8 +192,8 @@ export class AnalysisTaskService {
   }
 
   /**
-   * 受理一轮常规会话：同一事务内占用非 running 的常规会话任务、分配受理序号并写入回合。
-   * 任务正在运行或不是常规会话时返回 null，由入口回 409；受理序号与任务占用同一事务。
+   * Accepts one regular-session turn: inside one transaction it occupies a non-running regular-session task, assigns the acceptance sequence, and writes the turn.
+   * Returns null when the task is running or not a regular session, and the entry answers 409; the acceptance sequence and the task occupation share one transaction.
    */
   async claimConversationTurn(
     taskId: string,
@@ -264,7 +264,7 @@ export class AnalysisTaskService {
     }
   }
 
-  /** 只更新仍为 running 的该轮，迟到的中间写入不会覆盖终态。 */
+  /** Updates only the turn still running, so late intermediate writes can never overwrite a terminal state. */
   async saveConversationTurn(taskId: string, turn: AnalysisConversationTurnRecord): Promise<void> {
     const result = await this.pool.query(
       `UPDATE ${qualifiedTable("analysis_task_turns")} SET status = $3,
@@ -485,7 +485,7 @@ export class AnalysisTaskService {
     return (await this.getTask(id, params.domainId))!;
   }
 
-  /** 任务行单条更新：id 固定为 $1，其余参数按 sets 顺序从 $2 起。 */
+  /** Single-row task update: id is pinned to $1 and the remaining parameters start at $2 in `sets` order. */
   private async applyTaskUpdate(
     id: string,
     sets: string[],
@@ -502,9 +502,9 @@ export class AnalysisTaskService {
   }
 
   /**
-   * 运行归属写入的唯一原子边界：锁行读出运行历史后，先确认这次写入的运行是否仍是
-   * 最近一次受理的运行。只有它才能改写任务当前的状态与产物；被新运行取代的迟到写入
-   * 只按身份补齐自己那条历史记录，改不到新运行的任何当前事实，也绝不新增运行记录。
+   * The single atomic boundary for run-attribution writes: after reading the run history with the row locked, first confirm the writing run is still
+   * the most recently accepted run. Only it may rewrite the task's current state and artifacts; a late write superseded by a new run only backfills
+   * its own history record by identity — it cannot touch any current fact of the new run and never appends a run record.
    */
   private async applyTaskUpdateWithRunIdentity(
     id: string,
@@ -531,8 +531,8 @@ export class AnalysisTaskService {
       const row = current.rows[0];
       const history = readAnalysisRunHistory(row.run_history);
       const merged = runPatch ? applyAnalysisRunUpdate(history, identity, runPatch) : undefined;
-      // 当前事实只在“仍是最近一次受理的运行、且任务尚未因这次运行进入终态”时改写：
-      // 运行中的迟到产物不能把已落定的终态改回 running；同一终态的补齐仍可写正文与时间。
+      // Current facts are rewritten only while the writer is still the most recently accepted run and the task has not entered a terminal state from this run:
+      // a running run's late artifacts cannot flip a settled terminal state back to running; completion of the same terminal state may still write body and time.
       const incomingStatus = (runPatch?.status ?? "running") as AnalysisTaskStatus;
       const mayWriteCurrent =
         isCurrentAnalysisRun(history, identity) &&
@@ -571,7 +571,7 @@ export class AnalysisTaskService {
     extra?: {
       resultSummary?: string;
       lastRunAt?: number;
-      /** 本次终态要改写的运行；缺省表示没有已受理的运行，按普通状态刷新处理。 */
+      /** The run this terminal state rewrites; absent means no accepted run and the write is handled as an ordinary status refresh. */
       identity?: AnalysisRunIdentity;
     }
   ): Promise<AnalysisTask | null> {
@@ -611,8 +611,8 @@ export class AnalysisTaskService {
   }
 
   /**
-   * 原子地将任务状态从非 running 改为 running（防止并发重复执行）
-   * 返回更新后的任务，如果已在运行则返回 null
+   * Atomically moves the task status from non-running to running (preventing concurrent duplicate execution).
+   * Returns the updated task, or null when it is already running.
    */
   async tryStartTask(id: string, domainId: string): Promise<AnalysisTask | null> {
     const now = Date.now();
@@ -722,7 +722,7 @@ export class AnalysisTaskService {
       analysisPayload?: DeepAnalysisTaskPayload;
       requestSeq?: number;
     },
-    /** 受理时捕获的运行身份；产物与终态都是运行归属的当前事实，无身份不写入。 */
+    /** Run identity captured at acceptance; artifacts and terminal states are run-attributed current facts, and without identity nothing is written. */
     identity?: AnalysisRunIdentity
   ): Promise<AnalysisTask | null> {
     const now = Date.now();
@@ -746,8 +746,8 @@ export class AnalysisTaskService {
         const { resultSummary, resultReport } = buildDeepAnalysisTaskResult(
           artifacts.analysisPayload
         );
-        // 运行历史必须保留该次运行自己的可回放快照。只保存报告正文会让前端
-        // 在回看旧 run 时无法恢复任务过程，只能把报告正文误当成 assistant 消息。
+        // The run history must keep this run's own replayable snapshot. Saving only the report body would leave the frontend
+        // unable to restore the task process when reviewing an old run, mistaking the report body for an assistant message.
         const snapshot = buildDeepAnalysisTaskSnapshot({
           taskId: id,
           requestSeq: artifacts.requestSeq,
@@ -811,8 +811,8 @@ export class AnalysisTaskService {
   }
 
   /**
-   * 按事件序号读取某一来源类型的任务事件结构化事实。
-   * 循环形态用它读取分析轨迹。
+   * Reads the structured facts of task events of one source type by event sequence.
+   * The loop form uses it to read the analysis trajectory.
    */
   async listTaskEventPayloads<T>(taskId: string, sourceKind: string): Promise<T[]> {
     const result = await this.pool.query(
@@ -824,7 +824,7 @@ export class AnalysisTaskService {
     return result.rows.map((row) => row.payload as T);
   }
 
-  /** 按稳定来源身份读取一条任务事件事实；循环工人轨迹用派遣活动身份按需读取。 */
+  /** Reads one task event fact by stable source identity; loop worker trajectories read on demand by dispatch activity identity. */
   async getTaskEventPayload<T>(
     taskId: string,
     sourceKind: string,

@@ -4,6 +4,7 @@ import { marked as serverMarked } from "@ontomato/workbench-server/services/anal
 import { renderAgentMarkdown } from "@ontomato/workbench-ui/utils/agent-markdown";
 import { marked as webMarked } from "@ontomato/workbench-ui/utils/marked";
 
+// Escaped CJK input keeps the original Markdown punctuation and emphasis behavior.
 const renderers = [
   {
     name: "server marked",
@@ -21,7 +22,7 @@ const renderers = [
 
 describe.each(renderers)("$name product Markdown dialect", ({ render }) => {
   it("keeps repeated single-tilde numeric ranges literal", () => {
-    const source = "53,630.26~60,326.74，日占比在3.08%~3.47%之间，销售量介于50,883.02~67,397.23";
+    const source = "53,630.26~60,326.74\uff0c\u65e5\u5360\u6bd4\u57283.08%~3.47%\u4e4b\u95f4\uff0c\u9500\u552e\u91cf\u4ecb\u4e8e50,883.02~67,397.23";
 
     const html = render(source);
 
@@ -32,8 +33,8 @@ describe.each(renderers)("$name product Markdown dialect", ({ render }) => {
   });
 
   it("treats only double tildes as strikethrough", () => {
-    expect(render("保留 ~普通文本~")).toContain("~普通文本~");
-    expect(render("保留 ~~删除的问题~~")).toMatch(/<(?:del|s)>删除的问题<\/(?:del|s)>/);
+    expect(render("\u4fdd\u7559 ~\u666e\u901a\u6587\u672c~")).toContain("~\u666e\u901a\u6587\u672c~");
+    expect(render("\u4fdd\u7559 ~~\u5220\u9664\u7684\u95ee\u9898~~")).toMatch(/<(?:del|s)>\u5220\u9664\u7684\u95ee\u9898<\/(?:del|s)>/);
   });
 });
 

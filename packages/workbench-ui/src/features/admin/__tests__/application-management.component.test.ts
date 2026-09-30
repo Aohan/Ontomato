@@ -41,8 +41,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("分析智能体页的系统智能体页签", () => {
-  it("两张入口卡各按自己的权限显示；都没有权限时不显示页签", async () => {
+describe("system agents tab on the analysis agents page", () => {
+  it("each entry card shows by its own permission; without either the tab is hidden", async () => {
     const all = await mountPage(["observer", "business-knowledge"]);
     expect(all.tabs()).toContain(t("admin.systemAgents"));
     expect(all.cards()).toEqual([t("admin.opsAgent"), t("governance.title")]);
@@ -58,7 +58,7 @@ describe("分析智能体页的系统智能体页签", () => {
     expect(none.wrapper.find(".system-agent-card").exists()).toBe(false);
   });
 
-  it("运维智能体在新窗口打开可观测性的诊断页；业务知识治理在后台内打开", async () => {
+  it("the operations agent opens the observability diagnosis page in a new window; knowledge governance opens inside the admin console", async () => {
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const { wrapper, router } = await mountPage(["observer", "business-knowledge"]);
     const [ops, governance] = wrapper.findAll(".system-agent-card");

@@ -98,13 +98,13 @@ class SyncProductFilesTests(unittest.TestCase):
 
     def test_bytes_odd_names_and_spaced_roots_survive(self):
         blob = b"\x00\xff#\r\nnot utf-8\x80"
-        write(self.conf, {"binary/blob.dat": blob, "dir with space/中文 name.txt": "value\n"})
-        write(self.skills, {"dir with space/中文 skill.md": "value\n"})
+        write(self.conf, {"binary/blob.dat": blob, "dir with space/café name.txt": "value\n"})
+        write(self.skills, {"dir with space/café skill.md": "value\n"})
         result = self.sync(self.conf, self.skills, self.data)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual((self.data / "conf/binary/blob.dat").read_bytes(), blob)
-        self.assertEqual(self.read("conf/dir with space/中文 name.txt"), "value\n")
-        self.assertEqual(self.read("skills/dir with space/中文 skill.md"), "value\n")
+        self.assertEqual(self.read("conf/dir with space/café name.txt"), "value\n")
+        self.assertEqual(self.read("skills/dir with space/café skill.md"), "value\n")
 
     def test_wrong_argument_count_exits_64_without_writing(self):
         for arguments in ([], [self.conf], [self.conf, self.skills], [self.conf, self.skills, self.data, "extra"]):

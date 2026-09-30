@@ -37,7 +37,7 @@ export interface BranchContext<K extends BranchKey> {
   pushEvent: (event: any) => void;
   thinking: ThinkingBranchView<K>;
   signal: AbortSignal;
-  /** 分支拿到自己的后端会话位置即上报；是否仍活跃由执行器判定 */
+  /** A branch reports as soon as it has its backend session location; whether it is still active is decided by the executor */
   reportBackendLocation: (location: QueryBackendLocation) => void;
 }
 

@@ -12,13 +12,13 @@ import {
 import { adminRoutes } from "../router/admin-routes";
 import { adminAccessKey } from "../features/admin/navigation";
 
-// config/app.ts 在导入时读取运行配置。
+// config/app.ts reads the runtime config on import.
 window.__APP_CONFIG__ = { ONTOLOGY_MANAGER_URL: "http://manager.test/" };
 
 const enterpriseEntry: OntologyManagerEntryConfig = {
   themeMessage: "data-agent-theme",
   localeMessage: "data-agent-locale",
-  frameTitle: "本体管理器",
+  frameTitle: "Ontology Manager",
   missingUrlTitle: "",
   missingUrlDescription: "",
 };
@@ -69,16 +69,16 @@ async function managerFrameUrl(
   await new Promise((resolve) => setTimeout(resolve));
   await nextTick();
   const src = el.querySelector("iframe")?.getAttribute("src");
-  // 卸载最后一个应用时路由器把 currentRoute 复位为起点，须在卸载前读取。
+  // Unmounting the last app resets the router's currentRoute to the start, so read it before unmounting.
   const route = router.currentRoute.value;
   app.unmount();
   return { url: new URL(src!), route };
 }
 
-describe("Manager 入口", () => {
+describe("Manager entry", () => {
   beforeEach(() => localStorage.clear());
 
-  it("旧可视化建模路由带 focus/id/back 进入 Manager 入口，其余 query 不带入", async () => {
+  it("the old visual modeling route enters the Manager entry with focus/id/back and drops the rest of the query", async () => {
     const { url, route } = await managerFrameUrl(
       "/admin/ontology/visual-modeling?focus=object&id=Order&back=playground&tk=leak&keep=1",
       enterpriseEntry,
@@ -100,7 +100,7 @@ describe("Manager 入口", () => {
     expect(url.hash).toBe("");
   });
 
-  it("企业：token 优先，无 token 时带 apiKey；开源不带 locale，无凭据时不带凭据参数", async () => {
+  it("with locale sync: token first, apiKey without a token; open source sends no locale and no credential parameter without a credential", async () => {
     const withKey = await managerFrameUrl("/admin/ontology-manager?view=assets", enterpriseEntry, null, "key");
     expect(withKey.url.searchParams.get("apiKey")).toBe("key");
     expect(withKey.url.searchParams.get("tk")).toBeNull();
@@ -109,7 +109,7 @@ describe("Manager 入口", () => {
     expect(Object.fromEntries(oss.url.searchParams)).toEqual({ view: "data-browser", theme: "light", embedded: "1" });
   });
 
-  it("有 business-knowledge 权限时带业务知识治理页的绝对地址，无权限不带", async () => {
+  it("passes the absolute knowledge governance URL with business-knowledge permission and omits it without", async () => {
     const granted = await managerFrameUrl("/admin/ontology-manager", ossEntry, null, null, ["business-knowledge"]);
     expect(granted.url.searchParams.get("knowledgeGovernanceUrl")).toBe(
       `${window.location.origin}/admin/knowledge-governance`

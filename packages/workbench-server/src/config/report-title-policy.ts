@@ -1,2 +1,2 @@
-/** 交付变体策略；白云交付在此选择 preserve，既有正文和历史迁移使用同一策略。 */
+/** Deliverable variant policy; Baiyun delivery selects preserve here, with existing bodies and historical migration using the same policy. */
 export const DIMENSION_REPORT_TITLE_POLICY: "ensure" | "preserve" = "ensure";

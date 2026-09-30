@@ -411,7 +411,7 @@ function fenced(content: string, lang: string): string {
 }
 
 /**
- * Write all merged conversations to the 提示词/ directory.
+ * Write all merged conversations to the prompts/ directory.
  */
 export function writeConversationMarkdown(
   artifactDir: string,

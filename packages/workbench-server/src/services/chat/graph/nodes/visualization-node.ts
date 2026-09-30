@@ -172,7 +172,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
     return createErrorReturn(tApp("queryFixed.90"));
   }
 
-  // 初始化可视化思考状态
+  // Initialize the visualization thinking state
   let visThinking: QueryThinkingState = buildInitialVisThinkingState();
   sendVisThinkingState(visThinking, sendEvent);
 
@@ -187,7 +187,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
     return createErrorReturn(t("viz.noRenderSkillsAvailableCheck"));
   }
 
-  // 获取数据
+  // Fetch data
   try {
     sendEvent({
       type: "progress" as const,

@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 
 @Data
 @NoArgsConstructor
-@ConfigurationProperties(prefix = "ontomato.datarag.jdbc")
+@ConfigurationProperties(prefix = "ontomato.data-engine.jdbc")
 public class JdbcProps {
 
     /** PostgreSQL connection URL, e.g. jdbc:postgresql://127.0.0.1:5432/datarag */

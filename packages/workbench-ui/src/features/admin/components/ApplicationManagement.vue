@@ -12,7 +12,7 @@ const router = useRouter();
 const { t } = useI18n();
 const access = useAdminAccess();
 
-// 系统智能体入口卡：运维智能体与顶栏观测图标同一权限、同样新窗口打开；业务知识治理在后台内打开。
+// System agent entry cards: the operations agent uses the same permission as the header observe icon and also opens in a new window; knowledge governance opens inside the admin console.
 const canOpenOpsAgent = computed(() => access.can("observer"));
 const canOpenGovernance = computed(() => access.can("business-knowledge"));
 const showSystemAgents = computed(() => canOpenOpsAgent.value || canOpenGovernance.value);

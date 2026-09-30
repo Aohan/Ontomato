@@ -7,6 +7,7 @@ import {
   useManagerContext,
   type ManagerHostContext,
 } from "../context";
+import { englishMessages } from "../i18n";
 
 let requests: { url: string; headers: Record<string, string> }[];
 let status: number;
@@ -30,7 +31,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** 四个工作区各自注入客户端，代表本体、资产、数据浏览与建模的请求入口。 */
+/** Four workspaces each inject the client, standing for the ontology, asset, data browsing and modeling request entry points. */
 const workspaces = {
   ontology: (client: ManagerClient) => client.loadOntology(),
   assets: (client: ManagerClient) => client.loadSmartAssets("actions"),
@@ -76,10 +77,11 @@ const base: ManagerHostContext = {
   apiBase: "/manager-api",
   credential: { type: "token", token: "t-1" },
   locale: "en",
+  messages: englishMessages,
   theme: "light",
   view: "/playground",
-  dataFallbacks: { noBusinessDescription: "未填写业务说明", unnamedAsset: "未命名资产" },
-  // 本文件只核上下文注入与请求，展示值不参与；按契约给出完整的必传对象。
+  dataFallbacks: { noBusinessDescription: "Host: no description", unnamedAsset: "Host: unnamed asset" },
+  // This file only checks context injection and requests; presentation values are unused but supplied in full as the contract requires.
   presentation: {
     themeProperties: { light: {}, dark: {} },
     nodePalette: ["#000001", "#000002", "#000003", "#000004", "#000005", "#000006"],
@@ -88,13 +90,13 @@ const base: ManagerHostContext = {
     dataBrowserDescription: () => "",
     compactDialogs: false,
   },
-  knowledgeTagValues: { general: "通用", business: "业务", tech: "技术" },
+  knowledgeTagValues: { general: "General", business: "Business", tech: "Tech" },
   embedded: false,
   knowledgeGovernanceUrl: null,
 };
 
-describe("宿主上下文注入", () => {
-  it("本体、资产、数据浏览与建模共用同一实例上下文，并随宿主更新", async () => {
+describe("host context injection", () => {
+  it("ontology, assets, data browsing and modeling share one per-instance context that follows the host", async () => {
     const manager = mountManager(base);
     const { ontology, assets, dataBrowser, visualModeling } = manager.clients;
     expect(new Set([ontology, assets, dataBrowser, visualModeling]).size).toBe(1);
@@ -116,7 +118,7 @@ describe("宿主上下文注入", () => {
     );
   });
 
-  it("两个实例互不共享上下文", async () => {
+  it("two instances do not share context", async () => {
     const first = mountManager(base);
     const second = mountManager({
       ...base,
@@ -134,7 +136,7 @@ describe("宿主上下文注入", () => {
     expect(requests[1].headers).not.toHaveProperty("x-api-key");
   });
 
-  it("主题、语言与视图由宿主传入并保持响应", async () => {
+  it("theme, locale and view come from the host and stay reactive", async () => {
     const manager = mountManager(base);
     manager.context.theme = "dark";
     manager.context.view = "/visual-modeling?focus=object&id=Order";
@@ -146,7 +148,7 @@ describe("宿主上下文注入", () => {
     });
   });
 
-  it("不读取宿主存储中的旧凭据", async () => {
+  it("does not read old credentials from host storage", async () => {
     localStorage.setItem("data_agent_token", "host-token");
     localStorage.setItem("data_agent_apikey", "host-key");
     sessionStorage.setItem("ontology_manager_token", "shell-token");
@@ -162,7 +164,7 @@ describe("宿主上下文注入", () => {
     expect(requests[0].headers).not.toHaveProperty("x-api-key");
   });
 
-  it("401/402 交给宿主，不跳转、不清除任何存储", async () => {
+  it("401/402 go to the host without navigating or clearing any storage", async () => {
     localStorage.setItem("data_agent_token", "host-token");
     window.location.hash = "#/objects/Order";
     const manager = mountManager(base);
@@ -178,7 +180,7 @@ describe("宿主上下文注入", () => {
     expect(manager.context.credential).toEqual({ type: "token", token: "t-1" });
   });
 
-  it("未在宿主根组件内使用时明确报错", () => {
+  it("reports a clear error when used outside the host root component", () => {
     const Orphan = defineComponent({
       setup() {
         useManagerClient();

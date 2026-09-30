@@ -34,8 +34,8 @@ const props = defineProps<{
   visible: boolean;
   editingAgent: AnalysisAgent | null;
   /**
-   * 开源布局传入的原展示：必填星号在右、MCP 下拉宽度随输入框、表单标签换行。
-   * 企业布局不传：两个 Element Plus 属性保持原先省略，标签保持原不换行。
+   * Original display passed by the open-source layout: required asterisk on the right, MCP dropdown as wide as the input,
+   * wrapping form labels. Layouts that omit it keep both Element Plus attributes unset and labels unwrapped.
    */
   requireAsteriskPosition?: "left" | "right";
   fitInputWidth?: boolean;

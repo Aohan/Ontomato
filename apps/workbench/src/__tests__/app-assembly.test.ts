@@ -8,9 +8,9 @@ import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisTask } from "@ontomato/workbench-server/services/analysis-agent/task-types";
 
-// 真实入口装配；只替换启动副作用（监听、同步、DB、调度）、任务存储与模型运行。
-// dotenv 只替换读文件这一步：记录入口给出的路径，并像 .env 一样写入一个配置变量，
-// 以证明它在配置模块求值之前执行（真实读取见 product-env.test.ts）。
+// Real entry assembly; only startup side effects (listening, syncing, DB, scheduler), task storage, and model runs are replaced.
+// dotenv replaces only the file-read step: it records the path the entry provides and writes one config variable like a .env would,
+// proving it runs before the config modules evaluate (see product-env.test.ts for the real read).
 const DOTENV_BASE_URL = "http://from-product-env.invalid";
 const mocks = vi.hoisted(() => ({
   dotenv: vi.fn(),
@@ -77,9 +77,9 @@ const tempDir = (prefix: string) => {
 };
 
 beforeAll(async () => {
-  // 启动目录不是仓根：装配结果不能随调用 cwd 改变。
+  // The startup directory is not the repo root: the assembly result must not depend on the invoking cwd.
   vi.spyOn(process, "cwd").mockReturnValue(tempDir("oss-cwd-"));
-  // 日志用既有的目录覆盖变量写到临时目录，测试不写入仓内运行数据。
+  // Logs go to a temp directory through the existing directory override variable; the tests never write into repository runtime data.
   vi.stubEnv("ONTOMATO_LOG_DIR", tempDir("oss-logs-"));
   vi.stubEnv("DATA_QUERY_BASE_URL", "");
   mocks.dotenv.mockImplementation(() => void vi.stubEnv("DATA_QUERY_BASE_URL", DOTENV_BASE_URL));
@@ -137,7 +137,7 @@ describe("open-source workbench assembly", () => {
       mocks.task = {
         id: "task-1",
         agentId: "agent-1",
-        // 任务行归属与在线主体不同：开源版沿用任务行，不做归属比较。
+        // The task row's attribution differs from the online principal: the OSS edition keeps the task row and never compares attribution.
         userId: "row-user",
         domainId: "row-domain",
         name: "task",

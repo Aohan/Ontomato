@@ -3,7 +3,7 @@ import { createLogger } from "../logging/logger";
 import { getLocale, tApp } from "../i18n";
 
 const logger = createLogger("backend-client");
-// 禁用底层响应头/正文时限，由普通请求和 SSE 各自的 AbortSignal 控制。
+// Disables the underlying headers/body timeouts; ordinary requests and SSE are each controlled by their own AbortSignal.
 export const backendDispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 
 export class AuthFailedError extends Error {
@@ -154,7 +154,7 @@ type BufferedBackendResponse = Pick<Response, "headers" | "status" | "statusText
 
 export async function checkBackendResponse(response: Response, detailLimit = 200): Promise<void> {
   if (response.ok) return;
-  // 已收到的 HTTP status 决定分类；正文读取失败只影响错误详情。
+  // The received HTTP status decides the classification; a body read failure only affects the error detail.
   const detail = String(await response.text().catch(() => "")).slice(0, detailLimit);
   if (response.status === 401 || response.status === 403) {
     throw new AuthFailedError(

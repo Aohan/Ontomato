@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
-// 网页产物输出到仓根 dist/web：Node 生产服务从产品根的 dist/web 提供静态页面。
+// Web output goes to dist/web at the repository root: the Node production server serves static pages from the product root's dist/web.
 export default defineConfig({
   base: "./",
   plugins: [vue()],

@@ -12,7 +12,7 @@ const props = defineProps<{
   disabled: boolean;
 }>();
 
-// 条目是普通对象：父页以浅引用持有列表，新增与编辑都整表替换，不就地修改。
+// Entries are plain objects: the parent holds the list by a shallow ref, and adding or editing replaces the whole list instead of mutating it.
 const models = defineModel<ModelEntry[]>("models", { required: true });
 
 const emit = defineEmits<{
@@ -23,17 +23,17 @@ const emit = defineEmits<{
 const dialogVisible = ref(false);
 const editingIndex = ref(-1);
 const customRequestParametersValid = ref(true);
-// 原条目的完整快照（含未上控件的字段），编辑时展开回写，保证往返保真。
+// Complete snapshot of the original entry (including fields without controls), spread back when editing to keep round trips lossless.
 let editingBaseline: ModelEntry | null = null;
-// 自定义对象不进 reactive：Vue 深层代理会吞掉保留键，用浅引用持有原始对象。
+// Custom objects stay out of reactive: Vue's deep proxy would swallow reserved keys, so a shallow ref holds the raw object.
 const customParams = shallowRef<Record<string, unknown>>({});
 
 function updateCustomParameters(value: Record<string, unknown>) {
-  // 显式写入 ref，避免模板将含 __v_isRef 的普通 JSON 当成新的 ref 绑定。
+  // Write the ref explicitly so the template does not treat plain JSON containing __v_isRef as a new ref binding.
   customParams.value = value;
 }
 
-// 数值项为 null 表示不设置：maxTokens / contextWindow 由 Java 补默认值，其余不下发。
+// A null number means unset: Java fills maxTokens / contextWindow defaults and the rest are not sent.
 function emptyDraft() {
   return {
     name: "",
@@ -52,7 +52,7 @@ function emptyDraft() {
 }
 
 const draft = reactive(emptyDraft());
-// 密钥行按位置渲染；删除后递增使剩余行的密码输入重建，显示状态回到默认隐藏。
+// Key rows render by position; incrementing after a delete rebuilds the remaining password inputs so their visibility resets to hidden.
 const keyRowsVersion = ref(0);
 
 function removeKey(index: number) {
@@ -62,7 +62,7 @@ function removeKey(index: number) {
 
 const isNew = computed(() => editingIndex.value < 0);
 const dialogTitle = computed(() => (isNew.value ? t("admin.addModel") : t("admin.editModel")));
-// ID、显示名与连接三项（地址、至少一条非空 Key、API 模型标识）必填，与服务端保存规则一致。
+// ID, display name and the three connection fields (URL, at least one non-empty key, API model id) are required, matching the server's save rules.
 const draftComplete = computed(
   () =>
     [draft.name, draft.displayName, draft.baseUrl, draft.modelName].every(
@@ -91,14 +91,14 @@ function openEditDialog(index: number) {
     modelName: entry.modelName,
     maxTokens: entry.maxTokens,
     contextWindow: entry.contextWindow,
-    // 超时读取为 ISO-8601 时长（如 PT5M），缺失即空。
+    // The timeout is read as an ISO-8601 duration (e.g. PT5M); missing means empty.
     timeoutSeconds: entry.timeout ? parseIsoDurationSeconds(entry.timeout) : null,
     maxRetries: entry.maxRetries ?? null,
     temperature: entry.temperature ?? null,
     topP: entry.topP ?? null,
     maxCompletionTokens: entry.maxCompletionTokens ?? null,
   });
-  // custom 是不透明 JSON，原样引用，编辑器整件替换、不就地改。
+  // custom is opaque JSON referenced as-is; the editor replaces it whole instead of mutating it.
   customParams.value = entry.customRequestParameters ?? {};
   customRequestParametersValid.value = true;
   dialogVisible.value = true;
@@ -107,11 +107,11 @@ function openEditDialog(index: number) {
 function confirmDialog() {
   const staged: ModelEntry = {
     ...editingBaseline,
-    // 配置 ID 是角色引用的身份，已有条目不可改；显示名可随时改，不影响引用。
+    // The config ID is the identity roles refer to, so existing entries cannot change it; the display name can change at any time without affecting references.
     name: draft.name.trim(),
     displayName: draft.displayName.trim(),
     baseUrl: draft.baseUrl,
-    // 密钥是原值普通数组：删除即删项，保存与测试都按草稿原样提交。
+    // Keys are a plain array of original values: deleting removes the item, and save and test both submit the draft as-is.
     apiKeys: [...draft.apiKeys],
     modelName: draft.modelName,
     maxTokens: draft.maxTokens,

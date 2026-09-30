@@ -6,7 +6,7 @@ declare module "*.vue" {
   export default component;
 }
 
-/** 后端 `/config.js` 注入的运行配置；LANGUAGE_SWITCH_ENABLED 为既有的显式覆盖项，当前后端不注入。 */
+/** Runtime config injected by the backend `/config.js`; LANGUAGE_SWITCH_ENABLED is an existing explicit override that the current backend does not inject. */
 interface Window {
   __APP_CONFIG__?: {
     API_BASE?: string;

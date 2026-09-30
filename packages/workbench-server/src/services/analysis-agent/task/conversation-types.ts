@@ -6,7 +6,7 @@ import type {
   AnalysisChartResult,
 } from "@ontomato/contracts/analysis-charts";
 
-/** 一轮取证在 query_runs 中的稳定引用；后续轮次据此恢复历史证据。 */
+/** Stable reference of one evidence turn inside query_runs; later turns restore historical evidence through it. */
 export interface AnalysisConversationEvidenceRef {
   questionId: string;
   question: string;
@@ -17,9 +17,9 @@ export interface AnalysisConversationEvidenceRef {
 }
 
 /**
- * 常规会话一轮的持久化事实：消息保留工具结果，不保存可执行工具实例。
- * 后轮不覆盖前轮；读取历史时不自动重放其中记录的外部动作。
- * 消息按 Harness 回合引用读取；业务活动与证据仍由本回合拥有。
+ * Persisted facts of one regular-session turn: messages keep tool results and never store executable tool instances.
+ * Later turns never overwrite earlier ones; reading history never replays the external actions recorded inside it.
+ * Messages are read by harness turn reference; business activities and evidence remain owned by this turn.
  */
 export interface AnalysisConversationTurnRecord {
   harnessTurnId?: string;

@@ -1,7 +1,5 @@
 # Ontomato
 
-[中文](README.zh-CN.md) · [Website](https://ontomato.ai/)
-
 Give your AI a model of your business, then ask it real questions.
 
 Ontomato answers natural-language questions over your business database. It grounds
@@ -26,17 +24,38 @@ agent:
 
 ### 1. Deploy
 
-Requirements: Docker Engine 26+ with the Compose plugin, an OpenAI-compatible chat model
-endpoint, and an embedding model endpoint. The images are pulled from Docker Hub for
-`linux/amd64` and `linux/arm64`.
+Deployment needs Docker Engine 26+ with the Compose plugin, an OpenAI-compatible chat model
+endpoint, and an embedding model endpoint.
+
+The stack is delivered as an offline bundle: the images are built on a build host and
+carried to the server inside the bundle, which the server then loads. The build host needs
+Node.js 24+, Git, GNU Make and Docker with the Buildx plugin:
 
 ```bash
 git clone https://github.com/Aohan/Ontomato.git
-cd Ontomato/deploy
+cd Ontomato
+make build ARCH=amd64
+docker pull --platform linux/amd64 pgvector/pgvector:pg18
+make bundle ARCH=amd64   # or arm64
+```
+
+`make build` builds Ontomato's images and does not fetch PostgreSQL. Pull the
+PostgreSQL image for the same architecture (`--platform linux/arm64` for arm64), or import
+a matching image with `docker load -i`; `make bundle` fails on a missing image or an image
+of the wrong architecture.
+
+Copy the unpacked bundle directory to the server, load the images and start the stack:
+
+```bash
+for f in images/*.tar.gz; do docker load -i "$f"; done
 cp .env.example .env
 # edit .env, then:
 docker compose up -d
 ```
+
+The bundle holds `docker-compose.yml`, `.env.example`, `initdb.sql`, the assembly recipes
+under `assemble/` and one `images/*.tar.gz` per image.
+[deploy/README.md](deploy/README.md) describes the bundle and the on-site steps.
 
 Set these values in `.env`; the other entries have working defaults and are
 described in the comments of `.env.example`.
@@ -57,10 +76,12 @@ When `docker compose ps` shows every service healthy, these ports are open:
 | 18087 | Data engine |
 | 5432 | PostgreSQL |
 
+PostgreSQL is published on the server's loopback address only, so it is not reachable from
+outside the server.
+
 ### 2. Install the agent skills
 
-Three skills are in [agent-skills/en](agent-skills/en); Chinese versions are in
-[agent-skills/zh](agent-skills/zh). They need Node.js 18+.
+Three skills are in [agent-skills](agent-skills). They need Node.js 18+.
 
 | Skill | Use it to |
 | --- | --- |
@@ -73,9 +94,9 @@ root:
 
 ```bash
 # Claude Code
-mkdir -p .claude/skills && cp -R agent-skills/en/* .claude/skills/
+mkdir -p .claude/skills && cp -R agent-skills/* .claude/skills/
 # Codex
-mkdir -p .agents/skills && cp -R agent-skills/en/* .agents/skills/
+mkdir -p .agents/skills && cp -R agent-skills/* .agents/skills/
 ```
 
 | Agent | Project skills directory | User skills directory |
@@ -112,12 +133,12 @@ ontomap in the Ontology Manager at `http://<host>:3005`.
 | --- | --- |
 | `apps/` | application entry points: web app (`workbench`), data engine, Ontology Manager |
 | `packages/` | shared implementation and contracts |
-| `agent-skills/` | the agent skills, in English and Chinese |
+| `agent-skills/` | the agent skills |
 | `deploy/` | the Docker Compose stack |
 | `docker/`, `scripts/` | image recipes and build tools |
 
 Local development and image builds are described in
-[docs/development.md](docs/development.md) (Chinese).
+[docs/development.md](docs/development.md).
 
 ## License
 

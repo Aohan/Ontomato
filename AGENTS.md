@@ -1,25 +1,72 @@
 # AGENTS
 
-## 范围与依赖
+## Scope and dependencies
 
-本仓只包含可公开的产品源码、配置模板和工具。不要导入旧私有仓的 Git 历史、内部资料、真实配置或企业实现。
+This repository contains only the public product source, configuration templates and
+tools. Do not import the old private repository's Git history, internal material, real
+configuration or enterprise implementation.
 
-`apps` 负责启动与装配；`packages` 拥有实际实现。工作台服务端、浏览器界面、数据引擎和本体管理器按各自运行边界维护。公共模块不得依赖私有企业模块。Node 与浏览器共享的线上契约归 contracts，浏览器代码不得导入服务端实现。
+`apps` owns startup and assembly; `packages` owns the actual implementation. The
+workbench server, the browser interface, the data engine and the Ontology Manager are
+maintained per their own runtime boundaries. Public modules must not depend on private
+enterprise modules. The wire contracts shared by Node and the browser belong to
+contracts, and browser code must not import server implementations.
 
-本体管理器组件接收宿主传入的 API、当前鉴权与偏好；业务权限由服务端裁决。数据浏览与可视化建模归管理器，不保留主工作台的第二份实现。
+Ontology Manager components receive the API, the current authentication and preferences
+from the host; business permissions are decided by the server. Data browsing and visual
+modeling belong to the Manager, and the main workbench keeps no second implementation of
+them.
 
-## 变更与验证
+## Changes and verification
 
-当前处于首次迁移阶段。先核对实际模块和已存在的构建入口，再运行适用检查；不要编造尚未落地的命令或验收结果。保持原有业务、权限与数据语义，新增业务变化需先明确设计。
+Check the actual modules and the existing build entry points first, then run the
+applicable checks; do not invent commands or acceptance results
+that have not landed. Keep the existing business, permission and data semantics, and
+confirm the design before any new business change.
 
-Java 的数据库、模型及外部系统测试不得无筛选全量执行。真实配置和运行数据不得提交。仅保存本任务成果，保护其他任务修改。
+Java tests that touch databases, models or external systems must not be run unfiltered as
+a whole. Real configuration and runtime data must not be committed. Save only this task's
+results and protect other tasks' changes.
 
-## 协作与工作目录
+## Collaboration and working directories
 
-两个仓的外层工作目录是普通目录，不带 Git、锁或构建配置。两仓日常开发线均为 `develop`，各自独立切分支、提交与合并，同名分支不会自动绑定；正常开发从各自 `develop` 建立 `feature/<主题>` 或 `fix/<主题>`，完成后分别合回 `develop`。主目录默认检出 `develop` + `develop`，`main` 保留。构建不隐式 fetch、pull 或切换分支；首次迁移直接在 main 上实施只适用于该次迁移，不引入工作区管理器。
+Use an ordinary outer directory for an isolated pair of checkouts; do not add a third
+repository, lock file or build configuration there. Internal development uses `develop`, and each repository
+branches, commits and merges on its own; a branch of the same name is not bound
+automatically. Normal work starts from each repository's own `develop` as
+`feature/<topic>` or `fix/<topic>` and merges back into `develop` when done. The main
+directory checks out `develop` + `develop` by default, and `main` is kept. Builds do not
+implicitly fetch, pull or switch branches. Do not introduce a workspace manager.
 
-只在需要隔离完整组合时，使用与两仓平行的 `worktrees/<主题>/{ontomato,enterprise}` Git worktree，并保持 `../ontomato` 相对引用不变；只做本仓独立开发时用一个 worktree 即可，未改动的一边检出明确的主线提交。不新造常驻上游副本、submodule 或源码 SHA 锁。
+Use the `worktrees/<topic>/{ontomato,enterprise}` Git worktrees, parallel to the two
+repositories, only when the complete combination needs isolation, and keep the
+`../ontomato` relative reference unchanged; for independent work on this repository alone
+one worktree is enough, and the untouched side checks out an explicit mainline commit. Do
+not create a permanent upstream copy, a submodule or a source SHA lock.
 
-交接主目录联调前，各仓先自行保存提交并暂停编辑，确认没有待保存内容、相关服务已停止，并释放被功能 worktree 占用的分支，再让主目录检出所需组合；不强行让两处写同一分支，不自动丢弃、stash 或 reset 他人内容。完整组合通过后再分别合回各自主线并验证主线组合。
+Before handing the main directory over for integration, each repository saves its commits
+and pauses editing, confirms there is nothing left to save and the relevant services are
+stopped, and releases any branch held by a feature worktree; then the main directory
+checks out the required combination. Do not let two places write the same branch, and do
+not automatically discard, stash or reset other people's work. Once the complete
+combination passes, merge each repository back into its own mainline and verify the
+mainline combination.
 
-接口或边界变化先澄清再实施，组合结果由主控负责最终判断；主控验收是本次迁移已确认的方式，不代表后续每项任务只能这样验收。提交信息沿用工作空间的 `type：中文描述` 格式。
+Clarify interface or boundary changes before implementing them, and the main controller
+makes the final judgement on the combined result; acceptance by the main controller is the
+confirmed approach for this migration and does not mean every later task must be accepted
+this way.
+
+## Public history and branches
+
+`main` is this repository's public line: it carries only clean public snapshot history. The
+internal remote's `main` and GitHub's `main` hold the same content, and one push to `main`
+updates both. The internal development line, `develop`, keeps the original development
+history and is never pushed to GitHub. A release publishes to `main` by creating a new
+commit whose tree is the reviewed file tree: do not merge `develop` into `main`, and do not
+publish the internal history branches or the old tags.
+
+The public GitHub repository has `main` only, so public contributors start from `main`;
+`develop` is an internal line that does not exist there. Commit subjects on `main` are
+English and follow the `type: description` format; commits on the internal `develop` line
+follow the outer workspace convention.

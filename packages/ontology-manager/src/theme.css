@@ -1,10 +1,11 @@
 /*
- * Manager 自有主题：只在组件根 .ontology-manager 内生效，明/暗由 theme prop 决定（根元素 is-dark），
- * 不读取、不修改宿主 html/body。宿主只需提供 Element Plus 基础样式（element-plus/dist/index.css）。
- * 数值迁入自 element-plus 2.13.6 的浅色与暗色变量，以及原工作台 theme.css、style.css、admin-common.css
- * 中 Manager 实际使用的 token 与组件规则；此后在本文件直接维护。
- * 两版原值不同的品牌与中性色变量不在本文件：由宿主 presentation.themeProperties 按 theme 整组给出，
- * 组件在根元素上绑定（见 OntologyManager.vue）；本文件只保留两版相同的变量与规则。
+ * The Manager's own theme: applies only inside the component root .ontology-manager, with light/dark set by the theme prop
+ * (is-dark on the root); it neither reads nor changes the host html/body. The host only needs the Element Plus base styles
+ * (element-plus/dist/index.css). Values were taken from the element-plus 2.13.6 light and dark variables and from the tokens
+ * and component rules the Manager used in the original workbench theme.css, style.css and admin-common.css; they are now
+ * maintained here. Brand and neutral colour variables whose values differ per product are not in this file: the host
+ * supplies them as a group per theme via presentation.themeProperties and the component binds them on its root (see
+ * OntologyManager.vue). This file keeps only variables and rules shared by both products.
  */
 
 .ontology-manager {
@@ -86,8 +87,9 @@
   --el-mask-color-extra-light: #ffffff4d;
   --on-primary: #ffffff;
   /*
-   * EP 在 :root 上以 var() 派生的颜色变量会在 html 上按宿主主题求值再继承下来，
-   * 这里在组件根按原表达式重新声明，使它们随本实例的明/暗求值（element-plus 2.13.6 index.css :root）。
+   * Colour variables that EP derives with var() on :root are evaluated on html with the host theme and then inherited,
+   * so they are redeclared on the component root with the original expressions to follow this instance's light/dark
+   * (element-plus 2.13.6 index.css :root).
    */
   --el-disabled-bg-color: var(--el-fill-color-light);
   --el-disabled-text-color: var(--el-text-color-placeholder);
@@ -178,7 +180,7 @@
   --el-empty-fill-color-9: #18181a;
 }
 
-/* 容器查询不能作用于容器自身，字号 token 覆盖写在根的直接子元素上（工作区与弹层容器），由它们向下继承。 */
+/* A container query cannot target the container itself, so font-size token overrides go on the root's direct children (workspace and popper container) and inherit downwards. */
 @container ontology-manager (max-width: 768px) {
   .ontology-manager > * {
     --text-base: 0.875rem;
@@ -215,7 +217,7 @@
   --search-width: 240px;
 }
 
-/* safe：对话框高于本实例时从顶端排起，在 EP 可滚动的遮罩里能滚到标题与底部按钮，不被居中推出上沿。 */
+/* safe: a dialog taller than this instance starts at the top so the title and bottom buttons can be scrolled to in EP's scrollable overlay instead of being centred past the top edge. */
 :where(.ontology-manager) .el-overlay-dialog {
   display: flex !important;
   align-items: safe center !important;

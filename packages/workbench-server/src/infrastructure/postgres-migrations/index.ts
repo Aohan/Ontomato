@@ -203,7 +203,7 @@ export async function runPostgresBusinessMigrations(client: QueryableClient): Pr
   await client.query("SELECT pg_advisory_lock(hashtext($1::text))", [workbenchProduct().migrationLockKey]);
   try {
     await ensureMigrationTable(client);
-    // 核心表基线先落地：business-storage-v1 的补列依赖 thread_metadata 已存在。
+    // The core table baseline lands first: business-storage-v1's column backfill depends on thread_metadata already existing.
     for (const registration of POSTGRES_MIGRATION_REGISTRY) {
       await registration.ensureSchema(client);
     }

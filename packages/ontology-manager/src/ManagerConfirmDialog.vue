@@ -4,7 +4,7 @@ import { ElButton, ElDialog, useLocale } from "element-plus";
 import { TriangleAlert } from "lucide-vue-next";
 import { useManagerFeedback } from "./feedback";
 
-// 原 ElMessageBox.confirm 的本实例版本：渲染在工作区内，随工作区卸载而消失。
+// Per-instance version of the original ElMessageBox.confirm: rendered inside the workspace and removed when the workspace unmounts.
 const { state } = useManagerFeedback();
 const { t } = useLocale();
 const visible = computed({

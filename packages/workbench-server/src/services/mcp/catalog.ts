@@ -41,7 +41,7 @@ function getAnalysisAgentMcpUrl(req: McpRequestLocation): string {
   return host ? `${proto}://${host}${path}` : path;
 }
 
-/** 对外 MCP 地址去掉末尾 `/mcp/analysis-agents`，得到与 `/api` 相同 mount 前缀的服务根。 */
+/** Strips the trailing `/mcp/analysis-agents` from the external MCP address to get the service root with the same mount prefix as `/api`. */
 export function analysisAgentPublicServiceRoot(req: McpRequestLocation): string {
   const mcpUrl = getAnalysisAgentMcpUrl(req);
   if (!mcpUrl.endsWith(ANALYSIS_AGENT_MCP_SUFFIX)) {

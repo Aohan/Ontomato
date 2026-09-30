@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class LangServiceImpl implements LangService {
 	
+	private static final String DEFAULT_LANG = "en";
+
 	private Map<String, JSONArray> langMap = new HashMap<String, JSONArray>();
 	
 	@PostConstruct
@@ -36,21 +38,25 @@ public class LangServiceImpl implements LangService {
 		}
 	}
 
+	// The requested pack, then the installed English pack, then the key itself: an edition installs only
+	// the packs it ships (open source: en only), so a request for another language must not fail.
 	@Override
 	public String get(String lang, String key) {
-		JSONObject obj = _get(lang, key);
-		return obj.getString("value");
-	}
-	
-	private JSONObject _get(String lang, String key) {
-		if (lang == null) {
-			lang = "en";
+		String value = find(langMap.get(lang), key);
+		if (value == null) {
+			value = find(langMap.get(DEFAULT_LANG), key);
 		}
-		JSONArray array = langMap.get(lang);
+		return value == null ? key : value;
+	}
+
+	private static String find(JSONArray array, String key) {
+		if (array == null) {
+			return null;
+		}
 		for (int i = 0; i < array.size(); i++) {
 			JSONObject obj = array.getJSONObject(i);
 			if (obj.getString("key").equals(key)) {
-				return obj;
+				return obj.getString("value");
 			}
 		}
 		return null;

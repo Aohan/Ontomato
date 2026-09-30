@@ -18,23 +18,23 @@ const t = i18n.global.t;
 const cards: AnalysisReportCardSummary[] = [
   {
     id: "card-a",
-    question: "华东区域季度营收为何下滑",
+    question: "Why did quarterly revenue in the east region decline",
     status: "PENDING_REVIEW",
     businessDescription: "",
     agentId: "agent-1",
-    agentName: "营收分析",
-    dimensions: ["区域", "产品线"],
+    agentName: "Revenue analysis",
+    dimensions: ["Region", "Product line"],
     questionTotal: 4,
     createdAt: Date.UTC(2026, 8, 1, 2, 30),
     updatedAt: Date.UTC(2026, 8, 1, 2, 30),
   },
   {
     id: "card-b",
-    question: "库存周转天数变化",
+    question: "Change in inventory turnover days",
     status: "PUBLISHED",
-    businessDescription: "供应链周会复用",
+    businessDescription: "Reused in the weekly supply chain meeting",
     agentId: "agent-2",
-    agentName: "供应链分析",
+    agentName: "Supply chain analysis",
     dimensions: [],
     questionTotal: 2,
     createdAt: Date.UTC(2026, 8, 2, 2, 30),
@@ -77,7 +77,7 @@ beforeEach(() => {
       if (method === "GET" && url.pathname.endsWith("/analysis-reports/cards/card-a")) {
         return respond({
           success: true,
-          data: { ...cards[0], reportContent: "## 结论\n营收下滑" },
+          data: { ...cards[0], reportContent: "## Conclusion\nRevenue declined" },
         });
       }
       return respond({ success: true, data: {} });
@@ -130,7 +130,7 @@ describe("hot report management", () => {
     await flushPromises();
     expect(rowTitles(wrapper)).toEqual([cards[0]!.question, cards[1]!.question]);
 
-    await wrapper.getComponent(ElInput).get("input").setValue("库存");
+    await wrapper.getComponent(ElInput).get("input").setValue("inventory");
     expect(rowTitles(wrapper)).toEqual([cards[1]!.question]);
 
     const status = wrapper.getComponent(ElSelect);
@@ -164,7 +164,7 @@ describe("hot report management", () => {
       .findAllComponents(ElDialog)
       .find((dialog) => dialog.props("title") === t("report.preview"))!;
     expect(preview.text()).toContain(cards[0]!.question);
-    expect(preview.text()).toContain("## 结论\n营收下滑");
+    expect(preview.text()).toContain("## Conclusion\nRevenue declined");
   });
 
   it("saves only status and business description, showing the question read-only", async () => {
@@ -179,7 +179,7 @@ describe("hot report management", () => {
     expect(dialog.text()).toContain(cards[0]!.question);
     expect(dialog.findAllComponents(ElInput)).toHaveLength(1);
     dialog.getComponent(ElSelect).vm.$emit("update:modelValue", "PUBLISHED");
-    await dialog.get("textarea").setValue("月度经营会复用");
+    await dialog.get("textarea").setValue("Reused in the monthly business review");
     await dialog
       .findAll("button")
       .find((item) => item.text() === t("common.save"))!
@@ -195,7 +195,7 @@ describe("hot report management", () => {
       {
         method: "PUT",
         path: "/api/analysis-reports/cards/card-a/business-description",
-        body: { businessDescription: "月度经营会复用" },
+        body: { businessDescription: "Reused in the monthly business review" },
       },
       { method: "GET", path: "/api/analysis-reports/cards", body: undefined },
     ]);

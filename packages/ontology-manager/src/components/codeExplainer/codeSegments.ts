@@ -1,8 +1,8 @@
 /*
- * 动作代码解读：段树类型、边界规范化与纯逻辑。
+ * Action code explanation: segment tree types, boundary normalization and pure logic.
  *
- * codeSegments 出自 LLM，是外部边界。本模块是唯一把 unknown 规范化成
- * 有类型段树的地方；规范化之后的组件内部直接信任这些类型，不再探测。
+ * codeSegments come from an LLM and are an external boundary. This module is the only place that normalizes unknown
+ * into a typed segment tree; after normalization the components trust these types and do not probe again.
  */
 
 import type { MessageKey } from "../../i18n";
@@ -111,9 +111,8 @@ export interface CodeSegment {
 export type NormalizeResult = { ok: true; segments: CodeSegment[] } | { ok: false };
 
 /*
- * 13 种 kind 只在这里列出一次：SegmentKind 判别字段、颜色变量、
- * 本地化文案 key 都从它派生。入口校验保证 kind 属于其中之一，
- * 之后不再有“未知 kind”。
+ * The 13 kinds are listed only here: the SegmentKind discriminant, colour variables and localized message keys
+ * all derive from it. Entry validation guarantees the kind is one of them, so there is no "unknown kind" afterwards.
  */
 export const KIND_TEXT_KEYS = {
   QUERY: "kindQuery",
@@ -141,7 +140,7 @@ export function kindTextKey(kind: SegmentKind): MessageKey {
   return KIND_TEXT_KEYS[kind];
 }
 
-/** 六种可展开详情的 kind（其余 kind 只渲染卡片与嵌套子段）。 */
+/** The six kinds with expandable details (other kinds render only the card and nested child segments). */
 export const EXPANDABLE_KINDS = new Set<SegmentKind>([
   "QUERY",
   "CREATE_OBJECT",
@@ -164,7 +163,7 @@ function toText(value: unknown): string | undefined {
 }
 
 function normalizeChildSegs(value: unknown): CodeSegment[] | undefined {
-  // 子段数组缺席视为空；一旦出现就必须是数组（“若存在必须是数组”），null 也不行。
+  // A missing child array counts as empty; once present it must be an array ("if present, must be an array"), and null is not allowed.
   if (value === undefined) return [];
   return normalizeSegments(value);
 }
@@ -227,8 +226,8 @@ function normalizeSegment(value: unknown): CodeSegment | undefined {
   const catchs = normalizeCatchs(value.catchs);
   const branchArms = normalizeBranchArms(value.branchArms);
   if (!trySegs || !segs || !catchs || !branchArms) return undefined;
-  // 详情字段的形状由后端 ActionCodeExplanationValidator 保证（出现即合格），
-  // 这里只原样带入类型，不再逐个规范化。
+  // The backend ActionCodeExplanationValidator guarantees the shape of detail fields (present means valid),
+  // so they are only typed here, not normalized one by one.
   return {
     id,
     kind: kind as SegmentKind,
@@ -254,10 +253,10 @@ function normalizeSegment(value: unknown): CodeSegment | undefined {
 }
 
 /**
- * 边界唯一入口：把 `queryById` 返回的 codeSegments（unknown）规范化为段树。
- * 只校验入口层级：非空数组；每段 kind 属于 13 种、id/title 是字符串、
- * codeRange 两个数字、子段数组层级正确。有一处不合法（空数组也算）就整体判错，
- * 调用方显示“解读数据格式不正确”，不静默当成空。
+ * The only boundary entry: normalizes the codeSegments (unknown) returned by `queryById` into a segment tree.
+ * Only the entry levels are validated: a non-empty array; each segment's kind is one of the 13, id/title are strings,
+ * codeRange is two numbers, and child arrays are well-formed. Any invalid part (including an empty array) fails the
+ * whole tree and the caller shows "invalid explanation data" instead of silently treating it as empty.
  */
 export function normalizeCodeSegments(value: unknown): NormalizeResult {
   const segments = normalizeSegments(value);
@@ -270,7 +269,7 @@ export interface BusinessMeaning {
   negativeEffect: string;
 }
 
-/** 业务含义的形状检查：是对象、operations 是字符串数组、negativeEffect 是字符串；否则 null。 */
+/** Shape check for business meaning: an object whose operations is a string array and negativeEffect a string; otherwise null. */
 export function normalizeBusinessMeaning(value: unknown): BusinessMeaning | null {
   if (!isRecord(value)) return null;
   if (
@@ -292,7 +291,7 @@ export interface FlatSegment {
   end: number;
 }
 
-/** 先序展平段树（含全部嵌套子段），用于计数与行定位。 */
+/** Pre-order flattening of the segment tree (including all nested children), used for counting and line lookup. */
 export function flattenSegments(segments: CodeSegment[]): FlatSegment[] {
   const result: FlatSegment[] = [];
   const visit = (seg: CodeSegment) => {
@@ -310,7 +309,7 @@ export function flattenSegments(segments: CodeSegment[]): FlatSegment[] {
   return result;
 }
 
-/** 找到包含该行的最内层段（行范围最小者）；都不包含返回 null（调用方无反应）。 */
+/** Finds the innermost segment containing the line (smallest line range); returns null if none does (the caller does nothing). */
 export function findInnermostSegment(flat: FlatSegment[], line: number): CodeSegment | null {
   let best: FlatSegment | null = null;
   for (const item of flat) {
@@ -321,7 +320,7 @@ export function findInnermostSegment(flat: FlatSegment[], line: number): CodeSeg
   return best ? best.seg : null;
 }
 
-/** 本动作实际出现的 kind（按首次出现顺序），用于右栏图例。 */
+/** Kinds that actually occur in this action (in order of first occurrence), used for the right-panel legend. */
 export function collectKinds(segments: CodeSegment[]): SegmentKind[] {
   const kinds: SegmentKind[] = [];
   for (const item of flattenSegments(segments)) {
@@ -330,7 +329,7 @@ export function collectKinds(segments: CodeSegment[]): SegmentKind[] {
   return kinds;
 }
 
-/** 类全路径取短名：`/univ_demo/org` → `org`（输出字段显示为 `类短名.属性`）。 */
+/** Short name from a full class path: `/univ_demo/org` → `org` (output fields display as `classShortName.attribute`). */
 export function simplifyClassName(cls: string): string {
   const parts = cls.split("/").filter((part) => part.length > 0);
   return parts.length > 0 ? parts[parts.length - 1] : cls;
@@ -352,8 +351,8 @@ export interface FieldToken {
 }
 
 /**
- * 输出字段表达式分词：聚合函数、distinct、四则运算符各自着色，
- * 普通标识按 `类短名.属性` 显示（类短名由调用方按 source 别名查得）。
+ * Tokenizes output field expressions: aggregate functions, distinct and arithmetic operators are coloured separately;
+ * plain identifiers display as `classShortName.attribute` (the caller resolves the short name from the source alias).
  */
 export function tokenizeFieldExpr(expr: string, classShort: string): FieldToken[] {
   const tokens: FieldToken[] = [];
@@ -389,7 +388,7 @@ export function tokenizeFieldExpr(expr: string, classShort: string): FieldToken[
   return tokens;
 }
 
-/** 条件叶子值转展示文本（Parameter 名、数组与对象照原样展开）。 */
+/** Display text for a condition leaf value (Parameter names, arrays and objects are expanded as-is). */
 export function formatConditionValue(value: unknown): string {
   if (value === null || value === undefined) return "null";
   if (typeof value === "string") return value;

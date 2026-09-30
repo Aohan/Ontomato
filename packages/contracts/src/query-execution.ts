@@ -5,7 +5,7 @@ import type {
   QcState,
   QcResult,
 } from "./query-thinking";
-/** 展示用的多数据集预览。 */
+/** Multi-dataset preview for display. */
 export interface QueryFactDatasetPreview {
   title: string;
   markdownTable: string;
@@ -13,9 +13,11 @@ export interface QueryFactDatasetPreview {
 }
 
 /**
- * 查询记录里的一个后端会话：产生它的分支键、会话号，以及执行时上报的 datarag 节点。
- * 每条有模型参与的分支各有一个后端会话，同一事实不另用单值字段表达
- * （问数后端会话的定位与取消·设计 1、6）。
+ * One backend session in a query record: the branch key that produced it, the
+ * session number, and the data-engine node reported at execution time.
+ * Each model-involved branch gets its own backend session; the same fact is
+ * never re-expressed through a single-value field
+ * (backend session locating and cancellation · design 1, 6).
  */
 export interface QueryBackendSession {
   branch: BranchKey;
@@ -27,18 +29,18 @@ export interface QueryExecutionDisplayFact {
   thinkingSummary?: string;
   thinkingSteps?: ThinkingStep[];
   thinkingState?: QueryThinkingState;
-  /** 完整回答正文：与标准问数回复快照的正文同一份，表格、子图都在其中，只显示一次。 */
+  /** Full answer body: the same body as the standard query reply snapshot, tables and subcharts included, rendered only once. */
   fullContent?: string;
-  /** 展示表格 */
+  /** Tables for display */
   markdownTable?: string;
-  /** 原始数据 */
+  /** Raw data */
   data?: unknown;
-  /** 结构化数据集 */
+  /** Structured datasets */
   datasets?: unknown[];
   datasetPreviews?: QueryFactDatasetPreview[];
   dsl?: unknown;
   dataCount?: number;
-  /** 二级拆解产出：DSL 型给出 abcDsls，程序型给出 abcCodes 与 abcOutKeyRefs */
+  /** Second-level decomposition output: DSL forms provide abcDsls, program forms provide abcCodes and abcOutKeyRefs */
   abcSubQuestions?: string[];
   abcDsls?: unknown[];
   abcCodes?: string[];
@@ -46,6 +48,6 @@ export interface QueryExecutionDisplayFact {
   winner?: BranchKey;
   qcResult?: QcResult;
   qcState?: QcState;
-  /** 执行失败原因；失败也是执行事实的一部分，展示视图据它渲染失败态 */
+  /** Execution failure reason; failure is part of the execution facts, and the display view renders the failed state from it */
   error?: string;
 }

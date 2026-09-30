@@ -7,13 +7,13 @@ import type { WorkspaceManifest } from "@ontomato/contracts/observe";
  *
  * Structure:
  *   manifest.json
- *   原始日志/
+ *   raw-logs/
  *     app.log
  *     llm-calls.jsonl
  *     backend.log
- *   提示词/
+ *   prompts/
  *     {agentName}-{seq}.md
- *   诊断结果/
+ *   diagnostics/
  *     summary.md
  *     mqls_logic.md
  *     errors.log

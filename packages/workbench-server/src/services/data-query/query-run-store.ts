@@ -256,7 +256,7 @@ export async function updateQueryRunBackendSessions(
   );
 }
 
-/** 只补写质检两列：迟到事实不得整行覆盖已经收口的执行事实。返回命中的行数。 */
+/** Writes back only the two quality-check columns: a late fact must never overwrite a whole row of already finalized execution facts. Returns the number of rows hit. */
 export async function updateQueryRunQualityCheck(
   input: QueryRunKey & { qcResult?: unknown; qcState?: unknown }
 ): Promise<number> {

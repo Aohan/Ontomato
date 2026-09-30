@@ -10,8 +10,8 @@ import { loadPromptProtocol } from "../../../../core/prompts/loader";
 // ---- XML parsing -------------------------------------------------------
 
 /**
- * 评测提示词约定的 XML 协议，与提示词同目录（`answer-evaluator/protocol.json`），
- * 由各版内容装配：开源英文标签，企业中文标签。解析只认本版协议。
+ * The XML protocol agreed with the evaluation prompt, stored next to the prompt (`answer-evaluator/protocol.json`),
+ * assembled from each edition's content: the open-source English labels, the enterprise Chinese labels. Parsing accepts only this edition's protocol.
  */
 const evaluationProtocolSchema = z
   .object({
@@ -26,7 +26,7 @@ const evaluationProtocolSchema = z
       verdict: z.string().min(1),
     }),
     verdicts: z.object({ passed: z.string().min(1), failed: z.string().min(1) }),
-    /** 空 judgment 与等于该值的用例走「有结果即通过」，不调用评测模型。 */
+    /** Cases with an empty judgment or one equal to this value take the "any result passes" path and never call the evaluation model. */
     defaultJudgment: z.string().min(1),
   })
   .strict();

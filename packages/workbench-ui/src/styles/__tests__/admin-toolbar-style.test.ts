@@ -1,5 +1,5 @@
 // @vitest-environment node
-// 原仓非组件用例默认 node 环境（读样式源文件）；公共包默认 happy-dom，本文件保持原环境。
+// Non-component tests in the original repository defaulted to the node environment (reading style sources); this package defaults to happy-dom, so this file keeps the original environment.
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 

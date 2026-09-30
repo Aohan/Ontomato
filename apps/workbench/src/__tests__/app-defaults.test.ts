@@ -2,10 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-// 两处文本规则的真实消费者：模型与 DataRAG 是外部依赖，用替身；解析与请求构造走真实代码。
+// Real consumers of the two text rules: the model and the data engine are external dependencies replaced by test doubles; parsing and request construction run the real code.
 vi.mock("@ontomato/workbench-server/config/model-factory", () => ({
   createModel: () => ({
-    invoke: async () => ({ content: JSON.stringify({ "销售额（万元）": "revenue", "日期 (day)": "date" }) }),
+    // The escaped literals are Chinese dataset column names (see the \u escapes below) — user data kept byte-identical.
+    invoke: async () => ({ content: JSON.stringify({ "\u9500\u552e\u989d（\u4e07\u5143）": "revenue", "\u65e5\u671f (day)": "date" }) }),
   }),
 }));
 import {
@@ -59,7 +60,7 @@ describe("open-source application defaults", () => {
       [{ name: "q", type: "bar", datasetKey: "d" }] as never,
       [{ datasetKey: "d", sourceRows: [{ x: 1 }] }] as never
     );
-    expect(charts[0].fields).toEqual({ "销售额（万元）": "revenue", 日期: "date" });
+    expect(charts[0].fields).toEqual({ "\u9500\u552e\u989d（\u4e07\u5143）": "revenue", "\u65e5\u671f": "date" });
   });
 
   it("extracts dataset class paths with the open-source delimiter rule", async () => {
@@ -69,7 +70,7 @@ describe("open-source application defaults", () => {
       vi.fn(async (url: string, init: { body: string }) => {
         requests.push({ url: String(url), body: JSON.parse(init.body) });
         return String(url).endsWith("/admin/getschemamarkdown-v2")
-          ? Response.json({ data: { KEY_CLASS_DEF: "/a/b，说明\n| /c/d，备注 | x |" } })
+          ? Response.json({ data: { KEY_CLASS_DEF: "/a/b，desc\n| /c/d，note | x |" } })
           : Response.json({ data: "" });
       })
     );
@@ -78,7 +79,7 @@ describe("open-source application defaults", () => {
       datasetSchemaService.getSchemaForQuestion("xyz")
     );
     expect(requests.find((request) => request.url.endsWith("/admin/getSchemaByClassName"))?.body).toEqual({
-      classNames: ["/a/b，说明", "/c/d，备注"],
+      classNames: ["/a/b，desc", "/c/d，note"],
     });
   });
 });

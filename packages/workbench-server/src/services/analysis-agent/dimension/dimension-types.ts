@@ -1,61 +1,61 @@
 /**
- * 维度化子问题与本次分析的维度执行计划。
+ * Dimensionalized sub-questions and this analysis's dimension execution plan.
  */
 
 import type { AnalysisQueryFact } from "../runtime/evidence-types";
 
 /**
- * 维度化后的子问题
+ * A dimensionalized sub-question
  */
 export interface DimensionalizedQuestion {
-  /** 子问题 ID */
+  /** Sub-question ID */
   id: string;
-  /** 维度 ID */
+  /** Dimension ID */
   dimensionId: string;
-  /** 维度名称 */
+  /** Dimension name */
   dimensionName: string;
-  /** 维度值 */
+  /** Dimension value */
   dimensionValue: string;
-  /** 生成的子问题 */
+  /** The generated sub-question */
   subQuestion: string;
-  /** 原始问题 */
+  /** The original question */
   originalQuestion: string;
 }
 
 /**
- * 带查询结果的子问题（用于持久化）= 计划条目 + 执行事实 + 计划侧的状态文案。
- * 执行字段不在此重复声明，随 AnalysisQueryFact 走。
+ * A sub-question with query results (for persistence) = plan entry + execution facts + plan-side status copy.
+ * Execution fields are not re-declared here; they travel with AnalysisQueryFact.
  */
 export interface DimensionalizedQuestionWithResult
   extends DimensionalizedQuestion, AnalysisQueryFact {
-  /** 查询状态 */
+  /** Query status */
   status?: "pending" | "running" | "completed" | "failed";
-  /** 查询结果状态文本 */
+  /** Query result status text */
   statusText?: string;
 }
 
 /**
- * 本次分析的维度执行计划
+ * This analysis's dimension execution plan
  */
 export interface PlannedDimension {
-  /** 维度 ID */
+  /** Dimension ID */
   dimensionId: string;
-  /** 维度名称 */
+  /** Dimension name */
   dimensionName: string;
-  /** 维度值 */
+  /** Dimension value */
   dimensionValue: string;
-  /** 拆分原因 */
+  /** Reason for the split */
   reason?: string;
-  /** 子问题列表 */
+  /** Sub-question list */
   subQuestions: DimensionalizedQuestion[];
 }
 
 /**
- * 带查询结果的维度计划（用于持久化）
+ * Dimension plan with query results (for persistence)
  */
 export interface PlannedDimensionWithResults extends Omit<PlannedDimension, "subQuestions"> {
-  /** 维度查询状态 */
+  /** Dimension query status */
   status?: "pending" | "running" | "completed" | "partial" | "failed";
-  /** 子问题列表（带查询结果） */
+  /** Sub-question list (with query results) */
   subQuestions: DimensionalizedQuestionWithResult[];
 }

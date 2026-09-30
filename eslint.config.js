@@ -6,20 +6,23 @@ import vue from "eslint-plugin-vue";
 import prettierConfig from "eslint-config-prettier";
 import vueParser from "vue-eslint-parser";
 
-const layerSpec = "InfoHub《Node.js 服务端开发规范》模块与依赖";
+const layerSpec = "the Node.js server module and dependency rules";
 const server = "packages/workbench-server/src";
 
-// 公共仓任何文件都不得依赖私有企业模块：既不能用企业包名，也不能用相对路径跨到相邻的 enterprise 仓。
-// no-restricted-imports 覆盖 import/export-from/侧效 import，且在多个配置块间是覆盖而非合并，
-// 所以每个块都带上这一条；动态 import() 由 no-restricted-syntax 覆盖。
+// No file in this repository may depend on a private enterprise module: neither through an
+// enterprise package name nor through a relative path into the adjacent enterprise
+// repository.
+// no-restricted-imports covers import/export-from/side-effect import, and it overrides
+// rather than merges across config blocks, so every block repeats this entry; dynamic
+// import() is covered by no-restricted-syntax.
 const ENTERPRISE_SPECIFIER = "^@enterprise/|^(\\.\\./)+enterprise(/|$)";
-const noEnterprise = { regex: ENTERPRISE_SPECIFIER, message: "公共模块不得依赖私有企业模块" };
+const noEnterprise = { regex: ENTERPRISE_SPECIFIER, message: "public modules must not depend on a private enterprise module" };
 const restrict = (patterns) => ["error", { patterns: [...patterns, noEnterprise] }];
 const restrictLayer = (source, targets) =>
   restrict(
     targets.map((target) => ({
       regex: `^(\\.\\./)+${target}(/|$)`,
-      message: `${source} 不得依赖 ${target}，见 ${layerSpec}`,
+      message: `${source} must not depend on ${target}, see ${layerSpec}`,
     }))
   );
 
@@ -28,12 +31,13 @@ export default [
     ignores: [
       "**/node_modules/**",
       "**/dist/**",
-      // 第三方压缩库。
+      // Third-party minified libraries.
       "**/*.min.js",
-      // 与源仓相同：默认运行资源与技能包不在 lint 范围（源 eslint.config.js 忽略 data/**、skills/**）。
+      // Same as the source repository: default runtime resources and skill packages are out
+      // of lint scope (the source eslint.config.js ignores data/** and skills/**).
       "packages/workbench-server/data/**",
       "packages/workbench-server/skills/**",
-      // Java 模块。
+      // Java modules.
       "packages/data-engine-core/**",
     ],
   },
@@ -65,13 +69,14 @@ export default [
         "error",
         {
           selector: `ImportExpression > Literal[value=/${ENTERPRISE_SPECIFIER.replaceAll("/", "\\/")}/]`,
-          message: "公共模块不得依赖私有企业模块",
+          message: "public modules must not depend on a private enterprise module",
         },
       ],
     },
   },
   {
-    // 运行在 Node 的 .mjs 入口（应用构建入口与开发入口）：只补 Node 全局。
+    // .mjs entry points running on Node (app build entries and development entries): add
+    // only the Node globals.
     files: [
       "apps/*/build.mjs",
       "apps/*/build.node-test.mjs",
@@ -89,7 +94,8 @@ export default [
     languageOptions: { globals: globals.node },
   },
   {
-    // Vue 单文件组件；规则与源仓相同（不含 prettier 插件，格式另行核对）。
+    // Vue single-file components; rules match the source repository (without the prettier
+    // plugin, formatting is checked separately).
     files: ["**/*.vue"],
     languageOptions: {
       parser: vueParser,
@@ -101,21 +107,24 @@ export default [
       "vue/multi-word-component-names": "off",
       "vue/no-v-html": "off",
       "vue/require-default-prop": "off",
-      // 与源仓一致由 prettier 负责格式；只对 Vue 文件关闭模板格式规则，不改变既有 TS 检查。
+      // As in the source repository, prettier owns formatting; only the template formatting
+      // rules are off for Vue files, without changing the existing TS checks.
       ...prettierConfig.rules,
       "no-restricted-imports": restrict([]),
     },
   },
   {
-    // Manager 组件只消费宿主传入的上下文，不依赖宿主路由、全局词条实例或 store。
+    // Manager components consume only the context the host passes in; they do not depend on
+    // host routes, a global message instance or a store.
     files: ["packages/ontology-manager/src/**/*.{ts,vue}"],
     rules: {
-      // DOM 类型名（如 RequestInit）不是运行时全局；未定义标识符由 vue-tsc 检查。
+      // DOM type names (such as RequestInit) are not runtime globals; undefined identifiers
+      // are checked by vue-tsc.
       "no-undef": "off",
       "no-restricted-imports": restrict([
         {
           regex: "^(vue-router|vue-i18n|pinia)(/|$)",
-          message: "Manager 组件不得依赖宿主路由、全局词条实例或 store；使用宿主传入的上下文",
+          message: "Manager components must not depend on host routes, a global message instance or a store; use the context passed in by the host",
         },
       ]),
     },
@@ -126,7 +135,7 @@ export default [
       "no-restricted-imports": restrict([
         {
           regex: "(^|/)(?:src|web)(?:/|$)|^@ontomato/(?!contracts(/|$))",
-          message: "contracts 只能依赖共享契约，不得依赖服务端或浏览器实现",
+          message: "contracts may depend only on the shared contracts, not on server or browser implementations",
         },
       ]),
     },
@@ -140,7 +149,7 @@ export default [
     ["logging", ["services", "platform", "api", "core"]],
     ["config", ["services", "platform", "api", "core"]],
     ["infrastructure", ["services", "platform", "api", "core"]],
-    // 应用安装的装配缝，位于最底层。
+    // The assembly seam where the application is installed, at the bottommost layer.
     ["content", ["services", "platform", "api", "core", "infrastructure"]],
     ["runtime", ["services", "platform", "api", "core", "infrastructure"]],
     ["product", ["services", "platform", "api", "core", "infrastructure"]],
@@ -153,20 +162,21 @@ export default [
     files: [`${server}/api/routes/**/*.ts`],
     rules: {
       "no-restricted-imports": restrict([
-        { regex: "^pg(/|$)", message: `api/routes 不得依赖 pg，见 ${layerSpec}` },
+        { regex: "^pg(/|$)", message: `api/routes must not depend on pg, see ${layerSpec}` },
         {
           regex: "^@langchain/openai(/|$)",
-          message: `api/routes 不得依赖 @langchain/openai，见 ${layerSpec}`,
+          message: `api/routes must not depend on @langchain/openai, see ${layerSpec}`,
         },
         {
           regex: "^(\\.\\./)+infrastructure/postgres[^/]*(/|$)",
-          message: `api/routes 不得依赖 infrastructure/postgres，见 ${layerSpec}`,
+          message: `api/routes must not depend on infrastructure/postgres, see ${layerSpec}`,
         },
       ]),
     },
   },
   {
-    // 源仓存量白名单（platform → services），原样迁入，只减不增。
+    // Source-repository legacy allowlist (platform → services), moved over unchanged and
+    // only ever reduced.
     files: [`${server}/platform/diagnosis/autotest/strategies/api-chat.ts`],
     rules: { "no-restricted-imports": restrict([]) },
   },

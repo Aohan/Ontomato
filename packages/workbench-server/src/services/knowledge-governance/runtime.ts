@@ -177,7 +177,7 @@ export class GovernanceRuntime {
     } catch (error) {
       terminal = signal.aborted ? "cancelled" : "failed";
       if (!signal.aborted) {
-        // 角色未配置模型时直接给出已本地化的原因，其余失败仍用通用提示。
+        // When no model is configured for the role, directly provide the localized reason; other failures keep the generic message.
         record.error =
           error instanceof ModelNotConfiguredError
             ? error.message

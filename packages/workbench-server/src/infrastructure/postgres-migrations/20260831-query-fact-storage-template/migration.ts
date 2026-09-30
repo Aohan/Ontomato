@@ -6,18 +6,18 @@ export const QUERY_FACT_STORAGE_TEMPLATE_VERSION = "20260831_query_fact_storage_
 export const QUERY_FACT_STORAGE_TEMPLATE_NAME = "query facts stored by a single column template";
 
 export type QueryFactStorageTemplateResult = {
-  /** 搬运了内容的行数 */
+  /** Number of rows whose content was carried over */
   backfilledRows: number;
-  /** 混装列是否已退役 */
+  /** Whether the mixed column has been retired */
   legacyColumnDropped: boolean;
 };
 
 /**
- * 把混装列 `result_payload` 中的查询事实搬进各自的结构化列，然后退役该列。
+ * Carries the query facts out of the mixed column `result_payload` into their structured columns, then retires the column.
  *
- * 搬运只填空（`COALESCE(既有列, 混装值)`），因此可重复执行且不覆盖已有事实。
- * 混装列不存在时说明本迁移已经完成，直接返回；混装列存在则必须搬运成功才退役，
- * 任何失败都向上抛出，由编排层回滚事务并阻止记录版本。
+ * The carry only fills blanks (`COALESCE(existing column, mixed value)`), so it is repeatable and never overwrites existing facts.
+ * A missing mixed column means this migration already completed and it returns directly; when the column exists the carry must succeed before retirement,
+ * and any failure propagates upward for the orchestration layer to roll back the transaction and block version recording.
  */
 export async function migrateQueryFactStorageTemplate(
   client: QueryableClient
@@ -56,8 +56,8 @@ function jsonArray(key: string): string {
 }
 
 /**
- * 混装列里的单值会话转成按分支的会话列表（设计 6）：历史上只有 abc 产生过会话号。
- * 列形状在此写定，后续的列退役迁移只负责既有结构化列的历史行。
+ * Single-value sessions in the mixed column become the per-branch session list (design 6): historically only abc produced session numbers.
+ * The column shape is pinned here; later column-retirement migrations only handle historical rows of existing structured columns.
  */
 function backendSessionsFromLegacy(): string {
   const sessionId = `COALESCE(

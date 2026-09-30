@@ -1,4 +1,4 @@
-// 从原前端词条按已迁入页面的实际使用键生成；后续页面迁入时随之补充。
+// Generated from the original frontend messages using the keys the migrated pages actually use; extended as more pages are migrated.
 export default {
   "admin": {
     "systemAgents": "System Agents",

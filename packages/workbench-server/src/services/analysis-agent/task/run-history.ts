@@ -4,22 +4,22 @@ import { tApp } from "../../../i18n";
 
 
 /**
- * 一次运行的稳定身份：报告运行在受理时生成运行 ID，常规会话回合同步记录受理序号。
- * 终态与产物更新据此定位自己的历史记录，并确认是否仍可改写当前任务事实。
+ * Stable identity of one run: a report run generates its run ID at acceptance, and a regular-session turn records its acceptance sequence at the same time.
+ * Terminal states and artifact updates locate their own history record through it and confirm the current task facts are still writable.
  */
 export interface AnalysisRunIdentity {
   runId?: string;
   requestSeq?: number;
 }
 
-/** 最后一条运行记录就是最近一次受理的运行；缺省表示当前没有已受理的运行。 */
+/** The last run record is the most recently accepted run; absent means no run has been accepted. */
 export function currentAnalysisRunId(runs: AnalysisTaskRun[] | undefined): string | undefined {
   return runs?.[runs.length - 1]?.id;
 }
 
 /**
- * 受理时捕获的运行身份：优先取最近一条运行记录，常规会话在任务行尚未回读时用回合序号。
- * 没有已受理的运行就没有可归属的身份，运行归属的写入不得发生。
+ * Run identity captured at acceptance: prefer the latest run record; a regular session falls back to the turn sequence while the task row has not been read back.
+ * With no accepted run there is no attributable identity, and run-attribution writes must not happen.
  */
 export function currentAnalysisRunIdentity(
   runs: AnalysisTaskRun[] | undefined,
@@ -36,8 +36,8 @@ export function currentAnalysisRunIdentity(
 }
 
 /**
- * 任务的运行历史列是 JSONB 非空数组；非数组说明持久化内容与契约不符，
- * 抛出而不是当成“身份不匹配”，避免坏数据被静默当作无操作。
+ * The task's run-history column is a non-empty JSONB array; a non-array means persisted content contradicts the contract,
+ * so it throws instead of being treated as "identity mismatch", keeping bad data from being silently read as a no-op.
  */
 export function readAnalysisRunHistory(value: unknown): AnalysisTaskRun[] {
   if (value === undefined || value === null) return [];
@@ -57,7 +57,7 @@ function findRunIndex(history: readonly AnalysisTaskRun[], identity: AnalysisRun
   return -1;
 }
 
-/** 身份是否指向最近一次受理的运行；只有它仍可改写任务的当前状态与产物。 */
+/** Whether the identity points at the most recently accepted run; only that run may still rewrite the task's current state and artifacts. */
 export function isCurrentAnalysisRun(
   history: readonly AnalysisTaskRun[],
   identity: AnalysisRunIdentity
@@ -70,12 +70,12 @@ export function isCurrentAnalysisRun(
 }
 
 /**
- * 终态/产物更新只原地改写身份匹配的那条历史记录。
+ * Terminal-state/artifact updates rewrite in place only the history record whose identity matches.
  *
- * 身份缺省或匹配不到时返回 undefined（保持原样），既不改写别的运行，也不补造运行：
- * 追加运行记录只发生在启动受理（tryStartTask / claimConversationTurn）。
- * 因此同一终态的重复写入不叠加，迟到写入留在自己的运行记录上，覆盖不到新运行。
- * 终态单调：记录已终态后只接受同一终态的补齐（摘要/正文），不接受状态回退或被换成别的终态。
+ * When the identity is absent or matches nothing it returns undefined (leave as-is): it never rewrites another run and never fabricates a run.
+ * Appending run records happens only at start acceptance (tryStartTask / claimConversationTurn).
+ * Duplicate writes of the same terminal state therefore never stack; a late write stays on its own run record and cannot reach the new run.
+ * Terminal states are monotonic: once a record is terminal it only accepts completion of the same terminal state (summary/body), never a state regression or a different terminal state.
  */
 export function applyAnalysisRunUpdate(
   history: readonly AnalysisTaskRun[],

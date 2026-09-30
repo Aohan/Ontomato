@@ -4,9 +4,8 @@ import type { ManagerTheme } from "@ontomato/ontology-manager";
 const THEME_KEY = "theme-preference";
 const LOCALE_KEY = "app-locale";
 
-/** 带语言同步的应用（企业）：受支持的语言与主系统语言消息名。 */
+/** Locale sync for apps that follow the main system's language: the main system's locale message type. */
 export interface LocaleSync {
-  supported: readonly string[];
   messageType: string;
 }
 
@@ -14,7 +13,7 @@ function normalizeTheme(value: string | null): ManagerTheme | null {
   return value === "dark" || value === "light" ? value : null;
 }
 
-// 地址参数优先；嵌入同源父页面时只有父页面为暗色才取暗色，否则继续取本地偏好。
+// The URL parameter wins; when embedded in a same-origin parent, dark is taken only if the parent is dark, otherwise the stored preference.
 function initialTheme(): ManagerTheme {
   const urlTheme = normalizeTheme(new URLSearchParams(window.location.search).get("theme"));
   if (urlTheme) return urlTheme;
@@ -26,12 +25,12 @@ function initialTheme(): ManagerTheme {
       return "dark";
     }
   } catch {
-    // 跨源父页面不可读，由主题消息承接。
+    // A cross-origin parent is unreadable; theme messages take over.
   }
   return normalizeTheme(window.localStorage.getItem(THEME_KEY)) || "light";
 }
 
-/** 外壳拥有的文档主题：来源为地址参数、父页面、本地偏好，并跟随父页面消息、同源父页面类名与其他标签页偏好。 */
+/** Document theme owned by the shell: from the URL parameter, parent page or stored preference, then following parent messages, same-origin parent classes and other tabs' preference. */
 export function syncTheme(messageType: string) {
   const theme = ref<ManagerTheme>("light");
   const apply = (value: ManagerTheme) => {
@@ -60,15 +59,14 @@ export function syncTheme(messageType: string) {
       ).observe(parentRoot, { attributes: true, attributeFilter: ["class"] });
     }
   } catch {
-    // 跨源嵌入由地址参数与主题消息承接。
+    // Cross-origin embedding relies on the URL parameter and theme messages.
   }
   return theme;
 }
 
-/** 外壳拥有的界面语言：地址参数 → 本地偏好 → 应用默认，只接受受支持的语言，并跟随父页面消息与其他标签页偏好。 */
-export function syncLocale(defaultLocale: string, sync: LocaleSync) {
-  const normalize = (value: string | null) =>
-    value && sync.supported.includes(value) ? value : null;
+/** UI locale owned by the shell: URL parameter → stored preference → app default, accepting only supported locales, then following parent messages and other tabs' preference. */
+export function syncLocale(defaultLocale: string, supported: readonly string[], sync: LocaleSync) {
+  const normalize = (value: string | null) => (value && supported.includes(value) ? value : null);
   const locale = ref(defaultLocale);
   const apply = (value: string) => {
     locale.value = value;

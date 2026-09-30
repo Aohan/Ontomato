@@ -44,8 +44,8 @@ export function routeAfterTaskPlanner(state: GraphState): string {
 
   const hasReadyData = hasUsableDataReference(state);
 
-  // analysis 节点依赖已有数据；如果任务规划员没有显式安排 query，且当前没有可复用数据引用，
-  // 则强制先走 query，避免直接进入 analysis 后因缺少可用数据失败。
+  // The analysis node depends on existing data; when the task planner did not explicitly schedule a query and there is no reusable data reference,
+  // force query first, so analysis does not fail from missing usable data.
   if (plan.nodes.includes("analysis") && !plan.nodes.includes("query") && !hasReadyData) {
     return "query";
   }

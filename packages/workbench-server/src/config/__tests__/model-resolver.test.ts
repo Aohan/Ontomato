@@ -5,7 +5,6 @@ import { runWithLogContext } from "../../logging/log-context";
 import { configureI18n } from "../../i18n";
 import { appTextEn } from "../../i18n/app-text-en";
 import { en, enLocaleMeta } from "../../i18n/locales/en";
-import { zhCN, zhCNLocaleMeta } from "../../i18n/locales/zh-CN";
 import {
   ModelNotConfiguredError,
   getRoleNotConfiguredMessage,
@@ -21,12 +20,11 @@ vi.mock("../../utils/backend-client", () => ({
 describe("model-resolver", () => {
   beforeAll(() => {
     configureI18n({
-      defaultLocale: "zh-CN",
-      languageSwitchEnabled: true,
+      defaultLocale: "en",
+      languageSwitchEnabled: false,
       appTextLocale: "en",
       packs: {
         en: { messages: { ...en, ...appTextEn }, ...enLocaleMeta },
-        "zh-CN": { messages: zhCN, ...zhCNLocaleMeta },
       },
     });
   });
@@ -58,10 +56,10 @@ describe("model-resolver", () => {
   describe("getRoleNotConfiguredMessage", () => {
     it("returns formatted message via i18n", () => {
       expect(getRoleNotConfiguredMessage("general")).toBe(
-        "角色『通用』未配置模型，请在模型配置中选择"
+        "No model configured for role 'General', please configure it in model settings"
       );
       expect(getRoleNotConfiguredMessage("query")).toBe(
-        "角色『问数』未配置模型，请在模型配置中选择"
+        "No model configured for role 'Query', please configure it in model settings"
       );
     });
   });

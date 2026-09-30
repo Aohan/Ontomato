@@ -14,7 +14,7 @@ import VisualModelingAttributeDialog, {
 const { t } = useSharedText();
 const { message, confirm } = useManagerFeedback();
 const { ot } = useOntologyText();
-/** 定位参数来自宿主 view 的 focus/id/back；返回只回到 Manager 图谱。 */
+/** Location parameters come from the host view's focus/id/back; back only returns to the Manager graph. */
 const props = defineProps<{ focus: string; focusId: string; backToPlayground: boolean }>();
 const emit = defineEmits<{ back: [] }>();
 const context = useManagerContext();
@@ -70,7 +70,7 @@ const LAYOUT_STORAGE_KEY = "visual-modeling-layout-v2";
 const NODE_SIZE = 70;
 const NODE_CENTER = NODE_SIZE / 2;
 const NODE_LABEL_OFFSET = 12;
-// 节点色板由宿主给出，与本体图谱同一输入。
+// The node palette comes from the host, the same input as the ontology graph.
 function nodeColor(className: string) {
   const palette = context.presentation.nodePalette;
   let hash = 5381;
@@ -146,7 +146,7 @@ let graph: Graph | null = null;
 
 const classList = ref<ClassDef[]>([]);
 const relationList = ref<RelationDef[]>([]);
-// 当前数据适配器是 SQL 类（后端适配器列表的 sql 标记）时，关系可填关联字段。
+// When the current data adapter is SQL-based (the sql flag in the backend adapter list), relations can take join fields.
 const showJoinFields = ref(false);
 
 const selectedNode = ref<ClassDef | null>(null);
@@ -730,7 +730,7 @@ function renderNodes() {
       });
       applyEdgeGeometry(edge, sourceNode, targetNode);
     } else {
-      console.warn(`无法找到节点: ${rel.fromclass} -> ${rel.toclass}`);
+      console.warn(`Node not found: ${rel.fromclass} -> ${rel.toclass}`);
     }
   });
 
@@ -896,7 +896,7 @@ async function handleAddNode() {
       inStarChart: false,
     });
     nodeDialogVisible.value = false;
-    // 后端保存结果（含主键属性）是事实源：重新读取后选中新类。
+    // The backend's saved result (including the primary key attribute) is the source of truth: re-read, then select the new class.
     await loadData();
     selectNodeByClassName(className);
     message.success(t("hotData.classCreated"));

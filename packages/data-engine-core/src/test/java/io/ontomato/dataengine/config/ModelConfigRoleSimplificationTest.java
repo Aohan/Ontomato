@@ -87,9 +87,6 @@ class ModelConfigRoleSimplificationTest {
     @Test
     void unassignedRoleThrowsExplicitRuntimeError() {
         LangService langService = mock(LangService.class);
-        when(langService.get("zh-CN", "AgentRole.query")).thenReturn("问数");
-        when(langService.get("zh-CN", "AgentRole.coding")).thenReturn("代码与计算");
-        when(langService.get("zh-CN", "AgentRole.notConfigured")).thenReturn("角色『{0}』未配置模型，请在模型配置中选择");
         when(langService.get("en", "AgentRole.query")).thenReturn("Query");
         when(langService.get("en", "AgentRole.coding")).thenReturn("Coding and Computing");
         when(langService.get("en", "AgentRole.notConfigured")).thenReturn("No model is configured for role \"{0}\". Choose one in Model Configuration.");
@@ -104,18 +101,6 @@ class ModelConfigRoleSimplificationTest {
             agents.put(role, agent);
         }
         config.setAgents(agents);
-
-        // zh-CN
-        config.setLang("zh-CN");
-        IllegalStateException queryEx = assertThrows(
-                IllegalStateException.class,
-                () -> ModelResolver.resolve(config, AgentRole.QUERY, langService));
-        assertEquals("角色『问数』未配置模型，请在模型配置中选择", queryEx.getMessage());
-
-        IllegalStateException codingEx = assertThrows(
-                IllegalStateException.class,
-                () -> ModelResolver.resolve(config, AgentRole.CODING, langService));
-        assertEquals("角色『代码与计算』未配置模型，请在模型配置中选择", codingEx.getMessage());
 
         // en
         config.setLang("en");
@@ -139,12 +124,12 @@ class ModelConfigRoleSimplificationTest {
 
     @Test
     void langFilesContainRoleTranslations() throws Exception {
+        // Every pack this edition installs; the open-source edition installs English only.
         java.io.File langDir = new java.io.File("conf-defaults/lang");
-        assertTrue(langDir.isDirectory(), "conf-defaults/lang should exist at " + langDir.getAbsolutePath());
-        String[] expectedLangs = {"ar", "de", "en", "fr", "it", "ja", "zh-CN", "zh-TW"};
-        for (String lang : expectedLangs) {
-            java.io.File file = new java.io.File(langDir, lang + ".json");
-            assertTrue(file.isFile(), "Lang file should exist: " + file.getPath());
+        java.io.File[] files = langDir.listFiles((dir, name) -> name.endsWith(".json"));
+        assertEquals(List.of("en.json"), java.util.Arrays.stream(files).map(java.io.File::getName).toList());
+        for (java.io.File file : files) {
+            String lang = file.getName().replace(".json", "");
             String json = java.nio.file.Files.readString(file.toPath());
             com.alibaba.fastjson2.JSONArray array = com.alibaba.fastjson2.JSONArray.parseArray(json);
             Map<String, String> map = new java.util.HashMap<>();
@@ -156,10 +141,6 @@ class ModelConfigRoleSimplificationTest {
             for (String role : AgentRole.ALL) {
                 assertTrue(map.containsKey("AgentRole." + role), "Missing AgentRole." + role + " in " + lang);
                 assertNotNull(map.get("AgentRole." + role), "Null value for AgentRole." + role + " in " + lang);
-            }
-            if ("zh-CN".equals(lang)) {
-                assertEquals("角色『{0}』未配置模型，请在模型配置中选择", map.get("AgentRole.notConfigured"));
-                assertEquals("问数", map.get("AgentRole.query"));
             }
             if ("en".equals(lang)) {
                 assertEquals("No model is configured for role \"{0}\". Choose one in Model Configuration.", map.get("AgentRole.notConfigured"));

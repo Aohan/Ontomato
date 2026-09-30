@@ -2,7 +2,7 @@ import { ref } from "vue";
 import type { WorkbenchSelectionMode } from "@ontomato/workbench-ui/features/workbench";
 
 export function useWorkbenchLayoutState() {
-  // 开源欢迎态原为静态标志图（原 WorkbenchWelcomeState 的 img alt="Ontomato"）。
+  // The open-source welcome state was a static logo image (the original WorkbenchWelcomeState img alt="Ontomato").
   const welcomeAnimation = {
     kind: "image",
     src: `${import.meta.env.BASE_URL}ontomato-mark-green.svg`,

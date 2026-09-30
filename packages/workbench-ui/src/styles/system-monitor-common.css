@@ -1,4 +1,4 @@
-/* 系统监控公共页与 service-panels 插槽面板共用的规则（原 SystemMonitor.vue 声明，按实际 DOM 消费者移出不改）；两个组件各以 <style scoped src> 引用。 */
+/* Rules shared by the system monitor page and the service-panels slot panels (originally declared in SystemMonitor.vue, moved unchanged to follow the actual DOM consumers); both components reference this with <style scoped src>. */
 .section-card {
   border-radius: 8px;
   flex-shrink: 0;

@@ -18,7 +18,7 @@ export interface AnalysisTask {
   status: AnalysisTaskStatus;
   executionMode?: DeepAnalysisTaskPayload["executionMode"];
   runState?: DeepAnalysisTaskPayload["runState"];
-  /** 是否挂载报告交付件；关闭时的任务按常规会话逐轮受理 */
+  /** Whether a report deliverable is attached; when off, tasks are accepted turn by turn like regular sessions */
   reportDeliverableEnabled?: boolean;
   threadId?: string;
   question?: string;
@@ -33,7 +33,7 @@ export interface AnalysisTask {
   nextRunAt?: number;
   createdAt: number;
   updatedAt: number;
-  /** 过去每次运行的状态与结果；当前报告仍以分析产物为唯一权威。 */
+  /** Status and result of each past run; the current report still treats analysis artifacts as the only authority. */
   runHistory?: AnalysisTaskRun[];
 }
 
@@ -44,7 +44,7 @@ export interface AnalysisTaskRun {
   status: AnalysisTaskStatus;
   requestSeq?: number;
   resultSummary?: string;
-  /** 该次运行结束时的报告正文；只用于历史运行回看，不参与当前报告判定。 */
+  /** Report body at the end of that run; only for historical run review, never part of the current report decision. */
   resultReport?: string;
   snapshot?: unknown;
   followUpMessages?: Array<{
@@ -82,8 +82,10 @@ export interface AnalysisTaskCounts {
 }
 
 /**
- * 常规会话单轮：消息、活动与交付正文分开保存，逐轮追加、后轮不覆盖前轮。
- * 未记录结果的历史工具调用以未知结果表达，不在读取时重放。
+ * One regular-session turn: messages, activities, and the deliverable body
+ * are stored separately and appended turn by turn; later turns never overwrite
+ * earlier ones. Historical tool calls without a recorded result are expressed
+ * as unknown results and are not replayed on read.
  */
 export interface AnalysisConversationTurn {
   requestSeq: number;

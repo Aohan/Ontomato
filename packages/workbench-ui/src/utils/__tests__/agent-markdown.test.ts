@@ -11,7 +11,7 @@ describe("agent markdown JSON formatting", () => {
     }
   );
 
-  it.each(['说明文字\n{"status":"ready"}', '{"status":', "plain **markdown**", "123"])(
+  it.each(['Explanation text\n{"status":"ready"}', '{"status":', "plain **markdown**", "123"])(
     "keeps non-document JSON content on the existing Markdown path",
     (content) => {
       expect(renderAgentMarkdownWithJsonFormatting(content)).toBe(renderAgentMarkdown(content));

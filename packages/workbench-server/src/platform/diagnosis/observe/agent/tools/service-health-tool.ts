@@ -93,7 +93,7 @@ function extractStatus(json: unknown): SystemStatus | null {
   if (!json || typeof json !== "object") return null;
   const obj = json as Record<string, unknown>;
   // Bare SystemStatus: any of the known top-level service keys present.
-  // 只有装配了 M3 支持的应用把 m3 当作已知的顶层服务键（企业原行为）。
+  // Only apps with M3 support assembled treat m3 as a known top-level service key (the enterprise's original behavior).
   if (
     "server" in obj ||
     (m3DiagnosticSupport() !== null && "m3" in obj) ||
@@ -139,7 +139,7 @@ function formatMemory(mb?: number): string {
   return `${Math.round(mb)}MB`;
 }
 
-/** Build the per-service metric tail, e.g. `(pid 123, CPU 4.2%, 内存 512MB, 运行 2h 5m)`. */
+/** Builds the per-service metric tail, e.g. `(pid 123, CPU 4.2%, mem 512MB, up 2h 5m)`. */
 function metricTail(svc: FlatService): string {
   const parts: string[] = [];
   if (typeof svc.pid === "number" && svc.pid > 0) parts.push(`pid ${svc.pid}`);

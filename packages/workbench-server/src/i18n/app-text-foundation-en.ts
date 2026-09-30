@@ -1,6 +1,6 @@
 /**
- * T5A 固定应用文字（英文）。两固定源里企业私有值与 OSS 公开值不同的那些错误/默认产物文字。
- * 只给 OSS 应用安装的固定 appTextLocale=en 使用；中文对应值在企业私有 locales/app-text-foundation-zh-CN.ts。
+ * T5A fixed app text (English). The error/default-artifact copy where the enterprise-private values differ from the OSS public values across the two fixed sources.
+ * Used only by the OSS app's fixed appTextLocale=en; the Chinese counterparts live in the enterprise-private locales/app-text-foundation-zh-CN.ts.
  */
 export const appTextFoundationEn = {
   "foundation.domain.required": "Current identity has no associated domain",

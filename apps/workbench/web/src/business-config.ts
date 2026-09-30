@@ -1,6 +1,6 @@
 import type { BusinessConfigProps } from "@ontomato/workbench-ui";
 
-/** 本版系统配置页的原值（迁出前开源 BusinessConfig 与子卡），经 /admin/system-config 路由 props 传入。 */
+/** Original values of this edition's system config page (from BusinessConfig and its cards before extraction), passed through the /admin/system-config route props. */
 export const businessConfig: BusinessConfigProps = {
   defaultLanguage: "en",
   adapterDisplay: {
@@ -8,5 +8,6 @@ export const businessConfig: BusinessConfigProps = {
     urlSpan: 24,
     credentialSpan: 12,
   },
-  languageLabels: { zhCN: "Simplified Chinese", zhTW: "Traditional Chinese", ja: "Japanese" },
+  // The open-source data engine ships only lang/en.json.
+  languageOptions: [{ value: "en", label: "English" }],
 };

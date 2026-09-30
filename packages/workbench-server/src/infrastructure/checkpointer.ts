@@ -10,7 +10,7 @@ import { getPostgresPool, qualifiedTable } from "./postgres";
 import { HttpError } from "../utils/errors";
 
 const logger = createLogger("checkpointer");
-// LangGraph 恢复数据沿用既有 public 存储；PG_SCHEMA 只选择业务表。
+// LangGraph recovery data keeps the existing public storage; PG_SCHEMA selects only business tables.
 const CHECKPOINT_SCHEMA = "public";
 const CHECKPOINT_TABLE = `"${CHECKPOINT_SCHEMA}"."checkpoints"`;
 
@@ -202,11 +202,11 @@ export class ExtendedPostgresSaver extends PostgresSaver {
   }
 
   /**
-   * 写入线程的会话消息通道。
+   * Writes the thread's conversation message channel.
    *
-   * 线程消息是 checkpoint 的 `messages` 通道，图驱动的运行由 LangGraph 顺带写入；
-   * 不进图的运行（维度形态深度分析）用这里显式写同一条通道，`getThreadMessages`
-   * 的读取路径不变。其余通道沿用上一份 checkpoint，不被这次写入抹掉。
+   * Thread messages are the checkpoint's `messages` channel; graph-driven runs have LangGraph write it along the way.
+   * Runs that never enter a graph (dimension-form deep analysis) write the same channel explicitly here, keeping `getThreadMessages`'
+   * read path unchanged. Other channels carry over from the previous checkpoint and are not wiped by this write.
    */
   async putThreadMessages(threadId: string, messages: BaseMessage[]): Promise<void> {
     const previous = await this.getTuple({
@@ -215,7 +215,7 @@ export class ExtendedPostgresSaver extends PostgresSaver {
     const previousCheckpoint = previous?.checkpoint;
 
     const checkpoint: Checkpoint = emptyCheckpoint();
-    // 通道版本用本次 checkpoint id，保证 checkpoint 行与 blob 行指向同一份消息。
+    // The channel version uses this checkpoint id so the checkpoint row and the blob row point at the same messages.
     const messagesVersion = checkpoint.id;
     checkpoint.channel_values = {
       ...(previousCheckpoint?.channel_values || {}),

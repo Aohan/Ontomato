@@ -35,7 +35,7 @@ const dialogVisible = ref(false);
 const editing = reactive<BusinessKnowledge>(emptyKnowledge());
 const dialogTitle = computed(() => ot(editing.knowledgeID ? "knowledgeEdit" : "knowledgeAdd"));
 
-// 预设本版三个标签存储值（显示文字走 Manager 词条），也可输入自定义标签，与迁移前页面一致。
+// Offers this edition's three stored tag values (labels come from Manager messages) and also accepts custom tags, as the page did before migration.
 const tagOptions = computed(() => [
   { value: context.knowledgeTagValues.general, label: ot("knowledgeTagGeneral") },
   { value: context.knowledgeTagValues.business, label: ot("knowledgeTagBusiness") },

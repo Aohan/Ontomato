@@ -1,11 +1,11 @@
 /**
- * 维度执行形态的运行时。
+ * Runtime of the dimension execution form.
  *
- * 分析按"选计划 → 逐维度取证与报告 → 综合总结 → 收口"四段推进，段与段的产物
- * 由编排器显式传递。呈现事实统一经任务产物累积器渐进发布；任一段产生错误都会
- * 在收口后聚合抛出，交给任务编排器完成生命周期通知。
+ * An analysis advances through four stages — "select plan → per-dimension evidence and reports → comprehensive summary → finalization" — with each
+ * stage's outputs passed explicitly by the orchestrator. Presentation facts are published progressively through the task artifact accumulator; an error
+ * from any stage is aggregated and thrown after finalization, handing lifecycle notifications to the task orchestrator.
  *
- * 与循环形态一样不进图：LangGraph 只保留给标准问数主图。
+ * Like the loop form it never enters a graph: LangGraph is reserved for the standard query main graph.
  */
 
 import { PendingLateFacts } from "../../data-query/late-fact";
@@ -29,7 +29,7 @@ import { tApp } from "../../../i18n";
 
 const logger = createLogger("deep-analysis-workflow");
 
-/** 深度分析回看时最多带入的历史消息条数。 */
+/** Maximum number of historical messages carried into a deep-analysis review. */
 const MAX_HISTORY_MESSAGES = 10;
 
 interface RunDeepAnalysisWorkflowParams {
@@ -38,7 +38,7 @@ interface RunDeepAnalysisWorkflowParams {
   domainId: string;
   threadId?: string;
   taskId?: string;
-  /** 受理时捕获的运行身份；产物与终态据此确认是否仍可写当前任务。 */
+  /** Run identity captured at acceptance; artifacts and terminal states use it to confirm the current task is still writable. */
   identity?: AnalysisRunIdentity;
   onEvent?: (event: DeepAnalysisEmittedEvent) => void;
   token?: string;
@@ -52,7 +52,7 @@ interface RunDeepAnalysisWorkflowParams {
   signal?: AbortSignal;
 }
 
-/** 深度分析回看的上文：只带最近若干条，读取失败按无历史继续。 */
+/** Context of a deep-analysis review: only the most recent entries; a read failure continues without history. */
 async function loadHistoricalMessages(
   threadId: string,
   requestSeq: number
@@ -147,7 +147,7 @@ export async function runDeepAnalysisWorkflow(
       const analysis = await runAnalysisStage(ctx, store);
       errors.push(...analysis.errors);
 
-      // 上游已失败时不再生成总结，与拆图前"检测到上游错误跳过总结"一致。
+      // No summary is generated when upstream already failed, matching the pre-split "skip summary on upstream error".
       const summary =
         errors.length > 0 || !analysis.summaryInput
           ? { errors: [] }

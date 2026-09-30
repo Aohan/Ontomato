@@ -20,7 +20,7 @@ import {
 } from "../types";
 import type { BusinessConfigProps } from "../business-config";
 
-// 系统配置页：问数设置、技能目录、通用配置、数据适配器与问数示例；模型相关在模型配置页。
+// System config page: query settings, skill directory, general config, data adapter and query examples; models live on the model configuration page.
 const props = defineProps<BusinessConfigProps>();
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
@@ -29,7 +29,7 @@ const loading = ref(false);
 const backendLoadError = ref("");
 const querySettingsRef = ref<{ markSaved: () => void } | null>(null);
 
-// 通用配置、语言与数据适配器的草稿，卡片双向绑定。
+// Draft of the general config, language and data adapter, bound two-way by the cards.
 const config = reactive<SystemSettings>({
   knowledgeMaxResult: 10,
   toolAndPythonRetry: 0,
@@ -41,9 +41,9 @@ const config = reactive<SystemSettings>({
   dataAdapter: "",
   dataAdapterConnections: {},
 });
-// 本版本后端已安装的数据适配器，随业务配置一起加载。
+// Data adapters installed in this edition's backend, loaded together with the business config.
 const dataAdapters = ref<DataAdapterInfo[]>([]);
-// 技能目录草稿：加载失败或保存失败时保留，切导航不动它。
+// Skill directory draft: kept when loading or saving fails and untouched by navigation.
 const skilldir = ref("");
 
 async function loadConfig() {
@@ -57,7 +57,7 @@ async function loadConfig() {
     if (res?.success) {
       dataAdapters.value = adaptersRes.data;
       const data = res.data as BusinessConfig;
-      // 技能目录挂在代码与计算角色上，未设置时为空。
+      // The skill directory hangs on the coding role and is empty when unset.
       skilldir.value = data.agents.coding.skilldir ?? "";
       config.knowledgeMaxResult = data.knowledgeMaxResult ?? 10;
       config.toolAndPythonRetry = data.toolAndPythonRetry ?? 0;
@@ -65,7 +65,10 @@ async function loadConfig() {
       config.dslCookerTimeout = data.dslCookerTimeout ?? 300000;
       config.questionSpliterTries = data.questionSpliterTries ?? 1;
       config.questionSpliterTimeout = data.questionSpliterTimeout ?? 300000;
-      config.lang = data.lang || props.defaultLanguage;
+      // Only languages this edition ships are selectable; any other stored value shows the default until saved explicitly.
+      config.lang = props.languageOptions.some(({ value }) => value === data.lang)
+        ? data.lang
+        : props.defaultLanguage;
       config.dataAdapter = data.dataAdapter;
       config.dataAdapterConnections = data.dataAdapterConnections;
       dataAdapterMode.value = config.dataAdapter;
@@ -139,7 +142,7 @@ async function saveDataAdapter() {
   savingAdapter.value = true;
   try {
     const adapter = dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
-    // 只提交该类型声明的连接字段；有字段的类型其连接对象由卡片表单建立。
+    // Submit only the connection fields declared by the type; for types with fields, the card form builds the connection object.
     const connection = config.dataAdapterConnections[adapter.type];
     await adminApi.useDataAdapter({
       type: adapter.type,
@@ -154,7 +157,7 @@ async function saveDataAdapter() {
   }
 }
 
-// 问数设置存于 Node 系统模型文件，只有问数模式与总时限两项。
+// Query settings live in the Node system model file and hold only the query mode and total time limit.
 const querySettings = reactive<SystemModelConfig>({
   abcQuestionMode: "harness",
   queryTimeoutSeconds: 600,
@@ -236,7 +239,7 @@ onMounted(() => {
     <GeneralConfigCard
       v-model:config="config"
       :saving="savingGeneral"
-      :language-labels="languageLabels"
+      :language-options="languageOptions"
       :default-language="defaultLanguage"
       :disabled="loading || !!backendLoadError"
       @save="saveGeneralField"

@@ -33,7 +33,7 @@ function recordUnavailable(
   trajectory.settle(activityId, "failed", { error });
 }
 
-/** 按任务当前配置发现外部 MCP 工具，并直接适配为主管 AgentTool。 */
+/** Discovers external MCP tools from the task's current configuration and adapts them directly into supervisor AgentTools. */
 export async function loadExternalMcpTools(params: ExternalMcpToolParams): Promise<AgentTool[]> {
   params.signal?.throwIfAborted();
   if (params.selectedServiceNames.length === 0) return [];

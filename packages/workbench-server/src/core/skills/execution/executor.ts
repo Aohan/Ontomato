@@ -17,9 +17,9 @@ const defaultConfig: RuntimeConfig = {
 };
 
 export interface SkillExecutionOptions {
-  /** 已由调用边界确认在 frontmatter entries 内的入口 */
+  /** Entry already confirmed by the calling boundary to be inside the frontmatter entries */
   entry?: string;
-  /** 单次调用覆盖；未传时保持技能声明与运行时配置的既有语义 */
+  /** Per-call override; when absent, the existing semantics of the skill declaration and runtime configuration apply */
   maxRetries?: number;
   signal?: AbortSignal;
 }

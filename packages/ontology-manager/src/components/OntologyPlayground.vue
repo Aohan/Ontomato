@@ -290,7 +290,7 @@ async function fitGraphToContainer(target: Graph) {
   if (!width || !height) return;
   target.resize(Math.round(width), Math.round(height));
   await target.fitView({ when: "always", direction: "both" });
-  // 宿主给的适配上限（开源原为 1，企业原不设）：节点少时不被放大超过上限。
+  // Host-supplied fit limit (null for none): with few nodes the graph is not zoomed beyond it.
   const { maxFitZoom } = context.presentation;
   if (maxFitZoom !== null && target.getZoom() > maxFitZoom) {
     await target.zoomTo(maxFitZoom, false);
@@ -1007,7 +1007,7 @@ onBeforeUnmount(() => {
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
 }
-/* 两版原值由宿主 presentation.themeProperties 给出。 */
+/* Values come from the host's presentation.themeProperties. */
 .relation-icon {
   color: var(--manager-relation-icon-color);
   background: var(--manager-relation-icon-background);

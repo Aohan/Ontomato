@@ -20,12 +20,14 @@ import { businessConfig } from "./business-config";
 import { workbenchContent } from "./workbench-content";
 
 /*
- * 开源网页入口。装配 /chat 工作台布局、/observe 与开源全部管理后台页面（/admin 布局、Manager 入口（业务知识在 Manager 内）、
- * 分析智能体（含热报告与系统智能体入口页签）、知识治理、技能、MCP 服务、模型配置、系统配置（含问数示例）、审计日志、反馈记录、系统监控，
- * 以及业务知识、问数示例、热点报告与 Manager 旧入口的重定向）；
- * 界面已在本机合成接口下完成浏览器验收，真实整栈集成尚未验证，这一构建不能替换现网前端。
- * 菜单：Ontology Manager 页签（首页型，直达 Manager，无左侧菜单）；Agents and Skills：analysis, skills, mcp-service；
- * System Management：model-config, system-config, audit-log, feedback-records, system-monitor。
+ * Open-source web entry. Assembles the /chat workbench layout, /observe and all open-source admin pages (the /admin
+ * layout, the Manager entry (business knowledge lives in the Manager), analysis agents (with hot report and system agent
+ * tabs), knowledge governance, skills, MCP services, model configuration, system config (with query examples), audit
+ * log, feedback records and system monitor, plus redirects for business knowledge, query examples, hot reports and the
+ * old Manager entry). The UI has passed browser acceptance against locally synthesized APIs; real full-stack integration
+ * is not yet verified, so this build cannot replace the production frontend.
+ * Menu: the Ontology Manager tab (home-style, opens the Manager directly, no sidebar menu); Agents and Skills: analysis,
+ * skills, mcp-service; System Management: model-config, system-config, audit-log, feedback-records, system-monitor.
  */
 const adminLayout: AdminLayoutConfig = {
   access: { ready: true, can: () => true },
@@ -69,7 +71,7 @@ startWorkbenchWeb({
     missingUrlDescription: "Please set ONTOLOGY_MANAGER_URL in the Ontomato service and redeploy.",
   },
   content: workbenchContent,
-  // 开源的 /observe 无权限门：回合诊断入口对所有用户可见。
+  // The open-source /observe has no permission gate: the turn diagnosis entry is visible to all users.
   turnDiagnosis: { prepare: () => {}, visible: () => true },
   routes: [
     { path: "/", redirect: "/chat" },
@@ -104,7 +106,7 @@ startWorkbenchWeb({
         adminRoutes.systemMonitor,
       ],
     },
-    // 开源 /observe 原本没有认证/权限 meta；头部无账号。
+    // The open-source /observe had no auth/permission meta; the header has no account.
     { ...observeRoutes.root, props: { account: null }, children: observeRoutes.children },
   ],
 });

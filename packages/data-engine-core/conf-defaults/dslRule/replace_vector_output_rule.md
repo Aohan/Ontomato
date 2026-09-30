@@ -1,8 +1,8 @@
-		6.3.4 vector类型字段输出至少需要两个step，在查询step中把该字段输出到临时表中（需要as、variable、field属性），在后面的step中从临时表输出（由as、variable、field、query属性组成）
+		6.3.4 The output of a vector type field requires at least two steps; in the query step the field is output to a temporary table (the as, variable and field attributes are required), and in the following step it is output from the temporary table (consisting of the as, variable, field and query attributes)
    
-			6.3.4.1 如果后面的step中该字段只有as、variable、field属性，代表输出该字段的全部的向量对应的文件
+			6.3.4.1 If in the following step the field has only the as, variable and field attributes, it means outputting all the files corresponding to the vectors of the field
    
-			6.3.4.2 如果后面的step中该字段有as、variable、field、query属性时，代表输出该字段按query中文字内容过滤后的向量对应的文件
+			6.3.4.2 If in the following step the field has the as, variable, field and query attributes, it means outputting the files corresponding to the vectors of the field filtered by the text content in query
 			
-		- 不允许对在output中对vector类型字段做group by和having操作
-		- 不允许对在output中对vector类型字段做sort操作
+		- It is not allowed to perform group by and having operations on vector type fields in output
+		- It is not allowed to perform sort operations on vector type fields in output

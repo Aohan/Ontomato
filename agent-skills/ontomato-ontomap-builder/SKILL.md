@@ -47,7 +47,7 @@ node ontomato.mjs get-ontomap
 node ontomato.mjs set-ontomap '<json>'
 node ontomato.mjs set-ontomap @ontomap.json
 node ontomato.mjs ask "How many people are there?"
-node ontomato.mjs ask --lang zh "共有多少人？"
+node ontomato.mjs ask --lang en "How many people are there?"
 ```
 
 `type` is one of the types `list-datasources` prints.

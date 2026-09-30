@@ -1,4 +1,4 @@
-/* 开源原 style.css 中的窄屏对话框规则（企业原版没有），紧跟共享 style.css 引入以保持原层叠位置。 */
+/* Narrow-screen dialog rules from the original style.css, imported right after the shared style.css to keep their original cascade position. */
 @media (max-width: 700px) {
   .el-overlay-dialog {
     padding: max(12px, env(safe-area-inset-top)) 10px max(12px, env(safe-area-inset-bottom)) !important;

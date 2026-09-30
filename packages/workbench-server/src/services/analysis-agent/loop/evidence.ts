@@ -1,10 +1,10 @@
 import type { QueryThinkingState } from "@ontomato/contracts/query-thinking";
 import type { AnalysisEvidenceQuestion } from "@ontomato/contracts/analysis-presentation";
 /**
- * 循环形态的取证能力：把一批问数问题交给报告证据接入层取得当前数据证据。
+ * Evidence capability of the loop form: hands a batch of query questions to the report evidence access layer to obtain current data evidence.
  *
- * 一次请求可以携带多个问数问题，运行时按并发上限执行；单个问题失败收敛为该问题的
- * 失败结果，不中断循环。返回给模型的只有展示值数据所见，原始值不进循环上下文。
+ * One request may carry several query questions, executed under the concurrency limit; a single question's failure converges into that question's
+ * failed result without interrupting the loop. Only the display-value data view is returned to the model; raw values never enter the loop context.
  */
 
 import { PendingLateFacts } from "../../data-query/late-fact";
@@ -38,13 +38,13 @@ const logger = createLogger("analysis-loop-evidence");
 
 export const COLLECT_EVIDENCE_TOOL_NAME = "collect_evidence";
 
-/** 一个问数问题本次取证的结果事实。 */
+/** Result facts of one query question's evidence collection this time. */
 export interface LoopEvidenceResult extends AnalysisEvidenceQuestion {
   status: "completed" | "failed";
   dataCount: number;
-  /** 本次证据的原始值数据集，只在运行时内部流转（图表能力使用），不进循环上下文 */
+  /** The raw-value dataset of this evidence, flowing only inside the runtime (used by the chart capability), never entering the loop context */
   datasets: QueryResultDatasetEntry[];
-  /** 交给模型的展示值数据所见文本 */
+  /** Display-value data view text handed to the model */
   modelText: string;
 }
 
@@ -56,9 +56,9 @@ export interface LoopEvidenceDeps {
   userId: string;
   locale?: string;
   classNames?: string[];
-  /** 本次运行登记迟到事实的位置；分析不呈现质检，登记后不等结算 */
+  /** Where this run registers late facts; analysis never presents the quality check and does not wait for settlement after registering */
   lateFacts: PendingLateFacts;
-  /** 查询事实持久化；失败不阻断取证结果返回 */
+  /** Query fact persistence; its failure never blocks returning the evidence results */
   saveQueryRun: (input: {
     questionId: string;
     question: string;
@@ -68,8 +68,8 @@ export interface LoopEvidenceDeps {
 }
 
 /**
- * 把一个问数问题的证据渲染成模型可见文本：只包含展示值数据所见，
- * 不包含原始行、DSL、思考状态等原始值载荷。
+ * Renders one query question's evidence into model-visible text: only the display-value data view,
+ * never raw payloads such as raw rows, DSL, or thinking states.
  */
 export function buildEvidenceModelText(params: {
   index: number;
@@ -77,7 +77,7 @@ export function buildEvidenceModelText(params: {
   question: string;
   status: "completed" | "failed";
   error?: string;
-  /** 本次证据的原始值数据集；函数内部换算为展示值后才交给模型 */
+  /** The raw-value dataset of this evidence; converted to display values inside the function before reaching the model */
   entries?: QueryResultDatasetEntry[];
   markdownTable?: string;
   locale?: string;
@@ -113,13 +113,13 @@ export function buildEvidenceModelText(params: {
   return parts.join("\n");
 }
 
-/** 一批取证的并发上限，与维度形态的子问题查询同源，共享服务级问数额度。 */
+/** Concurrency limit of one evidence batch, sourced from the dimension form's sub-question query limit, sharing the service-level query quota. */
 export const LOOP_EVIDENCE_CONCURRENCY = Math.max(
   1,
   DEFAULT_ANALYSIS_CONCURRENCY.subQuestionQueryConcurrency ?? 1
 );
 
-/** 把取证工具、证据池、查询事实与主管/工人轨迹接线装配成一次运行内的取证能力。 */
+/** Assembles the evidence tool, evidence pool, query facts, and supervisor/worker trajectory wiring into one run's evidence capability. */
 export function assembleLoopEvidenceCapability(params: {
   threadId: string;
   requestSeq: number;
@@ -130,9 +130,9 @@ export function assembleLoopEvidenceCapability(params: {
   classNames?: string[];
   signal: AbortSignal;
   trajectory: DeepAnalysisArtifactStore;
-  /** 前几轮已经取得的证据；只用于让本轮参考，重新取证才会刷新数据。 */
+  /** Evidence already collected in earlier turns; for this turn's reference only, and only fresh evidence collection refreshes the data. */
   initialEvidence?: Map<string, { question: string; entries: QueryResultDatasetEntry[] }>;
-  /** 本轮每个问题取证成功后的稳定引用，供后续轮次恢复证据。 */
+  /** Stable reference recorded after each question's evidence succeeds this turn, for later turns to restore evidence. */
   onEvidence?: (questionId: string, question: string) => void;
 }) {
   const deps: LoopEvidenceDeps = {
@@ -230,7 +230,7 @@ export function assembleLoopEvidenceCapability(params: {
   };
 }
 
-/** 受限并发执行一批问数问题，单问失败收敛为该问失败结果。 */
+/** Executes a batch of query questions under bounded concurrency; a single question's failure converges into that question's failed result. */
 export async function collectLoopEvidence(
   questions: Array<{ questionId: string; question: string }>,
   deps: LoopEvidenceDeps,
@@ -266,7 +266,7 @@ export async function collectLoopEvidence(
               }
             )
         );
-        // 分析的工作流、报告与运行呈现都不消费质检，登记后不等它结算。
+        // Analysis workflows, reports, and run presentation never consume the quality check; after registering we do not wait for its settlement.
         if (pendingQualityCheck) deps.lateFacts.register(pendingQualityCheck);
 
         const status = branchResult.status === "completed" ? "completed" : "failed";
@@ -281,7 +281,7 @@ export async function collectLoopEvidence(
               })
             : [];
 
-        // 查询事实是中间产物：持久化失败只记录，不把已取得的证据判为失败。
+        // Query facts are intermediate products: a persistence failure is only logged and never marks collected evidence as failed.
         try {
           await deps.saveQueryRun({ questionId, question, result: branchResult, status });
         } catch (error: unknown) {
@@ -342,7 +342,7 @@ export async function collectLoopEvidence(
     LOOP_EVIDENCE_CONCURRENCY
   );
 
-  // 并发池把抛出的异常收进结果位；取证只在取消时抛出，取消要原样中断整批。
+  // The concurrency pool catches thrown exceptions into result slots; evidence collection throws only on cancellation, and cancellation must interrupt the whole batch as-is.
   const aborted = results.find((item): item is Error => item instanceof Error);
   if (aborted) throw aborted;
   return results as LoopEvidenceResult[];
@@ -361,16 +361,16 @@ function parseQuestions(params: Record<string, unknown>): string[] {
 }
 
 /**
- * 取证工具。稳定身份在受理时分配，工具反馈只携带展示值数据所见。
+ * Evidence collection tool. Stable identities are assigned at acceptance; tool feedback carries only the display-value data view.
  */
 export function createCollectEvidenceTool(params: {
   deps: LoopEvidenceDeps;
   signal: AbortSignal;
-  /** 受理一批问数问题时回调，用于登记轨迹活动 */
+  /** Invoked when a batch of query questions is accepted, to register the trajectory activity */
   onAccepted: (questions: AnalysisEvidenceQuestion[]) => string;
-  /** 单个问数问题完成时回调，用于更新进行中的轨迹活动 */
+  /** Invoked when one query question completes, to update the in-progress trajectory activity */
   onProgress: (activityId: string, questions: AnalysisEvidenceQuestion[]) => void;
-  /** 一批问数问题结算时回调，用于结算轨迹活动 */
+  /** Invoked when a batch of query questions settles, to finalize the trajectory activity */
   onSettled: (activityId: string, results: LoopEvidenceResult[]) => void;
   onThinking?: (activityId: string, questionId: string, thinkingState: QueryThinkingState) => void;
 }): AgentTool {

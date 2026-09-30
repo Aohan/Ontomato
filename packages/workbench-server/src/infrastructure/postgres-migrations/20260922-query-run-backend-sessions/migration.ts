@@ -6,16 +6,16 @@ export const QUERY_RUN_BACKEND_SESSIONS_VERSION = "20260922_query_run_backend_se
 export const QUERY_RUN_BACKEND_SESSIONS_NAME = "query runs store backend sessions per branch";
 
 export type QueryRunBackendSessionsResult = {
-  /** 转成会话列表的行数 */
+  /** Number of rows converted into session lists */
   migratedRows: number;
-  /** 单值会话列是否已退役 */
+  /** Whether the single-value session columns have been retired */
   legacyColumnsDropped: boolean;
 };
 
 /**
- * 把单值会话列搬进按分支的会话列表，然后退役 `session_id`/`backend_node_id`。
- * 历史上只有 abc 分支产生过会话号，旧行一律记为 abc（设计 6）。
- * 单值列不存在时说明本迁移已经完成，直接返回。
+ * Carries the single-value session columns into the per-branch session list, then retires `session_id`/`backend_node_id`.
+ * Historically only the abc branch produced session numbers, so old rows are uniformly recorded as abc (design 6).
+ * Missing single-value columns mean this migration already completed and it returns directly.
  */
 export async function migrateQueryRunBackendSessions(
   client: QueryableClient

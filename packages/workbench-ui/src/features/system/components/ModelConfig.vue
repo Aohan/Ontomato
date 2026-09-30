@@ -18,11 +18,11 @@ import {
   type RoleModels,
 } from "../types";
 
-// 模型配置页：模型列表与五个角色的引用是 Java 模型库的编辑草稿，一次保存；Embedding 卡片单独保存。
+// Model configuration page: the model list and the five role references are an edit draft of the Java model library, saved at once; the Embedding card saves separately.
 const { t } = useI18n();
 const { businessConfigSeparator } = workbenchContent().text;
 
-// 列表以浅引用持有、整表替换：条目保持普通对象，不透明的自定义参数不经 Vue 代理。
+// The list is held by a shallow ref and replaced as a whole: entries stay plain objects and opaque custom parameters never pass through Vue proxies.
 const models = shallowRef<ModelEntry[]>([]);
 const roles = ref<RoleModels>(
   Object.fromEntries(MODEL_ROLES.map((role) => [role, null])) as RoleModels
@@ -37,7 +37,7 @@ const dirty = computed(() => signature() !== savedSignature.value);
 
 function applySettings(data: ModelSettingsData) {
   models.value = data.models;
-  // 未配置的角色在响应里可能省略 model 字段，统一为 null。
+  // Unconfigured roles may omit the model field in the response; normalize them to null.
   roles.value = Object.fromEntries(
     MODEL_ROLES.map((role) => [role, data.agents[role].model ?? null])
   ) as RoleModels;
@@ -60,7 +60,7 @@ async function loadSettings() {
 function removeModel(index: number) {
   const removed = models.value[index]!.name;
   models.value = models.value.filter((_, i) => i !== index);
-  // 引用被删模型的角色随之置空，保存时不留悬空引用。
+  // Roles referring to a deleted model are cleared so no dangling reference is saved.
   for (const role of MODEL_ROLES) {
     if (roles.value[role] === removed) roles.value[role] = null;
   }
@@ -101,7 +101,7 @@ async function runModelTest() {
   testRunning.value = true;
   testResult.value = "";
   try {
-    // 测试用当前草稿条目，不保存。
+    // Test with the current draft entry without saving.
     const res = await adminApi.testModel(testModel.value!, testContent.value);
     testResult.value = res.data as string;
   } catch (e: any) {
@@ -111,7 +111,7 @@ async function runModelTest() {
   }
 }
 
-// Embedding 属于业务配置，随 getConfig 读取、单独保存。
+// Embedding belongs to the business config: read with getConfig and saved separately.
 const embedding = shallowRef<EmbeddingModelConfig | null>(null);
 const embeddingLoading = ref(false);
 const embeddingLoadError = ref("");
@@ -133,7 +133,7 @@ async function loadEmbedding() {
 async function saveEmbeddingConfig() {
   savingEmbedding.value = true;
   try {
-    // 整条快照提交：保留 customHeaders 等未在弹窗展示的字段。
+    // Submit the whole snapshot to keep fields not shown in the dialog, such as customHeaders.
     await adminApi.saveEmbeddingModel(embedding.value);
     ElMessage.success(t("admin.embeddingSaveSuccess"));
   } catch (e: any) {
@@ -236,7 +236,7 @@ onMounted(() => {
 <style scoped src="./business-config/business-config.css"></style>
 
 <style scoped>
-/* 宽度跟随后台主区；具体输入控件各自限宽。 */
+/* Width follows the admin main area; individual inputs limit their own width. */
 .system-config-container {
   display: flex;
   flex-direction: column;
@@ -244,7 +244,7 @@ onMounted(() => {
   min-width: 0;
 }
 
-/* 模型列表与角色引用的唯一保存入口，紧跟角色表；Embedding 卡片另有自己的保存。 */
+/* The single save action for the model list and role references, right after the role table; the Embedding card has its own save. */
 .model-settings-actions {
   display: flex;
   align-items: center;

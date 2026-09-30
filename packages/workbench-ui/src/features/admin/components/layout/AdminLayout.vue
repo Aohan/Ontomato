@@ -52,8 +52,8 @@ function openLangMenu() {
 
 const collapsed = ref(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1");
 
-// 页签可见：页签本身有权限，或组内至少一个菜单项有权限；菜单项逐项按权限过滤。
-// 切组落点：首页型页签是首页，其余是组内第一个可见菜单项。
+// A tab is visible if it has permission itself or at least one menu item in its group does; menu items are filtered one by one.
+// Landing path when switching groups: the home page for a home-style tab, otherwise the group's first visible menu item.
 const navGroups = computed(() =>
   props.groups
     .filter(
@@ -82,7 +82,7 @@ const currentGroupItems = computed(() => {
   return group?.items || [];
 });
 
-// 没有菜单项的页签（首页型页签）不显示左侧栏，内容直接占满。
+// Tabs without menu items (home-style tabs) hide the sidebar so the content fills the page.
 const showAside = computed(() => currentGroupItems.value.length > 0);
 
 const activeMenu = computed(() => {
@@ -118,7 +118,7 @@ watch(firstAvailableGroup, (group) => {
   }
 });
 
-// 权限就绪后定位页签：当前路由所在组可见则用它，否则第一个可见组。
+// Once permissions are ready, pick the tab: the current route's group if visible, otherwise the first visible group.
 watch(
   () => props.access.ready,
   (ready) => {
@@ -560,7 +560,7 @@ function openObserve() {
   min-width: 0;
 }
 
-/* 选中状态下确保省略号生效 */
+/* Keep the ellipsis working in the selected state */
 .admin-menu :deep(.el-menu-item.is-active) .menu-item-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -591,7 +591,7 @@ function openObserve() {
   border-radius: 0 2px 2px 0;
 }
 
-/* 折叠状态下图标居中 - 与收起按钮效果一致 */
+/* Centre icons when collapsed - consistent with the collapse button */
 .admin-aside.collapsed .admin-menu :deep(li.el-menu-item) {
   margin: 4px auto !important;
   width: 40px !important;

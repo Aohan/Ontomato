@@ -18,7 +18,7 @@ const router: ReturnType<typeof Router> = Router();
 
 /**
  * GET /api/analysis-reports/cards
- * 获取分析报告热卡片列表（支持按状态筛选）
+ * Lists analysis report hot cards (with status filtering)
  */
 router.get(
   "/cards",
@@ -32,7 +32,7 @@ router.get(
 
 /**
  * GET /api/analysis-reports/cards/published
- * 获取已发布的卡片（供查询节点热匹配使用）
+ * Lists published cards (consumed by the query node's hot matching)
  */
 router.get(
   "/cards/published",
@@ -44,7 +44,7 @@ router.get(
 
 /**
  * GET /api/analysis-reports/cards/:id
- * 获取单张卡片详情
+ * Gets one card's details
  */
 router.get(
   "/cards/:id",
@@ -59,7 +59,7 @@ router.get(
 
 /**
  * PUT /api/analysis-reports/cards/:id/status
- * 设置卡片状态（审批操作）
+ * Sets a card's status (approval action)
  */
 router.put(
   "/cards/:id/status",
@@ -83,7 +83,7 @@ router.put(
 
 /**
  * PUT /api/analysis-reports/cards/:id/business-description
- * 设置卡片业务描述
+ * Sets a card's business description
  */
 router.put(
   "/cards/:id/business-description",
@@ -106,7 +106,7 @@ router.put(
 
 /**
  * DELETE /api/analysis-reports/cards/:id
- * 删除卡片
+ * Deletes a card
  */
 router.delete(
   "/cards/:id",

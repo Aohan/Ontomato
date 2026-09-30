@@ -121,7 +121,7 @@ const taskResultPages = computed(() =>
   Math.max(1, Math.ceil(taskResultTotal.value / taskResultPageSize.value))
 );
 
-// 解读页签只属于带段的动作：其余资产与无段动作不出现页签栏。
+// The explanation tab belongs only to actions with segments; other assets and actions without segments show no tab bar.
 const activeTab = ref<"definition" | "explainer">("definition");
 const savedCodeSnapshot = ref("");
 
@@ -137,7 +137,7 @@ const explainerState = computed(() => {
   return normalizeCodeSegments(raw);
 });
 
-// 有解读就出页签：规范化通过即非空，格式不对时页签里显示错误。
+// Show the tab whenever there is an explanation: a normalized one is non-empty; an invalid format shows an error in the tab.
 const showExplainerTab = computed(() => explainerState.value !== null);
 
 const explainerSegments = computed(() => {
@@ -145,15 +145,15 @@ const explainerSegments = computed(() => {
   return state && state.ok ? state.segments : [];
 });
 
-// 编辑框相对已保存代码有未保存修改时，解读页签提示并仍渲染已保存版本。
+// When the editor has unsaved changes relative to the saved code, the explanation tab warns and still renders the saved version.
 const codeDirty = computed(() => editedCode.value !== savedCodeSnapshot.value);
 
-// 业务含义对应已保存的代码、不可编辑；脏态复用解读页签那一套，不另起判断。
+// Business meaning reflects the saved code and is read-only; its dirty state reuses the explanation tab's check instead of a separate one.
 const businessMeaning = computed(() =>
   props.kind === "actions" ? normalizeBusinessMeaning(record.value?.businessMeaning) : null
 );
 
-// 快照只在 record 重新赋值时同步（非深度）：新增加载路径不会漏，编辑框修改不触发。
+// The snapshot syncs only when record is reassigned (not deep): new load paths are not missed and editor changes do not trigger it.
 watch(
   () => record.value,
   () => {
@@ -246,14 +246,14 @@ async function save() {
   try {
     const isAction = props.kind === "actions";
     const codeChanged = isAction && codeDirty.value;
-    // 重算同步发生在保存请求里：代码有改动的动作先提示要等一会儿。
+    // Recalculation happens synchronously in the save request, so actions with code changes first warn that it may take a while.
     if (codeChanged) message.info(ot("explainerRegenerating"));
     await requestSmartAsset(props.kind, "save", record.value);
     message.success(ot("assetSaved", { title: meta.value.title }));
     if (props.creating) {
       emit("created");
     } else if (isAction) {
-      // 已有动作留在详情页：通知父级刷新目录后重新加载本条记录。
+      // Existing actions stay on the detail page: tell the parent to refresh the catalog, then reload this record.
       emit("saved");
       await loadDetail();
       if (codeChanged && explainerSegments.value.length === 0) {

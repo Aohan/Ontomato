@@ -1,6 +1,6 @@
 import type { WorkbenchAuthHost } from "@ontomato/workbench-ui";
 
-/** 开源无认证（原 utils/auth.ts）：无凭据，401/402 按普通请求错误处理。 */
+/** No authentication in open source (originally utils/auth.ts): no credential; 401/402 are handled as ordinary request errors. */
 export const anonymousAuthHost: WorkbenchAuthHost = {
   getToken: () => null,
   getApiKey: () => null,

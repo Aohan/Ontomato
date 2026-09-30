@@ -9,12 +9,12 @@ import type { HotJudgeResult } from "./hot-data-utils";
 const logger = createLogger("hot-data-static");
 
 /**
- * 判断"静态业务卡片"是否已经足够回答问题（固定指标）
+ * Decides whether the "static business cards" are already sufficient to answer the question (fixed metrics)
  *
- * 静态卡片判断更宽松：
- * 1. 结论优先：卡片已有清晰可展示结论即可视为候选
- * 2. 允许"覆盖范围 >= 用户需求"方向（用户要 top5，卡片有 top10 = OK）
- * 3. 不允许反向（用户要 top10，卡片只有 top5 = FAIL）
+ * Static-card judgment is looser:
+ * 1. Conclusion first: a card with a clear displayable conclusion already counts as a candidate
+ * 2. The "coverage >= user need" direction is allowed (user asks top5, card has top10 = OK)
+ * 3. The reverse is not allowed (user asks top10, card only has top5 = FAIL)
  */
 export async function judgeAndAnswerByStaticDocs(params: {
   question: string;

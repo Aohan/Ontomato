@@ -1,3 +1,4 @@
+import { englishMessages } from "@ontomato/ontology-manager/i18n";
 import type { ManagerShellProfile } from "./shell";
 import { ossPresentation } from "./presentation";
 
@@ -6,6 +7,7 @@ export const ossProfile: ManagerShellProfile = {
   themeMessage: "ontomato-theme",
   locale: "en",
   localeSync: null,
+  messages: { en: englishMessages },
   dataFallbacks: {
     noBusinessDescription: "No business description provided",
     unnamedAsset: "Unnamed asset",

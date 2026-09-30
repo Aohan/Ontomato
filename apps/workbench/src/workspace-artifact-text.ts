@@ -1,6 +1,6 @@
 import type { WorkspaceArtifactText } from "@ontomato/workbench-server/platform/diagnosis/observe/workspace-artifact/artifact-text";
 
-/** open-source 迁出前的诊断产物文本协议（b6437c86 的 prompt-unified-writer 与 post-processor）。 */
+/** Diagnosis artifact text protocol from before the open-source migration (b6437c86's prompt-unified-writer and post-processor). */
 export const ossWorkspaceArtifactText: WorkspaceArtifactText = {
   promptMarkers: {
     systemPrompt: "System Prompt",

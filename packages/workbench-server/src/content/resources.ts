@@ -1,4 +1,4 @@
 import { fileURLToPath } from "node:url";
 
-/** 本包携带的只读默认资源根：prompts/、skills/、data/{echart,knowledge,skills}/。 */
+/** Read-only default resource root carried by this package: prompts/, skills/, data/{echart,knowledge,skills}/. */
 export const workbenchServerResourceRoot = fileURLToPath(new URL("../../", import.meta.url));

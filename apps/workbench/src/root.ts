@@ -1,4 +1,4 @@
 import { fileURLToPath } from "node:url";
 
-/** 开源产品根：本仓根目录（镜像内即 /app）。.env 与运行数据 data/ 都在这里。 */
+/** OSS product root: this repository's root (inside the image, /app). .env and the runtime data data/ both live here. */
 export const productRoot = fileURLToPath(new URL("../../../", import.meta.url));

@@ -8,7 +8,7 @@ export const MODEL_ROLES = [
 
 export type ModelRole = (typeof MODEL_ROLES)[number];
 
-/** 模型条目：Java getModelSettings 读取归一化后 displayName、maxTokens、contextWindow 必有值（默认值只在 Java 维护）。 */
+/** Model entry: displayName, maxTokens, and contextWindow are guaranteed after Java getModelSettings read normalization (defaults are maintained only in Java). */
 export interface BackendModelConfig {
   name: string;
   displayName: string;

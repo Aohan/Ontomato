@@ -427,7 +427,7 @@ export class AnalysisAgentService {
 
 let analysisAgentService: AnalysisAgentService | null = null;
 
-/** AnalysisAgentService 的唯一获取入口：进程内只实例化并初始化一次。 */
+/** The single accessor for AnalysisAgentService: instantiated and initialized once per process. */
 export async function getAnalysisAgentService(): Promise<AnalysisAgentService> {
   if (!analysisAgentService) {
     analysisAgentService = new AnalysisAgentService();

@@ -2,7 +2,7 @@ import type { AnalysisTask } from "../task-types";
 import { buildDeepAnalysisMarkdown } from "../task/task-result";
 import { exportMarkdownPdf } from "./pdf-export";
 
-/** 能否导出只看这一处：定时规则、非报告任务、最新运行正文为空都不可导出。 */
+/** The single decision point for exportability: schedule rules, non-report tasks, and an empty latest-run body are all non-exportable. */
 export function analysisReportPdfSource(owned: {
   task: Pick<AnalysisTask, "name" | "reportDeliverableEnabled" | "analysisPayload">;
   rule?: object;
@@ -16,7 +16,7 @@ export function analysisReportPdfSource(owned: {
   return { title: owned.task.name, markdown };
 }
 
-/** `<任务名>_YYYY-MM-DDTHH-mm-ss.pdf`，时间取服务器本地时间。 */
+/** `<task name>_YYYY-MM-DDTHH-mm-ss.pdf`, with the timestamp taken from server local time. */
 function analysisReportPdfFileName(taskName: string, now: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   const stamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;

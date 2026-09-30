@@ -50,7 +50,7 @@ export function buildThinkingSummary(state: QueryThinkingState): string {
     .trim();
 }
 
-/** 把思考摘要逐行展开为已完成的思考步骤。 */
+/** Expands the thinking summary line by line into completed thinking steps. */
 export function buildThinkingSteps(summary: string) {
   const lines = summary
     .split("\n")

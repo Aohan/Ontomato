@@ -1,5 +1,7 @@
-# 产品根聚合入口。两个产品仓各自 include 这一份，它只按顺序调用各仓既有的分服务
-# 目标，不承载构建逻辑，也不识别任何一仓独有的变量（如企业 License 模式）。
+# Product-root aggregate entry point. Each of the two product repositories includes this
+# file; it only calls each repository's existing per-service targets in order, carries no
+# build logic, and recognizes no variable unique to one repository (such as the enterprise
+# license mode).
 .DEFAULT_GOAL := build
 
 .PHONY: build build-app pack pack-app pack-amd64 pack-arm64 pack-app-amd64 pack-app-arm64

@@ -6,58 +6,67 @@ import {
   type ManagerCredential,
   type ManagerDataFallbacks,
 } from "./api";
-import { ontologyText, sharedText, type MessageKey, type SharedKey, type TextParams } from "./i18n";
+import {
+  ontologyText,
+  sharedText,
+  type ManagerMessages,
+  type MessageKey,
+  type SharedKey,
+  type TextParams,
+} from "./i18n";
 
 export type ManagerTheme = "light" | "dark";
 
 /**
- * 宿主静态装配的展示原值：两个产品的 Manager 各自原有的显示与交互差异。组件单份、不含版本标记，
- * 由应用 profile 一次给定，不随运行切换。
+ * Presentation values supplied statically by the host: each product's own display and interaction differences for the
+ * Manager. There is a single component with no edition flags; the app profile supplies these once and they do not change at runtime.
  */
 export interface ManagerPresentation {
   /**
-   * 组件根元素上按 theme 整组绑定的自定义属性：两版取值不同的主题变量，以及组件专用属性
-   * --manager-relation-icon-color / --manager-relation-icon-background（图谱关系图标）、
-   * --manager-model-catalog-min-height（模型目录）、--manager-modeling-panel-header-background（建模右栏表头）、
-   * --manager-filter-drawer-radius（数据浏览筛选抽屉）。
+   * Custom properties bound as a group per theme on the component root: theme variables whose values differ per product,
+   * plus the component-specific --manager-relation-icon-color / --manager-relation-icon-background (graph relation icon),
+   * --manager-model-catalog-min-height (model catalog), --manager-modeling-panel-header-background (modeling right-panel
+   * header) and --manager-filter-drawer-radius (data browser filter drawer).
    */
   readonly themeProperties: Readonly<Record<ManagerTheme, Readonly<Record<string, string>>>>;
-  /** 本体图谱与可视化建模共用的节点色板，按类名哈希取色。 */
+  /** Node palette shared by the ontology graph and visual modeling; colours are picked by class-name hash. */
   readonly nodePalette: readonly string[];
-  /** 本体图谱边样式中的标签片段，原样展开到边样式。 */
+  /** Label fragment of the ontology graph edge style, spread into the edge style as-is. */
   readonly edgeLabel: Readonly<{ labelPlacement?: "center"; labelAutoRotate?: boolean }>;
-  /** 本体图谱适配画布后的缩放上限；null 表示不设上限。 */
+  /** Zoom limit after the ontology graph fits the canvas; null means no limit. */
   readonly maxFitZoom: number | null;
-  /** 数据浏览页头说明；参数为当前对象类型的显示名，未选择对象类型时没有。 */
+  /** Data browser header description; the argument is the current object type's display name, absent when none is selected. */
   readonly dataBrowserDescription: (objectLabel: string | undefined) => string;
-  /** 组件容器不超过 700px 时对话框改为窄屏布局。 */
+  /** Dialogs switch to the narrow layout when the component container is at most 700px wide. */
   readonly compactDialogs: boolean;
 }
 
-/** 业务知识三个标签的本版存储值：提交与落盘用这里的值，选项显示走 Manager 词条。 */
+/** This edition's stored values of the three business knowledge tags: submitted and stored as-is; option labels come from Manager messages. */
 export interface ManagerKnowledgeTagValues {
   readonly general: string;
   readonly business: string;
   readonly tech: string;
 }
 
-/** 宿主传入的全部上下文；组件不读取宿主存储、document 主题类或全局路由。 */
+/** Everything the host passes in; the component does not read host storage, document theme classes or global routing. */
 export interface ManagerHostContext {
   apiBase: string;
   credential: ManagerCredential | null;
   locale: string;
+  /** Messages for the current locale; the host changes them together with locale. */
+  messages: ManagerMessages;
   theme: ManagerTheme;
-  /** 当前视图路径，例如 `/objects/x`、`/visual-modeling?focus=object&id=x`。 */
+  /** Current view path, e.g. `/objects/x` or `/visual-modeling?focus=object&id=x`. */
   view: string;
-  /** 宿主静态装配的数据默认值，见 ManagerDataFallbacks。 */
+  /** Data defaults supplied statically by the host; see ManagerDataFallbacks. */
   dataFallbacks: ManagerDataFallbacks;
-  /** 宿主静态装配的展示原值，见 ManagerPresentation。 */
+  /** Presentation values supplied statically by the host; see ManagerPresentation. */
   presentation: ManagerPresentation;
-  /** 宿主静态装配的业务知识标签存储值，见 ManagerKnowledgeTagValues。 */
+  /** Business knowledge tag values supplied statically by the host; see ManagerKnowledgeTagValues. */
   knowledgeTagValues: ManagerKnowledgeTagValues;
-  /** 嵌在宿主页面里：宿主已有 Ontology Manager 页签与返回，不再显示顶部品牌栏。 */
+  /** Embedded in a host page: the host already has the Ontology Manager tab and back navigation, so the brand header is hidden. */
   embedded: boolean;
-  /** 宿主给出的业务知识治理页地址（当前用户有治理权限时才有），业务知识页据此显示入口；没有为 null。 */
+  /** The host's knowledge governance page URL (only when the current user has governance permission); the knowledge page shows an entry for it; null when absent. */
   knowledgeGovernanceUrl: string | null;
 }
 
@@ -65,8 +74,8 @@ const contextKey: InjectionKey<Readonly<ManagerHostContext>> = Symbol("ontology-
 const clientKey: InjectionKey<ManagerClient> = Symbol("ontology-manager-client");
 
 /**
- * 由 Manager 工作区在 setup 中调用一次；context 是根组件的响应式 props。
- * 客户端的生命期就是该工作区：卸载后不再发请求。
+ * Called once by the Manager workspace in setup; context is the root component's reactive props.
+ * The client lives as long as that workspace: no requests are sent after it unmounts.
  */
 export function provideManagerContext(
   context: Readonly<ManagerHostContext>,
@@ -81,7 +90,7 @@ export function provideManagerContext(
 
 function injectFromHost<T>(key: InjectionKey<T>): T {
   const value = inject(key);
-  if (!value) throw new Error("Ontology Manager 组件必须挂载在 provideManagerContext 的根组件内");
+  if (!value) throw new Error("Ontology Manager components must be mounted inside the root component that calls provideManagerContext");
   return value;
 }
 
@@ -93,15 +102,15 @@ export function useManagerClient() {
   return injectFromHost(clientKey);
 }
 
-/** 组件词条读取宿主当前 locale；Manager 自有词条与工作台共用词条的回退规则不同，分开取用。 */
+/** Component text reads the messages the host supplied for its current locale; Manager-owned and workbench-shared messages are looked up separately. */
 export function useOntologyText() {
   const context = useManagerContext();
-  const ot = (key: MessageKey, params?: TextParams) => ontologyText(context.locale, key, params);
+  const ot = (key: MessageKey, params?: TextParams) => ontologyText(context.messages, key, params);
   return { ot };
 }
 
 export function useSharedText() {
   const context = useManagerContext();
-  const t = (key: SharedKey, params?: TextParams) => sharedText(context.locale, key, params);
+  const t = (key: SharedKey, params?: TextParams) => sharedText(context.messages, key, params);
   return { t };
 }

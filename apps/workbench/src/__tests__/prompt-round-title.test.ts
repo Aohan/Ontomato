@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe("OSS prompt round titles", () => {
   it("writes titles the fixed open-source parser accepts as rounds", () => {
-    // writer 的 Node 文案经 tApp 取值：装本 app 的 Node 词条（本 app 无 vitest setup）。
+    // The writer's Node copy is read through tApp: install this app's Node messages (this app has no vitest setup).
     configureOssI18n();
     installWorkbenchProduct(ossProduct);
     installWorkspaceArtifactText(ossWorkspaceArtifactText);

@@ -8,11 +8,11 @@ import type {
   QueryBackendSession,
 } from "@ontomato/contracts/query-execution";
 /**
- * 一次问数问题的执行事实：唯一的结果模型与唯一的持久化构造。
+ * Execution facts of one query question: the only result model and the only persistence constructor.
  *
- * 标准问数与分析子问题都只是调用方——它们决定启用哪些查询分支、以及在这份事实
- * 之外叠加什么（回合级组装、或计划身份与业务执行状态），但不各自定义结果形状，
- * 也不各自决定往查询运行事实里写哪些列。
+ * Standard query and analysis sub-questions are only callers — they decide which query branches to enable and what to
+ * layer on top of these facts (turn-level assembly, or plan identity and business execution states), but none of them
+ * defines its own result shape, and none decides which columns to write into the query run facts.
  */
 
 import { t } from "../../i18n";
@@ -22,49 +22,49 @@ import { buildThinkingSteps, buildThinkingSummary } from "./thinking/thinking-st
 import type { HotReportReplayPlan, OutKeyRef } from "./replay-plan";
 
 /**
- * 执行事实。字段按"本次执行实际产生了什么"取值，没有产生就不存在——
- * 查询模式差异（DSL 型与程序型二级拆解）只表现为事实有无。
+ * Execution facts. Each field carries a value only when this execution actually produced one; what was not produced does not exist —
+ * query mode differences (DSL-form vs program-form second-level decomposition) show up only as the presence or absence of facts.
  */
 export interface QueryExecutionFact extends QueryExecutionDisplayFact {
   abcOutKeyRefs?: OutKeyRef[][];
-  /** 本次执行产生的后端会话列表，供诊断定位后端证据 */
+  /** Backend sessions produced by this execution, for diagnosis to locate backend evidence */
   backendSessions?: QueryBackendSession[];
-  /** 图谱中需要定位的节点 */
+  /** Nodes that need locating in the graph */
   nodeIds?: string[];
   dslText?: string;
   ir?: string;
   objectClasses?: string[];
   replayPlan?: HotReportReplayPlan;
-  /** 命中卡片与胜出分支 */
+  /** Hit cards and the winning branch */
   cards?: ThinkingBranchCard[];
 }
 
-/** 已退役的预计算分支键：只存在于退役前保存的查询运行事实里，当前执行器不再产生。 */
+/** Retired pre-computed branch keys: they exist only in query run facts saved before retirement; the current executor no longer produces them. */
 const RETIRED_BRANCH_KEY = "reportCard";
 
 /**
- * 退役分支胜出的历史问数：它生成的答案与查询过程都不再展示。winner 列与思考状态
- * 都是已落盘的胜出事实（旧行的 winner 列由迁移回填），任一记为退役分支即是。
+ * Historical queries won by a retired branch: neither the generated answer nor the query process is displayed anymore. The winner column and
+ * the thinking state are both persisted winning facts (the winner column of old rows is backfilled by migration); either naming a retired branch counts.
  */
 export function isWonByRetiredBranch(run: QueryRun | null | undefined): boolean {
   return run?.winner === RETIRED_BRANCH_KEY || run?.thinkingState?.winner === RETIRED_BRANCH_KEY;
 }
 
-/** 落盘的分支键是字符串：退役前保存的记录里可能是已退役的分支。 */
+/** Persisted branch keys are strings: records saved before retirement may name a retired branch. */
 type SavedThinkingBranch = Omit<ThinkingBranchState, "key"> & { key: string };
 
-/** 去掉退役分支后，剩下的都是当前执行器产生过的分支。 */
+/** With retired branches removed, everything left is a branch the current executor has produced. */
 function isCurrentBranch(branch: SavedThinkingBranch): branch is ThinkingBranchState {
   return branch.key !== RETIRED_BRANCH_KEY;
 }
 
 /**
- * 读回思考过程。退役前保存的思考状态含预计算分支：去掉它，并按执行器的方式重建
- * 标题、摘要与步骤，使过程只呈现当前分支；其他运行原样读回。
+ * Reads the thinking process back. Thinking states saved before retirement contain pre-computed branches: drop them and rebuild
+ * titles, summaries, and steps the way the executor does, so the process presents only current branches; all other runs are read back as-is.
  */
 function readThinking(run: QueryRun | null | undefined) {
   const saved = run?.thinkingState;
-  // 旧行迁移只保证思考状态是对象，不保证带 branches。
+  // Old-row migration only guarantees the thinking state is an object, not that it carries branches.
   const branches: SavedThinkingBranch[] | undefined = saved?.branches;
   if (!branches || branches.every(isCurrentBranch)) {
     return { summary: run?.thinkingSummary, steps: run?.thinkingSteps, state: saved };
@@ -79,15 +79,15 @@ function readThinking(run: QueryRun | null | undefined) {
 }
 
 /**
- * 把已保存的查询运行事实读回执行事实。与 buildQueryRunInput 成对：写入与读取
- * 各只有一处，调用方不再逐字段手抄，新增事实不会静默漏到某个读取方。
+ * Reads saved query run facts back into execution facts. Pairs with buildQueryRunInput: writing and reading each exist in exactly
+ * one place, callers stop hand-copying field by field, and a new fact can never silently miss one of the readers.
  */
 export function toQueryExecutionFact(run?: QueryRun | null): QueryExecutionFact {
   if (isWonByRetiredBranch(run)) return {};
   const thinking = readThinking(run);
   return {
-    // 已落盘旧运行事实没有 fullContent 值：回退到同一行的结果表格，
-    // 否则这些真实结果在历史里不可见。新写入都带 fullContent。
+    // Persisted old run facts carry no fullContent value: fall back to the result table on the same row,
+    // otherwise these real results would be invisible in history. All new writes include fullContent.
     fullContent: run?.fullContent ?? run?.markdownTable,
     thinkingSummary: thinking.summary,
     thinkingSteps: thinking.steps,
@@ -137,7 +137,7 @@ const DISPLAY_FACT_KEYS = [
   "error",
 ] as const satisfies readonly (keyof QueryExecutionDisplayFact)[];
 
-/** 取执行事实的展示部分。未产生的事实不出现，调用方据"有无"决定渲染与否。 */
+/** Picks the display part of execution facts. Facts that were never produced do not appear; callers decide rendering by presence. */
 export function toDisplayFact(
   fact: QueryExecutionFact | null | undefined
 ): QueryExecutionDisplayFact {
@@ -149,7 +149,7 @@ export function toDisplayFact(
   return display;
 }
 
-/** 查询运行的稳定身份。 */
+/** Stable identity of a query run. */
 export interface QueryRunIdentity {
   threadId: string;
   requestSeq: number;
@@ -159,8 +159,8 @@ export interface QueryRunIdentity {
 }
 
 /**
- * 把执行事实转换为查询运行事实的写入输入。这是唯一的持久化构造：
- * 标准问数与分析子问题经由它写入同一批列。
+ * Converts execution facts into the write input for query run facts. This is the only persistence constructor:
+ * standard query and analysis sub-questions write the same set of columns through it.
  */
 export function buildQueryRunInput(input: {
   identity: QueryRunIdentity;
@@ -170,8 +170,8 @@ export function buildQueryRunInput(input: {
   fact: QueryExecutionFact;
 }): UpsertQueryRunInput {
   const { identity, fact } = input;
-  // DSL 文本、对象类清单与数据条数都能从本次数据集确定性推导；两个调用方共用同一份推导，
-  // 不各自实现，也不让其中一方漏写。调用方显式给出时以调用方为准。
+  // DSL text, object class lists, and data row counts can all be derived deterministically from this dataset; both callers share one derivation,
+  // neither implements its own, and neither can skip writing it. When a caller passes values explicitly, those win.
   const datasets = Array.isArray(fact.datasets) ? (fact.datasets as any[]) : undefined;
   const lastDataset = datasets && datasets.length > 0 ? datasets[datasets.length - 1] : undefined;
   const dsl = fact.dsl ?? lastDataset?.dsl;
@@ -179,8 +179,8 @@ export function buildQueryRunInput(input: {
   const objectClasses = fact.objectClasses ?? extractObjectClasses(lastDataset?.dsl);
   const dataCount =
     fact.dataCount ?? (Array.isArray(lastDataset?.data) ? lastDataset.data.length : undefined);
-  // 思考摘要是思考状态的派生表达，两者同源；调用方不显式给出时从思考状态取，
-  // 避免某个调用方漏抄导致该列恒空。
+  // The thinking summary is a derived expression of the thinking state; the two share one source. When a caller does not pass it, take it from the
+  // thinking state so one caller forgetting to copy it cannot leave the column permanently empty.
   const thinkingSummary = fact.thinkingSummary ?? fact.thinkingState?.summary;
 
   return {
@@ -198,7 +198,7 @@ export function buildQueryRunInput(input: {
     datasetPreviews: fact.datasetPreviews,
     cards: fact.cards,
     winner: fact.winner,
-    // 分析侧给出查询结果数据包装，标准问数没有单独的包装，直接沿用本次数据集。
+    // The analysis side supplies a query-result data wrapper; standard query has no separate wrapper and reuses this dataset directly.
     dataPayload: fact.data ?? fact.datasets,
     datasetsPayload: fact.datasets,
     dslPayload: dsl,
@@ -223,7 +223,7 @@ function buildDslText(dsl: any): string | undefined {
   return graph?.patterns ? JSON.stringify(graph) : undefined;
 }
 
-/** 从 DSL 的查询步骤里取出参与本次查询的对象类。 */
+/** Extracts the object classes participating in this query from the DSL query steps. */
 function extractObjectClasses(dsl: any): string[] | undefined {
   if (!dsl?.problem) return undefined;
   const classes = new Set<string>();
@@ -239,14 +239,14 @@ function extractObjectClasses(dsl: any): string[] | undefined {
       }
     }
   } catch {
-    /* DSL 形状异常时按无对象类处理，不影响查询事实落库 */
+    /* On an unexpected DSL shape treat it as no object classes; this must not block persisting the query facts */
   }
   return Array.from(classes);
 }
 
 /**
- * 质检的展示形态：从执行事实构造，供任务规划的历史上下文使用。
- * 质检只有一条通道，读取方都从这里取，不从回复快照取。
+ * Display form of the quality check: built from execution facts for task-planning history context.
+ * The quality check has exactly one channel; readers take it from here, never from the reply snapshot.
  */
 export function buildQualityCheckView(
   run?: Pick<QueryRun, "qcState" | "qcResult"> | null

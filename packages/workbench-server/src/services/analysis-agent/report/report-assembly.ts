@@ -2,7 +2,7 @@ import { DIMENSION_REPORT_TITLE_POLICY } from "../../../config/report-title-poli
 import { tApp } from "../../../i18n";
 
 
-/** 在写入分节时决定标题；各交付出口只读取结果。 */
+/** Decides titles while sections are written; each delivery end only reads the result. */
 export function dimensionSectionTitle(report: {
   report?: string;
   dimensionName?: string;

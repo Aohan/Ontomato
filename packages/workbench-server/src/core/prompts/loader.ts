@@ -64,7 +64,7 @@ function ensureRuntimePrompts(): void {
   for (const { from, to } of sources) {
     const target = path.join(runtimeDir, to);
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    // Node 24 的原生目录拷贝在 macOS Docker Desktop 的绑定挂载（frontend_data）上报 EACCES，Linux 部署未见；传 filter 会走 JS 实现。Node 修好原生实现后可删
+    // Node 24's native directory copy reports EACCES on macOS Docker Desktop bind mounts (frontend_data), not seen on Linux deployments; passing a filter forces the JS implementation. Removable once Node fixes the native implementation
     fs.cpSync(from, target, { recursive: true, force: true, errorOnExist: false, filter: () => true });
   }
   logger.info(tApp("foundation.log.prompts.synced"), { runtimeDir });
@@ -135,7 +135,7 @@ export function renderPrompt(
   return template.trim();
 }
 
-/** 与提示词同目录、随提示词一起同步的协议数据 `<key>.json`（例如评测输出标签）。 */
+/** Protocol data `<key>.json` living next to a prompt and synced with it (e.g. evaluation output labels). */
 export function loadPromptProtocol(key: string): unknown {
   ensureRuntimePrompts();
   const relativePath = keyToRelativePath(key).replace(/\.md$/, ".json");

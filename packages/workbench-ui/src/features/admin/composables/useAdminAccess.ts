@@ -1,9 +1,9 @@
 import { inject } from "vue";
 import { adminAccessKey } from "../navigation";
 
-/** 管理布局下的页面读取应用的访问判定；只能在 AdminLayout 之内使用。 */
+/** Pages under the admin layout read the app's access check; usable only inside AdminLayout. */
 export function useAdminAccess() {
   const access = inject(adminAccessKey);
-  if (!access) throw new Error("useAdminAccess 必须在 AdminLayout 之内使用");
+  if (!access) throw new Error("useAdminAccess must be used inside AdminLayout");
   return access;
 }

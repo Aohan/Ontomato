@@ -38,9 +38,9 @@ export async function migrateBusinessStorageV1(
 }
 
 /**
- * 只同步已存在 thread_metadata 行的会话：源查询事实可能没有对应会话
- * （ABC 回填的合成 threadId、其他业务来源），此处不插入元数据、不编造身份，
- * 也不改动这些来源的查询事实。
+ * Only sessions with an existing thread_metadata row are synced: source query facts may have no matching session
+ * (synthetic threadIds backfilled by ABC, other business sources). No metadata is inserted, no identity is fabricated,
+ * and those sources' query facts are never modified here.
  */
 export async function syncThreadMetadataLastRequestSeq(client: QueryableClient): Promise<number> {
   const result = await client.query(`

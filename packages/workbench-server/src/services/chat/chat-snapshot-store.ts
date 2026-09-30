@@ -3,10 +3,10 @@ import { createHash } from "node:crypto";
 import { getPostgresPool, qualifiedTable } from "../../infrastructure/postgres";
 
 /**
- * PostgreSQL 中持久化的标准问数回合快照。
+ * Standard query turn snapshot persisted in PostgreSQL.
  *
- * 这里只允许回合级组装产物；查询事实由 query_runs 拥有，执行诊断由
- * execution_events 拥有。API 返回给页面的组合 read model 不是这个类型。
+ * Only turn-level assembly artifacts belong here; query facts are owned by query_runs and execution diagnostics
+ * by execution_events. The combined read model the API returns to the page is not this type.
  */
 export interface PersistedChatRenderSnapshot {
   mode: string;

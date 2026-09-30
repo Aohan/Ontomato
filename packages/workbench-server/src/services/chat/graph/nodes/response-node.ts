@@ -64,7 +64,7 @@ function buildPartialErrorSnapshot(errorMsg: string, artifacts: ResponseArtifact
     };
   }
 
-  // 查询失败的错误已在执行事实里，由执行视图显示；与直播一致，不再复制进正文。
+  // Query failure errors already live in the execution facts and are shown by the execution view; like live mode, they are no longer copied into the body.
   return {
     ...baseSnapshot,
     status: "failed" as const,
@@ -75,13 +75,13 @@ function buildPartialErrorSnapshot(errorMsg: string, artifacts: ResponseArtifact
 }
 
 /**
- * Response Node - 统一处理最终回复
+ * Response Node - handles the final reply uniformly
  *
- * 职责：
- * 1. 聚合各节点的结果（query/analysis/visualization）
- * 2. 处理错误情况
- * 3. 生成最终回复并返回 messages
- * 4. 确保历史会话加载时只有一条 assistant 消息
+ * Responsibilities:
+ * 1. Aggregates the results of each node (query/analysis/visualization)
+ * 2. Handles error cases
+ * 3. Generates the final reply and returns messages
+ * 4. Ensures exactly one assistant message when a historical session loads
  */
 export async function standardResponseNode(state: GraphState, config?: any): Promise<GraphUpdate> {
   logger.debug(tApp("queryFixed.47"), {
@@ -111,7 +111,7 @@ export async function standardResponseNode(state: GraphState, config?: any): Pro
     visualizationResult: resolveRuntimeVisualizationResult(state, config),
   };
 
-  // 检查是否有错误
+  // Check for errors
   const errors = state.errors || [];
   if (errors.length > 0) {
     const errorMsg = errors[0].message;
@@ -171,22 +171,22 @@ export async function standardResponseNode(state: GraphState, config?: any): Pro
     };
   }
 
-  // 构建最终回复内容
+  // Build the final reply content
   const responseParts: string[] = [];
   const queryResult = responseArtifacts.queryResult;
 
-  // 1. 如果有查询结果（ABC），添加查询内容
+  // 1. When query results (ABC) exist, add the query content
   if (queryResult?.fullContent) {
     responseParts.push(queryResult.fullContent);
   }
 
-  // 2. 普通分析结果不添加到 content，通过 analysisResult 单独传递给前端
-  // 避免：content 中包含分析结果 + analysisResult 字段也包含分析结果 = 显示两次
+  // 2. Ordinary analysis results are not added to content; they reach the frontend separately through analysisResult
+  // to avoid: analysis results inside content + analysis results inside the analysisResult field = rendered twice
 
-  // 3. 如果有可视化结果，不需要添加到文本（前端单独处理）
-  // visualizationHTML 会通过 runtime artifact 单独传递
+  // 3. Visualization results need no text addition (the frontend handles them separately);
+  // visualizationHTML travels separately through the runtime artifact
 
-  // 合并最终回复（可视化场景或纯分析场景不需要文本内容）
+  // Merge the final reply (visualization-only or analysis-only scenarios need no text content)
   const finalContent = responseParts.length > 0 ? responseParts.join("\n\n") : "";
 
   logger.debug(tApp("queryFixed.49"), {
@@ -196,7 +196,7 @@ export async function standardResponseNode(state: GraphState, config?: any): Pro
     nodeCount: Array.isArray(queryResult?.nodeIds) ? queryResult.nodeIds.length : 0,
   });
 
-  // 创建 AI 消息（用于持久化）
+  // Create the AI message (for persistence)
   const aiMessage = new AIMessage({
     content: finalContent,
     additional_kwargs: { requestSeq },

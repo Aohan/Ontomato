@@ -198,7 +198,7 @@ const { t } = useSharedText();
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
   border-bottom: 1px solid var(--el-border-color);
-  /* 两版原值由宿主给出：企业为渐变，开源为纯色。 */
+  /* The value is supplied by the host presentation (open source: a solid colour). */
   background: var(--manager-modeling-panel-header-background);
 }
 

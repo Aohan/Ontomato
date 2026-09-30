@@ -76,13 +76,13 @@ function hasValidFields(plan: ChartPlan, data: ChartDatasetCandidate["data"]): b
   );
 }
 
-/** 问数与报告共用的规划、硬校验、技能渲染链；归属字段保持既有呈现契约。 */
+/** The planning, hard-validation, and skill rendering chain shared by query and reports; ownership fields keep the existing presentation contract. */
 export async function generateChartsFromCandidates(params: {
   domainId: string;
   userQuestion: string;
   scopeId: string;
   candidates: ChartDatasetCandidate[];
-  /** 未指定时使用域内可用技能；显式空数组表示不出图。 */
+  /** When unspecified, all skills available in the domain are used; an explicit empty array means no charts. */
   enabledVisualizationSkillIds?: string[];
   maxCharts: number;
   failurePolicy: "error" | "diagnostic";

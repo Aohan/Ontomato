@@ -44,15 +44,15 @@ import { ossWorkspaceArtifactText } from "../workspace-artifact-text";
 import { ossModelAgents } from "../model-agents";
 import { ossRuntimeDefaults } from "../runtime-defaults";
 
-// 本文件重依赖经 skill-loader 触达 core/skills/manifest 的模块级 tApp，
-// 必须在 OSS 装配之后求值：先 configure，再动态导入（type import 保留静态）。
+// This file depends heavily on the module-level tApp reached through skill-loader into core/skills/manifest,
+// so it must evaluate after the OSS assembly: configure first, then dynamic import (type imports stay static).
 configureOssI18n();
 const { createDataQueryExecuteTool } = await import(
   "@ontomato/workbench-server/platform/diagnosis/observe/agent/tools/data-query-execute-tool"
 );
 
-// open-source 应用真实装配下，两版各自保留的诊断与数据规则（P3A-S1：C1/C2/C5/C6/C8/C9，S2：C3/C4/C7/C10/C11）。
-// 模型与 DataRAG / 运维接口是外部依赖，用替身；其余走真实实现与本版内容。
+// The per-edition diagnosis and data rules preserved by the open-source app's real assembly (P3A-S1: C1/C2/C5/C6/C8/C9, S2: C3/C4/C7/C10/C11).
+// The model and the data engine / maintenance endpoints are external dependencies replaced by test doubles; everything else runs the real implementation with this edition's content.
 const mocks = vi.hoisted(() => ({
   modelOutput: "",
   modelCalls: [] as Array<Array<{ role: string; content: string }>>,
@@ -61,7 +61,7 @@ const mocks = vi.hoisted(() => ({
   chartInputs: [] as unknown[][],
 }));
 
-// 图表生成（技能匹配、模型规划与技能渲染）是外部副作用，用替身记录收到的数据并返回一张图。
+// Chart generation (skill matching, model planning, skill rendering) is an external side effect; a test double records the received data and returns one chart.
 vi.mock("@ontomato/workbench-server/services/charts/chart-generator", () => ({
   generateChartsFromCandidates: async (input: { candidates: Array<{ data: unknown[] }> }) => {
     mocks.chartInputs.push(input.candidates.map((candidate) => candidate.data));
@@ -69,7 +69,7 @@ vi.mock("@ontomato/workbench-server/services/charts/chart-generator", () => ({
   },
 }));
 
-// 与 createModel 的包装一样，按调用方给的 agentName 写真实 LLM 日志。
+// Like the createModel wrapper, writes real LLM logs under the agentName the caller provides.
 vi.mock("@ontomato/workbench-server/config/model-factory", async () => {
   const { startLlmLog } = await import("@ontomato/workbench-server/logging/llm-logger");
   return {
@@ -123,7 +123,7 @@ beforeEach(() => {
   mocks.upstream = {};
 });
 
-// 已采集好的工作区证据：后端 agent-llm 与本服务 LLM 记录、最终答案，走真实后处理落盘。
+// Pre-collected workspace evidence: the backend agent-llm, this service's LLM records, and the final answer go through real post-processing to disk.
 type LogRecords = Array<Record<string, unknown>>;
 async function buildWorkspace(
   logs: { backend: LogRecords; frontend?: LogRecords },
@@ -146,7 +146,7 @@ async function buildWorkspace(
   return artifactDir;
 }
 
-// 一轮后端调用：各角色消息（含缺 role 与未知 role）、未配对的工具返回、输出、工具调用与错误。
+// One round of backend calls: per-role messages (including missing and unknown roles), unpaired tool returns, outputs, tool calls, and errors.
 const PROMPT_RECORD = {
   sessionId: "s1-2-try-1",
   agentName: "QUESTION_SPLITER",
@@ -163,7 +163,7 @@ const PROMPT_RECORD = {
   error: "boom",
 };
 
-/** 提示词产物里的分段标记行：每段 BEGIN 紧跟同一标记的 END，返回各段 BEGIN 的标记部分。 */
+/** Segment marker lines inside prompt artifacts: each segment's BEGIN is followed by the same marker's END; returns each segment's BEGIN marker part. */
 function markerSections(markdown: string): string[] {
   const markers = markdown.split("\n").filter((line) => line.startsWith("-----"));
   const begins = markers.filter((_, index) => index % 2 === 0);
@@ -173,7 +173,7 @@ function markerSections(markdown: string): string[] {
   return begins.map((line) => line.replace(/^-----/, "").replace(/ BEGIN-----$/, ""));
 }
 
-// 当前请求的查询产物进真实 QueryArtifactCache，再由真实的分析数据解析与可视化节点消费。
+// The current request's query artifacts enter the real QueryArtifactCache and are then consumed by the real analysis-data resolution and visualization nodes.
 async function runVisualization(datasets: Array<Record<string, unknown>>, configurable: Record<string, unknown> = {}) {
   const cache = new QueryArtifactCache();
   const queryArtifactRef = createQueryArtifactRef({ threadId: "thread-1", requestSeq: 3 });
@@ -195,7 +195,7 @@ async function runVisualization(datasets: Array<Record<string, unknown>>, config
     },
   };
   mocks.chartInputs = [];
-  // 节点模块求值时读取 i18n 文案，须在本文件装配 i18n 之后加载。
+  // Node modules read i18n copy at evaluation time; they must load after this file assembles i18n.
   const { visualizationNode } = await import("@ontomato/workbench-server/services/chat/graph/nodes/visualization-node");
   const analysis = await resolveAnalysisData(state, config);
   const update = await visualizationNode(state, config);
@@ -220,7 +220,8 @@ describe("open-source edition rules", () => {
     mocks.modelOutput = "<test-answer>A is 4</test-answer>\n<analysis>no</analysis>\n<verdict>incorrect</verdict>";
     expect((await evaluateAnswer(ANSWER)).passed).toBe(false);
 
-    for (const output of ["<test-answer>A is 3</test-answer>\n<analysis>ok</analysis>", "<测试答案>A is 3</测试答案>\n<分析>ok</分析>\n<判定结果>正确</判定结果>"]) {
+    // The escaped literals are the enterprise edition's protocol tags (see the \u escapes below): persisted protocol values kept byte-identical.
+    for (const output of ["<test-answer>A is 3</test-answer>\n<analysis>ok</analysis>", "<\u6d4b\u8bd5\u7b54\u6848>A is 3</\u6d4b\u8bd5\u7b54\u6848>\n<\u5206\u6790>ok</\u5206\u6790>\n<\u5224\u5b9a\u7ed3\u679c>\u6b63\u786e</\u5224\u5b9a\u7ed3\u679c>"]) {
       mocks.modelOutput = output;
       expect(await evaluateAnswer(ANSWER)).toEqual({
         passed: undefined,
@@ -253,7 +254,7 @@ describe("open-source edition rules", () => {
     expect(markdown).not.toContain("MQLS");
     expect(markdown).not.toContain("M3");
 
-    // 本版知识、技能与提示词里对查询逻辑产物的引用都指向实际写出的路径。
+    // This edition's knowledge, skills, and prompts reference the query-logic artifact at the path actually written.
     const references: string[] = [];
     const walk = (dir: string) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -304,8 +305,8 @@ describe("open-source edition rules", () => {
 
   it("C6: assumes this edition's data adapter only when the backend config omits it", async () => {
     const configEndpoint = "/businessConfig/getConfigAndDesc";
-    const withAdapter = (datarag: Record<string, unknown>) => {
-      mocks.upstream[configEndpoint] = { success: true, data: { config: { ontomato: { datarag } } } };
+    const withAdapter = (dataEngine: Record<string, unknown>) => {
+      mocks.upstream[configEndpoint] = { success: true, data: { config: { ontomato: { "data-engine": dataEngine } } } };
     };
 
     withAdapter({});
@@ -314,7 +315,8 @@ describe("open-source edition rules", () => {
       "The current data adapter is sql; please submit sql dialect SQL"
     );
 
-    const reference = path.join(runtimeDataDir("skills"), "query-flow-diagnosis", "references", "mql查询参考.md");
+    // The escaped file name is the enterprise edition's MQL reference file (see the \u escape below) — a persisted artifact name kept byte-identical.
+    const reference = path.join(runtimeDataDir("skills"), "query-flow-diagnosis", "references", "mql\u67e5\u8be2\u53c2\u8003.md");
     fs.mkdirSync(path.dirname(reference), { recursive: true });
     fs.writeFileSync(reference, "reference");
     withAdapter({ dataAdapter: "m3" });
@@ -333,20 +335,23 @@ describe("open-source edition rules", () => {
 
   it("C8: orders primary dimension columns and names the group column by this edition's headers", () => {
     const headerRow = (table: string) => table.split("\n").find((line) => line.startsWith("|"));
-    expect(headerRow(renderDataAsTable([{ label: "x", district: "d", 区县: "e" }], undefined, { locale: "en" }))).toBe(
-      "| district | label | 区县 |"
+    // The escaped keys are Chinese user-data column names (see the \u escapes below) that must pass through unchanged in the OSS edition.
+    expect(headerRow(renderDataAsTable([{ label: "x", district: "d", "\u533a\u53bf": "e" }], undefined, { locale: "en" }))).toBe(
+      "| district | label | \u533a\u53bf |"
     );
-    expect(headerRow(renderDataAsTable([{ group: "g", 分组: "h" }], undefined, { locale: "en" }))).toBe("| Group | 分组 |");
+    // The escaped key is the Chinese group column header (see the \u escape below), recognized only by the enterprise edition, so it passes through here.
+    expect(headerRow(renderDataAsTable([{ group: "g", "\u5206\u7ec4": "h" }], undefined, { locale: "en" }))).toBe("| Group | \u5206\u7ec4 |");
   });
 
   it("C9: detects user-supplied data with this edition's keywords", async () => {
     mocks.modelOutput = '[{"x":1}]';
     expect((await resolveVisualizationData("value option", null, undefined)).source).toBe("user_provided");
-    expect((await resolveVisualizationData("数据 选项", null, undefined)).source).toBe("mock_generated");
+    // The escaped input is a Chinese user-data phrase (see the \u escape below) the OSS keywords must not recognize.
+    expect((await resolveVisualizationData("\u6570\u636e \u9009\u9879", null, undefined)).source).toBe("mock_generated");
   });
 
   it("C3: logs model agents under this edition's names and explains them with the same catalog", async () => {
-    // agentName 是持久化标识，不随默认语言变化。
+    // agentName is a persisted identifier and never follows the default language.
     vi.stubEnv("APP_DEFAULT_LOCALE", "zh-CN");
     const llmLog = path.join(runtimeRoot, "logs", ossProduct.llmLogFileName);
     fs.rmSync(llmLog, { force: true });
@@ -362,8 +367,9 @@ describe("open-source edition rules", () => {
       Object.fromEntries(parse(records).conversations.map((c) => [c.meta.agentName, c.displayName]));
     expect(explain(lines)).toEqual({ "Evaluation-Answer": "3.8 Auto Evaluator", "Standard Data Query-DataResolver": "3.20 Data Resolver" });
 
-    // 未改名的固定名、历史名按本版目录解释；没有显示名的角色和另一版的名字按原名显示。
-    const fixed = { "API-TitleGenerator": "3.1 Title Generator", "TaskPlanner": "1.1 Task Planner", "Standard Data Query-Reply": "Standard Data Query-Reply", "评测-答案": "评测-答案" };
+    // Never-renamed fixed names and historical names resolve through this edition's catalog; roles without a display name and the other edition's names display as-is.
+    // The escaped key is a historical log agentName (see the \u escape below) — a persisted identifier kept byte-identical.
+    const fixed = { "API-TitleGenerator": "3.1 Title Generator", "TaskPlanner": "1.1 Task Planner", "Standard Data Query-Reply": "Standard Data Query-Reply", "\u8bc4\u6d4b-\u7b54\u6848": "\u8bc4\u6d4b-\u7b54\u6848" };
     expect(explain(Object.keys(fixed).map(logged))).toEqual(fixed);
     const backend = { "QUESTION_SPLITER": "2.1 Question Analyzer", "DSL_COOKER": "2.2 DSL Generator", "UNKNOWN_AGENT": "UNKNOWN_AGENT" };
     expect(explain(Object.keys(backend).map(logged), parseBackendAgentLlmJsonlLines)).toEqual(backend);
@@ -393,7 +399,7 @@ describe("open-source edition rules", () => {
       const artifactDir = await buildWorkspace({ backend: [PROMPT_RECORD] }, table);
       return fs.readFileSync(path.join(artifactDir, "response.md"), "utf8");
     };
-    // en 渲染文案是 `click to expand to view all`，本版原规则只认 `click to expand and view all`，按源保留原文。
+    // The en rendered copy is `click to expand to view all` while this edition's original rule only accepts `click to expand and view all`; the source wording is kept.
     const snapshot = await snapshotOf("en");
     expect(snapshot).toContain("> 2 more rows, click to expand to view all (3 rows total)");
     expect(snapshot).not.toContain("| 2 |");
@@ -433,20 +439,20 @@ describe("open-source edition rules", () => {
       ]);
     };
 
-    // 取回失败：后端返回 404，错误详情里没有失败词，只能靠本版说明文字判定。
+    // Fetch failure: the backend answers 404 and the error detail carries no failure word, so only this edition's note copy can decide.
     const httpError = "Backend returned HTTP error 404: gone";
     expect(await statusOf(session, window, () => new Response("gone", { status: 404 }))).toEqual([
       ["failed", `s2@n1: ${"Failed to fetch agent-llm records: "}${httpError}`],
       ["failed", `s2@n1: ${"Failed to fetch diagnostic-events: "}${httpError}`],
       ["failed", `${"Failed to fetch the backend runtime log slice: "}n1: ${httpError}`],
     ]);
-    // 取回成功但为空。
+    // Fetched successfully but empty.
     expect(await statusOf(session, window, () => new Response(""))).toEqual([
       ["empty", "s2@n1: agent-llm records are empty: no backend LLM call records found for this sessionId"],
       ["empty", "s2@n1: diagnostic-events records are empty: no backend diagnostic events found for this sessionId"],
       ["empty", "backend.log is empty: no backend runtime logs found within this time window"],
     ]);
-    // 没有后端会话与时间窗：会话类跳过，backend.log 的两条跳过说明以本版分隔符相连，不判为失败。
+    // No backend session or time window: session kinds are skipped and backend.log's two skip notes are joined by this edition's separator, never judged a failure.
     const skipped = await statusOf([], undefined, () => new Response(""));
     expect(skipped.map(([status]) => status)).toEqual(["skipped", "skipped", "empty"]);
     expect(skipped[2][1]).toBe("No node located: the query record has no backend session; No backend runtime log time window found; backend.log slice skipped");
@@ -485,7 +491,7 @@ describe("open-source edition rules", () => {
   });
 
   it("C10/C11: current dataset selection and zero-row visualization follow this edition's rules", async () => {
-    // [有数据, 空]：取最后一个有行的数据集，行与字段展示计划同源，走正常渲染。
+    // [with data, empty]: takes the last dataset with rows; rows and the field display plan share one source and render normally.
     const mixed = [
       { subQuestion: "earlier", data: ROWS, fieldDisplayPlan: WITH_ROWS_PLAN },
       { subQuestion: "empty follow-up", data: [], fieldDisplayPlan: EMPTY_PLAN },
@@ -496,7 +502,7 @@ describe("open-source edition rules", () => {
     expect(mocks.chartInputs).toEqual([[ROWS]]);
     expect(withRows.stored?.result).toEqual({ html: "<chart/>", chartType: "bar", title: "Chart" });
 
-    // 全空：取最后一个；不调用图表生成，写入“未生成图表”提示图。
+    // All empty: takes the last one; chart generation is not called and the "no chart generated" notice image is written.
     const empty = await runVisualization([{ data: [], fieldDisplayPlan: EMPTY_PLAN }]);
     expect(empty.analysis).toMatchObject({ data: [], source: "current_query", fieldDisplayPlan: EMPTY_PLAN });
     expect(mocks.chartInputs).toEqual([]);
@@ -508,7 +514,7 @@ describe("open-source edition rules", () => {
     const thinkingEvents = empty.events.filter((event) => event.type === "thinking_state");
     expect(thinkingEvents.at(-1)).toMatchObject({ node: "visualization" });
 
-    // 原顺序：技能可用性检查在零数据处理之前。
+    // Original order: the skill availability check comes before zero-data handling.
     const noDomain = await runVisualization([{ data: [] }], { domainId: undefined });
     expect(noDomain.update.errors).toHaveLength(1);
     expect(noDomain.stored).toBeUndefined();

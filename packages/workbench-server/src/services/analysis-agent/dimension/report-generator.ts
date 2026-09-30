@@ -104,7 +104,7 @@ function getDefaultMultiDimSummaryRules(): string {
 }
 
 /**
- * 报告生成器服务
+ * Report generator service
  */
 export class ReportGenerator {
   private modelOptions: Record<string, any>;
@@ -114,7 +114,7 @@ export class ReportGenerator {
   }
 
   /**
-   * 生成维度报告（带来源追踪）
+   * Generates a dimension report (with source tracing)
    */
   async generateDimensionReport(
     params: DimensionReportParams
@@ -174,7 +174,7 @@ export class ReportGenerator {
   }
 
   /**
-   * 生成多维度总结（带来源追踪）
+   * Generates the multi-dimension summary (with source tracing)
    */
   async generateMultiDimensionSummary(
     params: MultiDimensionSummaryParams
@@ -218,7 +218,7 @@ export class ReportGenerator {
   }
 
   /**
-   * 构建维度报告提示词
+   * Builds the dimension report prompt
    */
   private buildDimensionReportPrompt(
     dimensionName: string,
@@ -263,13 +263,13 @@ export class ReportGenerator {
       })
       .join("\n\n");
 
-    // 构建分析维度提示词（用于指导报告生成）
+    // Builds the analysis dimension prompt (guides report generation)
     let analysisDimensionContext = "";
     if (analysisDimensionPrompt && analysisDimensionPrompt.trim()) {
       analysisDimensionContext = tApp("analysis.dimension.report-generator.181", { truncateText: truncateText(analysisDimensionPrompt, 2500) });
     }
 
-    // 构建技能结果上下文
+    // Builds the skill results context
     const skillContext = buildSkillResultsContext(skillResults);
 
     let priorReportsContext = "";
@@ -298,7 +298,7 @@ export class ReportGenerator {
   }
 
   /**
-   * 构建多维度总结提示词
+   * Builds the multi-dimension summary prompt
    */
   private buildMultiDimensionSummaryPrompt(
     dimensionReports: Array<{
@@ -332,7 +332,7 @@ export class ReportGenerator {
   }
 
   /**
-   * 流式生成维度报告
+   * Streams the dimension report generation
    */
   async *generateDimensionReportStream(params: DimensionReportParams): AsyncGenerator<string> {
     const {
@@ -376,7 +376,7 @@ export class ReportGenerator {
   }
 
   /**
-   * 流式生成多维度总结
+   * Streams the multi-dimension summary generation
    */
   async *generateMultiDimensionSummaryStream(
     params: MultiDimensionSummaryParams

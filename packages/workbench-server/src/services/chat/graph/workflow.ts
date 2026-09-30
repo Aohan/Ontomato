@@ -54,7 +54,7 @@ export interface DataAgentWorkflowRuntimeArtifacts {
 
 export type DataAgentWorkflowResult = GraphState & {
   runtimeArtifacts?: DataAgentWorkflowRuntimeArtifacts;
-  /** 本次运行登记的迟到事实；呈现它们的入口在收口前等待结算 */
+  /** Late facts registered by this run; entries presenting them wait for settlement before finalizing */
   pendingLateFacts?: PendingLateFacts;
 };
 
@@ -266,7 +266,7 @@ export async function runDataAgentWorkflow(params: {
           continue;
         }
         const queryRun = queryRunResult.value;
-        // 质检是执行事实的字段：不论该轮数据是否可复用，都从这里取历史上下文。
+        // The quality check is a field of the execution facts: the historical context comes from here whether or not this turn's data is reusable.
         const qualityCheck = buildQualityCheckView(queryRun);
         if (qualityCheck) qualityChecksByRequestSeq.set(sourceRequestSeq, qualityCheck);
         if (queryRun) {
@@ -419,7 +419,7 @@ export async function runDataAgentWorkflow(params: {
         accumulatedOutput = { ...accumulatedOutput, ...nodeOutput };
 
         if (threadId) {
-          // stream 的节点更新在节点完成后到达，只保存此时已知的终态。
+          // Stream node updates arrive after the node completes; only the terminal states known at that point are saved.
           const startTime = nodeArrivalTime;
           if (nodeDisplayNames[nodeName]) {
             const endTime = Date.now();

@@ -89,7 +89,7 @@ class OssStartupAssemblyTest {
                 "io.ontomato.dataengine.service.ldap.LdapProps",
                 "io.ontomato.dataengine.util.AesEncryptUtil",
                 "io.ontomato.dataengine.core.utils.UserEncryptUtil",
-                "io.example.license.sdk.LicenseAuthorityAdapter",
+                "io.ontomato.dataengine.config.LicenseConfig",
                 "dev.langchain4j.mcp.McpToolProvider");
     }
 

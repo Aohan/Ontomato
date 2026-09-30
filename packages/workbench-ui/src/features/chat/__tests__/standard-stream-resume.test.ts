@@ -5,7 +5,7 @@ import type { Message, ResponseSnapshot } from "../../../types/chat";
 import { createStandardSender } from "../composables/useStandardStream";
 import { installAuthHost } from "../../../utils/auth";
 
-// 原用例替身化企业认证模块；共享代码现经应用宿主取凭据，这里装入同样的替身。
+// The original test doubled the auth module; shared code now gets credentials from the app host, so the same double is installed here.
 const host = {
   getApiKey: vi.fn((): string | null => null),
   getToken: vi.fn((): string | null => "token-1"),
@@ -51,12 +51,12 @@ class FakeEventSource {
 }
 
 function makeSender() {
-  const messages = ref<Message[]>([{ id: 1, role: "user", content: "问题" }]);
+  const messages = ref<Message[]>([{ id: 1, role: "user", content: "question" }]);
   const isLoading = ref(false);
   const stopRequested = ref(false);
   const streamingSnapshot = ref<ResponseSnapshot | null>(null);
   const currentThreadId = ref("thread-1");
-  const currentThreadTitle = ref("问题");
+  const currentThreadTitle = ref("question");
   const currentEventSource = shallowRef<EventSource | null>(null);
 
   const updateStreamingSnapshot = (patch: Partial<ResponseSnapshot>) => {
@@ -137,7 +137,7 @@ describe("standard stream resume", () => {
     await source.emitMessage(JSON.stringify({ type: "run_not_found" }));
 
     expect(onRunNotFound).toHaveBeenCalledOnce();
-    expect(messages.value).toEqual([{ id: 1, role: "user", content: "问题" }]);
+    expect(messages.value).toEqual([{ id: 1, role: "user", content: "question" }]);
   });
 
   it("replays the same run into a streaming snapshot and ignores stale thread events", async () => {
@@ -156,23 +156,23 @@ describe("standard stream resume", () => {
       }),
       "1"
     );
-    await source.emitMessage(JSON.stringify({ type: "token", content: "答案" }), "2");
+    await source.emitMessage(JSON.stringify({ type: "token", content: "answer" }), "2");
 
     expect(messages.value[1]?.snapshot).toMatchObject({
       runId: "run-1",
       requestSeq: 0,
-      primaryText: "答案",
+      primaryText: "answer",
       status: "streaming",
     });
 
     currentThreadId.value = "thread-2";
-    await source.emitMessage(JSON.stringify({ type: "token", content: "不应出现" }), "3");
-    expect(messages.value[1]?.snapshot?.primaryText).toBe("答案");
+    await source.emitMessage(JSON.stringify({ type: "token", content: "must not appear" }), "3");
+    expect(messages.value[1]?.snapshot?.primaryText).toBe("answer");
   });
 
   it("keeps partial content when the run fails after producing results", async () => {
-    // 与 response-node 的部分失败快照同规则：直播收到错误时已有部分结果，
-    // 只标记失败并保留正文与执行事实，不把错误说明盖掉部分内容。
+    // Same rule as response-node partial failure snapshots: when the live stream receives an error after partial results,
+    // it only marks failure and keeps the body and execution facts instead of overwriting the partial content with the error.
     const { sender, messages } = makeSender();
     await sender.resumeStandardMessage({ threadId: "thread-1", requestSeq: 0, token: "token-1" });
     const source = FakeEventSource.instances[0]!;
@@ -182,8 +182,8 @@ describe("standard stream resume", () => {
       JSON.stringify({
         type: "result",
         content: {
-          markdownTable: "部分表格",
-          execution: { fullContent: "部分表格", dataCount: 1, error: "boom" },
+          markdownTable: "partial table",
+          execution: { fullContent: "partial table", dataCount: 1, error: "boom" },
         },
       })
     );
@@ -192,14 +192,14 @@ describe("standard stream resume", () => {
     expect(messages.value[1]?.snapshot).toMatchObject({
       mode: "standard",
       status: "failed",
-      primaryText: "部分表格",
+      primaryText: "partial table",
     });
-    expect(messages.value[1]?.snapshot?.execution).toMatchObject({ fullContent: "部分表格" });
+    expect(messages.value[1]?.snapshot?.execution).toMatchObject({ fullContent: "partial table" });
   });
 
   it("merges execution-only results so failure facts stay visible", async () => {
-    // 连部分正文都没有的失败：result 事件只带执行事实（思考与错误），
-    // 直播照样收下，与历史读到同一份失败说明。
+    // A failure without even a partial body: the result event carries only execution facts (thinking and error);
+    // the live stream still accepts it and shows the same failure explanation as history.
     const { sender, messages } = makeSender();
     await sender.resumeStandardMessage({ threadId: "thread-1", requestSeq: 0, token: "token-1" });
     const source = FakeEventSource.instances[0]!;
@@ -208,13 +208,13 @@ describe("standard stream resume", () => {
     await source.emitMessage(
       JSON.stringify({
         type: "result",
-        content: { execution: { thinkingSummary: "已拆解", error: "查询超时" } },
+        content: { execution: { thinkingSummary: "decomposed", error: "query timed out" } },
       })
     );
 
     expect(messages.value[1]?.snapshot?.execution).toMatchObject({
-      thinkingSummary: "已拆解",
-      error: "查询超时",
+      thinkingSummary: "decomposed",
+      error: "query timed out",
     });
   });
 
@@ -223,7 +223,7 @@ describe("standard stream resume", () => {
     await sender.resumeStandardMessage({ threadId: "thread-1", requestSeq: 0, token: "token-1" });
     const source = FakeEventSource.instances[0]!;
     source.emitOpen();
-    const reason = `ABC 拆解：${"后端返回的完整失败原因".repeat(20)}；动态指标热数据：召回失败`;
+    const reason = `ABC decomposition: ${"full failure reason returned by the backend ".repeat(20)}; dynamic metric hot data: recall failed`;
 
     await source.emitMessage(JSON.stringify({ type: "error", error: reason }));
 
@@ -243,7 +243,7 @@ describe("standard stream resume", () => {
         await source.emitMessage(
           JSON.stringify({
             type: "result",
-            content: { markdownTable: "已完成的查询", execution: { fullContent: "已完成的查询" } },
+            content: { markdownTable: "completed query", execution: { fullContent: "completed query" } },
           })
         );
       }

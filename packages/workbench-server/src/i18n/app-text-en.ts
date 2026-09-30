@@ -3,7 +3,7 @@ import { appTextDiagnosisEn } from "./app-text-diagnosis-en";
 import { appTextFoundationEn } from "./app-text-foundation-en";
 import { appTextSkillsEn } from "./app-text-skills-en";
 import { appTextQueryEn } from "./app-text-query-en";
-/** OSS b6437c86 的 summary 与 threads 原文字。只给固定 appTextLocale=en 使用。 */
+/** Original summary and threads copy of OSS b6437c86. Used only by the fixed appTextLocale=en. */
 export const appTextEn = {
   ...appTextDiagnosisEn,
   ...appTextAnalysisEn,
