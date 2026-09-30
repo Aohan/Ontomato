@@ -360,9 +360,6 @@ onMounted(loadServices);
 
 <style scoped>
 .mcp-manager {
-  padding: 24px;
-  max-width: 1120px;
-  margin: 0 auto;
   color: var(--el-text-color-primary);
 }
 h3,
