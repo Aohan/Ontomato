@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import type { ModelRole } from "@ontomato/contracts/model-settings";
-import { Users } from "lucide-vue-next";
+import { Info, Users } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { modelLabel, type ModelEntry, type RoleModels } from "../../types";
 
 const { t } = useI18n();
 
 const props = defineProps<{
-  /** Models in the current draft: models and roles are saved together, so a newly added model can be selected immediately. */
+  /** The saved models: a model can be selected once its dialog has saved it. */
   models: Pick<ModelEntry, "name" | "displayName">[];
-  disabled: boolean;
+  saving: boolean;
+  /** Whether the role draft differs from the saved roles. */
+  dirty: boolean;
 }>();
 
+// Role draft: submitted only by this card's save.
 const roles = defineModel<RoleModels>("roles", { required: true });
+
+const emit = defineEmits<{
+  save: [];
+}>();
 
 // Query engine roles are consumed by Java and agent roles by Node; both groups choose from all models.
 const roleGroups: { titleKey: string; roles: ModelRole[] }[] = [
@@ -32,21 +39,41 @@ const unsetRole = () => null;
     <div class="card-header">
       <el-icon :size="20"><Users /></el-icon>
       <span>{{ t("admin.roleModels") }}</span>
+      <div class="card-header-actions">
+        <el-tag v-if="props.dirty" type="warning" size="small">{{ t("admin.unsaved") }}</el-tag>
+        <el-button type="primary" size="small" :loading="props.saving" @click="emit('save')">
+          {{ t("common.save") }}
+        </el-button>
+      </div>
     </div>
     <div class="card-body">
       <section v-for="group in roleGroups" :key="group.titleKey" class="role-group">
         <h4 class="dialog-section">{{ t(group.titleKey) }}</h4>
-        <ul class="model-list">
-          <li v-for="role in group.roles" :key="role" class="model-item">
-            <span class="role-name">{{ t(`admin.modelRoleNames.${role}`) }}</span>
+        <ul class="role-grid">
+          <li v-for="role in group.roles" :key="role" class="role-cell">
+            <div class="role-heading">
+              <span class="role-name">{{ t(`admin.modelRoleNames.${role}`) }}</span>
+              <el-tooltip
+                :content="t(`admin.modelRoleDescriptions.${role}`)"
+                :trigger="['hover', 'focus']"
+                placement="top"
+              >
+                <button
+                  type="button"
+                  class="role-info"
+                  :aria-label="t(`admin.modelRoleDescriptions.${role}`)"
+                >
+                  <Info :size="14" />
+                </button>
+              </el-tooltip>
+            </div>
             <el-select
               v-model="roles[role]"
-              class="role-model-select"
               clearable
               :value-on-clear="unsetRole"
               :placeholder="t('admin.roleNotConfigured')"
               :aria-label="t(`admin.modelRoleNames.${role}`)"
-              :disabled="props.disabled"
+              :disabled="props.saving"
             >
               <el-option
                 v-for="model in props.models"

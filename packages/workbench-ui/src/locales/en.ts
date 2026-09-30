@@ -169,7 +169,6 @@ export default {
     "apiModelId": "API model ID",
     "keyCountConfigured": "{n} keys configured",
     "keyMissing": "No key configured",
-    "doneEdit": "Done",
     "roleModels": "Role models",
     "modelRoleGroups": {
       "queryEngine": "Query engine",
@@ -182,6 +181,15 @@ export default {
       "diagnosis": "Operations Agent",
       "knowledgeGovernance": "Knowledge Governance Agent"
     },
+    "modelRoleDescriptions": {
+      "query": "Understands the question, generates and validates queries, and retrieves business knowledge",
+      "coding": "Generates and runs calculation code, for Python calculation, post-calculation, functions, metric views and data retrieval programs",
+      "general": "Used by every model call in the workbench without a dedicated role, including chat replies, business agents, and report and chart generation",
+      "diagnosis": "Used by the operations agent when diagnosing issues",
+      "knowledgeGovernance": "Used in business knowledge governance conversations"
+    },
+    "deleteModelConfirm": "Delete model \"{name}\"?",
+    "deleteModelInUseConfirm": "Model \"{name}\" is used by these roles: {roles}. After deletion they become not configured. Delete it?",
     "roleNotConfigured": "Not configured",
     "defaultWhenEmpty": "Leave empty to use the default",
     "modelListEmpty": "No models yet. Add the first config.",

@@ -80,12 +80,14 @@
   flex-wrap: wrap;
 }
 
-.model-main {
+/* Name, IDs, URL and key count sit together on the left (wrapping when narrow); the row actions stay on the right. */
+.model-info {
   display: flex;
   align-items: baseline;
-  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-md);
   min-width: 0;
-  flex: 1 1 220px;
+  flex: 1 1 0;
 }
 
 .model-name {
@@ -105,22 +107,9 @@
   white-space: nowrap;
 }
 
-.model-sub {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  min-width: 0;
-  flex: 2 1 280px;
-}
-
-/* Keep the API model ID whole ahead of the base URL; truncate the URL first when narrow. */
-.model-sub .model-id {
-  flex-shrink: 0;
-  max-width: 45%;
-}
-
+/* The URL is the longest field: it is the one truncated (full value in its tooltip). */
 .model-url {
-  flex: 1 1 auto;
+  max-width: 420px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -143,17 +132,50 @@
   gap: 4px;
 }
 
-/* Role reference row: a fixed-width role name and the model select taking the rest. */
-.role-name {
-  flex: 0 0 140px;
-  font-weight: var(--font-medium);
-  color: var(--el-text-color-primary);
+/* Role grid: one cell per role (name above, select below filling the cell); three columns when wide, then two, then one. */
+.role-grid {
+  --role-grid-gap: var(--spacing-lg);
+  list-style: none;
+  margin: 0 0 var(--spacing-lg);
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(280px, calc((100% - 2 * var(--role-grid-gap)) / 3)), 1fr)
+  );
+  gap: var(--spacing-md) var(--role-grid-gap);
 }
 
-.role-model-select {
-  flex: 1 1 220px;
+.role-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
   min-width: 0;
-  max-width: 480px;
+}
+
+.role-cell .el-select {
+  width: 100%;
+}
+
+.role-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.role-name {
+  font-weight: var(--font-medium);
+  color: var(--el-text-color-primary);
+  white-space: nowrap;
+}
+
+.role-info {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--el-text-color-secondary);
+  cursor: help;
 }
 
 .dialog-section {
@@ -176,8 +198,7 @@
     max-width: 100% !important;
   }
 
-  .model-main,
-  .model-sub {
+  .model-info {
     flex-basis: 100%;
     flex-direction: column;
     align-items: flex-start;
@@ -191,7 +212,7 @@
     overflow-wrap: anywhere;
   }
 
-  .model-sub .model-id {
+  .model-url {
     max-width: 100%;
   }
 
@@ -201,14 +222,10 @@
     margin-left: 0;
   }
 
-  .role-name,
-  .role-model-select {
-    flex-basis: 100%;
-  }
-
   .model-actions :deep(.el-button),
   .api-keys-wrap :deep(.el-button),
   .form-actions :deep(.el-button),
+  .card-header-actions .el-button,
   .header-action {
     min-width: 44px;
     min-height: 44px;

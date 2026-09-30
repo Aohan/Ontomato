@@ -1,6 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import ElementPlus, { ElMessage } from "element-plus";
+import ElementPlus, { ElMessage, ElMessageBox } from "element-plus";
 import { reactive } from "vue";
 import { MODEL_ROLES } from "@ontomato/contracts/model-settings";
 import ModelListCard from "../business-config/ModelListCard.vue";
@@ -244,24 +244,26 @@ async function fillNewModel(dialog: Pick<ReturnType<typeof mount>, "findAll">, i
   await inputs[4]!.setValue("new-model");
 }
 
-/** The list card replaces the whole list through v-model: updates are written back to props on mount, simulating the parent's shallow ref. */
+/** The list card hands a whole new list to save: the save double writes it back to props, simulating the page's saved list. */
 function mountList(models: ModelEntry[], extra: Record<string, unknown> = {}) {
+  const save = vi.fn(async (next: ModelEntry[]) => {
+    await wrapper.setProps({ models: next });
+    return true;
+  });
   const wrapper: ReturnType<typeof mount> = track(
-    mount(ModelListCard, {
-      props: {
-        models,
-        disabled: false,
-        "onUpdate:models": (next: ModelEntry[]) => wrapper.setProps({ models: next }),
-        ...extra,
-      },
-      global,
-    })
+    mount(ModelListCard, { props: { models, saving: false, save, ...extra }, global })
   );
-  return wrapper;
+  return { wrapper, save };
 }
 
 const listModels = (wrapper: ReturnType<typeof mount>) =>
   (wrapper.props() as { models: ModelEntry[] }).models;
+
+/** Clicks the dialog's Save inside the given card or dialog and waits for the save to settle. */
+async function saveDialog(scope: Pick<ReturnType<typeof mount>, "findAll">) {
+  await button(scope, t("common.save"))!.trigger("click");
+  await flushPromises();
+}
 
 async function mountModelPage() {
   const wrapper = track(mount(ModelConfig, { global }));
@@ -269,14 +271,9 @@ async function mountModelPage() {
   return wrapper;
 }
 
-/** System config page: query settings, skill directory and other config; query examples have their own API and are doubled here. */
+/** System config page: query settings, skill directory and other config. */
 async function mountSystemPage() {
-  const wrapper = track(
-    mount(BusinessConfig, {
-      props: businessConfig,
-      global: { ...global, stubs: { ...global.stubs, ExamplesManager: true } },
-    })
-  );
+  const wrapper = track(mount(BusinessConfig, { props: businessConfig, global }));
   await flushPromises();
   return wrapper;
 }
@@ -288,13 +285,18 @@ function roleSelect(page: ReturnType<typeof mount>, role: string) {
     .find((select) => select.props("ariaLabel") === t(`admin.modelRoleNames.${role}`))!;
 }
 
-async function saveButton(page: ReturnType<typeof mount>) {
-  return page.find(".model-settings-actions").findAll("button").at(-1)!;
+/** The role card's own save and its unsaved marker. */
+async function saveRoles(page: ReturnType<typeof mount>) {
+  await button(page.findComponent(RoleModelsCard), t("common.save"))!.trigger("click");
+  await flushPromises();
 }
+
+const unsavedTag = (page: ReturnType<typeof mount>) =>
+  page.findComponent(RoleModelsCard).find(".card-header-actions .el-tag");
 
 describe("model list card", () => {
   it("shows an add entry when the library is legitimately empty", async () => {
-    const wrapper = mountList([]);
+    const { wrapper } = mountList([]);
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
     const adds = wrapper.findAll("button").filter((b) => b.text().includes(t("admin.addModel")));
     expect(adds).toHaveLength(2);
@@ -304,16 +306,16 @@ describe("model list card", () => {
   });
 
   it("cancelling an edit leaves the original entry untouched", async () => {
-    const wrapper = mountList([entry("qwen-main", { displayName: "Qwen" })]);
+    const { wrapper, save } = mountList([entry("qwen-main", { displayName: "Qwen" })]);
     await button(wrapper, t("common.edit"))!.trigger("click");
     await wrapper.findAll("section input")[1]!.setValue("changed");
     await button(wrapper, t("common.cancel"))!.trigger("click");
-    expect(wrapper.emitted("update:models")).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
     expect(listModels(wrapper)[0]!.displayName).toBe("Qwen");
   });
 
   it("starts a new draft empty instead of reusing the previous entry", async () => {
-    const wrapper = mountList([entry("qwen-main")]);
+    const { wrapper } = mountList([entry("qwen-main")]);
     await button(wrapper, t("common.edit"))!.trigger("click");
     await button(wrapper, t("common.cancel"))!.trigger("click");
     await button(wrapper, t("admin.addModel"))!.trigger("click");
@@ -327,26 +329,25 @@ describe("model list card", () => {
   });
 
   it("fixes the config ID once created while the display name stays editable", async () => {
-    const wrapper = mountList([entry("qwen-main", { displayName: "Qwen" })]);
+    const { wrapper } = mountList([entry("qwen-main", { displayName: "Qwen" })]);
     expect(wrapper.find(".model-name").text()).toBe("Qwen");
-    expect(wrapper.find(".model-main .model-id").text()).toBe("qwen-main");
+    expect(wrapper.find(".model-id").text()).toBe("qwen-main");
 
     await button(wrapper, t("common.edit"))!.trigger("click");
     const [idInput, displayInput] = wrapper.findAll("section input");
     expect(idInput!.attributes("disabled")).toBeDefined();
     await displayInput!.setValue("Qwen Max");
-    await button(wrapper, t("admin.doneEdit"))!.trigger("click");
+    await saveDialog(wrapper);
     expect(listModels(wrapper)[0]).toMatchObject({ name: "qwen-main", displayName: "Qwen Max" });
 
-    // The ID is editable when creating; the entry joins the list only after the ID, display name and the three connection fields are filled in.
+    // The ID is editable when creating; the entry can be saved only after the ID, display name and the three connection fields are filled in.
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     const dialog = wrapper.find("section");
-    const confirm = () => button(dialog, t("admin.addModel"))!;
     expect(dialog.findAll("input")[0]!.attributes("disabled")).toBeUndefined();
     await dialog.findAll("input")[0]!.setValue("deepseek-main");
-    expect(confirm().attributes("disabled")).toBeDefined();
+    expect(button(dialog, t("common.save"))!.attributes("disabled")).toBeDefined();
     await fillNewModel(dialog, "deepseek-main");
-    await confirm().trigger("click");
+    await saveDialog(dialog);
     expect(listModels(wrapper).map((model) => model.name)).toEqual(["qwen-main", "deepseek-main"]);
     expect(listModels(wrapper)[1]).toMatchObject({
       maxTokens: null,
@@ -356,7 +357,7 @@ describe("model list card", () => {
   });
 
   it("reveals the full fake key and deletes several keys without shifting the rest", async () => {
-    const wrapper = mountList([entry("qwen-main", { apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"] })]);
+    const { wrapper } = mountList([entry("qwen-main", { apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"] })]);
     // The list shows only the count, never the key text.
     expect(wrapper.text()).not.toContain("sk-fake");
     expect(wrapper.text()).toContain(t("admin.keyCountConfigured", { n: 3 }));
@@ -374,12 +375,12 @@ describe("model list card", () => {
     expect(keyValues()).toEqual(["sk-fake-2", "sk-fake-3"]);
     await wrapper.findAll(trash)[1]!.trigger("click");
     expect(keyValues()).toEqual(["sk-fake-2"]);
-    await button(wrapper, t("admin.doneEdit"))!.trigger("click");
+    await saveDialog(wrapper);
     expect(listModels(wrapper)[0]!.apiKeys).toEqual(["sk-fake-2"]);
   });
 
   it("disables every row and add entry while the page is saving", () => {
-    const wrapper = mountList([entry("qwen-main")], { disabled: true });
+    const { wrapper } = mountList([entry("qwen-main")], { saving: true });
     expect(wrapper.findAll("button").every((b) => b.attributes("disabled") !== undefined)).toBe(
       true
     );
@@ -398,7 +399,7 @@ describe("role models card", () => {
     // Options render in the dropdown popper's content slot, so the tooltip stub renders it too.
     const wrapper = track(
       mount(RoleModelsCard, {
-        props: { roles, models, disabled: false },
+        props: { roles, models, saving: false, dirty: false },
         global: {
           ...global,
           stubs: {
@@ -426,6 +427,13 @@ describe("role models card", () => {
         t("admin.modelRoleNames.knowledgeGovernance"),
       ],
     ]);
+  });
+
+  it("each role name carries a focusable description", () => {
+    const { wrapper } = mountRoles();
+    expect(wrapper.findAll("button.role-info").map((info) => info.attributes("aria-label"))).toEqual(
+      MODEL_ROLES.map((role) => t(`admin.modelRoleDescriptions.${role}`))
+    );
   });
 
   it("offers the given models by config ID and clears a role to not configured", async () => {
@@ -483,50 +491,49 @@ describe("query settings card", () => {
 
 describe("embedding model card", () => {
   function mountEmbedding(extra: Record<string, unknown> = {}) {
-    return track(
+    const save = vi.fn(async (_model: EmbeddingModelConfig) => true);
+    const wrapper = track(
       mount(EmbeddingModelConfigCard, {
-        props: { model: { ...fixtures.embedding }, loading: false, saving: false, loadError: "", ...extra },
+        props: { model: { ...fixtures.embedding }, loading: false, saving: false, loadError: "", save, ...extra },
         global,
       })
     );
+    return { wrapper, save };
   }
 
   it("shows one compact row with the key masked and keeps unshown fields when editing", async () => {
-    const wrapper = mountEmbedding({ model: { ...fixtures.embedding, timeout: "PT5M" } });
+    const { wrapper, save } = mountEmbedding({ model: { ...fixtures.embedding, timeout: "PT5M" } });
     expect(wrapper.findAll(".model-item")).toHaveLength(1);
     expect(wrapper.text()).toContain("text-embedding-v3");
     expect(wrapper.text()).not.toContain("sk-embed");
     expect(wrapper.text()).toContain("300");
     await button(wrapper, t("common.edit"))!.trigger("click");
     await wrapper.find("section input").setValue("https://proxy.example/v1");
-    await button(wrapper, t("admin.doneEdit"))!.trigger("click");
-    const updated = wrapper.emitted("update:model")![0]![0] as EmbeddingModelConfig;
+    await saveDialog(wrapper);
+    const updated = save.mock.calls[0]![0];
     expect(updated.baseUrl).toBe("https://proxy.example/v1");
     expect(updated.timeout).toBe("PT300S");
     // The dialog overwrites only the 4 displayed fields; fields not shown, such as customHeaders, must be kept as-is.
     expect(updated.customHeaders).toEqual({ "X-Embed-Key": "keep" });
-    await button(wrapper, t("common.saveConfig"))!.trigger("click");
-    expect(wrapper.emitted("save")).toHaveLength(1);
+    expect(wrapper.find("section").exists()).toBe(false);
   });
 
   it("does not fake a model row while loading or after a load failure", async () => {
-    expect(mountEmbedding({ loading: true }).findAll(".model-item")).toHaveLength(0);
-    const failed = mountEmbedding({ loadError: "down" });
+    expect(mountEmbedding({ loading: true }).wrapper.findAll(".model-item")).toHaveLength(0);
+    const failed = mountEmbedding({ loadError: "down" }).wrapper;
     expect(failed.findAll(".model-item")).toHaveLength(0);
     expect(failed.text()).toContain("down");
-    expect(button(failed, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(failed, t("common.retry"))!.trigger("click");
     expect(failed.emitted("retry")).toHaveLength(1);
   });
 
   it("shows an add entry when no embedding model is configured", async () => {
-    const wrapper = mountEmbedding({ model: null });
+    const { wrapper, save } = mountEmbedding({ model: null });
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
-    expect(button(wrapper, t("common.saveConfig"))!.attributes("disabled")).toBeDefined();
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     await wrapper.find("section").findAll("input")[0]!.setValue("https://new.example/v1");
-    await button(wrapper, t("admin.doneEdit"))!.trigger("click");
-    const updated = wrapper.emitted("update:model")![0]![0] as EmbeddingModelConfig;
+    await saveDialog(wrapper);
+    const updated = save.mock.calls[0]![0];
     expect(updated.baseUrl).toBe("https://new.example/v1");
     expect(updated.timeout).toBe("PT300S");
   });
@@ -552,7 +559,8 @@ describe("password visibility with the real dialog", () => {
             entry("a", { apiKeys: ["sk-fake-1", "sk-fake-2", "sk-fake-3"] }),
             entry("b", { apiKeys: ["sk-fake-9"] }),
           ],
-          disabled: false,
+          saving: false,
+          save: async () => true,
         },
         global: realDialog,
         attachTo: document.body,
@@ -582,7 +590,13 @@ describe("password visibility with the real dialog", () => {
   it("re-hides the embedding key when its editor is reopened", async () => {
     const wrapper = track(
       mount(EmbeddingModelConfigCard, {
-        props: { model: { ...fixtures.embedding }, loading: false, saving: false, loadError: "" },
+        props: {
+          model: { ...fixtures.embedding },
+          loading: false,
+          saving: false,
+          loadError: "",
+          save: async () => true,
+        },
         global: realDialog,
         attachTo: document.body,
       })
@@ -605,7 +619,7 @@ describe("password visibility with the real dialog", () => {
 });
 
 describe("model config page", () => {
-  it("is one page without tabs: model list, role table, one save and the embedding card", async () => {
+  it("is one page without tabs: model list, role card and embedding card, with no save button outside the cards", async () => {
     const page = await mountModelPage();
     expect(page.find(".el-tabs").exists()).toBe(false);
     expect(page.findComponent(ModelListCard).exists()).toBe(true);
@@ -613,7 +627,7 @@ describe("model config page", () => {
     expect(page.findComponent(EmbeddingModelConfigCard).exists()).toBe(true);
     expect(page.findComponent(QuerySettingsCard).exists()).toBe(false);
     expect(page.findComponent(SkillDirConfigCard).exists()).toBe(false);
-    expect(page.find(".model-settings-actions").findAll("button")).toHaveLength(1);
+    expect(page.findAll("button").every((b) => b.element.closest(".config-card") !== null)).toBe(true);
 
     const system = await mountSystemPage();
     expect(system.findComponent(QuerySettingsCard).exists()).toBe(true);
@@ -622,26 +636,16 @@ describe("model config page", () => {
     expect(system.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
   });
 
-  it("adds a model to an empty library and assigns it to a role in the same save", async () => {
+  it("saves a new model from its dialog at once, then saves roles from the role card", async () => {
     server.models = [];
     server.agents = Object.fromEntries(MODEL_ROLES.map((role) => [role, null]));
     const page = await mountModelPage();
     const list = page.findComponent(ModelListCard);
     expect(list.text()).toContain(t("admin.modelListEmpty"));
-    expect(page.find(".model-settings-actions .el-tag").exists()).toBe(false);
 
     await button(list, t("admin.addModel"))!.trigger("click");
     await fillNewModel(list.find("section"), "fresh");
-    await button(list.find("section"), t("admin.addModel"))!.trigger("click");
-    // Options come from the current draft: a newly added model can be selected before saving.
-    expect(page.findComponent(RoleModelsCard).props("models")).toMatchObject([{ name: "fresh" }]);
-    roleSelect(page, "query").vm.$emit("update:modelValue", "fresh");
-    roleSelect(page, "general").vm.$emit("update:modelValue", "fresh");
-    await flushPromises();
-    expect(page.find(".model-settings-actions .el-tag").text()).toBe(t("admin.unsaved"));
-
-    await (await saveButton(page)).trigger("click");
-    await flushPromises();
+    await saveDialog(list.find("section"));
     expect(adminApi.saveModelSettings).toHaveBeenCalledTimes(1);
     expect(sent.settings).toEqual({
       models: [
@@ -661,6 +665,25 @@ describe("model config page", () => {
           customRequestParameters: {},
         },
       ],
+      agents: Object.fromEntries(MODEL_ROLES.map((role) => [role, null])),
+    });
+    // On success the dialog closes and the response (including Java's defaults) becomes the saved list.
+    expect(list.find("section").exists()).toBe(false);
+    expect(page.findComponent(ModelListCard).props("models")).toMatchObject([
+      { name: "fresh", maxTokens: 50000, contextWindow: 256000 },
+    ]);
+
+    // The saved model can be selected; role changes stay a draft until the role card saves them.
+    expect(unsavedTag(page).exists()).toBe(false);
+    roleSelect(page, "query").vm.$emit("update:modelValue", "fresh");
+    roleSelect(page, "general").vm.$emit("update:modelValue", "fresh");
+    await flushPromises();
+    expect(unsavedTag(page).text()).toBe(t("admin.unsaved"));
+    expect(adminApi.saveModelSettings).toHaveBeenCalledTimes(1);
+
+    await saveRoles(page);
+    expect(sent.settings).toMatchObject({
+      models: [{ name: "fresh", maxTokens: 50000, contextWindow: 256000 }],
       agents: {
         query: "fresh",
         coding: null,
@@ -669,41 +692,64 @@ describe("model config page", () => {
         knowledgeGovernance: null,
       },
     });
-    // On success the returned data is filled back as a whole (including Java's defaults) and the unsaved marker clears.
-    expect(page.findComponent(ModelListCard).props("models")).toMatchObject([
-      { name: "fresh", maxTokens: 50000, contextWindow: 256000 },
-    ]);
-    expect(page.find(".model-settings-actions .el-tag").exists()).toBe(false);
+    expect(unsavedTag(page).exists()).toBe(false);
     expect(server.reads).toBe(1);
   });
 
-  it("submits exactly the model list and the five role keys in one request", async () => {
+  it("a model save carries the saved roles, not the role draft, and keeps the draft", async () => {
     const page = await mountModelPage();
-    await (await saveButton(page)).trigger("click");
+    roleSelect(page, "knowledgeGovernance").vm.$emit("update:modelValue", "qwen-lite");
     await flushPromises();
+    const list = page.findComponent(ModelListCard);
+    await button(list, t("common.edit"))!.trigger("click");
+    await list.findAll("section input")[1]!.setValue("Qwen Max");
+    await saveDialog(list);
+    expect(sent.settings).toMatchObject({
+      models: [{ name: "qwen-main", displayName: "Qwen Max" }, { name: "qwen-lite" }],
+      agents: fixtures.agents,
+    });
+    expect(roleSelect(page, "knowledgeGovernance").props("modelValue")).toBe("qwen-lite");
+    expect(unsavedTag(page).exists()).toBe(true);
+  });
+
+  it("the role save submits exactly the saved model list and the five role keys in one request", async () => {
+    const page = await mountModelPage();
+    await saveRoles(page);
     const payload = sent.settings as { models: unknown[]; agents: Record<string, unknown> };
     expect(Object.keys(payload)).toEqual(["models", "agents"]);
     expect(Object.keys(payload.agents)).toEqual([...MODEL_ROLES]);
     // Roles carry only config IDs; the skill directory is not submitted with the model save.
     expect(payload.agents).toEqual(fixtures.agents);
-    expect(payload.models).toHaveLength(2);
+    expect(payload.models).toEqual(fixtures.models);
   });
 
-  it("clears the roles that referenced a deleted model and shows them as not configured", async () => {
+  it("deleting a model in use names its roles in the confirmation and saves them as not configured", async () => {
+    const confirm = vi.spyOn(ElMessageBox, "confirm");
     const page = await mountModelPage();
-    const list = page.findComponent(ModelListCard);
-    await list.findAll("button").filter((b) => b.text() === t("common.delete"))[0]!.trigger("click");
-    await flushPromises();
-    for (const role of ["query", "coding", "diagnosis"]) {
-      const select = roleSelect(page, role);
-      expect(select.props("modelValue")).toBeNull();
-      expect(select.find(".el-select__placeholder").text()).toBe(t("admin.roleNotConfigured"));
-    }
-    expect(roleSelect(page, "general").props("modelValue")).toBe("qwen-lite");
-    expect(page.findComponent(RoleModelsCard).props("models")).toMatchObject([{ name: "qwen-lite" }]);
+    const remove = () =>
+      page
+        .findComponent(ModelListCard)
+        .findAll("button")
+        .filter((b) => b.text() === t("common.delete"))[0]!
+        .trigger("click");
+    // A role draft pointing at the model is cleared too.
+    roleSelect(page, "knowledgeGovernance").vm.$emit("update:modelValue", "qwen-main");
 
-    await (await saveButton(page)).trigger("click");
+    confirm.mockRejectedValueOnce("cancel");
+    await remove();
     await flushPromises();
+    expect(adminApi.saveModelSettings).not.toHaveBeenCalled();
+    expect(page.findComponent(ModelListCard).props("models")).toHaveLength(2);
+
+    confirm.mockResolvedValueOnce("confirm" as never);
+    await remove();
+    await flushPromises();
+    expect(confirm.mock.calls[1]![0]).toBe(
+      t("admin.deleteModelInUseConfirm", {
+        name: "Qwen (qwen-main)",
+        roles: ["query", "coding", "diagnosis"].map((role) => t(`admin.modelRoleNames.${role}`)).join(", "),
+      })
+    );
     expect(sent.settings).toMatchObject({
       models: [{ name: "qwen-lite" }],
       agents: {
@@ -714,6 +760,14 @@ describe("model config page", () => {
         knowledgeGovernance: null,
       },
     });
+    for (const role of ["query", "coding", "diagnosis", "knowledgeGovernance"]) {
+      const select = roleSelect(page, role);
+      expect(select.props("modelValue")).toBeNull();
+      expect(select.find(".el-select__placeholder").text()).toBe(t("admin.roleNotConfigured"));
+    }
+    expect(roleSelect(page, "general").props("modelValue")).toBe("qwen-lite");
+    expect(page.findComponent(RoleModelsCard).props("models")).toMatchObject([{ name: "qwen-lite" }]);
+    expect(unsavedTag(page).exists()).toBe(false);
   });
 
   it("shows a persistent error with retry and offers no write entry when loading fails", async () => {
@@ -723,7 +777,6 @@ describe("model config page", () => {
     expect(alert.text()).toContain("legacy role params");
     expect(page.findComponent(ModelListCard).exists()).toBe(false);
     expect(page.findComponent(RoleModelsCard).exists()).toBe(false);
-    expect(page.find(".model-settings-actions").exists()).toBe(false);
     expect(button(page, t("admin.addModel"))).toBeUndefined();
 
     await button(alert, t("common.retry"))!.trigger("click");
@@ -732,7 +785,7 @@ describe("model config page", () => {
     expect(page.findComponent(ModelListCard).props("models")).toHaveLength(2);
   });
 
-  it("keeps the drafts and shows the backend message when saving fails", async () => {
+  it("keeps the role draft and shows the backend message when the role save fails", async () => {
     const error = vi.spyOn(ElMessage, "error");
     vi.mocked(adminApi.saveModelSettings).mockRejectedValueOnce(
       new Error("Model referenced by role query does not exist: gone")
@@ -740,11 +793,32 @@ describe("model config page", () => {
     const page = await mountModelPage();
     roleSelect(page, "knowledgeGovernance").vm.$emit("update:modelValue", "qwen-lite");
     await flushPromises();
-    await (await saveButton(page)).trigger("click");
-    await flushPromises();
+    await saveRoles(page);
     expect(error).toHaveBeenCalledWith("Model referenced by role query does not exist: gone");
     expect(roleSelect(page, "knowledgeGovernance").props("modelValue")).toBe("qwen-lite");
-    expect(page.find(".model-settings-actions .el-tag").exists()).toBe(true);
+    expect(unsavedTag(page).exists()).toBe(true);
+  });
+
+  it("keeps the model and embedding dialogs open when their save fails", async () => {
+    const error = vi.spyOn(ElMessage, "error");
+    vi.mocked(adminApi.saveModelSettings).mockRejectedValueOnce(new Error("models rejected"));
+    vi.mocked(adminApi.saveEmbeddingModel).mockRejectedValueOnce(new Error("embedding rejected"));
+    const page = await mountModelPage();
+    const list = page.findComponent(ModelListCard);
+    await button(list, t("common.edit"))!.trigger("click");
+    await list.findAll("section input")[1]!.setValue("Qwen Max");
+    await saveDialog(list);
+    expect(error).toHaveBeenCalledWith("models rejected");
+    expect(list.find("section").exists()).toBe(true);
+    expect(list.props("models")[0].displayName).toBe("Qwen");
+
+    const embedding = page.findComponent(EmbeddingModelConfigCard);
+    await button(embedding, t("common.edit"))!.trigger("click");
+    await embedding.findAll("section input")[1]!.setValue("sk-embed-2");
+    await saveDialog(embedding);
+    expect(error).toHaveBeenCalledWith("embedding rejected");
+    expect(embedding.find("section").exists()).toBe(true);
+    expect(embedding.props("model")).toEqual(fixtures.embedding);
   });
 
   it("shows an ISO timeout in seconds and writes it back as PT{n}S", async () => {
@@ -762,37 +836,19 @@ describe("model config page", () => {
       "",
       "",
     ]);
-    await button(list, t("admin.doneEdit"))!.trigger("click");
-    await (await saveButton(page)).trigger("click");
-    await flushPromises();
+    await saveDialog(list);
     expect((sent.settings as { models: ModelEntry[] }).models[0]!.timeout).toBe("PT300S");
   });
 
-  it("round-trips fields without controls through edit, test and save", async () => {
+  it("round-trips fields without controls through edit, save and test", async () => {
     const page = await mountModelPage();
     const list = page.findComponent(ModelListCard);
     await button(list, t("common.edit"))!.trigger("click");
     await list.find("section").findAll("input")[2]!.setValue("https://new.example.com/v1");
     const trash = `.api-key-row button[aria-label="${t("common.delete") as string}"]`;
     await list.find("section").findAll(trash)[1]!.trigger("click");
-    await button(list, t("admin.doneEdit"))!.trigger("click");
+    await saveDialog(list);
 
-    // Test with the current draft without saving.
-    await button(list, t("common.testModel"))!.trigger("click");
-    const testDialog = page.findAll("section").at(-1)!;
-    await testDialog.find("textarea").setValue("hello");
-    await button(testDialog, t("common.sendTest"))!.trigger("click");
-    await flushPromises();
-    const tested = (sent.test as { model: Record<string, unknown>; prompt: string });
-    expect(tested.prompt).toBe("hello");
-    expect(tested.model.baseUrl).toBe("https://new.example.com/v1");
-    expect(tested.model.apiKeys).toEqual(["", "sk-fake-cd34"]);
-    expect(JSON.stringify(tested.model.customRequestParameters)).toBe(OPAQUE_CUSTOMS);
-    expect(adminApi.saveModelSettings).not.toHaveBeenCalled();
-    await button(testDialog, t("common.close"))!.trigger("click");
-
-    await (await saveButton(page)).trigger("click");
-    await flushPromises();
     const saved = (sent.settings as { models: Array<Record<string, unknown>> }).models[0]!;
     expect(saved).toMatchObject({
       baseUrl: "https://new.example.com/v1",
@@ -808,6 +864,19 @@ describe("model config page", () => {
     expect(JSON.stringify(saved.customRequestParameters)).toBe(OPAQUE_CUSTOMS);
     // Unedited entries are submitted as-is.
     expect((sent.settings as { models: unknown[] }).models[1]).toEqual(fixtures.models[1]);
+
+    // The test uses the saved entry and does not save again.
+    await button(list, t("common.testModel"))!.trigger("click");
+    const testDialog = page.findAll("section").at(-1)!;
+    await testDialog.find("textarea").setValue("hello");
+    await button(testDialog, t("common.sendTest"))!.trigger("click");
+    await flushPromises();
+    const tested = (sent.test as { model: Record<string, unknown>; prompt: string });
+    expect(tested.prompt).toBe("hello");
+    expect(tested.model.baseUrl).toBe("https://new.example.com/v1");
+    expect(tested.model.apiKeys).toEqual(["", "sk-fake-cd34"]);
+    expect(JSON.stringify(tested.model.customRequestParameters)).toBe(OPAQUE_CUSTOMS);
+    expect(adminApi.saveModelSettings).toHaveBeenCalledTimes(1);
   });
 
   it("titles the model and embedding test dialogs after the selected entry", async () => {
@@ -826,16 +895,15 @@ describe("model config page", () => {
     expect(title()).toBe(t("admin.testModelNamed", { name: t("admin.embeddingModelConfig") }));
   });
 
-  it("saves and tests the embedding draft as a full snapshot on its own", async () => {
+  it("saves the embedding model from its dialog as a full snapshot and tests the saved model", async () => {
     const page = await mountModelPage();
     const embedding = page.findComponent(EmbeddingModelConfigCard);
     await button(embedding, t("common.edit"))!.trigger("click");
     await embedding.findAll("section input")[1]!.setValue("sk-embed-2");
-    await button(embedding, t("admin.doneEdit"))!.trigger("click");
-    await button(embedding, t("common.saveConfig"))!.trigger("click");
-    await flushPromises();
+    await saveDialog(embedding);
     expect(sent.embedding).toEqual({ ...fixtures.embedding, apiKey: "sk-embed-2" });
     expect(sent.settings).toBeNull();
+    expect(embedding.find("section").exists()).toBe(false);
 
     await button(embedding, t("common.testModel"))!.trigger("click");
     const testDialog = page.findAll("section").at(-1)!;
