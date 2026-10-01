@@ -34,6 +34,12 @@ fits real business data.
    `fix: keep the relationship order when saving the ontomap`.
 6. Open a pull request against `main` that says what changed, why, and how you verified it.
 
+Pull requests are not merged on GitHub. `main` receives one commit per published
+snapshot of the maintainers' development line, so an accepted pull request is applied
+there, with your commits and authorship kept, and reaches `main` with the next
+snapshot, which credits you as a co-author. The pull request is then closed with a
+link to that commit.
+
 Do not commit real configuration, credentials or business data.
 
 ## License

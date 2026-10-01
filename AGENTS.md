@@ -67,6 +67,11 @@ commit whose tree is the reviewed file tree: do not merge `develop` into `main`,
 publish the internal history branches or the old tags.
 
 The public GitHub repository has `main` only, so public contributors start from `main`;
-`develop` is an internal line that does not exist there. Commit subjects on `main` are
+`develop` is an internal line that does not exist there. An accepted pull request is not
+merged on GitHub: its own commits (those after the snapshot it started from) are
+cherry-picked onto `develop`, keeping their authors, because `main` and `develop` share no
+history and a plain merge would bring the snapshot commits along. The next snapshot
+carries a `Co-authored-by:` trailer for each contributor, and the pull request is closed
+with a link to it. Commit subjects on `main` are
 English and follow the `type: description` format; commits on the internal `develop` line
 follow the outer workspace convention.
