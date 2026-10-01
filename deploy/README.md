@@ -1,7 +1,37 @@
 # Ontomato unified deployment
 
-Offline Compose for PostgreSQL, DataRAG, the Node app, and the ontology manager.
+Compose for PostgreSQL, DataRAG, the Node app, and the ontology manager.
 Requires Docker Engine 26+ and the Docker Compose plugin.
+
+The Node app and DataRAG each ship as a runtime image and an app image, which are
+assembled on the deployment machine at `up` (`pull_policy: build`): each recipe under
+`assemble/` copies the app image into the runtime image and checks that they pair.
+The images come either from GitHub Container Registry (`docker-compose.ghcr.yml`) or
+from an offline pack (`docker-compose.yml`).
+
+## Deploy from GitHub Container Registry
+
+From `deploy/` in the source repository:
+
+```bash
+cp .env.example .env    # set ARCH, POSTGRES_PASSWORD and PUBLIC_HOST
+docker compose -f docker-compose.ghcr.yml up -d
+```
+
+`ARCH` names this machine's architecture, `amd64` or `arm64`; the assembly checks the
+images against it. `docker-compose.ghcr.yml` inherits every service from
+`docker-compose.yml` and only points the runtime, app and ontology manager images at
+`ghcr.io/aohan/ontomato-*`. They follow `latest` unless `ONTOMATO_VERSION` is set in
+`.env`. A runtime image is published under its compatibility fingerprint, so an update
+downloads new app images and reuses the runtime while the fingerprint is unchanged.
+
+To update:
+
+```bash
+docker compose -f docker-compose.ghcr.yml pull
+docker compose -f docker-compose.ghcr.yml build --pull
+docker compose -f docker-compose.ghcr.yml up -d
+```
 
 ## Build the offline pack
 
@@ -33,13 +63,6 @@ The app and backend images are assembled offline at `up` (`pull_policy: build`):
 each recipe copies a loaded app image into its loaded runtime image. To update only
 the application, import the new app package and run `docker compose up -d` again;
 the runtime stays loaded.
-
-## Moving to Docker.io
-
-`docker-compose.yml` keeps `ONTOMATO_RUNTIME_IMAGE` / `ONTOMATO_APP_IMAGE` and
-`DATARAG_RUNTIME_IMAGE` / `DATARAG_APP_IMAGE` as build-argument overrides. Pointing
-those four at registry references is the change that moves assembly off the local
-image store; they are intentionally absent from `.env.example`.
 
 ## Databases and ports
 

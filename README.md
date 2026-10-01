@@ -10,7 +10,8 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-639c2d" alt="License: Apache 2.0"></a>
-  <img src="https://img.shields.io/badge/status-early%20preview-639c2d" alt="Status: early preview">
+  <a href="https://github.com/Aohan/Ontomato/tags"><img src="https://img.shields.io/github/v/tag/Aohan/Ontomato?include_prereleases&label=version&color=639c2d" alt="Version"></a>
+  <img src="https://img.shields.io/badge/status-beta-639c2d" alt="Status: beta">
 </p>
 
 <p align="center">
@@ -137,24 +138,20 @@ documents every field.
 
 ### 1. Deploy
 
-Prebuilt images are not published yet, so build the offline bundle first. The build host
-needs Node.js 24+, Git, GNU Make and Docker with the Buildx plugin:
+The images are published to GitHub Container Registry for amd64 and arm64. On the server:
 
 ```bash
 git clone https://github.com/Aohan/Ontomato.git
-cd Ontomato
-make build ARCH=amd64                                      # or arm64
-docker pull --platform linux/amd64 pgvector/pgvector:pg18  # same architecture
-make bundle ARCH=amd64
+cd Ontomato/deploy
+cp .env.example .env    # set ARCH (amd64 or arm64), POSTGRES_PASSWORD and PUBLIC_HOST
+docker compose -f docker-compose.ghcr.yml up -d
 ```
 
-Copy the bundle to the server, unpack it, and in the unpacked directory:
-
-```bash
-for f in images/*.tar.gz; do docker load -i "$f"; done
-cp .env.example .env    # set POSTGRES_PASSWORD and PUBLIC_HOST
-docker compose up -d
-```
+The workbench and the data engine each come as a runtime image and an app image, which
+are assembled on the server at startup; an update downloads only the app images unless
+the runtime changed. The stack follows `latest`; set `ONTOMATO_VERSION` in `.env`, for
+example `ONTOMATO_VERSION=4.0.0-beta.1`, to stay on one release. For a server without
+internet access, deploy from the offline bundle instead.
 
 When `docker compose ps` shows every service healthy, open `http://<host>:3000` and set the
 chat and embedding models under **Model Configuration** in the Admin Panel. You can also
@@ -164,8 +161,8 @@ preset them in `.env` (`BACKEND_LLM_*`, `BACKEND_EMBEDDING_*`).
 the vector tables. Change it in `.env` before the first start if your model needs another
 value; it cannot change once data exists.
 
-[deploy/README.md](deploy/README.md) describes the bundle, updates and the remaining
-settings.
+[deploy/README.md](deploy/README.md) describes updates, the offline bundle and the
+remaining settings.
 
 ### 2. Install the agent skills
 
@@ -242,11 +239,10 @@ If you are a coding agent asked to set Ontomato up:
 
 ## Status
 
-Ontomato is an early preview. Current limits:
+Ontomato is in beta. Current limits:
 
 - PostgreSQL is the only supported business database, and a deployment works with one
   datasource at a time.
-- Prebuilt images are not published; deploy from the offline bundle.
 - The open-source edition has no login: everyone who can reach the ports has full access.
   Run it on a trusted network.
 

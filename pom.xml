@@ -29,7 +29,7 @@
     </modules>
 
     <properties>
-        <revision>4.0.0-dev</revision>
+        <revision>4.0.0-beta.1</revision>
         <!-- spring-boot:run executes in every module selected with -am; only apps/data-engine turns it on. -->
         <spring-boot.run.skip>true</spring-boot.run.skip>
         <java.version>21</java.version>
