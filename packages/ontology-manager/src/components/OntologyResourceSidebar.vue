@@ -85,6 +85,17 @@ defineEmits<{
           <small v-if="counts.relations !== null">{{ counts.relations }}</small>
         </button>
         <button
+          :class="[
+            'nav-item',
+            { active: activeWorkspace === 'assets' && activeAssetTab === 'actions' },
+          ]"
+          @click="$emit('asset', 'actions')"
+        >
+          <MousePointerClick :size="16" />
+          <span>{{ t("nav.actionManagement") }}</span>
+          <small v-if="counts.actions !== null">{{ counts.actions }}</small>
+        </button>
+        <button
           :class="['nav-item', { active: activeWorkspace === 'visual-modeling' }]"
           @click="$emit('visualModeling')"
         >
@@ -101,18 +112,6 @@ defineEmits<{
       </section>
 
       <section class="nav-group">
-        <p class="nav-heading">{{ t("nav.intelligenceAssets") }}</p>
-        <button
-          :class="[
-            'nav-item',
-            { active: activeWorkspace === 'assets' && activeAssetTab === 'actions' },
-          ]"
-          @click="$emit('asset', 'actions')"
-        >
-          <MousePointerClick :size="16" />
-          <span>{{ t("nav.actionManagement") }}</span>
-          <small v-if="counts.actions !== null">{{ counts.actions }}</small>
-        </button>
         <button
           :class="[
             'nav-item',
