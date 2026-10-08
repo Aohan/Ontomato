@@ -440,6 +440,8 @@ h2 {
   background: var(--el-fill-color-light);
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .detail-table-row {
