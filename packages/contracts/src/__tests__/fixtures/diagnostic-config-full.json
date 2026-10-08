@@ -1,0 +1,40 @@
+{
+  "server": { "port": 18087, "max-http-post-size": "100MB" },
+  "spring": { "servlet": { "multipart": { "max-file-size": "100MB", "max-request-size": "200MB" } } },
+  "langchain4j": {
+    "open-ai": {
+      "models": [
+        {
+          "name": "main",
+          "displayName": "Main",
+          "modelName": "api-main",
+          "connectionConfigured": true,
+          "timeout": "PT1M30S",
+          "maxRetries": 2,
+          "maxTokens": 4000,
+          "contextWindow": 64000
+        }
+      ],
+      "agents": {
+        "query": { "model": "main" },
+        "coding": { "model": "main", "skilldir": "skills/main" },
+        "general": { "model": "main" },
+        "diagnosis": { "model": "main" },
+        "knowledgeGovernance": { "model": null }
+      },
+      "embedding-model": { "modelName": "emb", "apiKeyConfigured": true, "timeout": "PT5M" }
+    }
+  },
+  "ontomato": {
+    "data-engine": {
+      "dataAdapter": "postgresql",
+      "knowledgeMaxResult": 7,
+      "toolAndPythonRetry": 1,
+      "dslCookerTries": 2,
+      "dslCookerTimeout": 300000,
+      "questionSpliterTries": 1,
+      "questionSpliterTimeout": 180000
+    }
+  },
+  "subQueryCacheDir": "/srv/datarag/conf/subQueryCache"
+}

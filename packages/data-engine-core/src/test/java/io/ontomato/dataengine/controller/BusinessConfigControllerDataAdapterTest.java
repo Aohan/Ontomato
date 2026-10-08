@@ -60,17 +60,30 @@ class BusinessConfigControllerDataAdapterTest {
 	}
 
 	@Test
-	void dataAdaptersListsTheInstalledOnesByLabel() {
+	void dataAdaptersGivesTheDomainsCurrentTypeAndTheInstalledOnesByLabelWithoutConnections() {
+		DataAdapterConnection saved = new DataAdapterConnection();
+		saved.setUrl("jdbc:postgresql://db.internal:5432/prod");
+		saved.setUser("prod-user");
+		saved.setPassword("SECRET-DB-PASSWORD");
+		businessConfig.getDataAdapterConnections().put("postgresql", saved);
+
 		JSONObject ret = controller.dataAdapters();
 
 		assertTrue(ret.getBooleanValue("success"));
+		JSONObject data = ret.getJSONObject("data");
+		assertEquals(java.util.Set.of("currentType", "adapters"), data.keySet());
+		assertEquals("postgresql", data.getString("currentType"));
+		String body = JSON.toJSONString(ret);
+		assertFalse(body.contains("SECRET-DB-PASSWORD"), body);
+		assertFalse(body.contains("db.internal"), body);
+		assertFalse(body.contains("prod-user"), body);
 		assertEquals(JSON.parseArray("["
 				+ "{\"type\":\"duckdb\",\"label\":\"DuckDB\",\"sql\":true,\"fields\":[\"url\"],"
 				+ "\"examples\":{\"url\":\"jdbc:duckdb:/data/example.duckdb\"}},"
 				+ "{\"type\":\"m3\",\"label\":\"M3\",\"sql\":false,\"fields\":[],\"examples\":{}},"
 				+ "{\"type\":\"postgresql\",\"label\":\"PostgreSQL\",\"sql\":true,\"fields\":[\"url\",\"user\",\"password\"],"
 				+ "\"examples\":{\"url\":\"jdbc:postgresql://host:port/db\",\"user\":\"postgres\"}}]"),
-				JSON.parseArray(JSON.toJSONString(ret.get("data"))));
+				JSON.parseArray(JSON.toJSONString(data.get("adapters"))));
 	}
 
 	@Test

@@ -31,5 +31,8 @@ LABEL io.runtime.kind="composite" \
 # Everything at the root of the app image is copied into /app: future new directories in the app image need no change to this Dockerfile.
 COPY --from=app_source / /app/
 
+# The product entrypoint rides the app image; the runtime image carries none.
+ENTRYPOINT ["/app/bin/container-entrypoint.sh"]
+
 RUN EXPECTED_ARCH="${EXPECTED_ARCH:?EXPECTED_ARCH is required}" \
     python "$PAIR_CONTRACT" assemble

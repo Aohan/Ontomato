@@ -110,7 +110,7 @@ class RuntimeBoundaryTests(unittest.TestCase):
     def body(self):
         return {
             'family': 'java-app',
-            'interfaceVersion': 3,
+            'interfaceVersion': 4,
             'platform': f'linux/{self.arch}',
             'java': {'classVersion': 65},
             'runtimeDependencies': {'jars': 'a' * 64},
@@ -154,6 +154,20 @@ class RuntimeBoundaryTests(unittest.TestCase):
             changed['platform'] = f'linux/{self.other}'
             self.install(root, app, changed)
             with self.assertRaisesRegex(ValueError, 'family or actual architecture'):
+                contract.assemble(root, app, {'EXPECTED_ARCH': self.arch})
+
+    def test_old_runtime_fingerprint_rejects_new_app(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'runtime'
+            app = Path(directory) / 'app'
+            root.mkdir()
+            app.mkdir()
+            self.install(root, app, self.body())
+            old = self.body()
+            old['interfaceVersion'] = 3
+            (root / 'runtime-contract.json').write_text(json.dumps(old))
+            (root / 'runtime-compat-fingerprint').write_text(contract.fingerprint(old))
+            with self.assertRaisesRegex(ValueError, 'compatibility fingerprint mismatch'):
                 contract.assemble(root, app, {'EXPECTED_ARCH': self.arch})
 
     def test_cli_failure_exits_without_pairing_ok(self):

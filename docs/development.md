@@ -33,7 +33,16 @@ source, compares it with `runtime-lock.json` and, on a mismatch, tells you to re
 runtime first. `build-app` only builds images and exports no pack; a deployment machine
 updates day to day with `git pull` → `make build-app` → `docker compose up -d` in the
 deployment directory, and `pack-app` additionally exports the offline pack. The matching
-check runs only once, during deployment assembly. The Manager still ships as its own
+check runs only once, during deployment assembly.
+
+Layout interface 4 moved the product startup files into the app images (the Java
+entrypoint, sync helper and built-in MCP service; the workbench Python defaults), so
+product startup logic now ships with the small package. The enterprise edition's
+native JVM argument (`-Djna.library.path`) ships the same way, in its own thin app
+entrypoint wrapper delegating to the public lifecycle script; the runtime carries no
+edition-specific target. The first update from an older
+layout needs a fresh runtime, app and assembly together: old and new layouts refuse to
+pair. Afterwards day-to-day updates stay app-only while the fingerprint is unchanged. The Manager still ships as its own
 image; there is no manager runtime. The per-service targets (`workbench-runtime-pack`,
 `workbench-app-pack`, `pack-data-engine`, `pack-data-engine-app`,
 `pack-ontology-manager` and their architecture variants) can still be called on their

@@ -126,7 +126,7 @@ test("same third-party packages stay compatible when own bindings differ", () =>
   assert.equal(Object.hasOwn(base.packages, "@app/app"), false);
   const contract = buildContract(base, observed());
   assert.equal(contract.interfaceVersion, INTERFACE);
-  assert.equal(INTERFACE, 3);
+  assert.equal(INTERFACE, 4);
   assert.equal(contract.family, "node-app");
   assert.equal(contract.productionDependencies, productionFingerprint(base));
 });

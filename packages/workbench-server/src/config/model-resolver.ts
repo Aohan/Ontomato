@@ -1,6 +1,7 @@
 import type { ModelRole, ModelSettingsData } from "@ontomato/contracts/model-settings";
 import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
-import { backendGet } from "../utils/backend-client";
+import { AuthFailedError, backendGet, buildBackendHeaders } from "../utils/backend-client";
+import { workbenchIdentity } from "../identity/installed";
 import { getLogContext } from "../logging/log-context";
 import { config } from "./application";
 import { t } from "../i18n";
@@ -29,8 +30,16 @@ export async function resolveModelForRole(role: ModelRole = "general"): Promise<
   const context = getLogContext();
 
   const response = await backendGet(endpoint, url, {
-    token: context?.token,
-    apiKey: context?.apiKey,
+    headers: {
+      ...buildBackendHeaders(context?.token, undefined, undefined, context?.apiKey),
+      ...workbenchIdentity().modelSettingsReadHeaders,
+    },
+  }).catch((error: unknown) => {
+    if (error instanceof AuthFailedError && error.status === 403) {
+      // This read's 403 is a service/domain configuration refusal; only a 401 asks the user to sign in again.
+      throw new Error(t("model.settingsReadRefused"));
+    }
+    throw error;
   });
 
   const body = JSON.parse(response.text) as {

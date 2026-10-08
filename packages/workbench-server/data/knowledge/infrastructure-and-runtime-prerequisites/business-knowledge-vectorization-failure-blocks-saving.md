@@ -15,7 +15,7 @@ This kind of content performs embedding synchronously before writing to the vect
 
 ## Verification and Localization
 
-1. Use `view_app_config` to check the embedding / vector model configuration, focusing on the baseurl suffix and auth instructions.
+1. Use `view_app_config` to check whether the embedding / vector model is configured (model name, whether the key is configured). The diagnosis view does not show the service address; have an administrator check the baseurl suffix on the model configuration page.
 2. When the configuration is normal, ask the user to test the vector model directly on the system configuration page, or confirm the specific embedding call error from backend logs.
 3. Record which page, what kind of content was being saved, what the API returned, and whether all categories fail.
 

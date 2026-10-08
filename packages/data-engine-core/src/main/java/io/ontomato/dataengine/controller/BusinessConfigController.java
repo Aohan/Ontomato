@@ -127,6 +127,9 @@ public class BusinessConfigController {
 
 			BusinessConfig stored = businessConfigService.get(user.getDomainId());
 			String existingSkillDir = stored.getAgents().get(AgentRole.CODING).getSkilldir();
+			// The first model saved into an empty library also fills every empty role reference, so a first
+			// setup needs no separate role step; a batch from empty, a second model or later edits assign nothing.
+			String firstModelName = stored.getModels().isEmpty() && models.size() == 1 ? models.get(0).getName() : null;
 
 			BusinessConfig candidate = new BusinessConfig();
 			BeanUtils.copyProperties(stored, candidate);
@@ -144,6 +147,9 @@ public class BusinessConfigController {
 					if (!str.isEmpty()) {
 						modelRef = str;
 					}
+				}
+				if (modelRef == null) {
+					modelRef = firstModelName;
 				}
 				AgentConfig agent = new AgentConfig();
 				agent.setModel(modelRef);
@@ -396,7 +402,8 @@ public class BusinessConfigController {
 	@GetMapping("/businessConfig/dataAdapters")
     @ResponseBody
     public JSONObject dataAdapters() {
-    	JSONArray data = new JSONArray();
+		User user = SystemUtils.getCurUser();
+		JSONArray adapters = new JSONArray();
     	for (DataAdapterProvider provider : dataAdapterRegistry.installed()) {
     		JSONObject item = new JSONObject();
     		item.put("type", provider.type());
@@ -404,8 +411,12 @@ public class BusinessConfigController {
     		item.put("sql", provider.sql());
     		item.put("fields", provider.connectionFields());
     		item.put("examples", provider.connectionExamples());
-    		data.add(item);
+			adapters.add(item);
     	}
+		// The current domain's adapter type without its saved connections: what non-management readers need.
+		JSONObject data = new JSONObject();
+		data.put("currentType", businessConfigService.get(user.getDomainId()).getDataAdapter());
+		data.put("adapters", adapters);
     	JSONObject ret = new JSONObject();
     	ret.put("data", data);
     	ret.put("success", true);
@@ -469,7 +480,7 @@ public class BusinessConfigController {
     	try {
     		User user = SystemUtils.getCurUser();
     		JSONObject data = new JSONObject();
-    		data.put("config", businessConfigService.getRuntimeWholeConfig(user.getDomainId()));
+			data.put("config", businessConfigService.getDiagnosticConfig(user.getDomainId()));
     		data.put("desc", businessConfigService.getWholeConfigDesc());
     		ret.put("data", data);
     		ret.put("success", true);

@@ -24,7 +24,6 @@ const {
   createOntologyRelation,
   deleteOntologyObject,
   deleteOntologyRelation,
-  getBusinessConfig,
   getMetas,
   listDataAdapters,
   updateOntologyAttribute,
@@ -45,7 +44,6 @@ interface AttrDef {
   showName: string;
   attrDesc: string;
   enable: boolean;
-  bizzkey: string;
   bizzkeyBool: boolean;
   primaryKey: boolean;
   isNew?: boolean;
@@ -154,11 +152,8 @@ const selectedEdge = ref<RelationDef | null>(null);
 
 async function loadAdapterConfig() {
   try {
-    const [config, adapters] = await Promise.all([getBusinessConfig(), listDataAdapters()]);
-    const current: string = config.data.dataAdapter;
-    showJoinFields.value = (adapters.data as { type: string; sql: boolean }[]).some(
-      ({ type, sql }) => type === current && sql
-    );
+    const { currentType, adapters } = await listDataAdapters();
+    showJoinFields.value = adapters.some(({ type, sql }) => type === currentType && sql);
   } catch {
     showJoinFields.value = false;
   }
@@ -757,7 +752,6 @@ async function loadData() {
           showName: a.showName || a.name,
           attrDesc: a.attrDesc || "",
           enable: toBoolean(a.enable, true),
-          bizzkey: a.bizzkey ?? "",
           bizzkeyBool: toBoolean(raw),
           primaryKey: toBoolean(a.primaryKey),
         };
@@ -813,7 +807,7 @@ function openAddAttrDialog(cls: ClassDef) {
 async function handleAddAttr(input: NewAttributeInput) {
   attrSaving.value = true;
   try {
-    await createOntologyAttribute({ ...input, name: input.attrName });
+    await createOntologyAttribute({ ...input });
     attrDialogVisible.value = false;
     await loadData();
     selectNodeByClassName(input.className);
@@ -1264,11 +1258,20 @@ async function onAttrBizKeyChange(cls: ClassDef, prop: AttrDef) {
   const shouldReturn = !!prop.bizzkeyBool;
   try {
     await updateOntologyAttribute(cls.className, prop, { bizzkeyBool: shouldReturn });
-    prop.bizzkey = String(shouldReturn);
     message.success(shouldReturn ? t("hotData.mustReturnSet") : t("hotData.mustReturnUnset"));
   } catch {
     prop.bizzkeyBool = !prop.bizzkeyBool;
     message.error(t("hotData.bizzkeySaveFailed"));
+  }
+}
+
+async function onAttrPrimaryKeyChange(cls: ClassDef, prop: AttrDef) {
+  try {
+    await updateOntologyAttribute(cls.className, prop, { primaryKey: true });
+    prop.primaryKey = true;
+    message.success(ot("primaryKeySet"));
+  } catch {
+    message.error(ot("primaryKeySetFailed"));
   }
 }
 
@@ -1410,6 +1413,7 @@ async function saveClassDesc(cls: ClassDef) {
         @save-class-desc="saveClassDesc"
         @attr-enable-change="onAttrEnableChange"
         @attr-biz-key-change="onAttrBizKeyChange"
+        @attr-primary-key-change="onAttrPrimaryKeyChange"
         @attr-show-name-focus="onAttrShowNameFocus"
         @attr-show-name-blur="onAttrShowNameBlur"
         @save-attr-desc="saveAttrDesc"

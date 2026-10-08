@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { SystemModelConfig } from "@ontomato/contracts/system-model";
+import type { DataAdapterInfo, DataAdaptersData } from "@ontomato/contracts/data-adapters";
 
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
@@ -12,7 +13,6 @@ import QuerySettingsCard from "./business-config/QuerySettingsCard.vue";
 import SkillDirConfigCard from "./business-config/SkillDirConfigCard.vue";
 import {
   type BusinessConfig,
-  type DataAdapterInfo,
   type GeneralConfigKey,
   type SystemSettings,
 } from "../types";
@@ -53,7 +53,7 @@ async function loadConfig() {
       adminApi.listDataAdapters(),
     ]);
     if (res?.success) {
-      dataAdapters.value = adaptersRes.data;
+      dataAdapters.value = (adaptersRes.data as DataAdaptersData).adapters;
       const data = res.data as BusinessConfig;
       // The skill directory hangs on the coding role and is empty when unset.
       skilldir.value = data.agents.coding.skilldir ?? "";

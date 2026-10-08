@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
 
-// Callers pass the interface version. Java data-engine is 3; this file does not own a product version.
+// Callers pass the interface version. Java data-engine is 4; this file does not own a product version.
 export const COMPAT_LABEL = "io.runtime.compat-fingerprint";
 export function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;

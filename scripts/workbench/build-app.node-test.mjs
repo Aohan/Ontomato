@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmodSync,
   existsSync,
@@ -392,6 +392,34 @@ test("the app recipe declares its stage arguments and launch permissions", () =>
   const sources = [...builder.matchAll(/^COPY\s+(\S+)/gm)].map((match) => match[1]);
   assert.deepEqual(sources, ["workspace/", "inputs.json", "tools/", "launch.sh", "LICENSE"]);
   assert.match(final, /COPY --from=web-builder \/stage\/ \//);
+});
+
+test("the app launcher fills product Python defaults only when unset; explicit values pass through", (t) => {
+  // The real launcher runs against a fake node that reports what it received.
+  const launch = fileURLToPath(new URL("../../docker/workbench/launch.sh", import.meta.url));
+  const dir = mkdtempSync(join(tmpdir(), "p4-n5a-launch-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(
+    join(dir, "node"),
+    '#!/bin/sh\nprintf "replay=%s hot=%s\\n" "$ABC_REPLAY_PYTHON_COMMAND" "$HOT_REPORT_PYTHON_COMMAND"\n',
+  );
+  chmodSync(join(dir, "node"), 0o755);
+  const run = (extra) =>
+    spawnSync("/bin/sh", [launch], {
+      encoding: "utf8",
+      env: { PATH: `${dir}:/usr/bin:/bin`, ...extra },
+    });
+  const cases = [
+    [{}, "replay=python3.10 hot=python3.10\n"],
+    [{ ABC_REPLAY_PYTHON_COMMAND: "", HOT_REPORT_PYTHON_COMMAND: "custom-hot" }, "replay= hot=custom-hot\n"],
+    [{ HOT_REPORT_PYTHON_COMMAND: "custom-hot" }, "replay=python3.10 hot=custom-hot\n"],
+    [{ ABC_REPLAY_PYTHON_COMMAND: "custom-replay", HOT_REPORT_PYTHON_COMMAND: "custom-hot" }, "replay=custom-replay hot=custom-hot\n"],
+  ];
+  for (const [extra, expected] of cases) {
+    const result = run(extra);
+    assert.equal(result.status, 0, JSON.stringify(extra));
+    assert.equal(result.stdout, expected, JSON.stringify(extra));
+  }
 });
 
 test("assemble writes own packages, resources, links, web and meta from a real graph", (t) => {

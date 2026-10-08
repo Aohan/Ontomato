@@ -12,6 +12,7 @@ import {
   ElPagination,
   ElRadio,
   ElRadioGroup,
+  ElSegmented,
   ElSelect,
   ElTable,
   ElTableColumn,
@@ -20,9 +21,11 @@ import {
 } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import { Filter, Download, Plus, Trash2, Search } from "lucide-vue-next";
-import { useManagerClient, useSharedText } from "../context";
+import { useManagerClient, useOntologyText, useSharedText } from "../context";
+import InstanceGraph from "./InstanceGraph.vue";
 
 const { t } = useSharedText();
+const { ot } = useOntologyText();
 const { message } = useManagerFeedback();
 const { getMetas, loadObjectData } = useManagerClient();
 const props = defineProps<{ initialClass?: string }>();
@@ -58,6 +61,12 @@ const pageNum = ref(1);
 const pageSize = ref(20);
 const total = ref(0);
 const loading = ref(false);
+const viewMode = ref<"table" | "graph">("table");
+
+const viewModeOptions = computed(() => [
+  { label: ot("tableView"), value: "table" },
+  { label: ot("instanceGraphTitle"), value: "graph" },
+]);
 
 const currentClassAttrs = computed(() => {
   const cls = classList.value.find((c) => c.className === selectedClass.value);
@@ -86,7 +95,19 @@ const operators = [
   { label: t("dataBrowser.notnull"), value: "notnull" },
 ];
 
-const availableColumns = computed(() => currentClassAttrs.value);
+const arrayAttrNames = computed(() => {
+  const names = new Set<string>();
+  for (const row of dataList.value) {
+    for (const key of Object.keys(row)) {
+      if (Array.isArray(row[key])) names.add(key);
+    }
+  }
+  return names;
+});
+
+const availableColumns = computed(() =>
+  currentClassAttrs.value.filter((attr) => !arrayAttrNames.value.has(attr.name))
+);
 
 const filteredData = computed(() => {
   let data = dataList.value;
@@ -143,7 +164,11 @@ const visibleColumns = computed(() => {
 });
 
 const visibleAttrs = computed(() =>
-  currentClassAttrs.value.filter((attr) => columnVisibility.value[attr.name] !== false)
+  currentClassAttrs.value.filter(
+    (attr) =>
+      columnVisibility.value[attr.name] !== false &&
+      !arrayAttrNames.value.has(attr.name)
+  )
 );
 
 function openFilterDrawer() {
@@ -321,7 +346,11 @@ watch(
 
 <template>
   <div class="data-browser">
-    <div class="toolbar">
+    <div class="mode-bar">
+      <el-segmented v-model="viewMode" :options="viewModeOptions" />
+    </div>
+    <template v-if="viewMode === 'table'">
+      <div class="toolbar">
       <el-select
         v-model="selectedClass"
         :placeholder="t('common.selectObjectClass')"
@@ -484,7 +513,9 @@ watch(
         <el-button @click="clearAllFilters">{{ t("dataBrowser.clearAll") }}</el-button>
         <el-button type="primary" @click="applyFilters">{{ t("dataBrowser.apply") }}</el-button>
       </template>
-    </el-drawer>
+      </el-drawer>
+    </template>
+    <InstanceGraph v-else />
   </div>
 </template>
 
@@ -495,6 +526,22 @@ watch(
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.mode-bar {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-bottom: var(--spacing-lg);
+}
+
+.mode-bar :deep(.el-segmented) {
+  --el-segmented-item-selected-bg-color: var(--el-color-primary);
+}
+
+.data-browser :deep(.instance-graph) {
+  min-height: 0;
+  flex: 1;
 }
 
 .data-browser :deep(.el-table) {

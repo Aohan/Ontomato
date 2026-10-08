@@ -1,5 +1,7 @@
 #!/bin/bash
-# DataRAG container entrypoint (inside the runtime image; Docker 26 / Compose assembles the application content into /app with a plain COPY).
+# DataRAG container entrypoint (shipped in the app image at /app/bin; the final
+# assembly recipe sets it as ENTRYPOINT after COPYing the whole app root into
+# /app. Docker 26 / Compose assembles the application content into /app with a plain COPY).
 # Responsibilities: data directory preparation, product file synchronization, built-in MCP startup, process supervision.
 set -euo pipefail
 
@@ -30,8 +32,8 @@ runtime_arch="$(cat /opt/datarag/runtime-arch)"
 python "$(dirname "$0")/sync-product-files.py" "$CONF_DEFAULTS" "$APP_SKILLS" "$DEPLOY_DIR"
 
 # 6) The MCP calculation service runs built into the backend container (started first, polled for up to 30 seconds)
-[ -f /opt/datarag/mcp/mcpserver.py ] || die "missing /opt/datarag/mcp/mcpserver.py, the runtime image is incomplete"
-/usr/local/bin/python3 /opt/datarag/mcp/mcpserver.py --host "$MCP_HOST" --port "$MCP_PORT" &
+[ -f /app/mcp/mcpserver.py ] || die "missing /app/mcp/mcpserver.py, the application image is incomplete"
+/usr/local/bin/python3 /app/mcp/mcpserver.py --host "$MCP_HOST" --port "$MCP_PORT" &
 mcp_pid=$!
 mcp_ok=0
 for _ in $(seq 1 30); do

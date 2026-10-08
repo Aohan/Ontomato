@@ -1,3 +1,4 @@
+import type { DataAdaptersData } from "@ontomato/contracts/data-adapters";
 import { ontologyText, type ManagerMessages } from "./i18n";
 
 export type ManagerCredential =
@@ -95,6 +96,25 @@ export interface OntologyRelation {
   fromclass: string;
   toclass: string;
   desc: string;
+}
+
+/** A data instance node in the star-chart instance graph. */
+export interface InstanceGraphNode {
+  id: string;
+  name: string;
+  class: string;
+  isCenter?: boolean;
+}
+
+/** A directed relation between two instance nodes. */
+export interface InstanceGraphEdge {
+  source: string;
+  target: string;
+}
+
+export interface InstanceGraphData {
+  nodes: InstanceGraphNode[];
+  edges: InstanceGraphEdge[];
 }
 
 export interface CreateOntologyObjectInput {
@@ -395,6 +415,32 @@ export function createManagerClient(
     };
   }
 
+  function normalizeInstanceGraph(data: unknown): InstanceGraphData {
+    const graph = (data ?? {}) as Record<string, unknown>;
+    const rawNodes = Array.isArray(graph.nodes) ? (graph.nodes as InstanceGraphNode[]) : [];
+    const rawEdges = Array.isArray(graph.edges) ? (graph.edges as InstanceGraphEdge[]) : [];
+    // The star chart injects a synthetic center ("virtual_root") when there is no single center; drop it and its edges.
+    const virtualIds = new Set(
+      rawNodes.filter((node) => node.class === "virtual_root" || node.id === "root").map((node) => node.id)
+    );
+    return {
+      nodes: rawNodes.filter((node) => !virtualIds.has(node.id)),
+      edges: rawEdges.filter((edge) => !virtualIds.has(edge.source) && !virtualIds.has(edge.target)),
+    };
+  }
+
+  /** Pre-built star-chart instance graph (all inStarChart classes); nodes are data instances, edges their relations. */
+  async function loadInstanceGraph() {
+    const response = await send("/data/queryWholeDataMode0", { method: "GET" });
+    return normalizeInstanceGraph(response.data);
+  }
+
+  /** One instance's full record; the data engine returns classDef plus a flat attribute map. */
+  async function queryInstanceInfo(id: string, className: string) {
+    const response = await post("/data/queryInfoByNode", { id, class: className });
+    return (response.data ?? {}) as Record<string, unknown>;
+  }
+
   async function loadSmartAssets(kind: SmartAssetKind) {
     const response = await post(`${smartAssetPaths[kind]}/queryList`, {});
     const source = Array.isArray(response.data)
@@ -415,14 +461,9 @@ export function createManagerClient(
     })) as SmartAsset[];
   }
 
-  /** Visual modeling reads data.dataAdapter (the current adapter type). */
-  function getBusinessConfig() {
-    return send("/businessConfig/getConfig", { method: "GET" });
-  }
-
-  /** Data adapters installed in this edition; visual modeling uses the current type's sql flag to decide whether to show join fields. */
-  function listDataAdapters() {
-    return send("/businessConfig/dataAdapters", { method: "GET" });
+  /** The current domain's adapter type and this edition's installed adapters; visual modeling uses the current type's sql flag to decide whether to show join fields. */
+  async function listDataAdapters(): Promise<DataAdaptersData> {
+    return (await send("/businessConfig/dataAdapters", { method: "GET" })).data;
   }
 
   /** Business knowledge list: the data engine returns an object keyed by knowledgeID; older entries may have no tags. */
@@ -471,7 +512,8 @@ export function createManagerClient(
     deleteOntologyRelation,
     loadObjectData,
     loadSmartAssets,
-    getBusinessConfig,
+    loadInstanceGraph,
+    queryInstanceInfo,
     listDataAdapters,
     listKnowledge,
     saveKnowledge,

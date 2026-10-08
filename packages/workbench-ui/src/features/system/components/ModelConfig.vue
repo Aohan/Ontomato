@@ -76,7 +76,14 @@ async function saveSettings(models: ModelEntry[], agents: RoleModels): Promise<b
 }
 
 // Model add/edit: saved with the saved roles, so an unsaved role draft is neither submitted nor lost.
-const saveModels = (models: ModelEntry[]) => saveSettings(models, savedRoles.value);
+// The first model of an empty library is assigned to every role by the backend in that same save; with no model
+// before it no role draft could exist, so the draft takes the saved roles and the role card shows them as saved.
+async function saveModels(models: ModelEntry[]): Promise<boolean> {
+  const firstModel = savedModels.value.length === 0;
+  const saved = await saveSettings(models, savedRoles.value);
+  if (saved && firstModel) roleDraft.value = { ...savedRoles.value };
+  return saved;
+}
 
 async function saveRoles() {
   if (await saveSettings(savedModels.value, roleDraft.value)) {

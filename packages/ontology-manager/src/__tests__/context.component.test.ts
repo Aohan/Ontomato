@@ -36,7 +36,7 @@ const workspaces = {
   ontology: (client: ManagerClient) => client.loadOntology(),
   assets: (client: ManagerClient) => client.loadSmartAssets("actions"),
   dataBrowser: (client: ManagerClient) => client.loadObjectData("Order", 1, 25),
-  visualModeling: (client: ManagerClient) => client.getBusinessConfig(),
+  visualModeling: (client: ManagerClient) => client.listDataAdapters(),
 };
 type Workspace = keyof typeof workspaces;
 
@@ -109,7 +109,7 @@ describe("host context injection", () => {
       "/admin/getMetas",
       "/action/queryList",
       "/data/getWholeClassDataByPage",
-      "/businessConfig/getConfig",
+      "/businessConfig/dataAdapters",
     ].map((path) => `/manager-api/data-query${path}`);
     expect(requests.map((r) => r.url)).toEqual([...paths, ...paths]);
     expect(requests.slice(0, 4).every((r) => r.headers.tk === "t-1")).toBe(true);

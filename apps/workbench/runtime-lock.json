@@ -2,7 +2,7 @@
   "schema": 3,
   "family": "node-app",
   "runtimes": {
-    "linux/amd64": "81697ee4916a1037c304161c19c510810a6f4da9bed6e69f154421096ec474d1",
-    "linux/arm64": "e6afda52039a80adb5b732c6be6ce53fd4b6f7c1dbdb21ca7e5164ee7db24a4f"
+    "linux/amd64": "07170699a9d43ce62fcee13d5e720720919becac4aae2e37ef9598cefbda4b9b",
+    "linux/arm64": "b75c6e3feb2be0714bb3cab7fb3000bb1453a74c92762ebf04b28e165849a447"
   }
 }

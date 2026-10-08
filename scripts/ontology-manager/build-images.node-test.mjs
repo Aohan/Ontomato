@@ -409,3 +409,17 @@ test("packing writes the archive and reports it on the build line", async (t) =>
     ["save", "ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
   );
 });
+
+// The DataRAG proxy the entrypoint renders clears the model runtime service credential, so a
+// browser-supplied one never reaches DataRAG. The real assignment is evaluated by sh; no Nginx runs.
+test("the rendered DataRAG proxy clears the model runtime credential header", () => {
+  const entrypoint = readFileSync(join(REPO, RECIPE, "docker-entrypoint.sh"), "utf8");
+  const assignment = entrypoint.match(/^API_LOCATION="[\s\S]*?^}"$/m)[0];
+  const rendered = execFileSync("sh", ["-c", `${assignment}\nprintf '%s' "$API_LOCATION"`], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, ONTOLOGY_API_BASE: "/api", DATARAG_ORIGIN: "http://datarag:18087" },
+  });
+  assert.match(rendered, /^location \/api\/data-query\/ \{\n {2}proxy_pass http:\/\/datarag:18087\/;\n/);
+  assert.match(rendered, /^ {2}proxy_set_header X-Ontomato-Model-Runtime-Token "";$/m);
+  assert.match(rendered, /\n\}$/);
+});

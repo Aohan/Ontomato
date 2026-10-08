@@ -1,8 +1,8 @@
+import type { DataAdaptersData } from "@ontomato/contracts/data-adapters";
 import { getApiConfig, buildUrl } from "../../../config/data-query-api";
 import { environment } from "../../../config/environment";
 import { backendGet } from "../../../utils/backend-client";
 import { createLogger } from "../../../logging/logger";
-import { runtimeDefaults } from "../../../runtime/defaults";
 import { tApp } from "../../../i18n";
 
 
@@ -14,7 +14,7 @@ export interface BackendInfraConfig {
 
 let cached: BackendInfraConfig | null = null;
 
-const ENDPOINT = "/businessConfig/getConfigAndDesc";
+const ENDPOINT = "/businessConfig/dataAdapters";
 
 export async function fetchBackendConfig(token?: string): Promise<BackendInfraConfig | null> {
   const apiConfig = getApiConfig();
@@ -29,28 +29,16 @@ export async function fetchBackendConfig(token?: string): Promise<BackendInfraCo
   try {
     const url = buildUrl(apiConfig, ENDPOINT);
     const resp = await backendGet(ENDPOINT, url, { token: tk, timeoutMs: 10_000, retries: 1 });
-    const json = JSON.parse(resp.text) as Record<string, unknown>;
+    const json = JSON.parse(resp.text) as
+      | { success: true; data: DataAdaptersData }
+      | { success: false; message?: string };
 
     if (!json.success) {
       logger.warn(tApp("diag.observe.backend-config-fetcher.1"), { response: JSON.stringify(json).slice(0, 200) });
       return null;
     }
 
-    const data = json.data as Record<string, unknown> | undefined;
-    const config = data?.config as Record<string, unknown> | undefined;
-    const ontomato = config?.ontomato as Record<string, unknown> | undefined;
-    const dataEngine = ontomato?.["data-engine"] as Record<string, unknown> | undefined;
-
-    if (!dataEngine) {
-      logger.warn(tApp("diag.observe.backend-config-fetcher.2"));
-      return null;
-    }
-
-    const result: BackendInfraConfig = {
-      // When the backend config gives no adapter, interpret it with each edition's
-      // own historical default (enterprise m3, OSS sql).
-      dataAdapter: String(dataEngine.dataAdapter || runtimeDefaults().defaultDataAdapter),
-    };
+    const result: BackendInfraConfig = { dataAdapter: json.data.currentType };
 
     cached = result;
     logger.info(tApp("diag.observe.backend-config-fetcher.3"), {

@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ElementPlus from "element-plus";
 import BusinessConfig from "../BusinessConfig.vue";
 import DataAdapterConfigCard from "../business-config/DataAdapterConfigCard.vue";
-import type { DataAdapterConnection, DataAdapterInfo } from "../../types";
+import type { DataAdapterInfo } from "@ontomato/contracts/data-adapters";
+import type { DataAdapterConnection } from "../../types";
 import { adminApi } from "../../../admin";
 import { workbenchI18n } from "../../../../i18n";
 import { businessConfig } from "../../../../../../../apps/workbench/web/src/business-config";
@@ -98,7 +99,10 @@ vi.mock("../../../admin", () => ({
         })
       ),
     })),
-    listDataAdapters: vi.fn(async () => ({ success: true, data: backend.adapters })),
+    listDataAdapters: vi.fn(async () => ({
+      success: true,
+      data: { currentType: backend.dataAdapter, adapters: backend.adapters },
+    })),
     useDataAdapter: vi.fn(async (payload: unknown) => {
       backend.used.push(JSON.parse(JSON.stringify(payload)));
       return { success: true };

@@ -1,3 +1,4 @@
+import { diagnosticConfigResponseSchema } from "@ontomato/contracts/diagnostic-config";
 import type { AgentTool } from "../../../../../core/agent-loop/index";
 import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet } from "../../../../../utils/backend-client";
@@ -13,53 +14,6 @@ const ENDPOINT = "/businessConfig/getConfigAndDesc";
 const MAX_VALUE_LENGTH = 500;
 const MAX_DESC_LENGTH = 2000;
 
-/**
- * Field-name patterns whose string values must be masked before returning the
- * config to the agent. Matched case-insensitively against the key, so e.g.
- * `apiKey`, `m3auth`, `accessToken`, `dbPassword`, `clientSecret` all hit.
- */
-const SENSITIVE_KEY_PATTERN = /key|token|auth|password|secret/i;
-
-/**
- * Mask a secret string the same way the settings route masks apiKey: replace
- * everything but the last 4 chars with `*`. Short values are fully masked.
- */
-function maskSecret(value: string): string {
-  if (!value) return value;
-  if (value.length <= 4) return "*".repeat(value.length);
-  return `${"*".repeat(value.length - 4)}${value.slice(-4)}`;
-}
-
-/**
- * Deep-clone the config tree, masking any string value whose field name looks
- * sensitive. Non-sensitive fields (url / namespace / model / enable ...) are
- * returned as-is. Only string leaves under a sensitive key are masked --
- * objects/arrays keep their structure so the agent can still see the shape.
- */
-function sanitizeConfig(value: unknown, keyIsSensitive = false): unknown {
-  if (value === null) return undefined;
-  if (typeof value === "string") {
-    return keyIsSensitive ? maskSecret(value) : value;
-  }
-  if (Array.isArray(value)) {
-    // An array under a sensitive key propagates the flag to its string items.
-    return value
-      .map((item) => sanitizeConfig(item, keyIsSensitive))
-      .filter((item) => item !== undefined);
-  }
-  if (value && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const sanitized = sanitizeConfig(v, SENSITIVE_KEY_PATTERN.test(k));
-      if (sanitized !== undefined) {
-        out[k] = sanitized;
-      }
-    }
-    return out;
-  }
-  // numbers / booleans / undefined -- never sensitive on their own.
-  return value;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -132,81 +86,32 @@ function flattenRows(value: unknown): string[] {
   return rows;
 }
 
-function formatDescription(desc: unknown): string[] {
-  if (desc === undefined || desc === null || desc === "") return [];
-  const lines = [tApp("diag.observe.agent.tools.view-app-config-tool.2")];
-  if (typeof desc === "string") {
-    lines.push(cleanBlock(desc));
-    return lines;
-  }
-
-  const rows: string[] = [];
-  appendFlattenedRows(sanitizeConfig(desc), "", rows);
-  lines.push(...(rows.length > 0 ? rows : [tApp("diag.observe.agent.tools.view-app-config-tool.3")]));
-  return lines;
+function formatDescription(desc: string): string[] {
+  return [tApp("diag.observe.agent.tools.view-app-config-tool.2"), cleanBlock(desc)];
 }
 
-function pickDescription(
-  json: Record<string, unknown>,
-  data: Record<string, unknown> | undefined
-): unknown {
-  const candidates = [data, json].filter(Boolean) as Record<string, unknown>[];
-  const keys = ["desc", "description", "configDesc", "configDescription"];
-  for (const source of candidates) {
-    for (const key of keys) {
-      if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
-        return source[key];
-      }
-    }
-  }
-  return undefined;
+/** The sections Java's diagnosis view always has, plus what `data.desc` is. */
+function formatKnownSectionGuide(): string[] {
+  return [
+    tApp("diag.observe.agent.tools.view-app-config-tool.7"),
+    tApp("diag.observe.agent.tools.view-app-config-tool.4"),
+    tApp("diag.observe.agent.tools.view-app-config-tool.5"),
+    tApp("diag.observe.agent.tools.view-app-config-tool.6"),
+  ];
 }
 
-function pickSectionDescription(desc: unknown, section: string): unknown {
-  if (!section || !isRecord(desc)) return desc;
-  const candidates = [section, `${section}Desc`, `${section}Description`];
-  for (const key of candidates) {
-    if (desc[key] !== undefined && desc[key] !== null && desc[key] !== "") return desc[key];
-  }
-  return desc;
-}
-
-function formatKnownSectionGuide(value: unknown, hasDesc: boolean): string[] {
-  if (!isRecord(value)) return [];
-
-  const rows: string[] = [];
-  if ("langchain4j" in value) {
-    rows.push(tApp("diag.observe.agent.tools.view-app-config-tool.4"));
-  }
-  if ("ontomato" in value) {
-    rows.push(tApp("diag.observe.agent.tools.view-app-config-tool.5"));
-  }
-  if (hasDesc) {
-    rows.push(
-      tApp("diag.observe.agent.tools.view-app-config-tool.6")
-    );
-  }
-
-  return rows.length > 0 ? [tApp("diag.observe.agent.tools.view-app-config-tool.7"), ...rows] : [];
-}
-
-/** Render the config (already sanitized) as readable Markdown. */
+/** Render the diagnosis view as readable Markdown. */
 function formatConfig(
   label: string,
   value: unknown,
-  desc?: unknown,
+  desc: string,
   mode: "full" | "section" = "full"
 ): string {
   const lines = [`## ${label}`];
 
-  const descLines = formatDescription(desc);
-  if (descLines.length > 0) {
-    lines.push("", ...descLines);
-  }
-
-  const sectionGuide = mode === "full" ? formatKnownSectionGuide(value, descLines.length > 0) : [];
-  if (sectionGuide.length > 0) {
-    lines.push("", ...sectionGuide);
+  lines.push("", ...formatDescription(desc));
+  if (mode === "full") {
+    lines.push("", ...formatKnownSectionGuide());
   }
 
   if (mode === "full" && isRecord(value)) {
@@ -231,9 +136,8 @@ function formatConfig(
 
 /**
  * Factory for the `view_app_config` tool. Reads the data engine's running
- * config via `/businessConfig/getConfigAndDesc` (same endpoint/method as
- * `backend-config-fetcher.fetchBackendConfig`), masks sensitive fields, includes
- * the backend-provided `desc` explanation when present, and optionally narrows
+ * diagnosis view via `/businessConfig/getConfigAndDesc`, which Java builds from
+ * named non-secret fields only, includes the backend-provided `desc` explanation, and optionally narrows
  * to a single top-level section. tk is read from the per-session holder at
  * execute time.
  */
@@ -267,33 +171,35 @@ export function createViewAppConfigTool(caller: DiagnosisCallerIdentity): AgentT
 
       try {
         const url = buildUrl(apiConfig, ENDPOINT);
+        // errorDetailLimit 0: an HTTP error keeps only its status, never a fragment of the response body.
         const resp = await backendGet(ENDPOINT, url, {
           token: caller.token,
           apiKey: caller.apiKey,
           timeoutMs: 15_000,
           retries: 1,
+          errorDetailLimit: 0,
         });
-        let json: Record<string, unknown> = {};
+        // Only the contract's named fields pass; a body that is not that contract (malformed JSON included) is
+        // reported as such without echoing any of it.
+        let body: unknown;
         try {
-          json = JSON.parse(resp.text);
+          body = JSON.parse(resp.text);
         } catch {
-          /* Keep the existing invalid-JSON fallback. */
+          body = undefined;
         }
-
-        if (json.success === false) {
+        const parsed = diagnosticConfigResponseSchema.safeParse(body);
+        if (!parsed.success) {
+          return {
+            content: [{ type: "text", text: tApp("diag.observe.agent.tools.view-app-config-tool.17") }],
+          };
+        }
+        if (!parsed.data.success) {
           return {
             content: [{ type: "text", text: tApp("diag.observe.agent.tools.view-app-config-tool.16") }],
           };
         }
 
-        const data = json.data as Record<string, unknown> | undefined;
-        const config = data?.config as Record<string, unknown> | undefined;
-        const desc = pickDescription(json, data);
-        if (!config || typeof config !== "object") {
-          return {
-            content: [{ type: "text", text: tApp("diag.observe.agent.tools.view-app-config-tool.17") }],
-          };
-        }
+        const { config, desc } = parsed.data.data;
 
         const sectionParam = typeof params.section === "string" ? params.section.trim() : "";
         if (sectionParam) {
@@ -308,24 +214,21 @@ export function createViewAppConfigTool(caller: DiagnosisCallerIdentity): AgentT
               ],
             };
           }
-          const sanitized = sanitizeConfig(config[sectionParam]);
-          const sectionDesc = pickSectionDescription(desc, sectionParam);
           return {
             content: [
               {
                 type: "text",
-                text: formatConfig(tApp("diag.observe.agent.tools.view-app-config-tool.20", { p0: sectionParam }), sanitized, sectionDesc, "section"),
+                text: formatConfig(tApp("diag.observe.agent.tools.view-app-config-tool.20", { p0: sectionParam }), config[sectionParam as keyof typeof config], desc, "section"),
               },
             ],
           };
         }
 
-        const sanitized = sanitizeConfig(config);
         return {
           content: [
             {
               type: "text",
-              text: formatConfig(tApp("diag.observe.agent.tools.view-app-config-tool.21"), sanitized, desc),
+              text: formatConfig(tApp("diag.observe.agent.tools.view-app-config-tool.21"), config, desc),
             },
           ],
         };

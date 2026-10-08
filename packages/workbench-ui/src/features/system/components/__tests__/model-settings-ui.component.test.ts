@@ -140,15 +140,18 @@ vi.mock("../../../admin", () => ({
     })),
     listDataAdapters: vi.fn(async () => ({
       success: true,
-      data: [
-        {
-          type: "postgresql",
-          label: "PostgreSQL",
-          sql: true,
-          fields: ["url", "user", "password"],
-          examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
-        },
-      ],
+      data: {
+        currentType: "postgresql",
+        adapters: [
+          {
+            type: "postgresql",
+            label: "PostgreSQL",
+            sql: true,
+            fields: ["url", "user", "password"],
+            examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
+          },
+        ],
+      },
     })),
     getSystemModelConfig: vi.fn(async () => ({
       success: true,
@@ -636,17 +639,33 @@ describe("model config page", () => {
     expect(system.findComponent(EmbeddingModelConfigCard).exists()).toBe(false);
   });
 
-  it("saves a new model from its dialog at once, then saves roles from the role card", async () => {
+  it("saves the first model from its dialog; the five roles the backend assigns it show as saved and stay editable", async () => {
     server.models = [];
     server.agents = Object.fromEntries(MODEL_ROLES.map((role) => [role, null]));
+    const error = vi.spyOn(ElMessage, "error");
     const page = await mountModelPage();
     const list = page.findComponent(ModelListCard);
     expect(list.text()).toContain(t("admin.modelListEmpty"));
+    const roleValues = () => MODEL_ROLES.map((role) => roleSelect(page, role).props("modelValue"));
 
+    // A failed first save keeps the dialog and its input; no role changes.
+    vi.mocked(adminApi.saveModelSettings).mockRejectedValueOnce(new Error("models rejected"));
     await button(list, t("admin.addModel"))!.trigger("click");
     await fillNewModel(list.find("section"), "fresh");
     await saveDialog(list.find("section"));
-    expect(adminApi.saveModelSettings).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith("models rejected");
+    expect(list.find("section").exists()).toBe(true);
+    expect(roleValues()).toEqual(MODEL_ROLES.map(() => null));
+    expect(unsavedTag(page).exists()).toBe(false);
+
+    // Java assigns the first model of an empty library to every empty role in the same save (simulated here).
+    vi.mocked(adminApi.saveModelSettings).mockImplementationOnce(async (payload) => {
+      sent.settings = JSON.parse(JSON.stringify(payload));
+      server.models = payload.models.map((model) => ({ ...model, maxTokens: 50000, contextWindow: 256000 }));
+      server.agents = Object.fromEntries(MODEL_ROLES.map((role) => [role, "fresh"]));
+      return { success: true, data: settingsData() };
+    });
+    await saveDialog(list.find("section"));
     expect(sent.settings).toEqual({
       models: [
         {
@@ -667,32 +686,37 @@ describe("model config page", () => {
       ],
       agents: Object.fromEntries(MODEL_ROLES.map((role) => [role, null])),
     });
-    // On success the dialog closes and the response (including Java's defaults) becomes the saved list.
+    // On success the dialog closes, the response (including Java's defaults) becomes the saved list, and the
+    // five assigned roles show at once with no false unsaved marker.
     expect(list.find("section").exists()).toBe(false);
     expect(page.findComponent(ModelListCard).props("models")).toMatchObject([
       { name: "fresh", maxTokens: 50000, contextWindow: 256000 },
     ]);
-
-    // The saved model can be selected; role changes stay a draft until the role card saves them.
+    expect(roleValues()).toEqual(MODEL_ROLES.map(() => "fresh"));
     expect(unsavedTag(page).exists()).toBe(false);
-    roleSelect(page, "query").vm.$emit("update:modelValue", "fresh");
-    roleSelect(page, "general").vm.$emit("update:modelValue", "fresh");
+
+    // The role card still edits and saves the assignment.
+    roleSelect(page, "coding").vm.$emit("update:modelValue", null);
     await flushPromises();
     expect(unsavedTag(page).text()).toBe(t("admin.unsaved"));
-    expect(adminApi.saveModelSettings).toHaveBeenCalledTimes(1);
-
     await saveRoles(page);
     expect(sent.settings).toMatchObject({
-      models: [{ name: "fresh", maxTokens: 50000, contextWindow: 256000 }],
-      agents: {
-        query: "fresh",
-        coding: null,
-        general: "fresh",
-        diagnosis: null,
-        knowledgeGovernance: null,
-      },
+      agents: { query: "fresh", coding: null, general: "fresh", diagnosis: "fresh", knowledgeGovernance: "fresh" },
     });
     expect(unsavedTag(page).exists()).toBe(false);
+
+    // A second model is saved with the saved roles and leaves the role draft alone.
+    roleSelect(page, "query").vm.$emit("update:modelValue", null);
+    await flushPromises();
+    await button(page.findComponent(ModelListCard), t("admin.addModel"))!.trigger("click");
+    await fillNewModel(page.findComponent(ModelListCard).find("section"), "second");
+    await saveDialog(page.findComponent(ModelListCard).find("section"));
+    expect(sent.settings).toMatchObject({
+      models: [{ name: "fresh" }, { name: "second" }],
+      agents: { query: "fresh", coding: null, general: "fresh", diagnosis: "fresh", knowledgeGovernance: "fresh" },
+    });
+    expect(roleSelect(page, "query").props("modelValue")).toBeNull();
+    expect(unsavedTag(page).exists()).toBe(true);
     expect(server.reads).toBe(1);
   });
 

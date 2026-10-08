@@ -61,8 +61,9 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   if (path === "/admin/getMetas") return json(metasFor(url));
   if (path === "/data/getWholeClassDataByPage")
     return json({ success: true, data: [{ id: "row-1" }], total_count: 1 });
-  if (path === "/businessConfig/getConfig") return json({ success: true, data: { dataAdapter } });
-  if (path === "/businessConfig/dataAdapters") return json({ success: true, data: dataAdapters });
+  if (path === "/businessConfig/dataAdapters") {
+    return json({ success: true, data: { currentType: dataAdapter, adapters: dataAdapters } });
+  }
   if (path === "/function/queryList") return json({ success: true, data: functions });
   if (path.endsWith("/queryList")) return json({ success: true, data: [] });
   return json({ success: true, data: {} });
@@ -347,9 +348,12 @@ describe("OntologyManager root component with real pages", () => {
       view: "/visual-modeling?focus=object&id=Order&back=playground",
     });
     await settle();
-    const config = requests.find((request) => request.url.endsWith("/businessConfig/getConfig"));
-    expect(config?.method).toBe("GET");
-    expect(config?.headers["x-api-key"]).toBe("key-a");
+    // The current adapter type comes from the one adapter read; the full business config is never requested.
+    const adapters = requests.filter((request) => request.url.endsWith("/businessConfig/dataAdapters"));
+    expect(adapters).toHaveLength(1);
+    expect(adapters[0].method).toBe("GET");
+    expect(adapters[0].headers["x-api-key"]).toBe("key-a");
+    expect(paths()).not.toContain("/businessConfig/getConfig");
 
     clickButton("Edit");
     await settle();
@@ -766,7 +770,7 @@ describe("OntologyManager root component with real pages", () => {
       classDesc: "Pump desc",
     });
     if (view === "/objects") {
-      expect(root().textContent).toContain("Primary key attribute: pump_no");
+      expect(root().textContent).toContain("Primary key property: pump_no");
     } else {
       const panel = root().querySelector(".attr-item")!;
       expect(panel.textContent).toContain("pump_no");
@@ -782,7 +786,7 @@ describe("OntologyManager root component with real pages", () => {
       document.body.getAttribute("style"),
       document.body.children.length,
     ];
-    clickButton("New Attribute");
+    clickButton("New Property");
     await settle();
     const dialog = openDialog("Create");
     expect(dialog.closest(".ontology-manager > [id*='popper-container']")).not.toBeNull();
