@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { ArrowLeft, ChevronRight, Plus, Save, Table2, Trash2 } from "lucide-vue-next";
+import { ArrowLeft, ChevronDown, ChevronUp, Plus, Save, Table2, Trash2 } from "lucide-vue-next";
 import { ElAlert, ElButton, ElEmpty, ElForm, ElFormItem, ElInput, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { OntologyObject, OntologyRelation } from "../api";
 import OntologyAttributeCreateDialog from "./OntologyAttributeCreateDialog.vue";
+import OntologyAttributeEditor from "./OntologyAttributeEditor.vue";
 import { useManagerClient, useOntologyText } from "../context";
 
 const { ot } = useOntologyText();
@@ -16,7 +17,6 @@ const emit = defineEmits<{
   back: [];
   updated: [];
   browse: [className: string];
-  attribute: [className: string, attributeName: string];
   relation: [relationship: string];
 }>();
 
@@ -27,6 +27,7 @@ const object = ref<OntologyObject | null>(null);
 const relatedRelations = ref<OntologyRelation[]>([]);
 const objectLabels = ref<Record<string, string>>({});
 const attributeCreateVisible = ref(false);
+const expandedAttributeName = ref("");
 const form = reactive({ showName: "", classDesc: "" });
 
 const businessKeyCount = computed(
@@ -126,10 +127,14 @@ async function remove() {
   }
 }
 
+function toggleAttribute(attributeName: string) {
+  expandedAttributeName.value = expandedAttributeName.value === attributeName ? "" : attributeName;
+}
+
 async function handleAttributeCreated(className: string, attributeName: string) {
   await loadDetail();
+  expandedAttributeName.value = attributeName;
   emit("updated");
-  emit("attribute", className, attributeName);
 }
 
 watch(
@@ -239,22 +244,36 @@ onMounted(() => void loadDetail());
             <span>{{ ot("description") }}</span>
             <span></span>
           </div>
-          <button
+          <div
             v-for="attribute in object.attrs"
             :key="attribute.name"
-            class="detail-table-row"
-            @click="emit('attribute', object.className, attribute.name)"
+            class="detail-table-row-group"
+            :class="{ expanded: expandedAttributeName === attribute.name }"
           >
-            <span>
-              <strong>{{ attribute.showName }}</strong>
-              <small>{{ attribute.name }}</small>
-            </span>
-            <span>{{ attribute.type }}</span>
-            <span>{{ attribute.bizzkeyBool ? ot("yes") : "-" }}</span>
-            <span>{{ attribute.primaryKey ? ot("yes") : "-" }}</span>
-            <span>{{ attribute.attrDesc || "-" }}</span>
-            <ChevronRight :size="16" class="row-chevron" />
-          </button>
+            <button
+              class="detail-table-row"
+              :aria-expanded="expandedAttributeName === attribute.name"
+              @click="toggleAttribute(attribute.name)"
+            >
+              <span>
+                <strong>{{ attribute.showName }}</strong>
+                <small>{{ attribute.name }}</small>
+              </span>
+              <span>{{ attribute.type }}</span>
+              <span>{{ attribute.bizzkeyBool ? ot("yes") : "-" }}</span>
+              <span>{{ attribute.primaryKey ? ot("yes") : "-" }}</span>
+              <span>{{ attribute.attrDesc || "-" }}</span>
+              <ChevronUp v-if="expandedAttributeName === attribute.name" :size="16" class="row-chevron" />
+              <ChevronDown v-else :size="16" class="row-chevron" />
+            </button>
+            <OntologyAttributeEditor
+              v-if="expandedAttributeName === attribute.name"
+              :class-name="object.className"
+              :attribute="attribute"
+              @saved="loadDetail"
+              @deleted="loadDetail"
+            />
+          </div>
         </div>
       </section>
 
@@ -461,6 +480,18 @@ h2 {
   border-bottom: 0;
 }
 .detail-table-row:hover {
+  background: var(--el-fill-color-light);
+}
+.detail-table-row-group {
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+.detail-table-row-group:last-child {
+  border-bottom: 0;
+}
+.detail-table-row-group .detail-table-row {
+  border-bottom: 0;
+}
+.detail-table-row-group.expanded .detail-table-row {
   background: var(--el-fill-color-light);
 }
 .detail-table-row > span {
