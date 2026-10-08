@@ -43,6 +43,11 @@ public class DataAdapterRegistry {
 		return provider(type).create(connection, dataRagConfig, jsonRule);
 	}
 
+	/** An adapter for a candidate connection, leaving the saved configuration untouched. */
+	public DataAdapter createForTest(String type, DataAdapterConnection connection) {
+		return provider(type).create(connection, dataRagConfig, null);
+	}
+
 	public List<DataAdapterProvider> installed() {
 		return providers.values().stream().sorted(Comparator.comparing(DataAdapterProvider::label)).toList();
 	}

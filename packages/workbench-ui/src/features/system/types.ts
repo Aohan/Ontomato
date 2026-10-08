@@ -3,7 +3,7 @@ import type {
   BackendModelConfig,
   ModelRole,
 } from "@ontomato/contracts/model-settings";
-import type { DataAdapterField } from "@ontomato/contracts/data-adapters";
+import type { DataAdapterField, DataAdapterTestResult } from "@ontomato/contracts/data-adapters";
 
 /**
  * A model entry edited on the model configuration page: based on the entry read by getModelSettings, with fields that
@@ -39,6 +39,10 @@ export interface EmbeddingModelConfig {
 
 /** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
 export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
+
+/** Outcome of the last connection test of the data adapter form: the driver's report, or the backend message verbatim. */
+export type DataAdapterTestOutcome =
+  { ok: true; result: DataAdapterTestResult } | { ok: false; message: string };
 
 /** General parameters, language and data adapter edited on the system config page. */
 export interface SystemSettings {

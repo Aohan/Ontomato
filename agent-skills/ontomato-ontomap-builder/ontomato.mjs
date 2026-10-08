@@ -126,9 +126,19 @@ async function ask(cfg, argv) {
   await printSse(res);
 }
 
+// test-datasource and use-datasource take the same arguments and send the same body.
+function datasourceBody(cmd, argv) {
+  if (argv[1] == null) die(`${cmd} requires a datasource type`);
+  if (argv[2] == null) die(`${cmd} requires a JSON payload`);
+  const payload = JSON.parse(readInput(argv[2]));
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) die(`${cmd} payload must be a JSON object`);
+  return { ...payload, type: argv[1] };
+}
+
 function usage() {
   die(`usage:
   ontomato.mjs list-datasources
+  ontomato.mjs test-datasource <type> <json|@file>
   ontomato.mjs use-datasource <type> <json|@file>
   ontomato.mjs get-ontomap
   ontomato.mjs set-ontomap <json|@file>
@@ -145,12 +155,13 @@ async function main() {
     console.log(JSON.stringify(json.data, null, 2));
     return;
   }
+  if (cmd === "test-datasource") {
+    const json = await requestJson(cfg, "POST", "/businessConfig/testDataAdapter", datasourceBody(cmd, argv));
+    console.log(JSON.stringify(json.data, null, 2));
+    return;
+  }
   if (cmd === "use-datasource") {
-    if (argv[1] == null) die("use-datasource requires a datasource type");
-    if (argv[2] == null) die("use-datasource requires a JSON payload");
-    const payload = JSON.parse(readInput(argv[2]));
-    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) die("use-datasource payload must be a JSON object");
-    await requestJson(cfg, "POST", "/businessConfig/useDataAdapter", { ...payload, type: argv[1] });
+    await requestJson(cfg, "POST", "/businessConfig/useDataAdapter", datasourceBody(cmd, argv));
     console.log("datasource set");
     return;
   }

@@ -25,7 +25,9 @@ import io.ontomato.dataengine.config.ModelConfig;
 import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.config.CustomRequestParameters;
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterConnection;
+import io.ontomato.dataengine.dataAdapter.DataAdapterConnectionTester;
 import io.ontomato.dataengine.dataAdapter.DataAdapterProvider;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.BusinessConfigService;
@@ -434,17 +436,7 @@ public class BusinessConfigController {
     		List<String> fields = provider.connectionFields();
     		// An adapter without connection fields (M3) keeps no saved connection.
     		if (!fields.isEmpty()) {
-    			DataAdapterConnection connection = new DataAdapterConnection();
-    			if (fields.contains("url")) {
-    				connection.setUrl(input.getString("url"));
-    			}
-    			if (fields.contains("user")) {
-    				connection.setUser(input.getString("user"));
-    			}
-    			if (fields.contains("password")) {
-    				connection.setPassword(input.getString("password"));
-    			}
-    			businessConfig.getDataAdapterConnections().put(provider.type(), connection);
+    			businessConfig.getDataAdapterConnections().put(provider.type(), connectionOf(provider, input));
     		}
     		businessConfig.setDataAdapter(provider.type());
     		businessConfigService.set(businessConfig, user.getDomainId());
@@ -455,6 +447,43 @@ public class BusinessConfigController {
     		ret.put("message", e.getMessage());
     	}
 		return ret;
+	}
+
+	@PostMapping("/businessConfig/testDataAdapter")
+    @ResponseBody
+    public JSONObject testDataAdapter(@RequestBody JSONObject input) {
+    	JSONObject ret = new JSONObject();
+    	try {
+    		DataAdapterProvider provider = dataAdapterRegistry.provider(input.getString("type"));
+    		if (provider.connectionFields().isEmpty()) {
+    			throw new IllegalStateException(provider.type() + " has no connection to test");
+    		}
+    		// The candidate values are tested as given; nothing saved is read or written.
+    		DataAdapter adapter = dataAdapterRegistry.createForTest(provider.type(), connectionOf(provider, input));
+    		ret.put("data", adapter.testConnection());
+    		ret.put("success", true);
+    	} catch (Exception e) {
+    		log.error(e.getMessage(), e);
+    		ret.put("success", false);
+    		ret.put("message", DataAdapterConnectionTester.failureMessage(e));
+    	}
+		return ret;
+	}
+
+	/** The request values of the fields this provider declares; undeclared fields are ignored. */
+	private static DataAdapterConnection connectionOf(DataAdapterProvider provider, JSONObject input) {
+		List<String> fields = provider.connectionFields();
+		DataAdapterConnection connection = new DataAdapterConnection();
+		if (fields.contains("url")) {
+			connection.setUrl(input.getString("url"));
+		}
+		if (fields.contains("user")) {
+			connection.setUser(input.getString("user"));
+		}
+		if (fields.contains("password")) {
+			connection.setPassword(input.getString("password"));
+		}
+		return connection;
 	}
 	
 	@GetMapping("/businessConfig/getConfig")

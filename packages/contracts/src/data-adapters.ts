@@ -16,3 +16,21 @@ export interface DataAdaptersData {
   currentType: string;
   adapters: DataAdapterInfo[];
 }
+
+/** A table or view listed by a connection test. */
+export interface DataAdapterTableInfo {
+  name: string;
+  type: "TABLE" | "VIEW";
+}
+
+/** `data` of a successful POST /businessConfig/testDataAdapter: what the driver reports about the tested connection. */
+export interface DataAdapterTestResult {
+  elapsedMs: number;
+  databaseProduct: string;
+  databaseVersion: string;
+  driverName: string;
+  driverVersion: string;
+  catalog: string | null;
+  schema: string | null;
+  tables: DataAdapterTableInfo[];
+}

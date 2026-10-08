@@ -26,6 +26,8 @@ export const adminApi = {
   listDataAdapters: () => apiGet("/businessConfig/dataAdapters"),
   useDataAdapter: (payload: { type: string } & DataAdapterConnection) =>
     apiPost("/businessConfig/useDataAdapter", payload),
+  testDataAdapter: (payload: { type: string } & DataAdapterConnection) =>
+    apiPost("/businessConfig/testDataAdapter", payload),
   testEmbeddingModel: (payload: unknown) => apiPost("/businessConfig/testEmbeddingModel", payload),
   getSystemModelConfig: () => nodeApiGet("/system-model-config"),
   saveSystemModelConfig: (payload: SystemModelConfig) =>

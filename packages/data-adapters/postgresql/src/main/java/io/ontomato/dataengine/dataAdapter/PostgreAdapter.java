@@ -6,6 +6,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
@@ -43,13 +44,21 @@ public class PostgreAdapter implements DataAdapter {
 	}
 
 	@Override
+	public Connection openConnection() throws SQLException {
+		return DriverManager.getConnection(
+				connection.getUrl(),
+				connection.getUser(),
+				connection.getPassword());
+	}
+
+	@Override
 	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] DSL to query PostgreSQL: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] Converted PostgreSQL sql: " + sql);
-		JSONArray data = querySql(connection, sql);
+		JSONArray data = querySql(sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -523,7 +532,7 @@ public class PostgreAdapter implements DataAdapter {
 				}
 			}
 			String sql = "select " + select + " from " + className + " limit 1";
-			JSONArray data = querySql(connection, sql);
+			JSONArray data = querySql(sql);
 			if (data.size() > 0) {
 				JSONObject datum = data.getJSONObject(0);
 				Set<String> keys = datum.keySet();
@@ -546,7 +555,7 @@ public class PostgreAdapter implements DataAdapter {
 		}
 	}
 
-	private JSONArray querySql(DataAdapterConnection connection, String sql) throws Exception {
+	private JSONArray querySql(String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -554,10 +563,7 @@ public class PostgreAdapter implements DataAdapter {
 		ResultSet rs = null;
 		try {
 			JSONArray rows = new JSONArray();
-			conn = DriverManager.getConnection(
-					connection.getUrl(),
-					connection.getUser(),
-					connection.getPassword());
+			conn = openConnection();
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();
@@ -622,13 +628,13 @@ public class PostgreAdapter implements DataAdapter {
 	@Override
 	public void truncateNamespace(String namespace) {
 		try {
-			JSONArray current_schemas = querySql(connection, "SELECT current_schema();");
+			JSONArray current_schemas = querySql("SELECT current_schema();");
 			String current_schema = current_schemas.getJSONObject(0).getString("current_schema");
-			JSONArray tableNames = querySql(connection, "SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
+			JSONArray tableNames = querySql("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
 			for (int i = 0; i < tableNames.size(); i++) {
 				String tableName = tableNames.getJSONObject(i).getString("table_name");
 				if (namespace == null || tableName.toLowerCase().startsWith(namespace.toLowerCase())) {
-					executeSql(connection, "delete from " + tableName);
+					executeSql("delete from " + tableName);
 				}
 			}
 		} catch (Exception e) {
@@ -639,13 +645,13 @@ public class PostgreAdapter implements DataAdapter {
 	@Override
 	public void dropNamespace(String namespace) {
 		try {
-			JSONArray current_schemas = querySql(connection, "SELECT current_schema();");
+			JSONArray current_schemas = querySql("SELECT current_schema();");
 			String current_schema = current_schemas.getJSONObject(0).getString("current_schema");
-			JSONArray tableNames = querySql(connection, "SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
+			JSONArray tableNames = querySql("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
 			for (int i = 0; i < tableNames.size(); i++) {
 				String tableName = tableNames.getJSONObject(i).getString("table_name");
 				if (namespace == null || tableName.toLowerCase().startsWith(namespace.toLowerCase())) {
-					executeSql(connection, "drop table " + tableName);
+					executeSql("drop table " + tableName);
 				}
 			}
 		} catch (Exception e) {
@@ -696,7 +702,7 @@ public class PostgreAdapter implements DataAdapter {
 				sql.append(" ").append(field).append(" " + (i == fields.size() - 1 ? "" : ",") + "\n");
 			}
 			sql.append(" );");
-			executeSql(connection, sql.toString());
+			executeSql(sql.toString());
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 		}
@@ -778,7 +784,7 @@ public class PostgreAdapter implements DataAdapter {
 				
 				sqls.add(sql.toString());
 			}
-			executeSql(connection, sqls);
+			executeSql(sqls);
 		} else {
 			throw new Exception("The insert statement must contain the primary key field");
 		}
@@ -849,7 +855,7 @@ public class PostgreAdapter implements DataAdapter {
 			sql += " where " + whereStr;
 		}
 		
-		executeSql(connection, sql);
+		executeSql(sql);
 	}
 	
 	private String generateWhere(JSONObject condition, Map<String, String> attrTypeMap, SimpleDateFormat ymd, SimpleDateFormat ymdhms) throws Exception {
@@ -984,7 +990,7 @@ public class PostgreAdapter implements DataAdapter {
 			sql += " where " + whereStr;
 		}
 		
-		executeSql(connection, sql);
+		executeSql(sql);
 	}
 
 	@Override
@@ -1042,7 +1048,7 @@ public class PostgreAdapter implements DataAdapter {
 			}
 			
 			if (sql != null) {
-				executeSql(connection, sql);
+				executeSql(sql);
 			}
 		} else {
 			throw new Exception("Object class [" + sourceClassName + "] and object class [" + targetClassName + "] have no relationship definition [" + relationName + "]");
@@ -1104,28 +1110,25 @@ public class PostgreAdapter implements DataAdapter {
 			}
 			
 			if (sql != null) {
-				executeSql(connection, sql);
+				executeSql(sql);
 			}
 		} else {
 			throw new Exception("Object class [" + sourceClassName + "] and object class [" + targetClassName + "] have no relationship definition [" + relationName + "]");
 		}
 	}
 	
-	private void executeSql(DataAdapterConnection connection, String sql) throws Exception {
+	private void executeSql(String sql) throws Exception {
 		List<String> sqls = new ArrayList<String>();
 		sqls.add(sql);
-		executeSql(connection, sqls);
+		executeSql(sqls);
 	}
 	
-	private void executeSql(DataAdapterConnection connection, List<String> sqls) throws Exception {
+	private void executeSql(List<String> sqls) throws Exception {
 		Connection conn = null;
 		Statement st = null;
 		
 		try {
-			conn = DriverManager.getConnection(
-					connection.getUrl(),
-					connection.getUser(),
-					connection.getPassword());
+			conn = openConnection();
 			conn.setAutoCommit(false);
 			st = conn.createStatement();
 			for (String sql : sqls) {
@@ -1158,7 +1161,7 @@ public class PostgreAdapter implements DataAdapter {
 		String fullClassName = (String) classDef.get("className");
 		String pk = DslUtil.getPrimaryKey(classDef);
 		String sql = "select " + attrName + " from " + fullClassName + " where " + pk + " = '" + objectId.replace("'", "''") + "'";
-		JSONArray rows = querySql(connection, sql);
+		JSONArray rows = querySql(sql);
 		if (rows == null || rows.isEmpty()) {
 			throw new IllegalArgumentException("Object " + objectId + " of class " + fullClassName + " does not exist");
 		}

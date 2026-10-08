@@ -6,6 +6,7 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -38,13 +39,21 @@ public class Db2Adapter implements DataAdapter {
 	}
 
 	@Override
+	public Connection openConnection() throws SQLException {
+		return DriverManager.getConnection(
+				connection.getUrl(),
+				connection.getUser(),
+				connection.getPassword());
+	}
+
+	@Override
 	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] DB2 query DSL: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] Converted DB2 sql: " + sql);
-		JSONArray data = executeSql(connection, sql);
+		JSONArray data = executeSql(sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -445,7 +454,7 @@ public class Db2Adapter implements DataAdapter {
 				}
 			}
 			String sql = "select " + select + " from " + className + " fetch first 1 rows only";
-			JSONArray data = executeSql(connection, sql);
+			JSONArray data = executeSql(sql);
 			if (data.size() > 0) {
 				JSONObject datum = data.getJSONObject(0);
 				Set<String> keys = datum.keySet();
@@ -468,7 +477,7 @@ public class Db2Adapter implements DataAdapter {
 		}
 	}
 
-	private JSONArray executeSql(DataAdapterConnection props, String sql) throws Exception {
+	private JSONArray executeSql(String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -476,10 +485,7 @@ public class Db2Adapter implements DataAdapter {
 		ResultSet rs = null;
 		try {
 			JSONArray rows = new JSONArray();
-			conn = DriverManager.getConnection(
-					props.getUrl(),
-					props.getUser(),
-					props.getPassword());
+			conn = openConnection();
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();
@@ -598,7 +604,7 @@ public class Db2Adapter implements DataAdapter {
 		String fullClassName = (String) classDef.get("className");
 		String pk = DslUtil.getPrimaryKey(classDef);
 		String sql = "select " + attrName + " from " + fullClassName + " where " + pk + " = '" + objectId.replace("'", "''") + "'";
-		JSONArray rows = executeSql(connection, sql);
+		JSONArray rows = executeSql(sql);
 		if (rows == null || rows.isEmpty()) {
 			throw new IllegalArgumentException("Object " + objectId + " of class " + fullClassName + " does not exist");
 		}

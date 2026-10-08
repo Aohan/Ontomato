@@ -2,6 +2,7 @@ package io.ontomato.dataengine.dataAdapter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -67,6 +68,21 @@ class DataAdapterRegistryTest {
 		registry.create(businessConfig, null);
 
 		assertEquals(new DataAdapterConnection(), mysql.lastConnection);
+	}
+
+	@Test
+	void createForTestHandsTheCandidateConnectionWithNullRule() {
+		FakeDataAdapterProvider postgresql = new FakeDataAdapterProvider("postgresql", "PostgreSQL", SQL_FIELDS);
+		DataRagConfig dataRagConfig = new DataRagConfig();
+		DataAdapterRegistry registry = new DataAdapterRegistry(List.of(postgresql), dataRagConfig);
+		DataAdapterConnection candidate = new DataAdapterConnection();
+		candidate.setUrl("jdbc:postgresql://candidate");
+
+		registry.createForTest("postgresql", candidate);
+
+		assertSame(candidate, postgresql.lastConnection);
+		assertSame(dataRagConfig, postgresql.lastDataRagConfig);
+		assertNull(postgresql.lastJsonRule);
 	}
 
 	@Test

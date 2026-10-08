@@ -1,5 +1,7 @@
 package io.ontomato.dataengine.dataAdapter;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -10,6 +12,20 @@ import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 
 public interface DataAdapter {
+
+	/**
+	 * Open a new JDBC connection from this adapter's own connection.
+	 * Driver choice and URL rewriting stay in each adapter module.
+	 */
+	Connection openConnection() throws SQLException;
+
+	/**
+	 * Test this adapter's connection without touching any saved configuration.
+	 * DuckDB overrides it to reject a missing database file before connecting.
+	 */
+	default JSONObject testConnection() throws Exception {
+		return new DataAdapterConnectionTester().test(this);
+	}
 
 	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception;
 	

@@ -31,12 +31,13 @@ When the environment variable `ONTOMATO_URL` is set, it takes precedence over `e
 
 1. Fill in `application.yml`.
 2. `node ontomato.mjs list-datasources` to see which database types this deployment supports and which connection fields each type needs.
-3. `node ontomato.mjs use-datasource <type> @payload.json`
-4. Inspect the business tables and rows with your own database tools. This skill does not query that database.
-5. Write the ontomap from that structure.
-6. `node ontomato.mjs set-ontomap @ontomap.json`
-7. `node ontomato.mjs get-ontomap` and compare it with the file you wrote.
-8. `node ontomato.mjs ask "..."` with a few simple questions that touch the main tables and relationships. If an answer is missing or wrong, go back and fill in `desc` and relationships, then set the ontomap again.
+3. `node ontomato.mjs test-datasource <type> @payload.json`. Fix the payload until it succeeds; nothing is saved yet.
+4. `node ontomato.mjs use-datasource <type> @payload.json`
+5. Inspect the business tables and rows with your own database tools. `test-datasource` only lists table and view names; this skill does not query columns or rows.
+6. Write the ontomap from that structure.
+7. `node ontomato.mjs set-ontomap @ontomap.json`
+8. `node ontomato.mjs get-ontomap` and compare it with the file you wrote.
+9. `node ontomato.mjs ask "..."` with a few simple questions that touch the main tables and relationships. If an answer is missing or wrong, go back and fill in `desc` and relationships, then set the ontomap again.
 
 ## Commands
 
@@ -44,6 +45,8 @@ Run `node ontomato.mjs <command>` from this directory, or pass the script path. 
 
 ```
 node ontomato.mjs list-datasources
+node ontomato.mjs test-datasource <type> '<json>'
+node ontomato.mjs test-datasource <type> @payload.json
 node ontomato.mjs use-datasource <type> '<json>'
 node ontomato.mjs use-datasource <type> @payload.json
 node ontomato.mjs get-ontomap
@@ -62,7 +65,8 @@ A JSON body of `{success, message, data}` with `success: false` is printed and t
 ## Connect a datasource
 
 1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`. Prints `currentType` (the adapter this domain uses now) and `adapters`, the adapters installed in this deployment. Each entry has `type`, `label`, `sql`, `fields` (the connection fields the type needs) and `examples` (a sample value per field); saved connections are not shown.
-2. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`. The script merges `type` into the JSON and posts it. Send the fields listed in that type's `fields`; usually `url`, `user`, `password`.
+2. `node ontomato.mjs test-datasource <type> '<json>'` — `POST /api/data-query/businessConfig/testDataAdapter`. Same arguments and body as `use-datasource`, but nothing is saved and the domain's datasource does not change. On success it prints `elapsedMs`, `databaseProduct`, `databaseVersion`, `driverName`, `driverVersion`, `catalog`, `schema` and `tables` (`name` and `type`, `TABLE` or `VIEW`, of the schema the connection landed in). Those names are what class `name` must resolve to, because adapters paste the class name unquoted and without a schema prefix. A connection that lands in no schema (for example a PostgreSQL `currentSchema` that does not exist) fails, as does a DuckDB file that does not exist; the test does not create the file. The connection test gives up after 15 seconds.
+3. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`. The script merges `type` into the JSON and posts it. Send the fields listed in that type's `fields`; usually `url`, `user`, `password`.
 
 Which types are actually available depends on the deployment. `list-datasources` is authoritative.
 
