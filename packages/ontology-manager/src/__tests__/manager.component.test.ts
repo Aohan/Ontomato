@@ -766,7 +766,7 @@ describe("OntologyManager root component with real pages", () => {
       classDesc: "Pump desc",
     });
     if (view === "/objects") {
-      expect(root().textContent).toContain("Primary key attribute: pump_no");
+      expect(root().textContent).toContain("Primary key property: pump_no");
     } else {
       const panel = root().querySelector(".attr-item")!;
       expect(panel.textContent).toContain("pump_no");
@@ -782,7 +782,7 @@ describe("OntologyManager root component with real pages", () => {
       document.body.getAttribute("style"),
       document.body.children.length,
     ];
-    clickButton("New Attribute");
+    clickButton("New Property");
     await settle();
     const dialog = openDialog("Create");
     expect(dialog.closest(".ontology-manager > [id*='popper-container']")).not.toBeNull();
