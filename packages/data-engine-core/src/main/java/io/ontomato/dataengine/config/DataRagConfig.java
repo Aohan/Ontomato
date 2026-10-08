@@ -14,9 +14,6 @@ public class DataRagConfig {
 
 	private String nodeId;
 
-    private String m3rootpath;
-
-    private String ragchatrootpath;
     private String m3DataUrl;
     private String m3SchemaUrl;
 
@@ -112,15 +109,7 @@ public class DataRagConfig {
 		this.questionSpliterTries = questionSpliterTries;
 	}
 
-	public String getRagchatrootpath() {
-        return ragchatrootpath;
-    }
-
-    public void setRagchatrootpath(String ragchatrootpath) {
-        this.ragchatrootpath = ragchatrootpath;
-    }
-
-    public Long getDslCookerTimeout() {
+	public Long getDslCookerTimeout() {
 		return dslCookerTimeout;
 	}
 
@@ -169,14 +158,6 @@ public class DataRagConfig {
 
     public void setPythonpath(String pythonpath) {
         this.pythonpath = pythonpath;
-    }
-
-    public String getM3rootpath() {
-        return m3rootpath;
-    }
-
-    public void setM3rootpath(String m3rootpath) {
-        this.m3rootpath = m3rootpath;
     }
 
 

@@ -15,7 +15,6 @@
     "./features/analysis/stores/analysis": "./src/features/analysis/stores/analysis.ts",
     "./features/dashboard/components/utils/echartsGenerator": "./src/features/dashboard/components/utils/echartsGenerator.ts",
     "./composables/useTheme": "./src/composables/useTheme.ts",
-    "./features/admin/system-monitor": "./src/features/admin/system-monitor.ts",
     "./features/admin/components/platform-operations/SystemMonitor.vue": "./src/features/admin/components/platform-operations/SystemMonitor.vue",
     "./features/chat": "./src/features/chat/index.ts",
     "./features/analysis": "./src/features/analysis/index.ts",

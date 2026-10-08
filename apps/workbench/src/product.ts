@@ -37,8 +37,6 @@ export const ossProduct: WorkbenchProduct = {
   serviceHealthNames: {
     backendGroup: "Backend",
     backendDefault: "backend",
-    frontendGroup: "Frontend",
-    frontendDefault: "frontend",
   },
   groupColumnHeader: "group",
   primaryDimensionHeaders: {

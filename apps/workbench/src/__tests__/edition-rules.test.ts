@@ -274,7 +274,7 @@ describe("open-source edition rules", () => {
     expect(new Set(references)).toEqual(new Set([`${"diagnostics"}/${"query_logic.md"}`]));
   });
 
-  it("C5: reports service health with this edition's groups and M3 rules", async () => {
+  it("C5: reports service health with this edition's backend group and ignores M3 and frontend entries", async () => {
     const tool = createServiceHealthTool({ domainId: "default", token: "tk" });
     mocks.upstream["/maintenance/getserviceinfo"] = {
       m3: { services: [{ name: "m3-parser", status: "stopped" }, { name: "m3-core", status: "running" }] },
@@ -286,16 +286,13 @@ describe("open-source edition rules", () => {
       [
         "# Service running status",
         "",
-        "1 service(s) are not running (2 services in total):",
+        "1 service(s) are not running (1 services in total):",
         "- [Backend] backend — Stopped",
         "",
         "## Service Details",
         "",
         "### Backend",
         "- backend: Stopped ⚠️",
-        "",
-        "### Frontend",
-        "- frontend: Running",
       ].join("\n")
     );
 
