@@ -3,6 +3,7 @@ import type {
   BackendModelConfig,
   ModelRole,
 } from "@ontomato/contracts/model-settings";
+import type { DataAdapterField } from "@ontomato/contracts/data-adapters";
 
 /**
  * A model entry edited on the model configuration page: based on the entry read by getModelSettings, with fields that
@@ -36,21 +37,8 @@ export interface EmbeddingModelConfig {
   customHeaders?: Record<string, string> | null;
 }
 
-/** Fields a data adapter connection can have; which ones each adapter needs comes from fields in the backend list. */
-export type DataAdapterField = "url" | "user" | "password";
-
 /** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
 export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
-
-/** A data adapter installed in this edition (one item of GET /businessConfig/dataAdapters). */
-export interface DataAdapterInfo {
-  type: string;
-  label: string;
-  sql: boolean;
-  fields: DataAdapterField[];
-  /** Input examples (only for fields that have one), declared by the adapter module. */
-  examples: Partial<Record<DataAdapterField, string>>;
-}
 
 /** General parameters, language and data adapter edited on the system config page. */
 export interface SystemSettings {

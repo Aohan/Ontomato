@@ -1,3 +1,4 @@
+import type { DataAdaptersData } from "@ontomato/contracts/data-adapters";
 import { ontologyText, type ManagerMessages } from "./i18n";
 
 export type ManagerCredential =
@@ -415,14 +416,9 @@ export function createManagerClient(
     })) as SmartAsset[];
   }
 
-  /** Visual modeling reads data.dataAdapter (the current adapter type). */
-  function getBusinessConfig() {
-    return send("/businessConfig/getConfig", { method: "GET" });
-  }
-
-  /** Data adapters installed in this edition; visual modeling uses the current type's sql flag to decide whether to show join fields. */
-  function listDataAdapters() {
-    return send("/businessConfig/dataAdapters", { method: "GET" });
+  /** The current domain's adapter type and this edition's installed adapters; visual modeling uses the current type's sql flag to decide whether to show join fields. */
+  async function listDataAdapters(): Promise<DataAdaptersData> {
+    return (await send("/businessConfig/dataAdapters", { method: "GET" })).data;
   }
 
   /** Business knowledge list: the data engine returns an object keyed by knowledgeID; older entries may have no tags. */
@@ -471,7 +467,6 @@ export function createManagerClient(
     deleteOntologyRelation,
     loadObjectData,
     loadSmartAssets,
-    getBusinessConfig,
     listDataAdapters,
     listKnowledge,
     saveKnowledge,

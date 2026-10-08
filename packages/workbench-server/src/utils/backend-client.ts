@@ -111,7 +111,7 @@ function createAbortBridge(signal: AbortSignal | undefined, timeoutMs: number) {
   };
 }
 
-function buildBackendHeaders(
+export function buildBackendHeaders(
   token?: string,
   userId?: string,
   locale?: string,

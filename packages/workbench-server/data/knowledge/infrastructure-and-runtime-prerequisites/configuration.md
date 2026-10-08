@@ -15,8 +15,8 @@
 
 ## On-Site Evidence
 
-- Use `view_app_config` to read the query backend's current effective configuration; `data.config` is the masked current content, and `data.desc` is the backend-provided modification and effect description. Read the minimal configuration segment per goal.
-- Sensitive values are masked, so whether credentials are still valid cannot be judged from them; combine with specific call errors or have the user test at the authorized management entry.
+- Use `view_app_config` to read the query backend's current effective configuration; `data.config` lists the current non-secret fields, and `data.desc` is the backend-provided modification and effect description. Read the minimal configuration segment per goal.
+- Service addresses, keys, passwords and headers are not returned, only whether a connection is configured, so whether credentials are still valid cannot be judged from it; combine with specific call errors or have the user test at the authorized management entry.
 - Configuration read failure, not configured, and configuration read but call failure are different states. Record the tool return, related service status, and the specific stage where the error occurred; do not substitute fixed URL patterns for on-site verification.
 
 ## Deviation Propagation and Verification

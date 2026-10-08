@@ -1,0 +1,28 @@
+{
+  "server": { "port": 18087, "max-http-post-size": null },
+  "spring": { "servlet": { "multipart": { "max-file-size": null, "max-request-size": null } } },
+  "langchain4j": {
+    "open-ai": {
+      "models": [],
+      "agents": {
+        "query": { "model": null },
+        "coding": { "model": null, "skilldir": null },
+        "general": { "model": null },
+        "diagnosis": { "model": null },
+        "knowledgeGovernance": { "model": null }
+      }
+    }
+  },
+  "ontomato": {
+    "data-engine": {
+      "dataAdapter": "postgresql",
+      "knowledgeMaxResult": 0,
+      "toolAndPythonRetry": 0,
+      "dslCookerTries": null,
+      "dslCookerTimeout": null,
+      "questionSpliterTries": null,
+      "questionSpliterTimeout": null
+    }
+  },
+  "subQueryCacheDir": "/srv/datarag/conf/subQueryCache"
+}

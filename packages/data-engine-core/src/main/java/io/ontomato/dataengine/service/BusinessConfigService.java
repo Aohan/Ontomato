@@ -10,6 +10,9 @@ public interface BusinessConfigService {
 	public BusinessConfig get(String domainId);
 	
 	public JSONObject getRuntimeWholeConfig(String domainId);
+
+	/** The diagnosis view of the running configuration: named non-secret fields only, never keys, passwords or raw headers. */
+	public JSONObject getDiagnosticConfig(String domainId);
 	
 	public String getWholeConfigDesc();
 	

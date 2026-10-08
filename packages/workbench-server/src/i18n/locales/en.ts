@@ -212,6 +212,7 @@ export const en = {
   "api.saveConfigFailed": "Failed to save configuration",
   "api.modelTestFailed": "Model test failed",
   "model.roleNotConfigured": "No model configured for role '{role}', please configure it in model settings",
+  "model.settingsReadRefused": "The data engine refused the model settings read (403): the workbench server's model settings service credential does not match the data engine's, or the current account has no business domain. This is a deployment configuration problem; signing in again does not fix it.",
   "model.role.query": "Query",
   "model.role.coding": "Coding and Computing",
   "model.role.general": "General",

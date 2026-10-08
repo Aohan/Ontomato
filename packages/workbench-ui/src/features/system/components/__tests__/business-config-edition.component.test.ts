@@ -26,7 +26,9 @@ beforeEach(() => {
     sent.push({ url, body: init.body === undefined ? undefined : JSON.parse(init.body) });
     const data = url.endsWith("/businessConfig/getConfig")
       ? { agents: { coding: { model: null } }, lang: storedLang, dataAdapter: "", dataAdapterConnections: {} }
-      : [];
+      : url.endsWith("/businessConfig/dataAdapters")
+        ? { currentType: "", adapters: [] }
+        : [];
     return new Response(JSON.stringify({ success: true, data }), {
       headers: { "Content-Type": "application/json" },
     });

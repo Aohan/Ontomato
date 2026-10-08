@@ -2,7 +2,8 @@
 import { computed } from "vue";
 import { Link2 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import type { DataAdapterConnection, DataAdapterInfo, SystemSettings } from "../../types";
+import type { DataAdapterInfo } from "@ontomato/contracts/data-adapters";
+import type { DataAdapterConnection, SystemSettings } from "../../types";
 import type { BusinessConfigAdapterDisplay } from "../../business-config";
 
 const { t } = useI18n();

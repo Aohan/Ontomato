@@ -24,7 +24,6 @@ const {
   createOntologyRelation,
   deleteOntologyObject,
   deleteOntologyRelation,
-  getBusinessConfig,
   getMetas,
   listDataAdapters,
   updateOntologyAttribute,
@@ -154,11 +153,8 @@ const selectedEdge = ref<RelationDef | null>(null);
 
 async function loadAdapterConfig() {
   try {
-    const [config, adapters] = await Promise.all([getBusinessConfig(), listDataAdapters()]);
-    const current: string = config.data.dataAdapter;
-    showJoinFields.value = (adapters.data as { type: string; sql: boolean }[]).some(
-      ({ type, sql }) => type === current && sql
-    );
+    const { currentType, adapters } = await listDataAdapters();
+    showJoinFields.value = adapters.some(({ type, sql }) => type === currentType && sql);
   } catch {
     showJoinFields.value = false;
   }
