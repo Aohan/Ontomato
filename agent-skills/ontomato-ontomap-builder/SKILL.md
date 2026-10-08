@@ -49,6 +49,7 @@ node ontomato.mjs use-datasource <type> @payload.json
 node ontomato.mjs get-ontomap
 node ontomato.mjs set-ontomap '<json>'
 node ontomato.mjs set-ontomap @ontomap.json
+node ontomato.mjs upload-vector @vector.json
 node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang en "How many people are there?"
 ```
@@ -56,6 +57,23 @@ node ontomato.mjs ask --lang en "How many people are there?"
 `type` is one of the types `list-datasources` prints.
 
 `ask` sends `Accept-Language`. The default is `en`.
+
+`upload-vector` uploads one text (for example a book paragraph) as a vector value: `POST /api/data-query/vectorResource/upload`. It computes the embedding, writes it into the vector store and attaches the file to the object's vector attribute. The object must already exist in the target database, with its vector attribute imported as `[]`. The payload is:
+
+```json
+{
+  "className": "paragraph",
+  "attrName": "content",
+  "objectId": "p1",
+  "text": "The paragraph text ...",
+  "suffix": "txt"
+}
+```
+
+- `className` is the class `name`, `attrName` is the `type: vector` attribute name, `objectId` is the object's primary-key value.
+- `text` is the full paragraph text: it is the input to the embedding and is also stored as the downloadable file.
+- `suffix` is the stored file extension, default `txt`.
+- The upload is append-only: uploading again for the same object adds another vector file rather than replacing.
 
 A JSON body of `{success, message, data}` with `success: false` is printed and the process exits non-zero. A non-2xx response prints the HTTP status and the response body, then exits non-zero.
 
