@@ -95,7 +95,19 @@ const operators = [
   { label: t("dataBrowser.notnull"), value: "notnull" },
 ];
 
-const availableColumns = computed(() => currentClassAttrs.value);
+const arrayAttrNames = computed(() => {
+  const names = new Set<string>();
+  for (const row of dataList.value) {
+    for (const key of Object.keys(row)) {
+      if (Array.isArray(row[key])) names.add(key);
+    }
+  }
+  return names;
+});
+
+const availableColumns = computed(() =>
+  currentClassAttrs.value.filter((attr) => !arrayAttrNames.value.has(attr.name))
+);
 
 const filteredData = computed(() => {
   let data = dataList.value;
@@ -152,7 +164,11 @@ const visibleColumns = computed(() => {
 });
 
 const visibleAttrs = computed(() =>
-  currentClassAttrs.value.filter((attr) => columnVisibility.value[attr.name] !== false)
+  currentClassAttrs.value.filter(
+    (attr) =>
+      columnVisibility.value[attr.name] !== false &&
+      !arrayAttrNames.value.has(attr.name)
+  )
 );
 
 function openFilterDrawer() {

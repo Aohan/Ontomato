@@ -208,7 +208,9 @@ async function loadNodeInfo(node: InstanceGraphNode) {
     const attrs = Array.isArray(classDef.attrs) ? (classDef.attrs as Array<Record<string, unknown>>) : [];
     const row = (info.data ?? {}) as Record<string, unknown>;
     selectedAttributes.value = attrs
-      .filter((attr) => typeof attr.name === "string")
+      .filter(
+        (attr) => typeof attr.name === "string" && !Array.isArray(row[attr.name as string])
+      )
       .map((attr) => ({
         name: attr.name as string,
         showName: (attr.showName as string) || (attr.name as string),
