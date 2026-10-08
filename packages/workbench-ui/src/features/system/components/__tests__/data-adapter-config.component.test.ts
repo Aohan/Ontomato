@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ElementPlus from "element-plus";
 import BusinessConfig from "../BusinessConfig.vue";
 import DataAdapterConfigCard from "../business-config/DataAdapterConfigCard.vue";
-import type { DataAdapterInfo } from "@ontomato/contracts/data-adapters";
+import type { DataAdapterInfo, DataAdapterTestResult } from "@ontomato/contracts/data-adapters";
 import type { DataAdapterConnection } from "../../types";
 import { adminApi } from "../../../admin";
 import { workbenchI18n } from "../../../../i18n";
@@ -84,6 +84,7 @@ const backend = vi.hoisted(() => ({
   dataAdapter: "",
   connections: {} as Record<string, unknown>,
   used: [] as unknown[],
+  tested: [] as unknown[],
 }));
 
 vi.mock("../../../admin", () => ({
@@ -107,6 +108,10 @@ vi.mock("../../../admin", () => ({
       backend.used.push(JSON.parse(JSON.stringify(payload)));
       return { success: true };
     }),
+    testDataAdapter: vi.fn(async (payload: unknown) => {
+      backend.tested.push(JSON.parse(JSON.stringify(payload)));
+      return { success: true, data: postgresReport };
+    }),
     getSystemModelConfig: vi.fn(async () => ({ success: false, message: "not under test" })),
   },
 }));
@@ -119,6 +124,7 @@ const wrappers: ReturnType<typeof mount>[] = [];
 afterEach(() => wrappers.splice(0).forEach((wrapper) => wrapper.unmount()));
 beforeEach(() => {
   backend.used = [];
+  backend.tested = [];
   backend.connections = {};
 });
 
@@ -225,5 +231,159 @@ describe("the data adapter card renders from the backend list", () => {
     expect(backend.used).toEqual([
       { type: "mysql", url: "jdbc:mysql://db/app", user: "root", password: "pw" },
     ]);
+  });
+});
+
+/** A successful POST /businessConfig/testDataAdapter `data`; catalog is null as some drivers report. */
+const postgresReport: DataAdapterTestResult = {
+  elapsedMs: 123,
+  databaseProduct: "PostgreSQL",
+  databaseVersion: "16.4",
+  driverName: "PostgreSQL JDBC Driver",
+  driverVersion: "42.7.4",
+  catalog: null,
+  schema: "public",
+  tables: [
+    { name: "orders", type: "TABLE" },
+    { name: "v_sales", type: "VIEW" },
+  ],
+};
+
+const testButton = (card: Card) =>
+  card.findAll("button").find((button) => button.text() === t("common.testConnection"));
+
+async function runTest(card: Card) {
+  await testButton(card)!.trigger("click");
+  await flushPromises();
+}
+
+const resultText = (card: Card) => card.find(".adapter-test-result");
+
+async function selectAdapter(card: Card, label: string) {
+  await card
+    .findAll(".el-radio")
+    .find((radio) => radio.text() === label)!
+    .find("input")
+    .setValue();
+  await flushPromises();
+}
+
+describe("testing the data adapter connection", () => {
+  it("a type without connection fields such as M3 offers no test button; a type with fields does", async () => {
+    const card = await mountCard(enterpriseAdapters, "m3");
+
+    expect(testButton(card)).toBeUndefined();
+    await selectAdapter(card, "DuckDB");
+    expect(testButton(card)).toBeDefined();
+  });
+
+  it("tests the current form values of only the selected type's fields, without saving", async () => {
+    const card = await mountCard(enterpriseAdapters, "mysql", {
+      mysql: { url: "jdbc:mysql://db/app", user: "root", password: "pw" },
+      duckdb: { url: "jdbc:duckdb:/data/old.duckdb" },
+    });
+    await selectAdapter(card, "DuckDB");
+    await card.find("input.el-input__inner").setValue("jdbc:duckdb:/data/new.duckdb");
+    await runTest(card);
+
+    expect(backend.tested).toEqual([{ type: "duckdb", url: "jdbc:duckdb:/data/new.duckdb" }]);
+    expect(backend.used).toEqual([]);
+  });
+
+  it("a successful test shows the server, driver, non-null catalog/schema and the table list with its count", async () => {
+    const card = await mountCard(openSourceAdapters, "postgresql", {
+      postgresql: { url: "jdbc:postgresql://db/app", user: "pg", password: "secret" },
+    });
+    await runTest(card);
+
+    const labels = card.findAll(".el-descriptions__label").map((label) => label.text());
+    expect(labels).toEqual([
+      t("common.duration"),
+      t("admin.databaseProduct"),
+      t("admin.databaseDriver"),
+      t("admin.databaseSchema"),
+    ]);
+    const values = card.findAll(".el-descriptions__content").map((value) => value.text());
+    expect(values).toEqual([
+      "123 ms",
+      "PostgreSQL 16.4",
+      "PostgreSQL JDBC Driver 42.7.4",
+      "public",
+    ]);
+    expect(resultText(card).text()).toContain(t("admin.dataAdapterTables", { n: 2 }));
+    expect(
+      card
+        .findAll(".adapter-table-list li")
+        .map((row) => [
+          row.find(".adapter-table-name").text(),
+          row.find(".adapter-table-type").text(),
+        ])
+    ).toEqual([
+      ["orders", "TABLE"],
+      ["v_sales", "VIEW"],
+    ]);
+  });
+
+  it("a successful test with no tables says so instead of an empty list", async () => {
+    vi.mocked(adminApi.testDataAdapter).mockResolvedValueOnce({
+      success: true,
+      data: { ...postgresReport, tables: [] },
+    });
+    const card = await mountCard(openSourceAdapters, "postgresql", { postgresql: {} });
+    await runTest(card);
+
+    expect(card.find(".adapter-table-list").exists()).toBe(false);
+    expect(card.find(".adapter-table-empty").text()).toBe(t("admin.dataAdapterNoTables"));
+  });
+
+  it("a failed test shows the backend message verbatim, line breaks included", async () => {
+    const message =
+      'FATAL: password authentication failed for user "pg" (SQLState 28P01)\nCaused by: java.io.EOFException';
+    vi.mocked(adminApi.testDataAdapter).mockRejectedValueOnce(new Error(message));
+    const card = await mountCard(openSourceAdapters, "postgresql", { postgresql: {} });
+    await runTest(card);
+
+    expect(card.find("pre.adapter-test-message").element.textContent).toBe(message);
+    expect(card.find(".adapter-table-list").exists()).toBe(false);
+  });
+
+  it("switching the type clears the last result", async () => {
+    const card = await mountCard(enterpriseAdapters, "postgresql", { postgresql: {} });
+    await runTest(card);
+    expect(resultText(card).exists()).toBe(true);
+
+    await selectAdapter(card, "MySQL");
+    expect(resultText(card).exists()).toBe(false);
+  });
+
+  it("editing a connection field clears the last result", async () => {
+    const card = await mountCard(openSourceAdapters, "postgresql", {
+      postgresql: { url: "jdbc:postgresql://db/app", user: "pg", password: "secret" },
+    });
+    await runTest(card);
+    expect(resultText(card).exists()).toBe(true);
+
+    await card.findAll("input.el-input__inner")[1].setValue("other");
+    await flushPromises();
+    expect(resultText(card).exists()).toBe(false);
+  });
+
+  it("a test answering after a field was edited shows no result for the edited values", async () => {
+    let answer!: (value: unknown) => void;
+    vi.mocked(adminApi.testDataAdapter).mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      })
+    );
+    const card = await mountCard(openSourceAdapters, "postgresql", {
+      postgresql: { url: "jdbc:postgresql://db/app" },
+    });
+    await runTest(card);
+    await card.find("input.el-input__inner").setValue("jdbc:postgresql://db/other");
+    await flushPromises();
+    answer({ success: true, data: postgresReport });
+    await flushPromises();
+
+    expect(resultText(card).exists()).toBe(false);
   });
 });
