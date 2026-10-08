@@ -26,7 +26,7 @@ interface ClassDef {
 
 export interface NewAttributeInput {
   className: string;
-  attrName: string;
+  name: string;
   showName: string;
   attrDesc: string;
   type: string;
@@ -96,7 +96,7 @@ function submit() {
 
   emit("create", {
     className: props.owner.className,
-    attrName,
+    name: attrName,
     showName: form.showName.trim(),
     attrDesc: form.attrDesc.trim(),
     type: form.type,

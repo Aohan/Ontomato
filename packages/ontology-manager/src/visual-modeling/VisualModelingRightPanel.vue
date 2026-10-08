@@ -9,7 +9,6 @@ interface AttrDef {
   showName: string;
   attrDesc: string;
   enable: boolean;
-  bizzkey: string;
   bizzkeyBool: boolean;
   primaryKey: boolean;
 }
@@ -38,6 +37,7 @@ const emit = defineEmits<{
   saveClassDesc: [node: ClassDef];
   attrEnableChange: [node: ClassDef, attr: AttrDef];
   attrBizKeyChange: [node: ClassDef, attr: AttrDef];
+  attrPrimaryKeyChange: [node: ClassDef, attr: AttrDef];
   attrShowNameFocus: [node: ClassDef, attr: AttrDef];
   attrShowNameBlur: [node: ClassDef, attr: AttrDef];
   saveAttrDesc: [node: ClassDef, attr: AttrDef];
@@ -138,6 +138,15 @@ const { t } = useSharedText();
                 size="small"
                 @update:model-value="emit('updateAttrField', prop, 'bizzkeyBool', Boolean($event))"
                 @change="emit('attrBizKeyChange', selectedNode, prop)"
+              />
+            </div>
+            <div class="switch-item">
+              <span class="switch-label">{{ t("hotData.primaryKey") }}</span>
+              <el-switch
+                :model-value="prop.primaryKey"
+                size="small"
+                :disabled="prop.primaryKey"
+                @change="emit('attrPrimaryKeyChange', selectedNode, prop)"
               />
             </div>
           </div>
@@ -365,9 +374,9 @@ code {
 
 .attr-switches {
   display: flex;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-  padding: 7px var(--spacing-sm);
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
   margin-bottom: var(--spacing-md);
   border: 1px solid var(--el-border-color-light);
   border-radius: var(--radius-sm);
@@ -377,6 +386,7 @@ code {
 .switch-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--spacing-xs);
 }
 

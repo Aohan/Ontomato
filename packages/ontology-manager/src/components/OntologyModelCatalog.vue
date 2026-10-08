@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { ElButton, ElEmpty, ElInput, vLoading } from "element-plus";
+import { ElButton, ElEmpty, ElInput, ElOption, ElSelect, vLoading } from "element-plus";
 import { ChevronRight, Plus, Search } from "lucide-vue-next";
 import type { OntologyAttribute, OntologyObject, OntologyRelation } from "../api";
 import OntologyAttributeCreateDialog from "./OntologyAttributeCreateDialog.vue";
@@ -21,6 +21,7 @@ const emit = defineEmits<{
 }>();
 
 const query = ref("");
+const ownerFilter = ref("");
 const loading = ref(false);
 const objects = ref<OntologyObject[]>([]);
 const relations = ref<OntologyRelation[]>([]);
@@ -69,6 +70,7 @@ const attributeRows = computed(() =>
   objects.value
     .flatMap((object) => object.attrs.map((attribute) => ({ object, attribute })))
     .filter(({ object, attribute }) => {
+      if (ownerFilter.value && object.className !== ownerFilter.value) return false;
       const text =
         `${attribute.showName} ${attribute.name} ${attribute.type} ${object.showName}`.toLowerCase();
       return !normalizedQuery.value || text.includes(normalizedQuery.value);
@@ -156,6 +158,20 @@ onMounted(() => {
 
     <div class="catalog-toolbar">
       <el-input v-model="query" :prefix-icon="Search" :placeholder="meta.search" clearable />
+      <el-select
+        v-if="resource === 'attributes'"
+        v-model="ownerFilter"
+        class="owner-filter"
+        :placeholder="ot('allObjectTypes')"
+        clearable
+      >
+        <el-option
+          v-for="object in objects"
+          :key="object.className"
+          :label="`${object.showName} (${object.className})`"
+          :value="object.className"
+        />
+      </el-select>
       <span class="resource-count">
         {{
           resource === "objects"
@@ -332,6 +348,9 @@ p {
 .catalog-toolbar :deep(.el-input) {
   width: 260px;
 }
+.catalog-toolbar .owner-filter {
+  width: 220px;
+}
 .resource-count {
   color: var(--el-text-color-secondary);
   font-size: var(--text-sm);
@@ -470,7 +489,8 @@ p {
     flex-direction: column;
   }
   .catalog-titlebar :deep(.el-button),
-  .catalog-toolbar :deep(.el-input) {
+  .catalog-toolbar :deep(.el-input),
+  .catalog-toolbar .owner-filter {
     width: 100%;
   }
   .catalog-toolbar {
