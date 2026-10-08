@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage } from "element-plus";
 import {
   RefreshCw,
   Cpu,
@@ -14,21 +14,12 @@ import {
 } from "lucide-vue-next";
 import { adminApi } from "../../api";
 import { useI18n } from "vue-i18n";
-import {
-  formatMemoryGB,
-  formatUptime,
-  type SystemMonitorSlots,
-  type SystemStatus,
-} from "../../system-monitor";
-
-// Service panel slot between the resource overview and the backend card (provided by the app's composed page); service actions go back through handleAction for confirmation and execution here.
-defineSlots<SystemMonitorSlots>();
+import { formatMemoryGB, formatUptime, type SystemStatus } from "../../system-monitor";
 
 const { t } = useI18n();
 
 const status = ref<SystemStatus | null>(null);
 const loading = ref(false);
-const actionLoading = ref<Record<string, boolean>>({});
 const refreshInterval = ref<number | null>(null);
 const lastRefresh = ref("");
 
@@ -45,48 +36,6 @@ async function fetchStatus() {
   }
 }
 
-async function executeAction(serviceName: string, action: string) {
-  const key = `${serviceName}:${action}`;
-  actionLoading.value[key] = true;
-  try {
-    const res = await adminApi.runServiceAction({
-      service_name: serviceName,
-      action,
-    });
-    const actionLabel = getActionLabel(action);
-    if (res.success) {
-      ElMessage.success(res.message || t("hotData.actionSuccess", { serviceName, actionLabel }));
-    } else {
-      ElMessage.error(res.message || t("hotData.actionFailed", { serviceName, actionLabel }));
-    }
-    await fetchStatus();
-  } catch (err: any) {
-    ElMessage.error(err?.message || t("admin.executeFailed"));
-  } finally {
-    actionLoading.value[key] = false;
-  }
-}
-
-function getActionLabel(action: string) {
-  const map: Record<string, string> = {
-    stop: t("common.stop"),
-    start: t("common.start"),
-    restart: t("admin.restart"),
-  };
-  return map[action] || action;
-}
-
-function handleAction(serviceName: string, action: string) {
-  const actionLabel = getActionLabel(action);
-  ElMessageBox.confirm(
-    t("admin.serviceActionConfirm", { serviceName, actionLabel }),
-    t("admin.actionConfirmTitle", { actionLabel }),
-    { confirmButtonText: actionLabel, cancelButtonText: t("common.cancel"), type: "warning" }
-  )
-    .then(() => executeAction(serviceName, action))
-    .catch(() => {});
-}
-
 const cpuColor = computed(() => {
   if (!status.value) return "";
   const u = status.value.server.cpu.userate;
@@ -101,10 +50,6 @@ const memColor = computed(() => {
   if (u >= 90) return "#F56C6C";
   if (u >= 70) return "#E6A23C";
   return "#67C23A";
-});
-
-const frontendActions = computed(() => {
-  return status.value?.frontend?.docker?.actions || [];
 });
 
 onMounted(() => {
@@ -181,54 +126,12 @@ onUnmounted(() => {
         </el-col>
       </el-row>
 
-      <!-- Card skeleton -->
-      <div v-for="i in 2" :key="'card-' + i" class="skeleton-card">
-        <div class="skeleton-card-header">
-          <el-skeleton style="width: 100px" animated>
-            <template #template>
-              <el-skeleton-item variant="text" style="width: 80px; height: 18px" />
-            </template>
-          </el-skeleton>
-        </div>
-        <div class="skeleton-card-body">
-          <el-skeleton :rows="3" animated />
-        </div>
-      </div>
-
-      <!-- Table skeleton -->
-      <div class="skeleton-card">
-        <div class="skeleton-card-header">
-          <el-skeleton style="width: 120px" animated>
-            <template #template>
-              <el-skeleton-item variant="text" style="width: 100px; height: 18px" />
-            </template>
-          </el-skeleton>
-        </div>
-        <div class="skeleton-card-body">
-          <el-skeleton :rows="5" animated />
-        </div>
-      </div>
-
       <!-- backend single-column skeleton -->
       <div class="skeleton-card">
         <div class="skeleton-card-header">
           <el-skeleton style="width: 100px" animated>
             <template #template>
               <el-skeleton-item variant="text" style="width: 80px; height: 18px" />
-            </template>
-          </el-skeleton>
-        </div>
-        <div class="skeleton-card-body">
-          <el-skeleton :rows="4" animated />
-        </div>
-      </div>
-
-      <!-- Bottom table skeleton -->
-      <div class="skeleton-card">
-        <div class="skeleton-card-header">
-          <el-skeleton style="width: 120px" animated>
-            <template #template>
-              <el-skeleton-item variant="text" style="width: 100px; height: 18px" />
             </template>
           </el-skeleton>
         </div>
@@ -262,6 +165,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Resource overview -->
+      <p v-if="status" class="resource-scope">{{ t("admin.monitorResourceScope") }}</p>
       <el-row v-if="status" :gutter="16" class="resource-overview">
         <el-col :span="8">
           <div class="resource-card cpu-card">
@@ -340,14 +244,6 @@ onUnmounted(() => {
         </el-col>
       </el-row>
 
-      <slot
-        name="service-panels"
-        :status="status"
-        :action-loading="actionLoading"
-        :handle-action="handleAction"
-        :get-action-label="getActionLabel"
-      />
-
       <!-- backend services -->
       <el-card v-if="status" shadow="never" class="section-card">
         <template #header>
@@ -356,18 +252,6 @@ onUnmounted(() => {
               <el-tag type="success" effect="dark" round size="small">backend</el-tag>
               {{ status.backend.service.name }}
             </span>
-            <div v-if="status.backend.service.actions?.length" class="docker-global-actions">
-              <el-button
-                v-for="action in status.backend.service.actions"
-                :key="action"
-                size="small"
-                :type="action === 'stop' ? 'danger' : action === 'restart' ? 'warning' : 'success'"
-                :loading="actionLoading[`${status.backend.service.name}:${action}`]"
-                @click="handleAction(status.backend.service.name, action)"
-              >
-                {{ getActionLabel(action) }}
-              </el-button>
-            </div>
           </div>
         </template>
         <div class="single-service-info">
@@ -404,80 +288,9 @@ onUnmounted(() => {
           </div>
         </div>
       </el-card>
-
-      <!-- Frontend Docker container -->
-      <el-card v-if="status?.frontend?.docker" shadow="never" class="section-card">
-        <template #header>
-          <div class="section-header">
-            <span class="section-title">
-              <el-tag type="danger" effect="dark" round size="small">frontend</el-tag>
-              {{ t("hotData.dockerContainers") }}
-            </span>
-            <div v-if="frontendActions.length" class="docker-global-actions">
-              <el-button
-                v-for="action in frontendActions"
-                :key="action"
-                size="small"
-                :type="action === 'stop' ? 'danger' : action === 'restart' ? 'warning' : 'success'"
-                :loading="actionLoading[`frontend:${action}`]"
-                @click="handleAction('frontend', action)"
-              >
-                {{ getActionLabel(action) }}
-              </el-button>
-            </div>
-          </div>
-        </template>
-        <el-table
-          :data="status.frontend.docker.containers"
-          stripe
-          size="small"
-          class="service-table"
-        >
-          <el-table-column :label="t('hotData.containerName')" min-width="120">
-            <template #default="{ row }">
-              <div class="service-name-cell">
-                <el-icon v-if="row.status === 'running'" size="16" class="status-running">
-                  <CircleCheck />
-                </el-icon>
-                <el-icon v-else size="16" class="status-stopped"><CircleX /></el-icon>
-                <span>{{ row.name }}</span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column
-            :label="t('hotData.image')"
-            min-width="170"
-            prop="image"
-            show-overflow-tooltip
-          />
-          <el-table-column :label="t('common.status')" width="100">
-            <template #default="{ row }">
-              <el-tag :type="row.status === 'running' ? 'success' : 'danger'" size="small">
-                {{ row.status === "running" ? t("hotData.running") : t("hotData.stopped") }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="CPU" width="120" align="right">
-            <template #default="{ row }">{{ row.cpu_percent }}%</template>
-          </el-table-column>
-          <el-table-column :label="t('hotData.memory')" width="120" align="right">
-            <template #default="{ row }">{{ formatMemoryGB(row.memory_mb) }}</template>
-          </el-table-column>
-          <el-table-column :label="t('hotData.uptime')" width="150" align="right">
-            <template #default="{ row }">{{ formatUptime(row.uptime_seconds) }}</template>
-          </el-table-column>
-          <el-table-column :label="t('dataSource.port')" width="150">
-            <template #default="{ row }">
-              {{ Array.isArray(row.ports) ? row.ports.join(", ") : row.ports }}
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-card>
     </template>
   </div>
 </template>
-
-<style scoped src="../../../../styles/system-monitor-common.css"></style>
 
 <style scoped>
 .system-monitor {
@@ -524,6 +337,13 @@ onUnmounted(() => {
 }
 
 .last-refresh {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.resource-scope {
+  margin: 0;
+  padding: 0 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
 }
@@ -636,15 +456,37 @@ onUnmounted(() => {
   gap: 4px;
 }
 
-.single-service-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
+.section-card {
+  border-radius: 8px;
+  flex-shrink: 0;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-light);
+  overflow: hidden;
 }
 
-.docker-global-actions {
+.section-card :deep(.el-card__header) {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.section-card :deep(.el-card__body) {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.section-header {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
 .skeleton-card {

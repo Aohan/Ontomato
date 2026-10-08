@@ -30,7 +30,6 @@ ontomato:
   data-engine:
     service-id: ${BACKEND_SERVICE_ID:}
     node-id: ${BACKEND_NODE_ID:}
-    ragchatrootpath: /opt/frontend
     cardBase-url: ${BACKEND_CARD_BASE_URL:}
     knowledge_maxResult: 10
     toolsdatamaxsize: 20

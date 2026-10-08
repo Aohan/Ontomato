@@ -12,10 +12,6 @@
     "value": "Authorization activated successfully"
   },
   {
-    "key": "Maintenance.action.paramError",
-    "value": "Invalid request parameters"
-  },
-  {
     "key": "Data.queryM3.error",
     "value": "Failed to query M3 database"
   },

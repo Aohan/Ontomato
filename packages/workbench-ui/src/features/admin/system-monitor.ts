@@ -1,7 +1,4 @@
-/**
- * Shared system monitor types and pure formatting functions (originally defined in SystemMonitor.vue, moved unchanged).
- * SystemStatus holds only the fields common to both editions; other extension fields in the response are declared by the app views that use them.
- */
+/** System monitor response types (host resources and the data engine process) and pure formatting functions. */
 export interface CpuInfo {
   system: number;
   user: number;
@@ -21,7 +18,7 @@ export interface DiskInfo {
   partition: string;
   size: number;
   used: number;
-  availible: number;
+  available: number;
   usage_percent: number;
 }
 
@@ -39,24 +36,6 @@ export interface ServiceItem {
   cpu_percent: number;
   memory_mb: number;
   uptime_seconds: number;
-  actions: string[];
-}
-
-export interface DockerContainer {
-  name: string;
-  image: string;
-  status: string;
-  cpu_percent: number;
-  memory_mb: number;
-  uptime_seconds: number;
-  ports: string[];
-}
-
-export interface FrontendInfo {
-  docker: {
-    actions: string[];
-    containers: DockerContainer[];
-  };
 }
 
 export interface SystemStatus {
@@ -64,23 +43,6 @@ export interface SystemStatus {
   hostname: string;
   server: ServerInfo;
   backend: { service: ServiceItem };
-  frontend: FrontendInfo;
-}
-
-/**
- * Props of the SystemMonitor service-panels slot (between the resource overview and the backend card):
- * status is the complete original API response; service actions must go through handleAction (confirm first, then the shared page executes and refreshes).
- */
-export interface SystemMonitorServicePanelsProps {
-  status: SystemStatus | null;
-  actionLoading: Record<string, boolean>;
-  handleAction: (serviceName: string, action: string) => void;
-  getActionLabel: (action: string) => string;
-}
-
-/** Named slots of SystemMonitor: service-panels is provided by app pages that need extra panels; the open-source entry uses this page directly without it. */
-export interface SystemMonitorSlots {
-  "service-panels"?: (props: SystemMonitorServicePanelsProps) => unknown;
 }
 
 export function formatUptime(seconds: number) {

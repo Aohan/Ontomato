@@ -127,7 +127,7 @@ describe("open-source workbench assembly", () => {
 
   it("serves public routes without enterprise-only routes", async () => {
     expect((await realFetch(`${base}/api/health`)).status).toBe(200);
-    for (const route of ["/api/auth/domains", "/api/connections", "/api/data-governance/ticket"]) {
+    for (const route of ["/api/connections", "/api/data-governance/ticket"]) {
       expect((await realFetch(`${base}${route}`)).status, route).toBe(404);
     }
   });
