@@ -100,11 +100,13 @@ async function main() {
   );
   mkdirSync(join(staging, "images"));
   for (const { ref } of images)
-    await exportImage([ref], join(staging, "images", imageFileName(ref)));
+    await exportImage([ref], join(staging, "images", imageFileName(ref)), `linux/${arch}`);
 
   const archive = `${staging}.tar.gz`;
   rmSync(archive, { force: true });
-  execute("tar", ["--exclude=.DS_Store", "-czf", archive, "-C", bundleRoot, base]);
+  execute("tar", ["--exclude=.DS_Store", "-czf", archive, "-C", bundleRoot, base], {
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
   console.log(`BUNDLE_TAR=${archive}`);
 }
 

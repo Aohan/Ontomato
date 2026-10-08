@@ -298,11 +298,12 @@ function buildApp(app, arch, version, stamp, exported, fp, lang) {
   assertImage(tag, arch, "app", app.component, fp, labels);
   return { tag, alias };
 }
-async function pack(app, image, role) {
+async function pack(app, image, role, arch) {
   const suffix = image.tag.slice(image.tag.indexOf(":") + 1);
   await exportImage(
     [image.tag, image.alias],
     join(app.repoRoot, ".build", "pack", `${app.component}-${role}-${suffix}.tar.gz`),
+    `linux/${arch}`,
   );
 }
 // The one CLI parse. Help returns before any Git, settings or Docker read; the
@@ -344,12 +345,12 @@ export async function buildJavaApp(app, { command, parsed }) {
       );
     }
     const built = buildApp(app, arch, version, stamp, exported, lockedFp, lang);
-    if (parsed["--pack-app"]) await pack(app, built, "app");
+    if (parsed["--pack-app"]) await pack(app, built, "app", arch);
     return;
   }
 
   const runtime = buildRuntime(app, arch, version, exported, contract, currentFp);
-  if (parsed["--pack-runtime"]) await pack(app, runtime, "runtime");
+  if (parsed["--pack-runtime"]) await pack(app, runtime, "runtime", arch);
   const built = buildApp(app, arch, version, stamp, exported, runtime.fp, lang);
-  if (parsed["--pack-app"]) await pack(app, built, "app");
+  if (parsed["--pack-app"]) await pack(app, built, "app", arch);
 }

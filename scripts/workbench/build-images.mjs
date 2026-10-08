@@ -203,6 +203,7 @@ async function buildWorkbenchAppImage(app, parsed, version, arch) {
     await exportImage(
       [tag, alias],
       join(app.repoRoot, ".build", "pack", `${app.component}-app-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
+      `linux/${arch}`,
     );
 }
 
@@ -291,5 +292,6 @@ export async function buildWorkbenchApp(app, args) {
     await exportImage(
       [tag, alias],
       join(app.repoRoot, ".build", "pack", `${app.runtimeImageName}-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
+      `linux/${arch}`,
     );
 }

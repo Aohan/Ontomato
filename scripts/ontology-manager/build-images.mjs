@@ -93,5 +93,6 @@ export async function buildManagerImage(app, args) {
     await exportImage(
       [tag, alias],
       join(app.repoRoot, ".build", "pack", `${app.component}-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
+      `linux/${arch}`,
     );
 }
