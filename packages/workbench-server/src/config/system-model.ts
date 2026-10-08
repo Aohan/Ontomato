@@ -85,6 +85,27 @@ function normalizeConfig(raw: unknown): SystemModelConfig {
   };
 }
 
+/**
+ * The legacy format stored `models` and `agents` alongside the surviving fields. Those two were
+ * retired; on read, migrate the file in place to the current shape by keeping only the surviving
+ * fields (invalid or missing values fall back to their defaults).
+ */
+function migrateLegacyConfig(raw: unknown): SystemModelConfig | null {
+  const source = asRecord(raw);
+  if (!source || !("models" in source || "agents" in source)) {
+    return null;
+  }
+
+  const abcQuestionMode = ABC_QUESTION_MODES.includes(source.abcQuestionMode)
+    ? (source.abcQuestionMode as AbcQuestionMode)
+    : DEFAULT_ABC_QUESTION_MODE;
+  const queryTimeoutSeconds = isPositiveInteger(source.queryTimeoutSeconds)
+    ? (source.queryTimeoutSeconds as number)
+    : DEFAULT_QUERY_TIMEOUT_SECONDS;
+
+  return { abcQuestionMode, queryTimeoutSeconds };
+}
+
 export function getSystemModelConfig(domainId?: string): SystemModelConfig {
   const resolved = resolveDomainId(domainId);
   const configFile = getDomainConfigFile(resolved);
@@ -95,6 +116,12 @@ export function getSystemModelConfig(domainId?: string): SystemModelConfig {
 
   try {
     const raw = JSON.parse(fs.readFileSync(configFile, "utf-8"));
+    const migrated = migrateLegacyConfig(raw);
+    if (migrated) {
+      logger.warn(`Migrating legacy system model config for domain ${resolved}`);
+      writeConfig(configFile, migrated);
+      return migrated;
+    }
     return normalizeConfig(raw);
   } catch (error) {
     if (error instanceof SystemModelConfigError) {
