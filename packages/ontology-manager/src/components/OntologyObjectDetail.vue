@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { ArrowLeft, Plus, Save, Table2, Trash2 } from "lucide-vue-next";
+import { ArrowLeft, ChevronRight, Plus, Save, Table2, Trash2 } from "lucide-vue-next";
 import { ElAlert, ElButton, ElEmpty, ElForm, ElFormItem, ElInput, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { OntologyObject, OntologyRelation } from "../api";
@@ -237,6 +237,7 @@ onMounted(() => void loadDetail());
             <span>{{ ot("businessKey") }}</span>
             <span>{{ ot("primaryKey") }}</span>
             <span>{{ ot("description") }}</span>
+            <span></span>
           </div>
           <button
             v-for="attribute in object.attrs"
@@ -252,6 +253,7 @@ onMounted(() => void loadDetail());
             <span>{{ attribute.bizzkeyBool ? ot("yes") : "-" }}</span>
             <span>{{ attribute.primaryKey ? ot("yes") : "-" }}</span>
             <span>{{ attribute.attrDesc || "-" }}</span>
+            <ChevronRight :size="16" class="row-chevron" />
           </button>
         </div>
       </section>
@@ -421,7 +423,7 @@ h2 {
 }
 .attribute-table .detail-table-head,
 .attribute-table .detail-table-row {
-  grid-template-columns: minmax(150px, 1.2fr) 90px 70px 70px minmax(140px, 1.3fr);
+  grid-template-columns: minmax(150px, 1.2fr) 90px 90px 90px minmax(140px, 1.3fr) 20px;
 }
 .relation-table .detail-table-head,
 .relation-table .detail-table-row {
@@ -438,8 +440,10 @@ h2 {
   background: var(--el-fill-color-light);
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
+  white-space: nowrap;
 }
 .detail-table-row {
+  width: 100%;
   min-height: 50px;
   padding: 7px var(--spacing-md);
   border: 0;
@@ -479,6 +483,9 @@ h2 {
   color: var(--el-text-color-secondary);
   font-size: var(--text-xs);
 }
+.row-chevron {
+  color: var(--el-text-color-tertiary);
+}
 @container ontology-manager (max-width: 1050px) {
   .detail-body {
     grid-template-columns: 1fr;
@@ -500,7 +507,9 @@ h2 {
     display: none;
   }
   .attribute-table .detail-table-head,
-  .attribute-table .detail-table-row,
+  .attribute-table .detail-table-row {
+    grid-template-columns: minmax(150px, 1fr) 80px 20px;
+  }
   .relation-table .detail-table-head,
   .relation-table .detail-table-row {
     grid-template-columns: minmax(150px, 1fr) 80px;
