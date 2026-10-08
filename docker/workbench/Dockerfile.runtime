@@ -112,9 +112,10 @@ Python 3.10 interpreter and standard library: /usr/local/lib/python3.10/LICENSE.
 Node.js binary (copied alone from the installer stage's Node image): /licenses/nodejs/LICENSE
 EOF
 
-ENV ABC_REPLAY_PYTHON_COMMAND=python3.10 \
-    HOT_REPORT_PYTHON_COMMAND=python3.10 \
-    CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+# Only the facility path stays here; the product Python defaults live in the
+# app-owned launch.sh so they ship with the small package, while an explicitly
+# set environment still wins.
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Node resolves bare imports by walking ancestors of the importing file, so /app
 # reaches this directory without owning node_modules itself.

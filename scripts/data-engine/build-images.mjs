@@ -203,7 +203,9 @@ function stageRuntime(app, arch, exported, contract) {
   const context = join(app.repoRoot, ".build", "contexts", arch, "runtime");
   resetDirectory(context);
   copyFrom(app.requirements.root, app.requirements.path, join(context, "requirements-py310.txt"));
-  copyFrom(app.mcp.root, app.mcp.path, join(context, "mcp/mcpserver.py"));
+  // No product startup files here: the entrypoint, the sync helper and the MCP
+  // service ride the app payload (appBin/mcp). Only the pairing checkers in
+  // app.bin enter the runtime context.
   cpSync(join(exported, "runtime-lib"), join(context, "lib"), { recursive: true });
   cpSync(join(exported, "maven-licenses.json"), join(context, "maven-licenses.json"));
   copyFrom(PUBLIC_ROOT, "scripts/third_party_notices.py", join(context, "tools/third_party_notices.py"));
@@ -261,6 +263,11 @@ function stageApp(app, arch, exported, lang, fp) {
     recursive: true,
   });
   stageResources(app, context, lang);
+  // Product startup files ride the app payload at their fixed /app layout, from
+  // the same single sources the host dev entry consumes. The app recipe sets
+  // executable permissions at the image boundary with COPY --chmod.
+  for (const [root, source, dest] of app.appBin) copyFrom(root, source, join(context, dest));
+  copyFrom(app.mcp.root, app.mcp.path, join(context, "payload/mcp/mcpserver.py"));
   // The payload is only the product's own jars and resources: no third-party notices.
   copyLicenses(join(context, "payload", "licenses"));
   for (const [name, content] of Object.entries(app.payloadFiles))

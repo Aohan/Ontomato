@@ -17,7 +17,7 @@ export const app = {
   sources: [{ id: "ontomato", root: repoRoot }],
   component: "datarag-opensource",
   family: "java-app",
-  interfaceVersion: 3,
+  interfaceVersion: 4,
   promptLang: "en",
   supportedPromptLangs: ["en"],
   reactorDir: "ontomato",
@@ -45,10 +45,14 @@ export const app = {
   secretExport: null,
   requirements: { root: repoRoot, path: "packages/data-engine-core/requirements-py310.txt" },
   mcp: { root: repoRoot, path: "packages/data-engine-core/mcp/mcpserver.py" },
+  // Only the pairing checkers ride the runtime context. Product startup files
+  // (entrypoint, sync helper, MCP service) ride the app payload via appBin/mcp.
   bin: [
-    [repoRoot, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"],
     [repoRoot, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"],
-    [repoRoot, "scripts/data-engine/sync-product-files.py", "bin/sync-product-files.py"],
+  ],
+  appBin: [
+    [repoRoot, "scripts/data-engine/container-entrypoint.sh", "payload/bin/container-entrypoint.sh"],
+    [repoRoot, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"],
   ],
   pairContract: "/opt/datarag/bin/runtime-contract.py",
   runtimeTarget: "runtime",

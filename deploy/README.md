@@ -24,6 +24,9 @@ images against it. `docker-compose.ghcr.yml` inherits every service from
 `ghcr.io/aohan/ontomato-*`. They follow `latest` unless `ONTOMATO_VERSION` is set in
 `.env`. A runtime image is published under its compatibility fingerprint, so an update
 downloads new app images and reuses the runtime while the fingerprint is unchanged.
+The layout interface is part of that fingerprint: after a layout upgrade the first
+update builds fresh runtimes once, and an old runtime never pairs with a new app
+(the assembly check rejects the mix).
 
 To update:
 
