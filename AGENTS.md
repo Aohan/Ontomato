@@ -17,6 +17,15 @@ from the host; business permissions are decided by the server. Data browsing and
 modeling belong to the Manager, and the main workbench keeps no second implementation of
 them.
 
+## Language
+
+Write all new commit messages, including subjects and bodies, in English. Use
+`type: description` for subjects. This applies to every branch, including `develop`,
+feature branches, fix branches and `main`, and overrides the outer workspace's
+Chinese commit-message convention for this repository.
+
+Write new or changed source-code comments in English.
+
 ## Changes and verification
 
 Check the actual modules and the existing build entry points first, then run the
@@ -72,6 +81,4 @@ merged on GitHub: its own commits (those after the snapshot it started from) are
 cherry-picked onto `develop`, keeping their authors, because `main` and `develop` share no
 history and a plain merge would bring the snapshot commits along. The next snapshot
 carries a `Co-authored-by:` trailer for each contributor, and the pull request is closed
-with a link to it. Commit subjects on `main` are
-English and follow the `type: description` format; commits on the internal `develop` line
-follow the outer workspace convention.
+with a link to it.
