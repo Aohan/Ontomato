@@ -1,8 +1,8 @@
 // Offline deployment pack: one tar.gz holding the deploy template, the assembly
 // recipes and one gzip archive per already imported image of one architecture.
 // Node built-ins and the Docker CLI only; no host shell.
-import { chmodSync, cpSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execute, exportImage, inspectImage, parseOptions } from "./build-support.mjs";
 
@@ -12,26 +12,18 @@ export const TEMPLATE_ENTRIES = ["docker-compose.yml", "initdb.sql", "README.md"
 // The fresh-install entry is assembled on the enterprise side (its build.sh
 // inlines the shared shell library and injects the version); the pack only
 // stages the assembled files. Paths are relative to --install-dir.
-export const INSTALL_STAGE_FILES = [
-  ["install.sh", "install.sh"],
-  ["scripts/image-artifacts.py", "scripts/image-artifacts.py"],
-  ["scripts/check-services.py", "scripts/check-services.py"],
-];
-
+// The edition hands over one directory of assembled onsite entries (install.sh and any
+// other entry with its helper scripts); the whole directory lands at the pack root, so a
+// new entry needs no change here. Top-level shell entries stay executable whatever the umask.
 export function stageInstallEntry(installDir, staging) {
-  for (const [from, to] of INSTALL_STAGE_FILES) {
-    const source = join(installDir, from);
-    const target = join(staging, to);
-    try {
-      readFileSync(source);
-    } catch {
-      throw new Error(`Install entry missing: ${source}`);
-    }
-    mkdirSync(dirname(target), { recursive: true });
-    cpSync(source, target);
+  try {
+    readFileSync(join(installDir, "install.sh"));
+  } catch {
+    throw new Error(`Install entry missing: ${join(installDir, "install.sh")}`);
   }
-  // The entry must stay executable no matter the staging umask.
-  chmodSync(join(staging, "install.sh"), 0o755);
+  cpSync(installDir, staging, { recursive: true });
+  for (const name of readdirSync(installDir))
+    if (name.endsWith(".sh")) chmodSync(join(staging, name), 0o755);
 }
 
 const FLAGS = { "--arch": "value", "--deploy-dir": "value", "--name": "value", "--image": "list", "--install-dir": "value" };
