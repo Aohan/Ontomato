@@ -1,15 +1,40 @@
 // Offline deployment pack: one tar.gz holding the deploy template, the assembly
 // recipes and one gzip archive per already imported image of one architecture.
 // Node built-ins and the Docker CLI only; no host shell.
-import { cpSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { chmodSync, cpSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execute, exportImage, inspectImage, parseOptions } from "./build-support.mjs";
 
 // Only the deploy template goes into the pack. .env, backend_data and
 // frontend_data are onsite state and are never packed.
 export const TEMPLATE_ENTRIES = ["docker-compose.yml", "initdb.sql", "README.md", "assemble"];
-const FLAGS = { "--arch": "value", "--deploy-dir": "value", "--name": "value", "--image": "list" };
+// The fresh-install entry is assembled on the enterprise side (its build.sh
+// inlines the shared shell library and injects the version); the pack only
+// stages the assembled files. Paths are relative to --install-dir.
+export const INSTALL_STAGE_FILES = [
+  ["install.sh", "install.sh"],
+  ["scripts/image-artifacts.py", "scripts/image-artifacts.py"],
+  ["scripts/check-services.py", "scripts/check-services.py"],
+];
+
+export function stageInstallEntry(installDir, staging) {
+  for (const [from, to] of INSTALL_STAGE_FILES) {
+    const source = join(installDir, from);
+    const target = join(staging, to);
+    try {
+      readFileSync(source);
+    } catch {
+      throw new Error(`Install entry missing: ${source}`);
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    cpSync(source, target);
+  }
+  // The entry must stay executable no matter the staging umask.
+  chmodSync(join(staging, "install.sh"), 0o755);
+}
+
+const FLAGS = { "--arch": "value", "--deploy-dir": "value", "--name": "value", "--image": "list", "--install-dir": "value" };
 
 // The pack is the only place that rewrites a template file, and only this line.
 export function renderEnvExample(text, arch) {
@@ -106,6 +131,8 @@ async function main() {
   // realpathSync dereferences the deploy/assemble symlink: the pack holds files.
   for (const entry of TEMPLATE_ENTRIES)
     cpSync(realpathSync(join(deployDir, entry)), join(staging, entry), { recursive: true });
+  if (options["--install-dir"])
+    stageInstallEntry(resolve(options["--install-dir"]), staging);
   writeFileSync(
     join(staging, ".env.example"),
     renderEnvExample(readFileSync(join(deployDir, ".env.example"), "utf8"), arch),
