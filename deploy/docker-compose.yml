@@ -64,6 +64,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      # Grace period: failed checks do not count during it, and the first passing check marks
+      # the service healthy. On a slow machine or a first start on an empty database DataRAG
+      # can take longer than retries x interval (about 50 s); without it the service is marked
+      # unhealthy and the Node app, which waits for it, does not start.
+      start_period: 120s
     depends_on:
       postgres:
         condition: service_healthy
