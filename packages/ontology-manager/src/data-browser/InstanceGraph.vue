@@ -8,15 +8,22 @@ import {
   Maximize2,
   MousePointerClick,
   RefreshCw,
+  Search,
   Unplug,
   ZoomIn,
   ZoomOut,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { ElButton, vLoading } from "element-plus";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { ElButton, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult } from "../api";
 import { useManagerClient, useManagerContext, useOntologyText, useSharedText } from "../context";
+import {
+  drawInstanceGraphBatches,
+  GRAPH_BATCH_SIZE,
+  instanceNodePosition,
+  isLargeInstanceGraph,
+} from "./instance-graph-rendering";
 
 const context = useManagerContext();
 const { message, confirm } = useManagerFeedback();
@@ -30,17 +37,31 @@ const loading = ref(false);
 const regenerating = ref(false);
 const error = ref("");
 const status = ref<InstanceGraphResult["status"]>("READY");
-const nodes = ref<InstanceGraphNode[]>([]);
-const edges = ref<InstanceGraphEdge[]>([]);
+const nodes = shallowRef<InstanceGraphNode[]>([]);
+const edges = shallowRef<InstanceGraphEdge[]>([]);
 const selectedNode = ref<InstanceGraphNode | null>(null);
 const selectedClassLabel = ref("");
 const selectedAttributes = ref<Array<{ name: string; showName: string; value: unknown }>>([]);
 const classLabels = ref<Record<string, string>>({});
 const layouting = ref(false);
+const rendering = ref(false);
+const renderedElements = ref(0);
+const largeGraph = computed(() => isLargeInstanceGraph(nodes.value.length, edges.value.length));
 
 let graph: Graph | null = null;
 let selectedId = "";
+let nodeInfoRequest = 0;
+let graphRequest = 0;
 let resizeObserver: ResizeObserver | null = null;
+
+const searchOptions = computed(() =>
+  nodes.value.map((node) => ({
+    value: node.id,
+    label: `${node.name || node.id} · ${node.id} · ${classLabels.value[node.class] || node.class} · ${node.class}`,
+    name: node.name || node.id,
+    description: `${classLabels.value[node.class] || node.class} · ${node.id}`,
+  }))
+);
 
 function colorForClass(className: string) {
   const palette = context.presentation.nodePalette;
@@ -97,7 +118,7 @@ function nodeOptions(colors: ReturnType<typeof graphColors>) {
       stroke: colors.nodeStroke,
       lineWidth: 4,
       shadowColor: colors.shadow,
-      shadowBlur: 10,
+      shadowBlur: largeGraph.value ? 0 : 10,
       labelText: (datum: any) => datum.data.node.name || datum.id,
       labelFill: colors.text,
       labelFontSize: 12,
@@ -136,52 +157,79 @@ async function fitGraph(target: Graph) {
   await target.fitCenter();
 }
 
-async function renderGraph() {
+function yieldToBrowser() {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+}
+
+async function renderGraph(request: number) {
   if (!graphRef.value) return;
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  await yieldToBrowser();
+  if (request !== graphRequest || !graphRef.value) return;
   const { width, height } = graphRef.value.getBoundingClientRect();
   if (!width || !height) return;
   graph?.destroy();
   graph = null;
   selectedId = "";
   const colors = graphColors();
-  graph = new Graph({
+  const target = new Graph({
     container: graphRef.value,
     width: Math.round(width),
     height: Math.round(height),
     autoResize: false,
     padding: 48,
     animation: false,
-    data: {
-      nodes: nodes.value.map((node) => ({
-        id: node.id,
-        data: { node, color: colorForClass(node.class) },
-      })),
-      edges: edges.value.map((edge, index) => ({
-        id: `edge:${index}:${edge.source}:${edge.target}`,
-        source: edge.source,
-        target: edge.target,
-      })),
-    },
-    layout: graphLayout(),
+    data: { nodes: [], edges: [] },
     behaviors: ["drag-canvas", "zoom-canvas", "drag-element"],
     node: nodeOptions(colors),
     edge: edgeOptions(colors),
   });
-  graph.on("node:click", (event: any) => void selectNode(event.target.id));
-  graph.on("canvas:click", clearSelection);
-  await graph.render();
-  await fitGraph(graph);
+  graph = target;
+  target.on("node:click", (event: any) => {
+    if (!rendering.value) void selectNode(event.target.id);
+  });
+  target.on("canvas:click", clearSelection);
+  const isCurrent = () => request === graphRequest && graph === target;
+  rendering.value = true;
+  renderedElements.value = 0;
+  try {
+    await target.render();
+    if (!isCurrent()) return;
+    const complete = await drawInstanceGraphBatches(target, nodes.value, edges.value, colorForClass, {
+      isCurrent,
+      yieldControl: yieldToBrowser,
+      onProgress: (completed) => { renderedElements.value = completed; },
+    });
+    if (!complete) return;
+    if (!largeGraph.value && nodes.value.length) await target.layout(graphLayout());
+    if (isCurrent()) await fitGraph(target);
+  } finally {
+    if (isCurrent()) rendering.value = false;
+  }
 }
 
 async function relayoutGraph() {
-  if (!graph || layouting.value) return;
+  if (!graph || layouting.value || loading.value || rendering.value) return;
+  const target = graph;
+  const request = graphRequest;
+  const isCurrent = () => request === graphRequest && graph === target;
   layouting.value = true;
   try {
-    await graph.layout(graphLayout());
-    await fitGraph(graph);
+    if (largeGraph.value) {
+      for (let offset = 0; offset < nodes.value.length; offset += GRAPH_BATCH_SIZE) {
+        await yieldToBrowser();
+        if (!isCurrent()) return;
+        target.updateNodeData(nodes.value.slice(offset, offset + GRAPH_BATCH_SIZE).map((node, index) => ({
+          id: node.id,
+          style: instanceNodePosition(offset + index, nodes.value.length),
+        })));
+        await target.draw();
+      }
+    } else {
+      await target.layout(graphLayout());
+    }
+    if (isCurrent()) await fitGraph(target);
   } finally {
-    layouting.value = false;
+    if (isCurrent()) layouting.value = false;
   }
 }
 
@@ -195,6 +243,7 @@ function applySelection(id: string) {
 }
 
 function clearSelection() {
+  nodeInfoRequest += 1;
   if (graph && selectedId) {
     void graph.setElementState({ [selectedId]: [] }, false);
   }
@@ -205,9 +254,12 @@ function clearSelection() {
 }
 
 async function loadNodeInfo(node: InstanceGraphNode) {
+  const request = ++nodeInfoRequest;
   selectedClassLabel.value = classLabels.value[node.class] || node.class;
+  selectedAttributes.value = [];
   try {
     const info = await queryInstanceInfo(node.id, node.class);
+    if (request !== nodeInfoRequest) return;
     const classDef = (info.classDef ?? {}) as Record<string, unknown>;
     const attrs = Array.isArray(classDef.attrs) ? (classDef.attrs as Array<Record<string, unknown>>) : [];
     const row = (info.data ?? {}) as Record<string, unknown>;
@@ -221,6 +273,7 @@ async function loadNodeInfo(node: InstanceGraphNode) {
         value: row[attr.name as string],
       }));
   } catch (reason) {
+    if (request !== nodeInfoRequest) return;
     selectedAttributes.value = [];
     message.error(reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed"));
   }
@@ -232,6 +285,14 @@ async function selectNode(id: string) {
   selectedNode.value = node;
   applySelection(id);
   void loadNodeInfo(node);
+}
+
+async function focusNode(id: string | undefined) {
+  const target = graph;
+  if (!id || !target || loading.value || rendering.value || layouting.value) return;
+  await selectNode(id);
+  await target.zoomTo(Math.max(1, target.getZoom()), false);
+  await target.focusElement(id, false);
 }
 
 function zoomIn() {
@@ -278,10 +339,19 @@ function downloadGraph() {
 }
 
 async function refresh() {
+  const request = ++graphRequest;
+  clearSelection();
+  graph?.destroy();
+  graph = null;
+  rendering.value = false;
+  layouting.value = false;
+  nodes.value = [];
+  edges.value = [];
   loading.value = true;
   error.value = "";
   try {
     const [result, ontology] = await Promise.all([loadInstanceGraph(), loadOntology()]);
+    if (request !== graphRequest) return;
     classLabels.value = Object.fromEntries(
       ontology.objects.map((object) => [object.className, object.showName])
     );
@@ -289,11 +359,12 @@ async function refresh() {
     nodes.value = result.status === "READY" ? result.graph.nodes : [];
     edges.value = result.status === "READY" ? result.graph.edges : [];
     clearSelection();
-    await renderGraph();
+    await renderGraph(request);
   } catch (reason) {
+    if (request !== graphRequest) return;
     error.value = reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed");
   } finally {
-    loading.value = false;
+    if (request === graphRequest) loading.value = false;
   }
 }
 
@@ -332,14 +403,22 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  graphRequest += 1;
+  nodeInfoRequest += 1;
   resizeObserver?.disconnect();
   graph?.destroy();
+  graph = null;
 });
 </script>
 
 <template>
-  <section v-loading="loading || regenerating" class="instance-graph">
+  <section
+    v-loading="loading || regenerating"
+    :element-loading-text="rendering ? ot('instanceGraphRenderProgress', { completed: renderedElements, total: nodes.length + edges.length }) : undefined"
+    class="instance-graph"
+  >
     <div ref="graphRef" class="graph-canvas" />
+    <div v-if="error" class="graph-empty" role="alert"><strong>{{ error }}</strong></div>
 
     <div v-if="isEmpty" class="graph-empty">
       <Unplug :size="30" />
@@ -360,7 +439,7 @@ onBeforeUnmount(() => {
       <button :title="ot('zoomIn')" @click="zoomIn"><ZoomIn :size="17" /></button>
       <button :title="ot('zoomOut')" @click="zoomOut"><ZoomOut :size="17" /></button>
       <button :title="ot('fitCanvas')" @click="fitGraphView"><Maximize2 :size="17" /></button>
-      <button :title="ot('relayout')" :disabled="layouting" @click="relayoutGraph">
+      <button :title="ot('relayout')" :disabled="loading || rendering || layouting" @click="relayoutGraph">
         <Focus :size="17" />
       </button>
       <button :title="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
@@ -376,6 +455,32 @@ onBeforeUnmount(() => {
     </div>
 
     <aside class="inspector-panel">
+      <div class="node-search">
+        <el-select-v2
+          :model-value="selectedNode?.id"
+          :options="searchOptions"
+          :placeholder="ot('searchInstanceNodes')"
+          :aria-label="ot('searchInstanceNodes')"
+          :no-match-text="ot('noMatchingResources')"
+          :disabled="loading || regenerating || layouting || !nodes.length"
+          :item-height="52"
+          filterable
+          clearable
+          @change="focusNode"
+          @clear="clearSelection"
+        >
+          <template #prefix><Search :size="15" /></template>
+          <template #label="{ value }">
+            {{ nodes.find((node) => node.id === value)?.name || value }}
+          </template>
+          <template #default="{ item }">
+            <div class="node-search-option">
+              <strong :title="item.name">{{ item.name }}</strong>
+              <small :title="item.description">{{ item.description }}</small>
+            </div>
+          </template>
+        </el-select-v2>
+      </div>
       <div class="panel-heading">
         <div>
           <strong>{{ ot("instanceInspector") }}</strong>
@@ -528,6 +633,34 @@ onBeforeUnmount(() => {
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--el-border-color-light);
   color: var(--el-text-color-secondary);
+}
+.node-search {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--el-border-color-light);
+}
+.node-search :deep(.el-select-v2) {
+  width: 100%;
+}
+.node-search-option {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  height: 52px;
+  line-height: 20px;
+}
+.node-search-option strong,
+.node-search-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.node-search-option strong {
+  font-size: var(--text-sm);
+}
+.node-search-option small {
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-xs);
 }
 .panel-heading strong,
 .panel-heading small {

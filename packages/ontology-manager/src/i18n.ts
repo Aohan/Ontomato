@@ -29,6 +29,8 @@ const ontologyEn = {
   downloadPng: "Download PNG",
   graphHint: "Click a node to inspect details, drag to adjust the layout",
   instanceGraphTitle: "Instance Graph",
+  searchInstanceNodes: "Search nodes by name, ID or class",
+  instanceGraphRenderProgress: "Rendering graph: {completed} / {total}",
   tableView: "Table",
   loadInstanceGraphFailed: "Failed to load instance graph data",
   instanceGraphEmpty: "No instance graph data",

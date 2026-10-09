@@ -30,6 +30,7 @@ let statusFor: (path: string) => number;
 let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
 let dataAdapter: string;
+let instanceNodeCount: number;
 let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
 let knowledge: Record<string, Record<string, unknown>>;
 /** Knowledge IDs whose delete returns a business failure. */
@@ -59,6 +60,21 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   if (path === "/admin/delBussinessKnowledge" && knowledgeDeleteFails.has(String(body?.knowledgeID)))
     return json({ success: false, message: "locked" });
   if (path === "/admin/getMetas") return json(metasFor(url));
+  if (path === "/data/queryWholeDataMode0")
+    return json({ success: true, status: "READY", data: {
+      nodes: instanceNodeCount > 2 ? Array.from({ length: instanceNodeCount }, (_, index) => ({
+        id: `Order:${index}`, name: `Order ${index}`, class: "Order",
+      })) : [
+        { id: "Order:1", name: "First order", class: "Order" },
+        { id: "Item:2", name: "Spare part", class: "Item" },
+      ],
+      edges: [{ source: "Order:1", target: instanceNodeCount > 2 ? "Order:2" : "Item:2" }],
+    } });
+  if (path === "/data/queryInfoByNode")
+    return json({ success: true, data: {
+      classDef: { attrs: [{ name: "id", showName: "ID" }] },
+      data: { id: body?.id },
+    } });
   if (path === "/data/getWholeClassDataByPage")
     return json({ success: true, data: [{ id: "row-1" }], total_count: 1 });
   if (path === "/businessConfig/dataAdapters") {
@@ -74,6 +90,12 @@ beforeEach(() => {
   graphRecord.addedNodes = [];
   graphRecord.zoom = 1;
   graphRecord.zoomTo = [];
+  graphRecord.focusElement = [];
+  graphRecord.states = [];
+  graphRecord.dataBatches = [];
+  graphRecord.layouts = [];
+  graphRecord.nodeUpdates = [];
+  instanceNodeCount = 2;
   requests = [];
   mountedApps = [];
   held = new Map();
@@ -208,6 +230,71 @@ function clickButton(text: string) {
 }
 
 describe("OntologyManager root component with real pages", () => {
+  it("large instance graphs draw incrementally and relayout without starting a force simulation", async () => {
+    instanceNodeCount = 1201;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 800, height: 600,
+    } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    await settle();
+    const options = graphRecord.options.at(-1);
+    expect(options.data).toEqual({ nodes: [], edges: [] });
+    expect(options.layout).toBeUndefined();
+    expect(options.node.style.shadowBlur).toBe(0);
+    expect(graphRecord.layouts).toEqual([]);
+    expect(graphRecord.dataBatches.map((batch) => batch.nodes?.length || batch.edges?.length))
+      .toEqual([200, 200, 200, 200, 200, 200, 1, 1]);
+    expect(root().querySelector(".node-search input")?.hasAttribute("disabled")).toBe(false);
+
+    (root().querySelector(".graph-toolbar button[title='Relayout']") as HTMLButtonElement).click();
+    await settle();
+    await settle();
+    expect(graphRecord.layouts).toEqual([]);
+    expect(graphRecord.nodeUpdates.map((batch) => batch.length)).toEqual([200, 200, 200, 200, 200, 200, 1]);
+  });
+
+  it("instance graph search filters nodes and focuses the selected result without stale record details", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 800, height: 600,
+    } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+
+    const input = root().querySelector<HTMLInputElement>(".node-search input")!;
+    expect(input).not.toBeNull();
+    input.focus();
+    input.value = "spare";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await settle();
+    expect(root().querySelector(".node-search-option")?.textContent).toContain("Spare part");
+    expect(root().querySelector(".node-search-option")?.textContent).toContain("Item:2");
+    expect(root().querySelector(".node-search-option")?.textContent).not.toContain("First order");
+    (root().querySelector(".node-search-option") as HTMLElement).click();
+    await settle();
+    expect(graphRecord.focusElement).toContainEqual(["Item:2", false]);
+    expect(graphRecord.zoomTo).toContainEqual([1, false]);
+    expect(graphRecord.states).toContainEqual([{ "Item:2": ["selected"] }, false]);
+    expect(root().querySelector(".detail-title h2")?.textContent).toBe("Spare part");
+    expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+
+    holdPaths.add("/data/queryInfoByNode");
+    graphHandlers["node:click"]({ target: { id: "Order:1" } });
+    await settle();
+    graphHandlers["node:click"]({ target: { id: "Item:2" } });
+    await settle();
+    const waiting = held.get("/data/queryInfoByNode")!;
+    waiting[1].resolve(new Response());
+    await settle();
+    waiting[0].resolve(new Response());
+    await settle();
+    expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+  });
+
   it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
     mountHost(base);
     await settle();
