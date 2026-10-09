@@ -58,6 +58,8 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   const status = statusFor(path);
   if (status !== 200) return json({ success: false }, status);
   if (path === "/admin/getBussinessKnowledge") return json({ success: true, data: knowledge });
+  if (path.endsWith("BussinessKnowledge") && body?.knowledgeText === "")
+    return json({ success: false, message: "Business knowledge content is required" });
   if (path === "/admin/editBussinessKnowledge") {
     knowledge[String(body?.knowledgeID)] = { ...body };
     return json({ success: true });
@@ -943,6 +945,7 @@ describe("Manager business knowledge page", () => {
     const form = root().querySelector(".knowledge-form")!;
     expect(form.querySelector("h2")?.textContent).toBe("Add Knowledge");
     typeInto(form.querySelector("input")!, "Shipping rule");
+    typeInto(form.querySelector("textarea")!, "Ships in 2 days");
     await settle();
 
     requests = [];
@@ -951,7 +954,7 @@ describe("Manager business knowledge page", () => {
     expect(requests.find((r) => r.url.endsWith("/admin/addBussinessKnowledge"))?.body).toEqual({
       knowledgeID: "",
       knowledgeTitle: "Shipping rule",
-      knowledgeText: "",
+      knowledgeText: "Ships in 2 days",
       knowledgeTags: [],
       status: 1,
     });
@@ -1150,6 +1153,19 @@ describe("business knowledge page", () => {
       { knowledgeID: "k1", knowledgeTitle: "Refund rule", knowledgeText: "t1", knowledgeTags: ["Business"], status: 1 },
     ]);
     expect(detailTitle()).toBe("Refund rule");
+  });
+
+  it("a save the data engine refuses shows its message and keeps the form open with the input", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    clickButton("Add Knowledge");
+    await settle();
+    typeInto(document.querySelector<HTMLInputElement>(".knowledge-form input")!, "Empty entry");
+    await settle();
+    clickButton("Save");
+    await settle();
+    expect(messageText()).toBe("Business knowledge content is required");
+    expect(document.querySelector<HTMLInputElement>(".knowledge-form input")!.value).toBe("Empty entry");
   });
 
   it("leaving an edit with unsaved changes asks first: keeping it stays in the edit, discarding it opens the other entry without saving", async () => {

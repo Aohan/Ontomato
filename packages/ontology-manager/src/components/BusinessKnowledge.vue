@@ -374,7 +374,7 @@ onMounted(load);
           <el-form-item :label="ot('knowledgeTitle')" required>
             <el-input v-model="draft.knowledgeTitle" :placeholder="ot('knowledgeTitlePlaceholder')" />
           </el-form-item>
-          <el-form-item :label="ot('knowledgeContent')">
+          <el-form-item :label="ot('knowledgeContent')" required>
             <el-input
               v-model="draft.knowledgeText"
               type="textarea"
