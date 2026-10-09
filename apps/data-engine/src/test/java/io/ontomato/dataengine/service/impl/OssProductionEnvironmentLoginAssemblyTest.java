@@ -2,6 +2,8 @@ package io.ontomato.dataengine.service.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.io.IOException;
 import java.lang.reflect.Proxy;
@@ -17,6 +19,7 @@ import com.alibaba.fastjson2.JSONObject;
 import com.sun.net.httpserver.HttpServer;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.core.bean.User;
+import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.ProductionEnvironmentLoginPolicy;
@@ -39,6 +42,7 @@ class OssProductionEnvironmentLoginAssemblyTest {
             config.setProductionEnvUser("acct");
             config.setProductionEnvPwd("pw");
             four(service, remote, true);
+            verifyNoInteractions(remote.vectorResourceDao);
         }
     }
 
@@ -88,6 +92,7 @@ class OssProductionEnvironmentLoginAssemblyTest {
 
     static final class Remote implements AutoCloseable {
         final List<Hit> hits = new ArrayList<>();
+        final VectorResourceDao vectorResourceDao = mock(VectorResourceDao.class);
         private final HttpServer server;
         private final DataRagConfig config;
 
@@ -119,6 +124,7 @@ class OssProductionEnvironmentLoginAssemblyTest {
                 factory.registerResolvableDependency(io.ontomato.dataengine.dataAdapter.DataAdapterRegistry.class, new io.ontomato.dataengine.dataAdapter.DataAdapterRegistry(List.of(), config));
                 factory.registerResolvableDependency(AdminService.class, unused(AdminService.class));
                 factory.registerResolvableDependency(SchemaPermissionService.class, unused(SchemaPermissionService.class));
+                factory.registerResolvableDependency(VectorResourceDao.class, vectorResourceDao);
             });
             context.register(assembly, EnvServiceImpl.class);
             context.refresh();
