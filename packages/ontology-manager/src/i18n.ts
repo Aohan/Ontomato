@@ -402,10 +402,11 @@ export interface ManagerMessages {
 export const englishMessages: ManagerMessages = { ontology: ontologyEn, shared: sharedEn, element: en };
 
 export function ontologyText(messages: ManagerMessages, key: MessageKey, params?: TextParams) {
-  return interpolate(messages.ontology[key], params);
+  return interpolate(messages.ontology[key] ?? ontologyEn[key], params);
 }
 
 export function sharedText(messages: ManagerMessages, key: SharedKey, params?: TextParams) {
   const [group, name] = key.split(".") as [keyof SharedMessages, string];
-  return interpolate((messages.shared[group] as Readonly<Record<string, string>>)[name], params);
+  const fallback = sharedEn[group] as Readonly<Record<string, string>>;
+  return interpolate((messages.shared[group] as Readonly<Record<string, string>> | undefined)?.[name] ?? fallback[name], params);
 }
