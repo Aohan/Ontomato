@@ -84,9 +84,9 @@ always use exact versions, never `^` or `~` ranges; the root `.npmrc` sets
 `save-exact=true`, so `pnpm add` writes exact versions.
 
 The Node service reads the product root `.env` (the process environment takes priority)
-and writes runtime data under the product root `data/`. The Ontology Manager's
-`DATARAG_ORIGIN` has no default in this repository, so startup fails when it is not
-configured and the DataRAG root address must be given in `.env` or the environment. The
+and writes runtime data under the product root `data/`. The Ontology Manager proxies to
+`DATARAG_ORIGIN` from the environment or `.env`, otherwise to `DATA_QUERY_BASE_URL`, so by
+default it reaches the same DataRAG as the Node service; with neither set, startup fails. The
 Java data engine, PostgreSQL and the Python MCP are prepared separately; this entry point
 starts only the three processes above and is not a full-stack start.
 
