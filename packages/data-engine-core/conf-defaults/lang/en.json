@@ -68,6 +68,10 @@
     "value": "The object class name and display name are required"
   },
   {
+    "key": "Admin.knowledge.textRequired",
+    "value": "Business knowledge content is required"
+  },
+  {
     "key": "Admin.class.primaryKeyRequired",
     "value": "A new object class needs a primary key field name"
   },
