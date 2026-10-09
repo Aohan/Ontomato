@@ -272,6 +272,36 @@ public class VectorResourceDao extends BaseDao {
 	}
 
 	/**
+	 * Delete every vector resource of a single object for one attribute: its vector table records and files.
+	 * Used by object deletion to cascade-clean the object's vector resources. Does nothing when the vector
+	 * table does not exist yet.
+	 */
+	public void deleteByObjectId(String className, String attrName, String objectId, String domainId) {
+		String indexName = this.generateIndexName(className, attrName, domainId);
+		String tableName = quotedTable(indexName);
+		Integer cnt = jdbcTemplate.queryForObject(
+				"SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
+				Integer.class, indexName);
+		if (cnt == null || cnt == 0) {
+			return;
+		}
+		Path root = Paths.get("conf", dirName).toAbsolutePath();
+		Path indexDir = root.resolve(indexName).normalize();
+		List<String> paths = jdbcTemplate.queryForList("SELECT path FROM " + tableName + " WHERE object_id = ?", String.class, objectId);
+		jdbcTemplate.update("DELETE FROM " + tableName + " WHERE object_id = ?", objectId);
+		for (String path : paths) {
+			Path file = root.resolve(path).normalize();
+			if (!root.equals(indexDir.getParent()) || !indexDir.equals(file.getParent())) {
+				log.warn("Skip deleting vector file outside index dir {}: {}", indexName, path);
+				continue;
+			}
+			if (!file.toFile().delete()) {
+				log.warn("Failed to delete vector resource file: {}", file.toAbsolutePath());
+			}
+		}
+	}
+
+	/**
 	 * Update an existing vector resource in place: rewrite its file, recompute the embedding and refresh
 	 * the vector table row. The {@code className}/{@code objectId} must already carry the sandbox prefix
 	 * when inside a sandbox; {@code fileId} is the last path segment ({@code id.suffix}).

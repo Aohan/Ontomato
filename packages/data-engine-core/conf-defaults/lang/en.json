@@ -340,6 +340,10 @@
     "value": "Relation does not exist"
   },
   {
+    "key": "WriteFunctionOperation.vectorAttrNotAllowed",
+    "value": "Vector attribute cannot be written through this interface"
+  },
+  {
     "key": "AgentRole.notConfigured",
     "value": "No model is configured for role \"{0}\". Choose one in Model Configuration."
   },

@@ -139,6 +139,8 @@ A MetricView is a read-only query interface and an Action is a write interface. 
 
 The core of a definition is `function`: `logic` says in natural language what the interface does, `parameters` are its inputs (`name`, `type`, `description`, `sample`), `code` is the program that runs, and `returnDef` describes the returned structure.
 
+> **Action code and vector attributes:** an Action's `code` is a Python write function. Its object writes use `/writeFunctionOperation/insert` and `/writeFunctionOperation/update`, which write **only non-vector attributes** — `insert` silently ignores any vector attribute and `update` raises an error. Write vector attributes only through the vector primitives `appendVector` / `updateVector` / `deleteVector`, never through `insert`/`update`.
+
 ## Calling interfaces from a page
 
 A page calls the interfaces through the test environment's frontend, the same path the script uses:
