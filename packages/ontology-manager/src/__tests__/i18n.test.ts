@@ -17,7 +17,7 @@ describe("message lookup", () => {
     expect(ontologyText(messages, "instanceGraphRenderProgress", { completed: 200, total: 1201 }))
       .toBe("Rendering graph: 200 / 1201");
     expect(ontologyText(messages, "searchInstanceNodes"))
-      .toBe("Search nodes by name, ID or class");
+      .toBe("Search names or IDs in the selected type");
   });
 
   it("preserves host translations and falls back for missing shared messages", () => {

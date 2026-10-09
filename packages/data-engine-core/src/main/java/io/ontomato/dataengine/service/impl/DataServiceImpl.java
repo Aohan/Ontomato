@@ -612,74 +612,50 @@ public class DataServiceImpl implements DataService {
 	}
 
 	@Override
-	public JSONObject queryNextByNode(JSONObject n, String lang, String domainId) {
-		JSONObject ret = new JSONObject();
-		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-		if (adapter.useM3()) {
-			try {
-				Map<String, JSONObject> nodeMap = new HashMap<String, JSONObject>();
-				Map<String, String[]> edgeMap = new HashMap<String, String[]>();
-				
-				String[] mqls = new String[] {
-						"match ('" + n.getString("id") + "')-[*1..1]->()",
-						"match ('" + n.getString("id") + "')<-[*1..1]-()"
-				};
-				for (String mql : mqls) {
-					JSONObject output = HttpRequestUtil.queryMql(dataRagConfig, mql);
-					JSONArray message = output.getJSONArray("message");
-					for (int i = 0; i < message.size(); i++) {
-						JSONObject graph = message.getJSONObject(i).getJSONObject("graph");
-						JSONArray nodes = graph.getJSONArray("nodes");
-						for (int j = 0; j < nodes.size(); j++) {
-							JSONObject node = nodes.getJSONObject(j);
-							if (!n.getString("id").equals(node.getString("id"))) {
-								JSONObject obj = new JSONObject();
-								obj.put("id", node.getString("id"));
-								obj.put("name", node.getString("name"));
-								obj.put("class", node.getString("class"));
-								nodeMap.put(obj.getString("id"), obj);
-							}
-						}
-						JSONArray edges = graph.getJSONArray("edges");
-						for (int j = 0; j < edges.size(); j++) {
-							JSONObject edge = edges.getJSONObject(j);
-							String source = edge.getString("source");
-							String target = edge.getString("target");
-							edgeMap.put(source + "_" + target, new String[] {source, target});
-						}
+	public JSONObject queryNextByNode(JSONObject n, String lang, UserDataPermission permission, String domainId) {
+		return queryInstanceGraph(n, lang, permission, domainId, true);
+	}
+
+	@Override
+	public JSONObject queryInstanceNodes(JSONObject request, String lang, UserDataPermission permission, String domainId) {
+		return queryInstanceGraph(request, lang, permission, domainId, false);
+	}
+
+	private JSONObject queryInstanceGraph(JSONObject request, String lang, UserDataPermission permission, String domainId, boolean neighbors) {
+		try {
+			Map<String, Object> rule = adminService.getJSONRule(domainId);
+			DataAdapter adapter = dataAdapterRegistry.create(businessConfigService.get(domainId), rule);
+			InstanceGraphQuery query = new InstanceGraphQuery(rule, adapter, permission, dsl -> {
+				DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, adapter,
+						JSONArray.of(dsl).toJSONString(), UUID.randomUUID().toString(), true, rule,
+						vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+				if (result.failed()) throw result.failure().cause();
+				JSONObject raw = result.rawResponse();
+				JSONArray identifiers = new JSONArray();
+				if (raw.getJSONArray("data") != null && !raw.getJSONArray("data").isEmpty()) {
+					JSONArray rows = raw.getJSONArray("data").getJSONObject(0).getJSONArray("answer");
+					if (rows != null) for (int i = 0; i < rows.size(); i++) {
+						JSONObject row = rows.getJSONObject(i);
+						identifiers.add(JSONObject.of("id", row.get("id"), "sid", row.get("sid"), "tid", row.get("tid")));
 					}
 				}
-				
-				JSONObject data = new JSONObject();
-				JSONArray nodes = new JSONArray();
-				for (String key : nodeMap.keySet()) {
-					JSONObject node = nodeMap.get(key);
-					nodes.add(node);
+				JSONObject filtered = DslPermissionUtil.dealDslAnswerWithPermission(raw, permission,
+						(List<Map<String, Object>>) rule.get("classDef"));
+				JSONArray data = filtered.getJSONArray("data");
+				JSONArray rows = data == null || data.isEmpty() || data.getJSONObject(0).getJSONArray("answer") == null
+						? new JSONArray() : data.getJSONObject(0).getJSONArray("answer");
+				// Graph identities are routing keys, not detail properties. Keep them after field masking removes internal IDs.
+				for (int i = 0; i < rows.size(); i++) {
+					JSONObject ids = identifiers.getJSONObject(i);
+					for (String alias : ids.keySet()) if (ids.get(alias) != null) rows.getJSONObject(i).put(alias, ids.get(alias));
 				}
-				data.put("nodes", nodes);
-				JSONArray edges = new JSONArray();
-				for (String key : edgeMap.keySet()) {
-					String[] st = edgeMap.get(key);
-					JSONObject edge = new JSONObject();
-					edge.put("source", st[0]);
-					edge.put("target", st[1]);
-					edges.add(edge);
-				}
-				data.put("edges", edges);
-				ret.put("success", true);
-				ret.put("data", data);
-			} catch (Exception e) {
-				log.error(e.getMessage(), e);
-				ret.put("message", langService.get(lang, "Data.queryM3.error"));
-				ret.put("success", false);
-			}
-		} else {
-			ret.put("message", langService.get(lang, "Data.remoteDB.notSupport") + ": " + businessConfig.getDataAdapter());
-			ret.put("success", false);
+				return rows;
+			});
+			return JSONObject.of("success", true, "data", neighbors ? query.neighbors(request) : query.instances(request));
+		} catch (Exception e) {
+			log.error("Failed to query instance graph", e);
+			return JSONObject.of("success", false, "message", langService.get(lang, "Data.queryM3.error"));
 		}
-		
-		return ret;
 	}
 
 	@Override

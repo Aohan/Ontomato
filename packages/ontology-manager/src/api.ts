@@ -88,6 +88,7 @@ export interface OntologyObject {
   showName: string;
   classDesc: string;
   attrs: OntologyAttribute[];
+  inStarChart?: boolean;
 }
 
 export interface OntologyRelation {
@@ -115,6 +116,17 @@ export interface InstanceGraphEdge {
 export interface InstanceGraphData {
   nodes: InstanceGraphNode[];
   edges: InstanceGraphEdge[];
+}
+
+export interface InstanceNodePage {
+  nodes: InstanceGraphNode[];
+  hasMore: boolean;
+  nextOffset: number | null;
+}
+
+export interface InstanceNeighborPage extends InstanceGraphData {
+  hasMore: boolean;
+  nextCursor: string | null;
 }
 
 /**
@@ -195,7 +207,7 @@ export function createManagerClient(
   const stale = () =>
     new DOMException(ontologyText(context.messages, "staleResponseDropped"), "AbortError");
 
-  async function send(path: string, init: { method: "GET" | "POST"; body?: string }) {
+  async function send(path: string, init: { method: "GET" | "POST"; body?: string; signal?: AbortSignal }) {
     if (disposed) throw stale();
     const credential = context.credential;
     if (!credential) throw new Error(ontologyText(context.messages, "credentialMissing"));
@@ -270,6 +282,7 @@ export function createManagerClient(
             .trim()
             .toLowerCase() === "true",
       })),
+      inStarChart: item.inStarChart === true,
     })) as OntologyObject[];
     const relationSource = data.relationDef || data.relations || data.relationship_rule || [];
     const relations = (
@@ -444,6 +457,27 @@ export function createManagerClient(
     return { status: "READY", graph: normalizeInstanceGraph(response.data) };
   }
 
+  async function loadInstanceClasses() {
+    const response = await send("/data/getclassandcount", { method: "GET" });
+    return (Array.isArray(response.data) ? response.data : []) as Array<{
+      className: string; showName: string; count: number;
+    }>;
+  }
+
+  async function loadInstanceNodes(className: string, offset = 0, search = "", signal?: AbortSignal): Promise<InstanceNodePage> {
+    const response = await send("/data/queryInstanceNodes", {
+      method: "POST", body: JSON.stringify({ class: className, offset, limit: 50, search }), signal,
+    });
+    return response.data;
+  }
+
+  async function loadInstanceNeighbors(node: InstanceGraphNode, cursor: string | null = null, direction = "both", signal?: AbortSignal): Promise<InstanceNeighborPage> {
+    const response = await send("/data/queryNextByNode", {
+      method: "POST", body: JSON.stringify({ id: node.id, class: node.class, cursor, direction, limit: 50 }), signal,
+    });
+    return response.data;
+  }
+
   /**
    * Rebuilds the star-chart data from the current Ontology and returns once it is done; GENERATING means a build for
    * this domain was already running.
@@ -530,6 +564,9 @@ export function createManagerClient(
     loadObjectData,
     loadSmartAssets,
     loadInstanceGraph,
+    loadInstanceClasses,
+    loadInstanceNodes,
+    loadInstanceNeighbors,
     refreshStarChartData,
     queryInstanceInfo,
     listDataAdapters,
