@@ -155,7 +155,7 @@ async function distinctValues(api, backendPath, rest) {
 
 async function importTestData(api, file) {
   const form = new FormData();
-  form.append("file", new Blob([fs.readFileSync(file)], { type: "application/json" }), path.basename(file));
+  form.append("file", new Blob([fs.readFileSync(file)], { type: "application/zip" }), path.basename(file));
   const res = await fetch(`${api.envUrl}/api/data-query/testEnv/importData`, {
     method: "POST",
     headers: headers(api),

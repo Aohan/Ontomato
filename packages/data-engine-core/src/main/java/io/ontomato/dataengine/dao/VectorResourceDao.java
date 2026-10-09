@@ -98,12 +98,17 @@ public class VectorResourceDao extends BaseDao {
 		ensureTable(indexName);
 	}
 
+	/** The suffix rule for an uploaded resource file; shared by {@link #insert} and the test-data import preflight. */
+	public static boolean isValidSuffix(String suffix) {
+		return suffix != null && suffix.matches("^[a-zA-Z0-9]{1,16}$");
+	}
+
 	public VectorResource insert(VectorResource vectorResource, InputStream is, String suffix, String domainId) {
 		if (vectorResource.getContent() == null || vectorResource.getContent().trim().isEmpty()) {
 			throw new IllegalArgumentException("content is required");
 		}
 		if (is != null) {
-			if (suffix == null || !suffix.matches("^[a-zA-Z0-9]{1,16}$")) {
+			if (!isValidSuffix(suffix)) {
 				throw new IllegalArgumentException("Invalid suffix: must be 1-16 alphanumeric characters");
 			}
 		} else {

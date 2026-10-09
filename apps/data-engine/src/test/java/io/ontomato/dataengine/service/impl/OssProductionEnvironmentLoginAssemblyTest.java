@@ -24,6 +24,7 @@ import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.ProductionEnvironmentLoginPolicy;
 import io.ontomato.dataengine.service.SchemaPermissionService;
+import io.ontomato.dataengine.service.VectorResourceService;
 
 class OssProductionEnvironmentLoginAssemblyTest {
 
@@ -125,6 +126,7 @@ class OssProductionEnvironmentLoginAssemblyTest {
                 factory.registerResolvableDependency(AdminService.class, unused(AdminService.class));
                 factory.registerResolvableDependency(SchemaPermissionService.class, unused(SchemaPermissionService.class));
                 factory.registerResolvableDependency(VectorResourceDao.class, vectorResourceDao);
+                factory.registerResolvableDependency(VectorResourceService.class, unused(VectorResourceService.class));
             });
             context.register(assembly, EnvServiceImpl.class);
             context.refresh();
