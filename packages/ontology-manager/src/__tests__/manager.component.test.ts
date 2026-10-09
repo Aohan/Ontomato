@@ -46,6 +46,7 @@ const metas = (classes: string[]) => ({
       className,
       showName: `${className}-label`,
       classDesc: `${className} desc`,
+      inStarChart: true,
       attrs: [{ name: "id", showName: "ID", type: "string" }],
     })),
     relationship_rule: { has: { fromclass: "Order", toclass: "Item", desc: "has" } },
@@ -60,6 +61,17 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   if (path === "/admin/delBussinessKnowledge" && knowledgeDeleteFails.has(String(body?.knowledgeID)))
     return json({ success: false, message: "locked" });
   if (path === "/admin/getMetas") return json(metasFor(url));
+  if (path === "/data/getclassandcount") return json({ success: true, data: [
+    { className: "Order", showName: "Order-label", count: instanceNodeCount },
+    { className: "Item", showName: "Item-label", count: 50000 },
+  ] });
+  if (path === "/data/queryInstanceNodes") return json({ success: true, data: {
+    nodes: [{ id: "Item:2", name: "Spare part", class: "Item" }], hasMore: false, nextOffset: null,
+  } });
+  if (path === "/data/queryNextByNode") return json({ success: true, data: {
+    nodes: [{ id: "Order:1", name: "First order", class: "Order" }],
+    edges: [{ source: "Order:1", target: "Item:2" }], hasMore: false, nextCursor: null,
+  } });
   if (path === "/data/queryWholeDataMode0")
     return json({ success: true, status: "READY", data: {
       nodes: instanceNodeCount > 2 ? Array.from({ length: instanceNodeCount }, (_, index) => ({
@@ -95,6 +107,7 @@ beforeEach(() => {
   graphRecord.dataBatches = [];
   graphRecord.layouts = [];
   graphRecord.nodeUpdates = [];
+  graphRecord.data = [];
   instanceNodeCount = 2;
   requests = [];
   mountedApps = [];
@@ -230,7 +243,7 @@ function clickButton(text: string) {
 }
 
 describe("OntologyManager root component with real pages", () => {
-  it("large instance graphs draw incrementally and relayout without starting a force simulation", async () => {
+  it("large instance graphs load only type summaries before browsing a bounded instance page", async () => {
     instanceNodeCount = 1201;
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       width: 800, height: 600,
@@ -243,17 +256,15 @@ describe("OntologyManager root component with real pages", () => {
     const options = graphRecord.options.at(-1);
     expect(options.data).toEqual({ nodes: [], edges: [] });
     expect(options.layout).toBeUndefined();
-    expect(options.node.style.shadowBlur).toBe(0);
     expect(graphRecord.layouts).toEqual([]);
-    expect(graphRecord.dataBatches.map((batch) => batch.nodes?.length || batch.edges?.length))
-      .toEqual([200, 200, 200, 200, 200, 200, 1, 1]);
-    expect(root().querySelector(".node-search input")?.hasAttribute("disabled")).toBe(false);
-
-    (root().querySelector(".graph-toolbar button[title='Relayout']") as HTMLButtonElement).click();
+    expect(paths()).not.toContain("/data/queryWholeDataMode0");
+    expect(paths()).not.toContain("/data/queryInstanceNodes");
+    expect(graphRecord.data.at(-1).nodes).toHaveLength(2);
+    graphHandlers["node:click"]({ target: { id: "class:Item" } });
     await settle();
-    await settle();
-    expect(graphRecord.layouts).toEqual([]);
-    expect(graphRecord.nodeUpdates.map((batch) => batch.length)).toEqual([200, 200, 200, 200, 200, 200, 1]);
+    expect(requests.find((item) => item.url.endsWith("/data/queryInstanceNodes"))?.body)
+      .toEqual({ class: "Item", offset: 0, search: "", limit: 50 });
+    expect(graphRecord.data.at(-1).nodes).toHaveLength(1);
   });
 
   it("instance graph search filters nodes and focuses the selected result without stale record details", async () => {
@@ -265,16 +276,17 @@ describe("OntologyManager root component with real pages", () => {
     (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
     await settle();
 
-    const input = root().querySelector<HTMLInputElement>(".node-search input")!;
+    graphHandlers["node:click"]({ target: { id: "class:Item" } });
+    await settle();
+    const input = root().querySelector<HTMLInputElement>(".node-search .el-input input")!;
     expect(input).not.toBeNull();
-    input.focus();
     input.value = "spare";
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
     await settle();
-    expect(root().querySelector(".node-search-option")?.textContent).toContain("Spare part");
-    expect(root().querySelector(".node-search-option")?.textContent).toContain("Item:2");
-    expect(root().querySelector(".node-search-option")?.textContent).not.toContain("First order");
-    (root().querySelector(".node-search-option") as HTMLElement).click();
+    expect(requests.filter((item) => item.url.endsWith("/data/queryInstanceNodes")).at(-1)?.body?.search).toBe("spare");
+    expect(root().querySelector(".node-result")?.textContent).toContain("Spare part");
+    (root().querySelector(".node-result") as HTMLElement).click();
     await settle();
     expect(graphRecord.focusElement).toContainEqual(["Item:2", false]);
     expect(graphRecord.zoomTo).toContainEqual([1, false]);
@@ -293,6 +305,11 @@ describe("OntologyManager root component with real pages", () => {
     waiting[0].resolve(new Response());
     await settle();
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+    graphRecord.zoom = 0.2;
+    graphHandlers["aftertransform"]({});
+    await settle();
+    expect(root().querySelector(".graph-level")?.textContent).toContain("Object Type Overview");
+    expect(graphRecord.data.at(-1).nodes.map((node: { id: string }) => node.id)).toEqual(["class:Order", "class:Item"]);
   });
 
   it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
@@ -816,6 +833,7 @@ describe("OntologyManager root component with real pages", () => {
           className: "Pump",
           showName: "Pump-label",
           classDesc: "Pump desc",
+          inStarChart: false,
           attrs: [
             { name: "pump_no", showName: "pump_no", type: "varchar", enable: true, primaryKey: true },
           ] as never,

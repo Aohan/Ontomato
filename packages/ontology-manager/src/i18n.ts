@@ -29,7 +29,23 @@ const ontologyEn = {
   downloadPng: "Download PNG",
   graphHint: "Click a node to inspect details, drag to adjust the layout",
   instanceGraphTitle: "Instance Graph",
-  searchInstanceNodes: "Search nodes by name, ID or class",
+  instanceGraphOverview: "Object Type Overview",
+  instanceGraphInstances: "Instance Page",
+  instanceGraphNeighborhood: "Local Relations",
+  instanceGraphMore: "Load Next Page",
+  instanceGraphPrevious: "Previous Page",
+  instanceGraphReplacePage: "Continue in a New Local Graph",
+  instanceGraphBack: "Back",
+  instanceGraphBoth: "Incoming and Outgoing",
+  instanceGraphIncoming: "Incoming",
+  instanceGraphOutgoing: "Outgoing",
+  instanceGraphExpand: "Expand One Level",
+  instanceGraphRecenter: "Explore from This Node",
+  instanceGraphCollapse: "Collapse to Center",
+  instanceGraphBudgetReached: "The graph limit has been reached. Continue in a new local graph or collapse to the center.",
+  instanceGraphLodHint: "Select a type to browse instances. Double-click an instance to explore its relations. Point at a node and zoom in to enter the next level, or zoom out to return to the overview. Expand up to two levels.",
+  searchInstanceNodes: "Search names or IDs in the selected type",
+  instanceGraphVisibleCount: "Nodes {nodes} / {nodeLimit} · Relations {edges} / {edgeLimit}",
   instanceGraphRenderProgress: "Rendering graph: {completed} / {total}",
   tableView: "Table",
   loadInstanceGraphFailed: "Failed to load instance graph data",
@@ -402,10 +418,11 @@ export interface ManagerMessages {
 export const englishMessages: ManagerMessages = { ontology: ontologyEn, shared: sharedEn, element: en };
 
 export function ontologyText(messages: ManagerMessages, key: MessageKey, params?: TextParams) {
-  return interpolate(messages.ontology[key], params);
+  return interpolate(messages.ontology[key] ?? ontologyEn[key], params);
 }
 
 export function sharedText(messages: ManagerMessages, key: SharedKey, params?: TextParams) {
   const [group, name] = key.split(".") as [keyof SharedMessages, string];
-  return interpolate((messages.shared[group] as Readonly<Record<string, string>>)[name], params);
+  const fallback = sharedEn[group] as Readonly<Record<string, string>>;
+  return interpolate((messages.shared[group] as Readonly<Record<string, string>> | undefined)?.[name] ?? fallback[name], params);
 }

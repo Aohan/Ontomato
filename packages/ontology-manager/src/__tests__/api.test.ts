@@ -12,6 +12,7 @@ interface RecordedRequest {
   method: string;
   headers: Record<string, string>;
   body: unknown;
+  signal?: AbortSignal | null;
 }
 
 let requests: RecordedRequest[];
@@ -30,6 +31,7 @@ beforeEach(() => {
       method: String(init.method),
       headers: init.headers as Record<string, string>,
       body: init.body === undefined ? undefined : JSON.parse(String(init.body)),
+      signal: init.signal,
     });
     return respond(url);
   });
@@ -62,6 +64,18 @@ function deferred() {
 }
 
 describe("credentials and request headers", () => {
+  it("instance graph page queries carry server limits, cursors and cancellation signals", async () => {
+    const { client } = setup({ type: "token", token: "t" });
+    const controller = new AbortController();
+    await client.loadInstanceNodes("Order", 50, "pump", controller.signal);
+    await client.loadInstanceNeighbors({ id: "Order:1", name: "Order", class: "Order" }, "0:50", "in", controller.signal);
+    expect(requests.map((request) => request.body)).toEqual([
+      { class: "Order", offset: 50, limit: 50, search: "pump" },
+      { id: "Order:1", class: "Order", cursor: "0:50", direction: "in", limit: 50 },
+    ]);
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true);
+  });
+
   it("a token sends only tk and paths use the host apiBase", async () => {
     const { client } = setup({ type: "token", token: "t-1" });
     await client.loadOntology();
@@ -467,6 +481,7 @@ describe("requests used by data browsing and visual modeling", () => {
           className: "Order",
           showName: "Order",
           classDesc: "Host: no description",
+          inStarChart: false,
           attrs: [
             {
               name: "id",

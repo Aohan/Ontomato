@@ -13,7 +13,9 @@ public interface DataService {
 	
 	public JSONObject queryWholeDataMode1(String domainId);
 	
-	public JSONObject queryNextByNode(JSONObject node, String lang, String domainId);
+	public JSONObject queryNextByNode(JSONObject node, String lang, UserDataPermission permission, String domainId);
+
+	public JSONObject queryInstanceNodes(JSONObject request, String lang, UserDataPermission permission, String domainId);
 	
 	public JSONObject queryInfoByNode(JSONObject node, String lang, UserDataPermission permission, String domainId);
 
