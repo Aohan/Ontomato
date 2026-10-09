@@ -7,7 +7,7 @@ import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 
 public interface DataService {
 	
-	public void refreshStarChartData(String domainId);
+	public JSONObject refreshStarChartData(String domainId);
 
 	public JSONObject queryWholeDataMode0(String domainId);
 	

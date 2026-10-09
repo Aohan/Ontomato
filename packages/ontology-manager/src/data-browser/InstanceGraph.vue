@@ -2,6 +2,7 @@
 import { Graph } from "@antv/g6";
 import {
   Box,
+  DatabaseZap,
   Download,
   Focus,
   Maximize2,
@@ -12,20 +13,23 @@ import {
   ZoomOut,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { vLoading } from "element-plus";
+import { ElButton, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
-import type { InstanceGraphEdge, InstanceGraphNode } from "../api";
+import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult } from "../api";
 import { useManagerClient, useManagerContext, useOntologyText, useSharedText } from "../context";
 
 const context = useManagerContext();
-const { message } = useManagerFeedback();
+const { message, confirm } = useManagerFeedback();
 const { ot } = useOntologyText();
 const { t } = useSharedText();
-const { loadInstanceGraph, queryInstanceInfo, loadOntology } = useManagerClient();
+const { loadInstanceGraph, refreshStarChartData, queryInstanceInfo, loadOntology } =
+  useManagerClient();
 
 const graphRef = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
+const regenerating = ref(false);
 const error = ref("");
+const status = ref<InstanceGraphResult["status"]>("READY");
 const nodes = ref<InstanceGraphNode[]>([]);
 const edges = ref<InstanceGraphEdge[]>([]);
 const selectedNode = ref<InstanceGraphNode | null>(null);
@@ -277,18 +281,41 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    const [graphData, ontology] = await Promise.all([loadInstanceGraph(), loadOntology()]);
+    const [result, ontology] = await Promise.all([loadInstanceGraph(), loadOntology()]);
     classLabels.value = Object.fromEntries(
       ontology.objects.map((object) => [object.className, object.showName])
     );
-    nodes.value = graphData.nodes;
-    edges.value = graphData.edges;
+    status.value = result.status;
+    nodes.value = result.status === "READY" ? result.graph.nodes : [];
+    edges.value = result.status === "READY" ? result.graph.edges : [];
     clearSelection();
     await renderGraph();
   } catch (reason) {
     error.value = reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed");
   } finally {
     loading.value = false;
+  }
+}
+
+// Generation scans all star-chart data, so it is confirmed first; the empty state and the toolbar share this entry.
+async function regenerate() {
+  try {
+    await confirm(ot("instanceGraphGenerateConfirm"), ot("generateInstanceGraph"));
+  } catch {
+    return;
+  }
+  regenerating.value = true;
+  try {
+    if ((await refreshStarChartData()) === "GENERATED") {
+      message.success(ot("instanceGraphGenerated"));
+      await refresh();
+    } else {
+      message.info(ot("instanceGraphGenerating"));
+    }
+  } catch (reason) {
+    message.error((reason as Error).message);
+  } finally {
+    regenerating.value = false;
   }
 }
 
@@ -311,13 +338,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section v-loading="loading" class="instance-graph">
+  <section v-loading="loading || regenerating" class="instance-graph">
     <div ref="graphRef" class="graph-canvas" />
 
     <div v-if="isEmpty" class="graph-empty">
       <Unplug :size="30" />
-      <strong>{{ ot("instanceGraphEmpty") }}</strong>
-      <span>{{ ot("instanceGraphEmptyDesc") }}</span>
+      <template v-if="status === 'NOT_GENERATED'">
+        <strong>{{ ot("instanceGraphNotGenerated") }}</strong>
+        <el-button type="primary" :icon="DatabaseZap" @click="regenerate">
+          {{ ot("generateInstanceGraph") }}
+        </el-button>
+      </template>
+      <strong v-else-if="status === 'GENERATING'">{{ ot("instanceGraphGenerating") }}</strong>
+      <template v-else>
+        <strong>{{ ot("instanceGraphEmpty") }}</strong>
+        <span>{{ ot("instanceGraphEmptyDesc") }}</span>
+      </template>
     </div>
 
     <div class="graph-toolbar">
@@ -329,6 +365,9 @@ onBeforeUnmount(() => {
       </button>
       <button :title="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
       <button :title="t('common.refresh')" @click="refresh"><RefreshCw :size="17" /></button>
+      <button :title="ot('regenerateInstanceGraph')" :disabled="regenerating" @click="regenerate">
+        <DatabaseZap :size="17" />
+      </button>
     </div>
 
     <div class="graph-hint">
@@ -463,6 +502,10 @@ onBeforeUnmount(() => {
 }
 .graph-empty span {
   font-size: var(--text-sm);
+}
+.graph-empty .el-button {
+  margin-top: 8px;
+  pointer-events: auto;
 }
 .inspector-panel {
   position: relative;

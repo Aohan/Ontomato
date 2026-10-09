@@ -30,19 +30,11 @@ public class DataController {
 	@Autowired
     private DataService dataService;
 	
-	@GetMapping("/data/refreshStarChartData")
+	@PostMapping("/data/refreshStarChartData")
     @ResponseBody
-    public Boolean refreshStarChartData() {
+    public JSONObject refreshStarChartData() {
 		User user = SystemUtils.getCurUser();
-		dataService.refreshStarChartData(user.getDomainId());
-		return true;
-	}
-	
-	@GetMapping("/data/queryWholeData")
-    @ResponseBody
-    public JSONObject queryWholeData() {
-		User user = SystemUtils.getCurUser();
-		return dataService.queryWholeDataMode0(user.getDomainId());
+		return dataService.refreshStarChartData(user.getDomainId());
 	}
 
 	@GetMapping("/data/queryWholeDataMode0")

@@ -6,8 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -68,140 +67,23 @@ public class DataServiceImpl implements DataService {
 	@Autowired
 	private SysDomainDao domainDao;
 	
-	private BlockingQueue<WholeDataOperate> wholeDataQueue = new LinkedBlockingQueue<WholeDataOperate>();
-	
-	class WholeDataOperate {
-		public static final String TYPE_GET = "GET";
-		public static final String TYPE_CUT = "CUT";
-		public static final String TYPE_PUT = "PUT";
-		
-		public static final String MODE_0 = "mode0";
-		public static final String MODE_1 = "mode1";
-		
-		private String type;
-		private JSONObject input;
-		private BlockingQueue<JSONObject> output;
-		
-		public WholeDataOperate(String type, JSONObject input, BlockingQueue<JSONObject> output) {
-			this.type = type;
-			this.input = input;
-			this.output = output;
-		}
-		
-		public String getType() {
-			return type;
-		}
-		public void setType(String type) {
-			this.type = type;
-		}
-		public JSONObject getInput() {
-			return input;
-		}
-		public void setInput(JSONObject input) {
-			this.input = input;
-		}
-		public BlockingQueue<JSONObject> getOutput() {
-			return output;
-		}
-		public void setOutput(BlockingQueue<JSONObject> output) {
-			this.output = output;
-		}
-	}
+	private static final String MODE_0 = "mode0";
+	private static final String MODE_1 = "mode1";
+
+	private static final String STATUS_READY = "READY";
+	private static final String STATUS_GENERATING = "GENERATING";
+	private static final String STATUS_NOT_GENERATED = "NOT_GENERATED";
+	private static final String STATUS_GENERATED = "GENERATED";
+
+	// Current A/B file suffix per domain; absent means the domain has no current data in this process.
+	// Package-visible so focused unit tests can drive the read states without a database.
+	final Map<String, String> currentSuffix = new ConcurrentHashMap<>();
+	// Domains with a generation in progress; guarantees at most one generation per domain at a time.
+	// Package-visible so focused unit tests can drive the read states without a database.
+	final Set<String> generatingDomains = ConcurrentHashMap.newKeySet();
 	
 	@PostConstruct
 	public void initService() {
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				Map<String, String> currentMap = new HashMap<String, String>();
-				while (true) {
-					try {
-						WholeDataOperate operate = wholeDataQueue.take();
-						JSONObject input = operate.getInput();
-						BlockingQueue<JSONObject> output = operate.getOutput();
-						if (WholeDataOperate.TYPE_GET.equals(operate.getType())) {
-							String mode = input.getString("mode");
-							String domainId = input.getString("domainId");
-							String _current = currentMap.get(domainId) != null ? (currentMap.get(domainId) + "") : "";
-							new Thread(new Runnable() {
-								@Override
-								public void run() {
-									try {
-										boolean wholeDataIsNull = true;
-										if (!_current.equals("")) {
-											JSONObject wholeData = starChartDao.readWholeData(mode, _current, domainId);
-											if (wholeData != null) {
-												output.put(wholeData);
-												wholeDataIsNull = false;
-											}
-										}
-										if (wholeDataIsNull) {
-											Thread.sleep(1000);
-											wholeDataQueue.put(operate);
-										}
-									} catch (Exception e) {
-										log.error(e.getMessage(), e);
-									}
-								}
-							}).start();
-						} else if (WholeDataOperate.TYPE_CUT.equals(operate.getType())) {
-							String domainId = input.getString("domainId");
-							String _current = currentMap.get(domainId) != null ? (currentMap.get(domainId) + "") : "";
-							new Thread(new Runnable() {
-								@Override
-								public void run() {
-									try {
-										String newCurrent = null;
-										if (_current.equals("")) {
-											newCurrent = "A";
-										} else {
-											if (_current.equals("A")) {
-												newCurrent = "B";
-											} else {
-												newCurrent = "A";
-											}
-										}
-										BusinessConfig businessConfig = businessConfigService.get(domainId);
-										DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-										if (adapter.useM3()) {
-											JSONObject wholeData = cutWholeData(domainId);
-											log.info("TYPE_CUT writeWholeData start...");
-											starChartDao.writeWholeData(wholeData, WholeDataOperate.MODE_0, newCurrent, domainId);
-											starChartDao.writeWholeData(fromMode0ToMode1(wholeData, domainId), WholeDataOperate.MODE_1, newCurrent, domainId);
-											log.info("TYPE_CUT writeWholeData end...");
-										} else {
-											JSONObject wholeData = cutWholeDataBySql(domainId, businessConfig);
-											log.info("TYPE_CUT writeWholeData start...");
-											starChartDao.writeWholeData(wholeData, WholeDataOperate.MODE_0, newCurrent, domainId);
-											starChartDao.writeWholeData(fromMode0ToMode1(wholeData, domainId), WholeDataOperate.MODE_1, newCurrent, domainId);
-											log.info("TYPE_CUT writeWholeData end...");
-										}
-										JSONObject input = new JSONObject();
-										input.put("domainId", domainId);
-										input.put("newCurrent", newCurrent);
-										log.info("TYPE_CUT operate input start    " + input.toString());
-										WholeDataOperate operate = new WholeDataOperate(WholeDataOperate.TYPE_PUT, input, null);
-										wholeDataQueue.put(operate);
-									} catch (Exception e) {
-										log.error(e.getMessage(), e);
-									}
-								}
-							}).start();
-						} else if (WholeDataOperate.TYPE_PUT.equals(operate.getType())) {
-							String domainId = input.getString("domainId");
-							String current = input.getString("newCurrent");
-							currentMap.put(domainId, current);
-						}
-					} catch (Exception e) {
-						log.error(e.getMessage(), e);
-					}
-					try {
-						Thread.sleep(10);
-					} catch (Exception e) {}
-				}
-			}
-		}).start();
-		
 		new Thread(new Runnable() {
 			@Override
 			public void run() {
@@ -209,12 +91,9 @@ public class DataServiceImpl implements DataService {
 					try {
 						List<SysDomain> domains = domainDao.queryList(new CSysDomain());
 						for (SysDomain domain : domains) {
-							JSONObject input = new JSONObject();
-							input.put("domainId", domain.getId());
-							WholeDataOperate operate = new WholeDataOperate(WholeDataOperate.TYPE_CUT, input, null);
-							wholeDataQueue.put(operate);
+							startBackgroundGeneration(domain.getId());
 						}
-						
+
 						break;
 					} catch (Exception e) {
 						log.error(e.getMessage(), e);
@@ -226,53 +105,88 @@ public class DataServiceImpl implements DataService {
 			}
 		}).start();
 	}
-	
-	@Override
-	public void refreshStarChartData(String domainId) {
-		try {
-			JSONObject input = new JSONObject();
-			input.put("domainId", domainId);
-			WholeDataOperate operate = new WholeDataOperate(WholeDataOperate.TYPE_CUT, input, null);
-			wholeDataQueue.put(operate);
-		} catch (Exception e) {
-			log.error(e.getMessage(), e);
+
+	private void startBackgroundGeneration(String domainId) {
+		if (!generatingDomains.add(domainId)) {
+			return;
 		}
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					generate(domainId);
+				} catch (Exception e) {
+					log.error(e.getMessage(), e);
+				} finally {
+					generatingDomains.remove(domainId);
+				}
+			}
+		}).start();
 	}
-	
+
 	@Override
-	public JSONObject queryWholeDataMode0(String domainId) {
-		return queryWholeData(WholeDataOperate.MODE_0, domainId);
-	}
-	
-	@Override
-	public JSONObject queryWholeDataMode1(String domainId) {
-		return queryWholeData(WholeDataOperate.MODE_1, domainId);
-	}
-	
-	private JSONObject queryWholeData(String mode, String domainId) {
-		JSONObject data = null;
+	public JSONObject refreshStarChartData(String domainId) {
+		if (!generatingDomains.add(domainId)) {
+			JSONObject ret = new JSONObject();
+			ret.put("success", true);
+			ret.put("status", STATUS_GENERATING);
+			return ret;
+		}
 		try {
-			JSONObject input = new JSONObject();
-			input.put("mode", mode);
-			input.put("domainId", domainId);
-			BlockingQueue<JSONObject> output = new LinkedBlockingQueue<JSONObject>();
-			WholeDataOperate operate = new WholeDataOperate(WholeDataOperate.TYPE_GET, input, output);
-			wholeDataQueue.put(operate);
-			data = output.take();
-		} catch (Exception e) {
-			log.error(e.getMessage(), e);
+			generate(domainId);
+		} finally {
+			generatingDomains.remove(domainId);
 		}
 		JSONObject ret = new JSONObject();
-		if (data != null) {
-			ret.put("success", true);
-			ret.put("data", data);
-		} else {
-			ret.put("success", false);
-		}
+		ret.put("success", true);
+		ret.put("status", STATUS_GENERATED);
 		return ret;
 	}
+
+	@Override
+	public JSONObject queryWholeDataMode0(String domainId) {
+		return queryWholeData(MODE_0, domainId);
+	}
+
+	@Override
+	public JSONObject queryWholeDataMode1(String domainId) {
+		return queryWholeData(MODE_1, domainId);
+	}
+
+	private JSONObject queryWholeData(String mode, String domainId) {
+		JSONObject ret = new JSONObject();
+		ret.put("success", true);
+		String suffix = currentSuffix.get(domainId);
+		if (suffix != null) {
+			JSONObject data = starChartDao.readWholeData(mode, suffix, domainId);
+			ret.put("status", STATUS_READY);
+			ret.put("data", data);
+			return ret;
+		}
+		ret.put("status", generatingDomains.contains(domainId) ? STATUS_GENERATING : STATUS_NOT_GENERATED);
+		return ret;
+	}
+
+	private void generate(String domainId) {
+		BusinessConfig businessConfig = businessConfigService.get(domainId);
+		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
+		JSONObject wholeData;
+		if (adapter.useM3()) {
+			wholeData = cutWholeData(domainId);
+		} else {
+			wholeData = cutWholeDataBySql(domainId, businessConfig);
+		}
+		String suffix = currentSuffix.get(domainId);
+		String newSuffix = suffix == null ? "A" : (suffix.equals("A") ? "B" : "A");
+		log.info("generate star chart data writeWholeData start...");
+		starChartDao.writeWholeData(wholeData, MODE_0, newSuffix, domainId);
+		starChartDao.writeWholeData(fromMode0ToMode1(wholeData, domainId), MODE_1, newSuffix, domainId);
+		log.info("generate star chart data writeWholeData end...");
+		currentSuffix.put(domainId, newSuffix);
+	}
 	
-	private JSONObject cutWholeData(String domainId) {
+	// Package-visible so focused unit tests can stub the data build without a database or remote query.
+	JSONObject cutWholeData(String domainId) {
 		log.info("cutWholeData start...");
 		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
