@@ -30,7 +30,8 @@ fits real business data.
 
    Java tests that need a database, a model or another external system are not run as a
    whole suite; run the tests for the classes you touched.
-5. Write commit subjects in English as `type: description`, for example
+5. Write commit messages (subjects and bodies) and new or changed code comments in
+   English. Use `type: description` for commit subjects, for example
    `fix: keep the relationship order when saving the ontomap`.
 6. Open a pull request against `main` that says what changed, why, and how you verified it.
 
