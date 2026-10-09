@@ -21,7 +21,7 @@ langchain4j:
       base-url: ${BACKEND_EMBEDDING_BASE_URL:}
       api-key: ${BACKEND_EMBEDDING_API_KEY:}
       model-name: ${BACKEND_EMBEDDING_MODEL:}
-      dimensions: ${BACKEND_EMBEDDING_DIMENSIONS:2048}
+      dimensions: ${BACKEND_EMBEDDING_DIMENSIONS:4096}
       timeout: PT300S
       log-requests: true
       log-responses: false

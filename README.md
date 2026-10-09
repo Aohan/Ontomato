@@ -157,7 +157,7 @@ When `docker compose ps` shows every service healthy, open `http://<host>:3000` 
 chat and embedding models under **Model Configuration** in the Admin Panel. You can also
 preset them in `.env` (`BACKEND_LLM_*`, `BACKEND_EMBEDDING_*`).
 
-`BACKEND_EMBEDDING_DIMENSIONS` (default `2048`) is sent to the embedding model and sizes
+`BACKEND_EMBEDDING_DIMENSIONS` (default `4096`) is sent to the embedding model and sizes
 the vector tables. Change it in `.env` before the first start if your model needs another
 value; it cannot change once data exists.
 
