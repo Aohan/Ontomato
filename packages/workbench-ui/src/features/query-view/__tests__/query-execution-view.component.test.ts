@@ -1,6 +1,10 @@
 import { mount, type DOMWrapper, type VueWrapper } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { datasetPlacement } from "@ontomato/contracts/query-execution";
+
+// Downloads are asserted by the rows each action hands over, not by a browser file save.
+vi.mock("../utils/downloadUtils", () => ({ downloadCsvFromData: vi.fn(), downloadDsl: vi.fn() }));
+import { downloadCsvFromData } from "../utils/downloadUtils";
 
 import QueryExecutionView from "../components/QueryExecutionView.vue";
 import MessageContent from "../components/MessageContent/index.vue";
@@ -116,7 +120,7 @@ describe("execution display view renders by facts", () => {
     expect(w.findAll(unplaced)).toHaveLength(0);
   });
 
-  it("shows only row count and actions where the body places a dataset, the name staying in the body", () => {
+  it("shows only actions where the body places a dataset, the name staying in the body", () => {
     const w = render(MULTI);
     const blocks = w.findAll(placed);
 
@@ -124,7 +128,10 @@ describe("execution display view renders by facts", () => {
       false,
       false,
     ]);
-    expect(blocks[0]!.text()).toContain(t("analysis.rowCountHint", { n: 1 }));
+    expect(blocks.map((block) => block.find(".result-dataset-head").exists())).toEqual([
+      false,
+      false,
+    ]);
     expect(buttonLabels(blocks[0]!)).toContain(t("chat.downloadData"));
     // The sub-question name appears once: in the body heading, not again in the actions.
     expect(w.text().split("Construction sites by town")).toHaveLength(2);
@@ -194,7 +201,7 @@ describe("execution display view renders by facts", () => {
     }
   });
 
-  it("presents three results of the real answer's shape in order, conclusion after them, conclusion and folded tables without actions", () => {
+  it("presents three results of the real answer's shape in order, conclusion after them, conclusion and folded tables without actions", async () => {
     const row = (count: number, keys: string[]) =>
       Array.from({ length: count }, (_, index) =>
         Object.fromEntries(keys.map((key) => [key, `${key}-${index}`]))
@@ -237,11 +244,17 @@ describe("execution display view renders by facts", () => {
       ],
     });
 
+    // Each placed action downloads its own dataset's rows.
     const blocks = w.findAll(placed);
-    expect(blocks.map((block) => block.text())).toEqual([
-      expect.stringContaining(t("analysis.rowCountHint", { n: 6380 })),
-      expect.stringContaining(t("analysis.rowCountHint", { n: 6380 })),
-      expect.stringContaining(t("analysis.rowCountHint", { n: 41 })),
+    expect(blocks).toHaveLength(3);
+    vi.mocked(downloadCsvFromData).mockClear();
+    for (const block of blocks) await clickButton(block, t("chat.downloadData"));
+    expect(
+      vi.mocked(downloadCsvFromData).mock.calls.map(([rows, name]) => [rows.length, name])
+    ).toEqual([
+      [6380, "Revenue by entity"],
+      [6380, "Cash flow by entity"],
+      [41, "Entities with growth"],
     ]);
     expect(w.findAll(unplaced)).toHaveLength(0);
 
@@ -378,11 +391,10 @@ describe("execution display view renders by facts", () => {
     const blocks = w.findAll(".result-dataset");
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text()).toContain("Data-only result");
-    expect(blocks[0]!.text()).toContain(t("analysis.rowCountHint", { n: 1 }));
     expect(w.findComponent(MessageContent).props("content")).toBe("");
   });
 
-  it("puts zero-row and no-displayable-field results' actions right after the body's empty state", () => {
+  it("puts zero-row and no-displayable-field results' actions right after the body's empty state", async () => {
     const w = render({
       fullContent: [
         "### Empty result",
@@ -409,12 +421,15 @@ describe("execution display view renders by facts", () => {
 
     const [empty, blank] = w.findAll(placed);
     expect(w.findAll(unplaced)).toHaveLength(0);
-    expect(empty!.text()).toContain(t("analysis.rowCountHint", { n: 0 }));
     expect(buttonLabels(empty!)).not.toContain(t("chat.downloadData"));
     expect(buttonLabels(empty!)).toContain(t("common.detail"));
     // Rows the adapter could not display are still the real data, downloadable as saved.
-    expect(blank!.text()).toContain(t("analysis.rowCountHint", { n: 2 }));
-    expect(buttonLabels(blank!)).toContain(t("chat.downloadData"));
+    vi.mocked(downloadCsvFromData).mockClear();
+    await clickButton(blank!, t("chat.downloadData"));
+    expect(vi.mocked(downloadCsvFromData)).toHaveBeenCalledWith(
+      [{ note: "" }, { note: null }],
+      "Blank fields"
+    );
     expect(w.html().indexOf("Conclusion: nothing found.")).toBeGreaterThan(
       w.html().lastIndexOf('class="result-dataset"')
     );
