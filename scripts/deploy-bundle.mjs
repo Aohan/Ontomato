@@ -46,6 +46,17 @@ export function bundleVersion(apps) {
   return versions[0];
 }
 
+// The offline pack is a release outlet: an image carrying a license mode must
+// be the real licensed artifact. Only the enterprise data-engine app carries
+// this label; override builds are packed under their own alias, if at all.
+export function assertReleaseLicense(images) {
+  for (const { ref, image } of images) {
+    const mode = (image.Config.Labels || {})["io.example.license.mode"];
+    if (mode !== undefined && mode !== "real")
+      throw new Error(`Refusing to pack non-real licensed image: ${ref} (io.example.license.mode=${mode})`);
+  }
+}
+
 const STAMP_OFFSET_MS = 8 * 3600 * 1000;
 // UTC+8 local time, same shape as the build stamp: YYYYMMDD-HHMMSS.
 export function bundleStamp(now) {
@@ -77,6 +88,7 @@ async function main() {
     image: assertImagePlatform(inspectImage(ref, `linux/${arch}`), ref, arch),
   }));
   const labels = (image) => image.Config.Labels || {};
+  assertReleaseLicense(images);
   const version = bundleVersion(
     images
       .filter(({ image }) => labels(image)["io.runtime.kind"] === "app")

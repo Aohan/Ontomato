@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   assertImagePlatform,
+  assertReleaseLicense,
   bundleName,
   bundleVersion,
   imageFileName,
@@ -71,6 +72,13 @@ test("the pack version comes from the app images and must agree", () => {
       ]),
     /a=4\.0\.0-dev, b=4\.0\.1/,
   );
+});
+
+test("the pack refuses a non-real licensed image", () => {
+  const image = (mode) => ({ ref: "datarag-app:deploy", image: { Config: { Labels: mode === undefined ? null : { "io.example.license.mode": mode } } } });
+  assertReleaseLicense([image("real")]);
+  assertReleaseLicense([image(undefined)]);
+  assert.throws(() => assertReleaseLicense([image("override")]), /Refusing to pack non-real licensed image: datarag-app:deploy/);
 });
 
 test("the pack name carries product, version, local time and architecture", () => {
