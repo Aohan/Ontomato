@@ -72,6 +72,10 @@
     "value": "Business knowledge content is required"
   },
   {
+    "key": "Admin.knowledge.idRequired",
+    "value": "Business knowledge ID is required"
+  },
+  {
     "key": "Admin.class.primaryKeyRequired",
     "value": "A new object class needs a primary key field name"
   },
