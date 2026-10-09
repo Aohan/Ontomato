@@ -33,6 +33,13 @@ const ontologyEn = {
   loadInstanceGraphFailed: "Failed to load instance graph data",
   instanceGraphEmpty: "No instance graph data",
   instanceGraphEmptyDesc: "No instances or relations have been built for the current Ontology.",
+  instanceGraphNotGenerated: "Instance graph data has not been generated yet",
+  instanceGraphGenerating: "Instance graph data is being generated. Please refresh later.",
+  generateInstanceGraph: "Generate Instance Graph",
+  regenerateInstanceGraph: "Regenerate Instance Graph",
+  instanceGraphGenerateConfirm:
+    "All classes added to the star chart and their relation data will be rescanned according to the current Ontology. With large data volumes this can take a long time and use substantial database and memory resources. Continue?",
+  instanceGraphGenerated: "Instance graph data generated",
   instanceInspector: "Instance Inspector",
   instanceInspectorDesc: "Inspect the selected instance and its properties.",
   instanceClass: "Class",

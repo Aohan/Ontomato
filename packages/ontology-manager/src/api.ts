@@ -117,6 +117,14 @@ export interface InstanceGraphData {
   edges: InstanceGraphEdge[];
 }
 
+/**
+ * Star-chart data state reported by the data engine. Only READY carries data; GENERATING and NOT_GENERATED mean the
+ * domain has never been generated, with or without a build currently running.
+ */
+export type InstanceGraphResult =
+  | { status: "READY"; graph: InstanceGraphData }
+  | { status: "GENERATING" | "NOT_GENERATED" };
+
 export interface CreateOntologyObjectInput {
   className: string;
   /** Primary key attribute the backend saves with the class (an enabled varchar); must be id for the M3 data source. */
@@ -430,9 +438,18 @@ export function createManagerClient(
   }
 
   /** Pre-built star-chart instance graph (all inStarChart classes); nodes are data instances, edges their relations. */
-  async function loadInstanceGraph() {
+  async function loadInstanceGraph(): Promise<InstanceGraphResult> {
     const response = await send("/data/queryWholeDataMode0", { method: "GET" });
-    return normalizeInstanceGraph(response.data);
+    if (response.status !== "READY") return { status: response.status };
+    return { status: "READY", graph: normalizeInstanceGraph(response.data) };
+  }
+
+  /**
+   * Rebuilds the star-chart data from the current Ontology and returns once it is done; GENERATING means a build for
+   * this domain was already running.
+   */
+  async function refreshStarChartData(): Promise<"GENERATED" | "GENERATING"> {
+    return (await send("/data/refreshStarChartData", { method: "POST" })).status;
   }
 
   /** One instance's full record; the data engine returns classDef plus a flat attribute map. */
@@ -513,6 +530,7 @@ export function createManagerClient(
     loadObjectData,
     loadSmartAssets,
     loadInstanceGraph,
+    refreshStarChartData,
     queryInstanceInfo,
     listDataAdapters,
     listKnowledge,

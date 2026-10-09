@@ -26,7 +26,7 @@ public class StarChartDao {
 			fos = new FileOutputStream(file);
 			fos.write(JSON.toJSONString(data, Feature.WriteMapNullValue).getBytes("utf-8"));
 		} catch (Exception e) {
-			log.error(e.getMessage(), e);
+			throw new RuntimeException("Failed to write star chart data: mode=" + mode + ", suffix=" + suffix + ", domainId=" + domainId, e);
 		} finally {
 			if (fos != null) {
 				try {
@@ -37,7 +37,7 @@ public class StarChartDao {
 			}
 		}
 	}
-	
+
 	public JSONObject readWholeData(String mode, String suffix, String domainId) {
 		FileInputStream fis = null;
 		try {
@@ -45,8 +45,7 @@ public class StarChartDao {
 			JSONObject data = JSONObject.parseObject(new String(fis.readAllBytes(), "utf-8"));
 			return data;
 		} catch (Exception e) {
-			log.error(e.getMessage(), e);
-			return null;
+			throw new RuntimeException("Failed to read star chart data: mode=" + mode + ", suffix=" + suffix + ", domainId=" + domainId, e);
 		} finally {
 			if (fis != null) {
 				try {

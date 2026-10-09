@@ -331,6 +331,7 @@ describe("requests used by data browsing and visual modeling", () => {
       if (url.endsWith("/data/queryWholeDataMode0")) {
         return json({
           success: true,
+          status: "READY",
           data: {
             nodes: [
               { id: "Order:1", name: "O1", class: "Order" },
@@ -347,11 +348,16 @@ describe("requests used by data browsing and visual modeling", () => {
     };
     const { client } = setup({ type: "token", token: "t" });
 
-    const graph = await client.loadInstanceGraph();
+    const result = await client.loadInstanceGraph();
     const info = await client.queryInstanceInfo("Order:1", "Order");
 
-    expect(graph.nodes).toEqual([{ id: "Order:1", name: "O1", class: "Order" }]);
-    expect(graph.edges).toEqual([{ source: "Order:1", target: "Item:1" }]);
+    expect(result).toEqual({
+      status: "READY",
+      graph: {
+        nodes: [{ id: "Order:1", name: "O1", class: "Order" }],
+        edges: [{ source: "Order:1", target: "Item:1" }],
+      },
+    });
     expect(info).toEqual({ classDef: { className: "Order" }, data: { id: "1" } });
 
     expect(
@@ -360,6 +366,23 @@ describe("requests used by data browsing and visual modeling", () => {
       ["/data/queryWholeDataMode0", "GET", undefined],
       ["/data/queryInfoByNode", "POST", { id: "Order:1", class: "Order" }],
     ]);
+  });
+
+  it("instance graph reports a state without data while the star chart is not generated", async () => {
+    respond = async () => json({ success: true, status: "NOT_GENERATED" });
+    const { client } = setup({ type: "token", token: "t" });
+
+    expect(await client.loadInstanceGraph()).toEqual({ status: "NOT_GENERATED" });
+  });
+
+  it("regenerating the star chart posts without a body and returns the build state", async () => {
+    respond = async () => json({ success: true, status: "GENERATED" });
+    const { client } = setup({ type: "token", token: "t" });
+
+    expect(await client.refreshStarChartData()).toBe("GENERATED");
+    expect(
+      requests.map((r) => [r.url.replace("/custom/manager-api/data-query", ""), r.method, r.body])
+    ).toEqual([["/data/refreshStarChartData", "POST", undefined]]);
   });
 
   it("creating classes and relations in modeling keeps the original request body fields", async () => {
