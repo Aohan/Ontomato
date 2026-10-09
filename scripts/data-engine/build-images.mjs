@@ -279,7 +279,9 @@ function stageApp(app, arch, exported, lang, fp) {
 function buildApp(app, arch, version, stamp, exported, fp, lang) {
   const context = stageApp(app, arch, exported, lang, fp);
   const tag = `${app.component}-app:${stamp}${app.appTagSuffix}-${arch}`;
-  const alias = `${app.component}-app:deploy`;
+  // An override edition carries its suffix into the deploy alias as well, so a
+  // development build never claims the alias the deployment assembles from.
+  const alias = `${app.component}-app:deploy${app.appTagSuffix || ""}`;
   const labels = app.appLabels;
   console.log(`[build] app ${tag} (prompt=${lang})`);
   docker([

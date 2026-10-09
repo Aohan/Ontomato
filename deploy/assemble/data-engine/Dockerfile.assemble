@@ -5,9 +5,9 @@
 # The application image is architecture-independent (scratch + files): this stage
 # pins the $BUILDPLATFORM reference, so assembly does not depend on the platform
 # recorded in the app image. The only architecture source is EXPECTED_ARCH.
-# APP_COMPONENT names the product (public datarag-opensource). An edition whose
-# checker owns a license mode rule requires EXPECTED_LICENSE_MODE; the public
-# checker does not read it.
+# APP_COMPONENT names the product (public datarag-opensource). The enterprise
+# checker used to require EXPECTED_LICENSE_MODE here; the license mode is now
+# decided at build time and no deployment passes it anymore.
 ARG RUNTIME_IMAGE
 ARG APP_IMAGE
 ARG EXPECTED_ARCH
@@ -18,7 +18,6 @@ FROM --platform=$BUILDPLATFORM ${APP_IMAGE} AS app_source
 FROM ${RUNTIME_IMAGE}
 
 ARG EXPECTED_ARCH
-ARG EXPECTED_LICENSE_MODE
 ARG APP_COMPONENT
 
 # A composite of two separately built images: clear the inherited image

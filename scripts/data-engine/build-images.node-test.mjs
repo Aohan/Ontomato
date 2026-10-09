@@ -454,6 +454,12 @@ for (const mode of ["real", "override"])
     const tag = app.args[app.args.indexOf("-t") + 1];
     const enterpriseHead = git(fx.ent, "rev-parse", "HEAD");
     assert.match(tag, new RegExp(`^datarag-app:${VERSION}-\\d{8}-\\d{6}-g${enterpriseHead.slice(0, 12)}-dirty${mode === "override" ? "-override" : ""}-arm64$`));
+    // The deploy alias carries the same suffix: an override build never claims
+    // the alias the deployment assembles from.
+    assert.deepEqual(
+      Object.keys(docker.images()).filter((name) => name.startsWith("datarag-app:deploy")),
+      [`datarag-app:deploy${mode === "override" ? "-override" : ""}`],
+    );
     // The edition mode is the only app label on top of the shared runtime pair.
     const runtimeFp = argOf(runtime.args, "RUNTIME_COMPAT_FINGERPRINT")[0];
     assert.deepEqual(docker.images()[tag], {
