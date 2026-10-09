@@ -5,7 +5,7 @@ name: Images
 # Registry. Runtime and app images are published separately and assembled on the
 # deployment machine, as in the offline bundle. A push to main publishes `edge`; a
 # version tag `v<version>` publishes `<version>` and `latest`.
-# deploy/docker-compose.ghcr.yml is the stack that pulls them.
+# deploy/docker-compose.ghcr.yml is the override that pulls them (selected through COMPOSE_FILE).
 
 on:
   push:
