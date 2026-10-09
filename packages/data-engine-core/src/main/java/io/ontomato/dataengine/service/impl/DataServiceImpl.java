@@ -20,14 +20,12 @@ import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.StarChartDao;
 import io.ontomato.dataengine.dao.VectorResourceDao;
-import io.ontomato.dataengine.dao.sys.CSysDomain;
-import io.ontomato.dataengine.dao.sys.SysDomain;
-import io.ontomato.dataengine.dao.sys.SysDomainDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.DataService;
+import io.ontomato.dataengine.service.DomainSvc;
 import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.sys.bean.permission.FieldPermission;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
@@ -65,7 +63,7 @@ public class DataServiceImpl implements DataService {
 	private LangService langService;
 	
 	@Autowired
-	private SysDomainDao domainDao;
+	private DomainSvc domainSvc;
 	
 	private static final String MODE_0 = "mode0";
 	private static final String MODE_1 = "mode1";
@@ -89,9 +87,9 @@ public class DataServiceImpl implements DataService {
 			public void run() {
 				while (true) {
 					try {
-						List<SysDomain> domains = domainDao.queryList(new CSysDomain());
-						for (SysDomain domain : domains) {
-							startBackgroundGeneration(domain.getId());
+						List<String> domainIds = domainSvc.listDomainIds();
+						for (String domainId : domainIds) {
+							startBackgroundGeneration(domainId);
 						}
 
 						break;
