@@ -141,7 +141,7 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 		setValues.put(attrName, vectorAttr);
 		JSONObject where = new JSONObject();
 		where.put("field", pkField);
-		where.put("operator", "=");
+		where.put("operator", "="); 
 		where.put("value", objectId);
 		adapter.updateObjects(sandboxId, classDef, setValues, where);
 	}
