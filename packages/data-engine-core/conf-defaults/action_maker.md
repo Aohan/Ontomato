@@ -278,7 +278,7 @@ def query(dsl: dict) -> list:
 
 
 def insert(className: str, objs: list):
-    """Insert objects; objs is an array of objects, and each object must contain an id field"""
+    """Insert objects; objs is an array of objects, and each object must contain an id field. Writes ONLY non-vector attributes — any vector attribute in objs is ignored; write vector attributes via appendVector/updateVector instead."""
     url = f"{BASE}/insert"
     resp = requests.post(url, json={"className": className, "objs": objs,
                                     "sandboxId": sandboxId, "domainId": domainId}).json()
@@ -286,7 +286,7 @@ def insert(className: str, objs: list):
 
 
 def update(className: str, setValues: dict, where: dict):
-    """Update objects; setValues is the fields to change, where is the filter condition"""
+    """Update objects; setValues is the fields to change, where is the filter condition. setValues may contain ONLY non-vector attributes — a vector attribute here raises an error; write vector attributes via updateVector/appendVector instead."""
     url = f"{BASE}/update"
     resp = requests.post(url, json={"className": className, "setValues": setValues, "where": where,
                                     "sandboxId": sandboxId, "domainId": domainId}).json()
@@ -397,6 +397,7 @@ The `where` condition format of `update`/`delete` is as follows:
 - Multi-attribute condition (logic): `{"operator": "logic", "and": [single-attribute condition...]}` or `{"operator": "logic", "or": [single-attribute condition...]}`, nestable
 
 ### Notes on Writing
+- **`insert` and `update` write ONLY non-vector attributes.** To attach / update / delete vector files, use `appendVector` / `updateVector` / `deleteVector` exclusively. Never put a vector attribute into `insert`'s rows or `update`'s `setValues` — `insert` silently ignores it, and `update` raises an error.
 - When adding an object, the `id` or primary key must be unique: it can be passed in as a parameter, or generated inside the program (such as `str(uuid.uuid4())`). It is forbidden to duplicate the id or primary key of an object that already exists in the sandbox.
 - ** It is best to print the exception stack `traceback.print_exc()`, as this helps with troubleshooting **
 - A write function mainly performs write operations; there is no mandatory format requirement for the content of `print`, but it is recommended to print the key execution results or exception information, for easy observation during test.
