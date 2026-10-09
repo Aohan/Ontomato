@@ -1,4 +1,5 @@
 import { computed, type Ref } from "vue";
+import { splitAnswerBody } from "@ontomato/contracts/query-execution";
 import { type ContentPart } from "../components/MessageContent/types";
 import {
   extractChartSpec,
@@ -17,38 +18,7 @@ export function useContentParser(
     if (!content.value && !visualizationHTML.value && !visualizationLoading.value) return [];
 
     const parts: ContentPart[] = [];
-
-    if (visualizationHTML.value) {
-      if (content.value.trim()) {
-        parts.push({ type: "text", content: content.value });
-      }
-      parts.push({
-        type: "visualization",
-        content: "",
-        visualization: {
-          type: "visualization",
-          html: visualizationHTML.value,
-          meta: { loading: false },
-        },
-      });
-      return parts;
-    } else if (visualizationLoading.value) {
-      if (content.value.trim()) {
-        parts.push({ type: "text", content: content.value });
-      }
-      parts.push({
-        type: "visualization",
-        content: "",
-        visualization: {
-          type: "visualization",
-          html: "",
-          meta: { loading: true },
-        },
-      });
-      return parts;
-    }
-
-    if (!content.value) return [];
+    const hasVisualization = !!visualizationHTML.value || !!visualizationLoading.value;
 
     function appendPlainContent(text: string) {
       if (!text.trim()) return;
@@ -175,12 +145,17 @@ export function useContentParser(
       }
     }
 
-    const subgraphBlocks = extractSubgraphBlocks(content.value);
-    if (subgraphBlocks.length > 0) {
+    function appendBodyText(text: string) {
+      if (hasVisualization) {
+        if (text.trim()) parts.push({ type: "text", content: text });
+        return;
+      }
+
+      const subgraphBlocks = extractSubgraphBlocks(text);
       let cursor = 0;
       for (const block of subgraphBlocks) {
         if (block.index > cursor) {
-          appendPlainContent(content.value.substring(cursor, block.index));
+          appendPlainContent(text.substring(cursor, block.index));
         }
 
         parts.push({
@@ -192,14 +167,31 @@ export function useContentParser(
         cursor = block.index + block.fullMatch.length;
       }
 
-      if (cursor < content.value.length) {
-        appendPlainContent(content.value.substring(cursor));
+      if (cursor < text.length) {
+        appendPlainContent(text.substring(cursor));
       }
-
-      return parts;
     }
 
-    appendPlainContent(content.value);
+    // Dataset placements split the body; each text piece keeps its own parsing.
+    for (const piece of splitAnswerBody(content.value)) {
+      if (piece.kind === "dataset") {
+        parts.push({ type: "dataset", content: "", datasetId: piece.datasetId });
+      } else {
+        appendBodyText(piece.text);
+      }
+    }
+
+    if (hasVisualization) {
+      parts.push({
+        type: "visualization",
+        content: "",
+        visualization: {
+          type: "visualization",
+          html: visualizationHTML.value || "",
+          meta: { loading: !visualizationHTML.value },
+        },
+      });
+    }
 
     return parts;
   });

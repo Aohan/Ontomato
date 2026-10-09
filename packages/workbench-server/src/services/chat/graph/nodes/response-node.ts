@@ -1,3 +1,4 @@
+import { answerBodyText } from "@ontomato/contracts/query-execution";
 import type { QueryExecutionFact } from "../../../data-query/query-fact";
 import { AnalysisResult, GraphState, GraphUpdate, VisualizationResult } from "../state";
 import { t, tApp } from "../../../../i18n";
@@ -136,7 +137,7 @@ export async function standardResponseNode(state: GraphState, config?: any): Pro
     sendEvent(errorEvent);
 
     const aiMessage = new AIMessage({
-      content: responseArtifacts.queryResult?.fullContent || errorMsg,
+      content: answerBodyText(responseArtifacts.queryResult?.fullContent || errorMsg),
       additional_kwargs: { requestSeq },
     });
 
@@ -196,9 +197,9 @@ export async function standardResponseNode(state: GraphState, config?: any): Pro
     nodeCount: Array.isArray(queryResult?.nodeIds) ? queryResult.nodeIds.length : 0,
   });
 
-  // Create the AI message (for persistence)
+  // Create the AI message (for persistence and later turns' model history): plain text without placements
   const aiMessage = new AIMessage({
-    content: finalContent,
+    content: answerBodyText(finalContent),
     additional_kwargs: { requestSeq },
   });
 

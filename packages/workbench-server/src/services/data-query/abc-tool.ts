@@ -1,4 +1,5 @@
 import type { ThinkingAbcState, ThinkingProgress } from "@ontomato/contracts/query-thinking";
+import { datasetPlacement } from "@ontomato/contracts/query-execution";
 import { tool } from "langchain";
 import { z } from "zod";
 import type { RunnableConfig } from "@langchain/core/runnables";
@@ -32,6 +33,8 @@ export type AbcQueryConfig = RunnableConfig<{
   userId?: string;
   locale?: string;
   progressCallback?: (event: any) => void;
+  /** Receives the whole current answer body; the executor decides what goes on the wire. */
+  pushContent?: (content: string, loading: boolean) => void;
   isV0?: boolean;
   modelOptions?: Record<string, unknown>;
   reportFallback?: (output: BaseQueryOutput) => void;
@@ -79,15 +82,7 @@ function pushLog(
 }
 
 function pushContent(config: AbcQueryConfig | undefined, content: string, loading = false) {
-  const configurable = getConfigurable(config);
-  configurable?.progressCallback?.({ type: "abc_content", content, loading });
-}
-
-function pushAbcAnalysis(config: AbcQueryConfig | undefined, event: any) {
-  const callback = getConfigurable(config)?.progressCallback;
-  if (callback) {
-    callback({ type: "abc_analysis", ...event });
-  }
+  getConfigurable(config)?.pushContent?.(content, loading);
 }
 
 function pushDatasets(config: AbcQueryConfig | undefined, datasets: Dataset[], nodeIds?: string[]) {
@@ -323,12 +318,9 @@ export async function executeAbcQuery(
           subQuestion,
           subgraphDesc,
           modelOptions,
-          (event) => {
-            pushAbcAnalysis(config, event);
-            if (event.type === "abc_analysis_chunk" && event.content) {
-              tempAbcDesc = event.content;
-              pushContent(config, fullContent + tempAbcDesc, true);
-            }
+          (text) => {
+            tempAbcDesc += text;
+            pushContent(config, fullContent + tempAbcDesc, true);
           },
           signal,
           analysisTransition
@@ -440,11 +432,6 @@ export async function executeAbcQuery(
         }
       );
 
-      const transition = makeResultTransition(currentSubQ);
-      const dataContent = `\n\n---\n\n${transition}\n\n${tableSegment}\n\n`;
-      fullContent += dataContent;
-      pushContent(config, fullContent, true);
-
       const dataset = convertChunkToDataset(
         { data: normalizedRows, dsl: chunk.dsl },
         chunkIndex,
@@ -453,6 +440,11 @@ export async function executeAbcQuery(
       dataset.subQuestion = currentSubQ;
       dataset.description = currentSubQ;
       dataset.fieldDisplayPlan = fieldDisplayPlan;
+
+      const transition = makeResultTransition(currentSubQ);
+      fullContent += `\n\n---\n\n${transition}\n\n${tableSegment}\n\n${datasetPlacement(dataset.id)}\n\n`;
+      pushContent(config, fullContent, true);
+
       datasets.push(dataset);
       abcDsls.push(chunk.dsl || null);
       abcCodes.push(chunk.code || "");

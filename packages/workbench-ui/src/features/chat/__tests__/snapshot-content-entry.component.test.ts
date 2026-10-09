@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../../api", () => ({ nodeApiBlobPost: vi.fn() }));
 vi.mock("element-plus", () => ({ ElMessage: { success: vi.fn(), error: vi.fn() } }));
 
+import { datasetPlacement } from "@ontomato/contracts/query-execution";
+import { analysisReportApi } from "../../analysis";
 import SnapshotContent from "../components/SnapshotContent.vue";
 import { MessageContent, QueryExecutionView } from "../../query-view";
 import { workbenchI18n } from "../../../i18n";
@@ -265,15 +267,34 @@ describe("standard query entry", () => {
     expect(w.findComponent(QueryExecutionView).exists()).toBe(false);
   });
 
-  it("still expands the result details in a standalone body without execution facts", async () => {
+  it("still expands the result details of an old standalone body, listed after it", async () => {
     const w = mount(SnapshotContent, { props: { snapshot: PRIMARY_WITH_DATASETS }, global });
     expect(w.findComponent(QueryExecutionView).exists()).toBe(false);
 
-    const block = w.find(".table-section .result-dataset");
-    expect(block.exists()).toBe(true);
+    // Saved before dataset ids, the body places no dataset: its actions follow the body, named.
+    const block = w.find(".unplaced-results .result-dataset");
+    expect(block.find(".result-dataset-title").text()).toBe("Construction sites by town");
     await clickButton(block, t("common.detail"));
     await clickButton(block, t("common.viewDsl"));
     expect(block.find(".dsl-pre").text()).toContain("stat");
+  });
+
+  it("exports the standard report without the body's dataset placements", async () => {
+    const snapshot = {
+      ...PRIMARY_WITH_DATASETS,
+      primaryText: `  ${PRIMARY_WITH_DATASETS.primaryText}\n\n${datasetPlacement("ds-1")}\n`,
+      analysisText: "Appended analysis",
+    } as ResponseSnapshot;
+    const exportPdf = vi.spyOn(analysisReportApi, "exportPdf").mockResolvedValue(new Blob());
+    const w = mount(SnapshotContent, { props: { snapshot }, global });
+
+    await clickButton(w, t("analysis.exportPdf"));
+
+    expect(exportPdf).toHaveBeenCalledWith({
+      markdown: `${PRIMARY_WITH_DATASETS.primaryText}\n\n---\n\nAppended analysis`,
+      renderInlineCharts: true,
+    });
+    exportPdf.mockRestore();
   });
 
   it("does not drop or duplicate appended analysis when the execution view takes the body from datasets alone", () => {

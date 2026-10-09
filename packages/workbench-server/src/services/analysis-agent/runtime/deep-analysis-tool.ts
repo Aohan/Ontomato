@@ -1,5 +1,5 @@
 import type { QueryThinkingState, ThinkingBranchCard } from "@ontomato/contracts/query-thinking";
-import type { QueryFactDatasetPreview } from "@ontomato/contracts/query-execution";
+import { answerBodyText, type QueryFactDatasetPreview } from "@ontomato/contracts/query-execution";
 import { startQualityCheckSettlement } from "../../data-query/late-fact";
 import type { QueryRunIdentity } from "../../data-query/query-fact";
 import { getAbcQuestionMode } from "../../data-query/data-query-policy";
@@ -138,7 +138,7 @@ function applyBaseQueryOutput(target: SubQuestionBranchResult, output: BaseQuery
   target.dsl = datasets.length > 0 ? buildQueryResultDslFromDatasets(datasets) : undefined;
   target.datasets = datasets.length > 0 ? datasets : undefined;
   target.fullContent = output.content;
-  target.markdownTable = output.content;
+  target.markdownTable = answerBodyText(output.content);
   target.dataCount = datasets.reduce((sum, dataset) => sum + (dataset.data?.length || 0), 0);
   // Deep analysis enables only the abc branch, so the winning output already carries that branch's backend session.
   target.backendSessions = output.sessionId
@@ -275,7 +275,7 @@ export async function executeSubQuestionWithBranches(
         } catch {
           datasetPreviews.push({
             title,
-            markdownTable: ret.content || "",
+            markdownTable: answerBodyText(ret.content),
             dataCount: Array.isArray(dataset.data) ? dataset.data.length : 0,
           });
         }
@@ -295,10 +295,10 @@ export async function executeSubQuestionWithBranches(
           }
         );
       } catch {
-        baseResult.markdownTable = ret.content || "";
+        baseResult.markdownTable = answerBodyText(ret.content);
       }
     } else {
-      baseResult.markdownTable = ret.content || "";
+      baseResult.markdownTable = answerBodyText(ret.content);
     }
 
     logger.info("[DeepAnalysis] query display fields built", {

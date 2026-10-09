@@ -83,7 +83,7 @@ export async function runStaticBranch(
   findKnowledgeUrl: string,
   ctx: BranchContext<"static">
 ): Promise<BaseQueryOutput | undefined> {
-  const { queryQuestion, token, userId, locale, pushEvent, thinking, apiKey } = ctx;
+  const { queryQuestion, token, userId, locale, pushEvent, pushContent, thinking, apiKey } = ctx;
   thinking.ensureParallelStarted();
 
   if (!metricViewStaticUrl) {
@@ -174,11 +174,7 @@ export async function runStaticBranch(
   thinking.log(t("query.thinking.staticSufficient"));
 
   if (mergedText) {
-    pushEvent({
-      type: "abc_content",
-      content: t("query.thinking.staticCardLocated") + mergedText,
-      loading: true,
-    });
+    pushContent(t("query.thinking.staticCardLocated") + mergedText, true);
   }
 
   let mergedContent = "";
@@ -195,11 +191,8 @@ export async function runStaticBranch(
   });
 
   for (const result of fetchedResults) {
-    if (fetchedResults.length > 1) {
-      mergedContent += tApp("queryFixed.212", { v0: (result.card.atomicAsk), v1: (result.tableMarkdown) });
-    } else {
-      mergedContent += result.tableMarkdown + "\n";
-    }
+    // Each result names its sub-question once, ahead of its table and placement.
+    mergedContent += tApp("queryFixed.212", { v0: (result.card.atomicAsk), v1: (result.tableMarkdown) });
 
     if (result.html) {
       mergedContent += result.html + "\n";
@@ -216,13 +209,7 @@ export async function runStaticBranch(
     queryQuestion,
     datasets,
     mergedContent,
-    (content: string) => {
-      pushEvent({
-        type: "abc_content",
-        content,
-        loading: false,
-      });
-    },
+    (content: string) => pushContent(content, false),
     ctx.signal,
     locale
   );

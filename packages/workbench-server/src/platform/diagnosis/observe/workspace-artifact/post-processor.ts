@@ -6,7 +6,7 @@ import type {
   ParsedLogRecord,
   WorkspaceBackendSessionEvidence,
 } from "@ontomato/contracts/observe";
-import type { QueryBackendSession } from "@ontomato/contracts/query-execution";
+import { answerBodyText, type QueryBackendSession } from "@ontomato/contracts/query-execution";
 import type { LogFileTimeWindow } from "../../../../logging/log-file-transport";
 import type { UnifiedConversation } from "./prompt-types";
 import type { WorkspaceArtifactSummaryMetadata } from "./summary-generator";
@@ -620,10 +620,11 @@ function inferLogResultFromRecords(
   };
 }
 
-export function toResponseSnapshotMarkdown(markdown: string): {
+export function toResponseSnapshotMarkdown(answer: string): {
   content: string;
   foldedTablesRemoved: number;
 } {
+  const markdown = answerBodyText(answer);
   let foldedTablesRemoved = 0;
   let output = "";
   let cursor = 0;

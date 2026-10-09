@@ -38,9 +38,7 @@ export type ChatClientEvent =
       thinkingState?: QueryThinkingState;
     }
   | { type: "abc_progress"; progress: ThinkingProgress }
-  | { type: "abc_content"; content: string; loading?: boolean }
-  | AbcAnalysisEvent
-  | { type: "abc_analysis"; [key: string]: unknown }
+  | AbcContentEvent
   | {
       type: "result";
       content:
@@ -66,10 +64,17 @@ export interface RunNotFoundEvent {
   timestamp: number;
 }
 
-export interface AbcAnalysisEvent {
-  type: "abc_analysis_start" | "abc_analysis_chunk" | "abc_analysis_done";
-  subQuestion?: string;
-  content?: string;
+/**
+ * Live answer body of the query: `append` carries only the text added after what was already sent;
+ * `replace` carries the whole current body (first frame, or when earlier text changed).
+ */
+export type AbcContentEvent =
+  | { type: "abc_content"; mode: "append"; delta: string; loading: boolean }
+  | { type: "abc_content"; mode: "replace"; content: string; loading: boolean };
+
+/** The body after applying one `abc_content` frame to the body built from the frames before it. */
+export function applyAbcContent(body: string, event: AbcContentEvent): string {
+  return event.mode === "append" ? body + event.delta : event.content;
 }
 
 export type ThreadMessagesPayload = {

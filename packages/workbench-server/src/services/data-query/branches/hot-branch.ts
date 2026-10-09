@@ -83,7 +83,7 @@ export async function runHotBranch(
   findKnowledgeUrl: string,
   ctx: BranchContext<"hot">
 ): Promise<BaseQueryOutput | undefined> {
-  const { queryQuestion, token, userId, locale, pushEvent, thinking, apiKey } = ctx;
+  const { queryQuestion, token, userId, locale, pushEvent, pushContent, thinking, apiKey } = ctx;
   thinking.ensureParallelStarted();
 
   if (!metricViewGeneralUrl) {
@@ -179,11 +179,7 @@ export async function runHotBranch(
   thinking.log(t("query.thinking.hotSufficient"));
 
   if (mergedText) {
-    pushEvent({
-      type: "abc_content",
-      content: t("query.thinking.hotCardLocated") + mergedText,
-      loading: true,
-    });
+    pushContent(t("query.thinking.hotCardLocated") + mergedText, true);
   }
 
   let mergedContent = "";
@@ -200,11 +196,8 @@ export async function runHotBranch(
   });
 
   for (const result of fetchedResults) {
-    if (fetchedResults.length > 1) {
-      mergedContent += tApp("queryFixed.212", { v0: (result.card.atomicAsk), v1: (result.tableMarkdown) });
-    } else {
-      mergedContent += result.tableMarkdown + "\n";
-    }
+    // Each result names its sub-question once, ahead of its table and placement.
+    mergedContent += tApp("queryFixed.212", { v0: (result.card.atomicAsk), v1: (result.tableMarkdown) });
 
     if (result.html) {
       mergedContent += result.html + "\n";
@@ -219,13 +212,7 @@ export async function runHotBranch(
     queryQuestion,
     datasets,
     mergedContent,
-    (content: string) => {
-      pushEvent({
-        type: "abc_content",
-        content,
-        loading: false,
-      });
-    },
+    (content: string) => pushContent(content, false),
     ctx.signal,
     locale
   );

@@ -35,6 +35,8 @@ export interface BranchContext<K extends BranchKey> {
   abcQuestionMode: AbcQuestionMode;
   classNames?: string[];
   pushEvent: (event: any) => void;
+  /** Reports the branch's whole current answer body; the executor sends it as an append or a replace. */
+  pushContent: (content: string, loading: boolean) => void;
   thinking: ThinkingBranchView<K>;
   signal: AbortSignal;
   /** A branch reports as soon as it has its backend session location; whether it is still active is decided by the executor */

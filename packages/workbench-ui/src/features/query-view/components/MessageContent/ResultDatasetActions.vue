@@ -26,6 +26,8 @@ import type { ResultDataset, ResultDetailRequest } from "./types";
 
 const props = defineProps<{
   dataset: ResultDataset;
+  /** False where the body places this dataset: the body already names it right above. */
+  showTitle: boolean;
   showDashboardAction: boolean;
 }>();
 
@@ -78,7 +80,7 @@ function openDetail(kind: ResultDetailRequest["kind"]) {
 <template>
   <div class="result-dataset">
     <div class="result-dataset-head">
-      <span class="result-dataset-title">{{ dataset.title }}</span>
+      <span v-if="showTitle" class="result-dataset-title">{{ dataset.title }}</span>
       <span class="result-dataset-count">
         {{ t("analysis.rowCountHint", { n: dataset.rows.length }) }}
       </span>

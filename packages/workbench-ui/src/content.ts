@@ -35,8 +35,6 @@ export interface WorkbenchContent {
   subgraphListItems: { split: RegExp; empty: RegExp; join: string };
   /** "Step N" label in quality check results (QcInlineResult.vue). */
   qcStepLabel: RegExp;
-  /** Template phrase for taking the current sub-question from the preceding answer text (MessageContent/index.vue). */
-  answerSubject: RegExp;
   /** Separator of skill lists (analysis/utils/loop-activity.ts). */
   skillListSeparator: string;
   /** Analysis agent MCP server name, the same value as Node product.analysisMcpServerName: identifies that server among published services on the MCP page (McpManager.vue). */

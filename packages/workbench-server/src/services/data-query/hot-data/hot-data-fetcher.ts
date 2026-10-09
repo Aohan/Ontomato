@@ -1,4 +1,5 @@
 import type { AbcProgramDashboard } from "@ontomato/contracts/dashboard";
+import { datasetPlacement } from "@ontomato/contracts/query-execution";
 import { createLogger } from "../../../logging/logger";
 import { assertMetricViewSuccess, type HotCard } from "./hot-data-utils";
 import {
@@ -17,6 +18,7 @@ const logger = createLogger("hot-data-fetcher");
 export interface FetchedCardResult {
   card: HotCard;
   data: any[];
+  /** The card's table or empty state, followed by its dataset's placement. */
   tableMarkdown: string;
   dataset: Dataset;
   html?: string;
@@ -123,12 +125,12 @@ export async function fetchHotCards(params: {
           }
         );
 
-        const tableMarkdown = tableSegment;
         const dataset = convertChunkToDataset({ data: normalizedRows }, 0, locale);
         dataset.abcProgram = abcProgram;
         dataset.subQuestion = card.atomicAsk;
         dataset.description = card.atomicAsk;
         dataset.fieldDisplayPlan = fieldDisplayPlan;
+        const tableMarkdown = `${tableSegment}\n\n${datasetPlacement(dataset.id)}`;
 
         let html: string | undefined;
         if (json?.chartHtml) {

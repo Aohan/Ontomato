@@ -1,5 +1,6 @@
 import type { AbcQuestionMode } from "@ontomato/contracts/system-model";
 import type { BranchKey } from "@ontomato/contracts/query-thinking";
+import type { AbcContentEvent } from "@ontomato/contracts/chat";
 import type { QueryBackendSession } from "@ontomato/contracts/query-execution";
 import type { QueryThinkingState, ThinkingStep } from "@ontomato/contracts/query-thinking";
 import { getApiConfig } from "../../config/data-query-api";
@@ -123,6 +124,19 @@ export async function executeBaseQuery(
 
   const thinking = new ThinkingBuffer(enabledBranches, notifyThinking);
 
+  // Body text last put on the wire. Branches run concurrently and each reports its whole body, so
+  // text continuing what was sent goes out as an append, and anything else (first frame, another
+  // branch, rewritten earlier text) as a full replace.
+  let sentContent: string | undefined;
+  const sendContent = (content: string, loading: boolean) => {
+    const event: AbcContentEvent =
+      sentContent !== undefined && content.startsWith(sentContent)
+        ? { type: "abc_content", mode: "append", delta: content.slice(sentContent.length), loading }
+        : { type: "abc_content", mode: "replace", content, loading };
+    sentContent = content;
+    options.onEvent?.({ type: "abc_content", node: "query", content: event, timestamp: Date.now() });
+  };
+
   const isBranchActive = (branch: BranchKey) => {
     const controller = controllers.get(branch);
     return !settled && !!controller && !controller.signal.aborted;
@@ -142,6 +156,9 @@ export async function executeBaseQuery(
       classNames: options.classNames,
       pushEvent: (event) => {
         if (isBranchActive(branch)) options.onEvent?.(event);
+      },
+      pushContent: (content, loading) => {
+        if (isBranchActive(branch)) sendContent(content, loading);
       },
       thinking: thinking.createBranchView(branch),
       signal: controller.signal,

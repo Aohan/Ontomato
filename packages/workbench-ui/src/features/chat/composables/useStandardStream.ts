@@ -4,10 +4,11 @@ import type {
   Message,
   ExecutionSnapshotStep,
 } from "../../../types/chat";
-import type { ChatClientEvent } from "@ontomato/contracts/chat";
+import { applyAbcContent, type ChatClientEvent } from "@ontomato/contracts/chat";
 import { nextTick, type Ref } from "vue";
 
 import { buildExecutionStepId } from "../../../utils/snapshot-helpers";
+import { buildResultDatasets } from "../../query-view/utils/result-datasets";
 import { t, workbenchI18n } from "../../../i18n";
 import { authHost } from "../../../utils/auth";
 import { chatApi } from "../api";
@@ -185,12 +186,10 @@ export function createStandardSender(deps: StandardStreamDeps) {
               });
             }
           } else if (json.type === "abc_content") {
-            if (json.content) {
-              updateStreamingSnapshot({
-                primaryText: json.content,
-                showPendingUnderstanding: true,
-              });
-            }
+            updateStreamingSnapshot({
+              primaryText: applyAbcContent(current?.primaryText || "", json),
+              showPendingUnderstanding: true,
+            });
           } else if (json.type === "result") {
             const resultContent =
               typeof json.content === "string"
@@ -209,19 +208,11 @@ export function createStandardSender(deps: StandardStreamDeps) {
           } else if (json.type === "query_datasets") {
             updateStreamingSnapshot({
               showPendingUnderstanding: true,
-              datasets: Array.isArray(json.datasets)
-                ? json.datasets.map((dataset: any, index: number) => ({
-                    id: `dataset-${index}`,
-                    title:
-                      dataset?.subQuestion ||
-                      dataset?.name ||
-                      dataset?.description ||
-                      `${t("hotData.dataTable")}_${index + 1}`,
-                    rows: Array.isArray(dataset?.data) ? dataset.data : [],
-                    dsl: dataset?.dsl,
-                    subQuestion: dataset?.subQuestion,
-                  }))
-                : [],
+              // The live datasets take the same derivation as the execution facts, ids included.
+              datasets: buildResultDatasets(
+                { datasets: json.datasets as QueryExecutionFacts["datasets"] },
+                t
+              ),
               graphNodeIds: Array.isArray(json.nodeIds)
                 ? json.nodeIds.map((item: unknown) => String(item)).filter(Boolean)
                 : current?.graphNodeIds,

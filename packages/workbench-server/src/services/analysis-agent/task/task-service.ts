@@ -505,6 +505,9 @@ export class AnalysisTaskService {
    * The single atomic boundary for run-attribution writes: after reading the run history with the row locked, first confirm the writing run is still
    * the most recently accepted run. Only it may rewrite the task's current state and artifacts; a late write superseded by a new run only backfills
    * its own history record by identity — it cannot touch any current fact of the new run and never appends a run record.
+   *
+   * Status and acceptance paths need the rewritten row back; the artifact hot path only needs
+   * completion as its confirmation, so it passes `confirmationOnly` and no full row travels back.
    */
   private async applyTaskUpdateWithRunIdentity(
     id: string,
@@ -512,7 +515,23 @@ export class AnalysisTaskService {
     vals: any[],
     identity: AnalysisRunIdentity,
     runPatch?: Partial<AnalysisTaskRun>
-  ): Promise<AnalysisTask | null> {
+  ): Promise<AnalysisTask | null>;
+  private async applyTaskUpdateWithRunIdentity(
+    id: string,
+    sets: string[],
+    vals: any[],
+    identity: AnalysisRunIdentity,
+    runPatch: Partial<AnalysisTaskRun> | undefined,
+    confirmationOnly: true
+  ): Promise<void>;
+  private async applyTaskUpdateWithRunIdentity(
+    id: string,
+    sets: string[],
+    vals: any[],
+    identity: AnalysisRunIdentity,
+    runPatch?: Partial<AnalysisTaskRun>,
+    confirmationOnly?: boolean
+  ): Promise<AnalysisTask | null | void> {
     if (identity.runId === undefined && identity.requestSeq === undefined) {
       logger.error(tApp("analysis.task.task-service.448", { id: id }));
       return null;
@@ -540,7 +559,7 @@ export class AnalysisTaskService {
           incomingStatus === row.status);
       if (!mayWriteCurrent && !merged) {
         await client.query("ROLLBACK");
-        return null;
+        return confirmationOnly ? undefined : null;
       }
       const nextSets = mayWriteCurrent ? [...sets] : [];
       const nextVals = mayWriteCurrent ? [...vals] : [];
@@ -549,12 +568,16 @@ export class AnalysisTaskService {
         nextSets.push(`run_history = $${nextVals.length + 1}::jsonb`);
       }
       const result = await client.query(
-        `UPDATE ${qualifiedTable("analysis_tasks")} SET ${nextSets.join(", ")}
+        confirmationOnly
+          ? `UPDATE ${qualifiedTable("analysis_tasks")} SET ${nextSets.join(", ")}
+         WHERE id = $1`
+          : `UPDATE ${qualifiedTable("analysis_tasks")} SET ${nextSets.join(", ")}
          WHERE id = $1
          RETURNING *`,
         [id, ...nextVals]
       );
       await client.query("COMMIT");
+      if (confirmationOnly) return;
       if ((result.rowCount ?? 0) === 0) return null;
       return mapTaskRow(result.rows[0]);
     } catch (error) {
@@ -724,7 +747,7 @@ export class AnalysisTaskService {
     },
     /** Run identity captured at acceptance; artifacts and terminal states are run-attributed current facts, and without identity nothing is written. */
     identity?: AnalysisRunIdentity
-  ): Promise<AnalysisTask | null> {
+  ): Promise<void> {
     const now = Date.now();
     const sets: string[] = ["updated_at = $2"];
     const vals: any[] = [now];
@@ -770,9 +793,11 @@ export class AnalysisTaskService {
       vals.push(artifacts.requestSeq);
       sets.push(`request_seq = $${idx}`);
     }
-    if (sets.length === 1) return null;
+    if (sets.length === 1) return;
 
-    return this.applyTaskUpdateWithRunIdentity(id, sets, vals, identity ?? {}, runPatch);
+    // The artifact store never consumes the rewritten row; write completion is the only
+    // confirmation it needs, so the hot path returns no full task row.
+    await this.applyTaskUpdateWithRunIdentity(id, sets, vals, identity ?? {}, runPatch, true);
   }
 
   async upsertTaskEvent(input: UpsertAnalysisTaskEventInput): Promise<void> {

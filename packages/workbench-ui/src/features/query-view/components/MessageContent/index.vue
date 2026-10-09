@@ -21,8 +21,7 @@ import { useI18n } from "vue-i18n";
 import { withSkillResourceCredentials } from "../../../skills/utils/skill-resource";
 import SubgraphView from "../thinking/SubgraphView.vue";
 import ResultDatasetActions from "./ResultDatasetActions.vue";
-import type { ResultDataset, TableData } from "./types";
-import { workbenchContent } from "../../../../content";
+import type { ResultDataset } from "./types";
 
 const { t } = useI18n();
 
@@ -33,10 +32,9 @@ const props = withDefaults(
     visualizationHTML?: string;
     visualizationLoading?: boolean;
     /**
-     * Result datasets produced by this query: the body tables correspond to them by sub-question,
-     * header, or title, and the name, row count, data/DSL download, and DSL/code/lineage details
-     * are provided with the corresponding table. Datasets without a body table are still presented
-     * as result entries, so deduplication does not drop real output.
+     * Result datasets produced by this query: the name, row count, data/DSL download, and
+     * DSL/code/lineage details are provided where the body places each dataset's id. Datasets the
+     * body does not place are listed after it, so no real output is dropped.
      */
     resultDatasets?: ResultDataset[];
     /**
@@ -52,101 +50,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   addToDashboard: [payload: { datasetIndex: number; datasetTitle?: string }];
 }>();
-
-function normalizeText(value?: string) {
-  return String(value || "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeColumnName(value: string) {
-  return normalizeText(value).toLowerCase();
-}
-
-function tableHeadersMatchDataset(part: TableData, dataset: ResultDataset) {
-  if (!Array.isArray(part.headers) || part.headers.length === 0) return false;
-  if (!Array.isArray(dataset.rows) || dataset.rows.length === 0) return false;
-
-  const datasetColumns = new Set(
-    dataset.rows.flatMap((row) => Object.keys(row).map((key) => normalizeColumnName(key)))
-  );
-  if (datasetColumns.size === 0) return false;
-
-  const matchedHeaderCount = part.headers.filter((header) =>
-    datasetColumns.has(normalizeColumnName(header))
-  ).length;
-  return matchedHeaderCount > 0 && matchedHeaderCount === part.headers.length;
-}
-
-function extractLatestSubQuestion(beforeContent?: string) {
-  const text = String(beforeContent || "");
-  const matches = Array.from(
-    text.matchAll(
-      workbenchContent().answerSubject
-    )
-  );
-  const latest = matches[matches.length - 1];
-  return latest ? normalizeText(latest[1] || latest[2] || latest[3]) : "";
-}
-
-/**
- * Maps a body table to the dataset it presents. Only datasets with rows are matched — a zero-row
- * result is a no-data empty state in the body rather than a table; the index comes from the filtered
- * order here, consistent with the dashboard datasets the server retrieves in the same order.
- */
-function resolveDatasetMeta(part: TableData): ResultDataset | undefined {
-  const datasets = props.resultDatasets.filter((dataset) => dataset.rows.length > 0);
-
-  const latestSubQuestion = extractLatestSubQuestion(part.beforeContent);
-  if (latestSubQuestion) {
-    const matched = datasets.find((dataset) => {
-      const subQuestion = normalizeText(dataset.subQuestion);
-      return !!subQuestion && latestSubQuestion === subQuestion;
-    });
-    if (matched) return matched;
-  }
-
-  const tableTitle = normalizeText(part.title);
-  if (tableTitle) {
-    const matched = datasets.find(
-      (dataset) =>
-        tableTitle === normalizeText(dataset.title) ||
-        tableTitle === normalizeText(dataset.subQuestion)
-    );
-    if (matched) return matched;
-  }
-
-  return datasets.length === 1 && tableHeadersMatchDataset(part, datasets[0])
-    ? datasets[0]
-    : undefined;
-}
-
-/**
- * Datasets resolved for each body table. Recorded by `TableData` object identity: when one body is
- * split into multiple segments for parsing, table ids restart, so using the id as a key would make
- * an earlier segment's table point to a later segment's dataset.
- */
-const resolvedTableDatasets = computed(() => {
-  const resolved = new Map<TableData, ResultDataset>();
-  for (const part of contentParts.value) {
-    if (part.type !== "table" || !part.table) continue;
-    const dataset = resolveDatasetMeta(part.table);
-    if (dataset) resolved.set(part.table, dataset);
-  }
-  return resolved;
-});
-
-const resolvedDatasetFor = (table: TableData) => resolvedTableDatasets.value.get(table);
-
-/**
- * Real results with no body table to attach to: when there is no body but there is data, the body
- * lacks a table, or headers do not match, the name, row count, and details can still be viewed and
- * downloaded without losing output to body deduplication.
- */
-const unattachedDatasets = computed(() => {
-  const attached = new Set(resolvedTableDatasets.value.values());
-  return props.resultDatasets.filter((dataset) => !attached.has(dataset));
-});
 
 function onAddToDashboard(dataset: ResultDataset) {
   const datasetIndex = props.resultDatasets.filter((item) => item.rows.length > 0).indexOf(dataset);
@@ -178,6 +81,30 @@ const { contentParts } = useContentParser(
   toRef(props, "visualizationHTML"),
   toRef(props, "visualizationLoading")
 );
+
+/** Datasets by the server id the body's placements refer to. */
+const datasetsById = computed(
+  () =>
+    new Map(
+      props.resultDatasets
+        .filter((dataset) => dataset.datasetId)
+        .map((dataset) => [dataset.datasetId, dataset])
+    )
+);
+
+/**
+ * Datasets the body does not place: saved before dataset ids, or not (yet) placed by this body.
+ * They are listed after the body with their titles, so their data and details stay reachable.
+ */
+const unplacedDatasets = computed(() => {
+  const placed = new Set(
+    contentParts.value.filter((part) => part.type === "dataset").map((part) => part.datasetId)
+  );
+  return props.resultDatasets.filter(
+    (dataset) => !dataset.datasetId || !placed.has(dataset.datasetId)
+  );
+});
+
 const { isDark } = useTheme();
 
 const openMermaidViewer = (host: HTMLElement) => {
@@ -596,21 +523,28 @@ watch(isDark, () => {
 
         <div v-else-if="part.type === 'table' && part.table" class="table-section">
           <div class="markdown-content" v-html="renderMarkdown(part.content)"></div>
-          <ResultDatasetActions
-            v-if="resolvedDatasetFor(part.table)"
-            :dataset="resolvedDatasetFor(part.table)!"
-            :show-dashboard-action="props.showDashboardAction !== false"
-            @add-to-dashboard="onAddToDashboard(resolvedDatasetFor(part.table)!)"
-          />
         </div>
+
+        <!-- The body names the dataset right above, so its actions go without the title; a
+             placement whose dataset has not arrived yet renders nothing until it does. Keyed by
+             the dataset id, so another dataset in this place starts with its own action state. -->
+        <ResultDatasetActions
+          v-else-if="part.type === 'dataset' && datasetsById.get(part.datasetId)"
+          :key="part.datasetId"
+          :dataset="datasetsById.get(part.datasetId)!"
+          :show-title="false"
+          :show-dashboard-action="props.showDashboardAction !== false"
+          @add-to-dashboard="onAddToDashboard(datasetsById.get(part.datasetId)!)"
+        />
       </template>
     </div>
 
-    <div v-if="unattachedDatasets.length > 0" class="unattached-results">
+    <div v-if="unplacedDatasets.length > 0" class="unplaced-results">
       <ResultDatasetActions
-        v-for="dataset in unattachedDatasets"
-        :key="dataset.id"
+        v-for="dataset in unplacedDatasets"
+        :key="dataset.datasetId ?? dataset.id"
         :dataset="dataset"
+        show-title
         :show-dashboard-action="props.showDashboardAction !== false"
         @add-to-dashboard="onAddToDashboard(dataset)"
       />
@@ -939,7 +873,7 @@ watch(isDark, () => {
   margin: 16px 0;
 }
 
-.unattached-results {
+.unplaced-results {
   margin-top: 12px;
 }
 

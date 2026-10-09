@@ -10,6 +10,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { ThumbsUp, ThumbsDown, Copy, Check } from "lucide-vue-next";
 import SnapshotContent from "./SnapshotContent.vue";
 import type { ClarificationOption } from "@ontomato/contracts/chat";
+import { answerBodyText } from "@ontomato/contracts/query-execution";
 import type { Message, ResponseSnapshot } from "../../../types/chat";
 import { setupAiTableEnhancer } from "../utils/table";
 import TurnDiagnoseButton from "../../diagnosis/components/TurnDiagnoseButton.vue";
@@ -32,9 +33,7 @@ const messagesContainerRef = ref<HTMLElement | null>(null);
 
 const copyContent = async (snapshot: ResponseSnapshot, msgId: number) => {
   try {
-    const textToCopy = [snapshot.primaryText, snapshot.analysisText]
-      .filter(Boolean)
-      .join("\n\n---\n\n");
+    const textToCopy = buildOutput(snapshot);
     if (!textToCopy) {
       ElMessage.warning(t("chat.noContentCopy"));
       return;
@@ -58,8 +57,11 @@ function findUserInputForMessage(msgId: number): string {
   return "";
 }
 
+/** The answer as plain text for copying and feedback: body placements removed. */
 function buildOutput(snapshot: ResponseSnapshot): string {
-  return [snapshot.primaryText, snapshot.analysisText].filter(Boolean).join("\n\n---\n\n");
+  return [answerBodyText(snapshot.primaryText), snapshot.analysisText]
+    .filter(Boolean)
+    .join("\n\n---\n\n");
 }
 
 function feedbackTargetId(msg: Message): string {

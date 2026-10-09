@@ -170,6 +170,72 @@ describe("standard stream resume", () => {
     expect(messages.value[1]?.snapshot?.primaryText).toBe("answer");
   });
 
+  it("builds the body from append/replace frames and rebuilds it unchanged when the run is replayed", async () => {
+    const table = `| region | amount |\n| --- | --- |\n${"| east | 1 |\n".repeat(20000)}`;
+    const frames: unknown[] = [
+      { type: "run_started", runId: "run-1", threadId: "thread-1", requestSeq: 0 },
+      { type: "abc_content", mode: "replace", content: table, loading: true },
+      // A loading change with no new text, then the conclusion as small deltas.
+      { type: "abc_content", mode: "append", delta: "", loading: false },
+      { type: "abc_content", mode: "append", delta: "\nConclusion: ", loading: false },
+      { type: "abc_content", mode: "append", delta: "east leads.", loading: false },
+      // Earlier text rewritten (styled conclusion prefix) arrives as one whole snapshot.
+      { type: "abc_content", mode: "replace", content: `${table}\n<strong>Conclusion</strong>: east leads.`, loading: false },
+      { type: "abc_content", mode: "append", delta: " Done.", loading: false },
+    ];
+    const live = `${table}\n<strong>Conclusion</strong>: east leads. Done.`;
+    const { sender, messages } = makeSender();
+
+    const play = async (source: FakeEventSource) => {
+      source.emitOpen();
+      for (const [index, frame] of frames.entries()) {
+        await source.emitMessage(JSON.stringify(frame), String(index + 1));
+      }
+    };
+
+    await sender.resumeStandardMessage({ threadId: "thread-1", requestSeq: 0, token: "token-1" });
+    await play(FakeEventSource.instances[0]!);
+    expect(messages.value[1]?.snapshot?.primaryText).toBe(live);
+
+    // Coming back to the thread opens a new subscription that replays the run from its first frame.
+    messages.value.pop();
+    await sender.resumeStandardMessage({ threadId: "thread-1", requestSeq: 0, token: "token-1" });
+    const replay = FakeEventSource.instances[1]!;
+    await play(replay);
+    expect(messages.value[1]?.snapshot?.primaryText).toBe(live);
+
+    await replay.emitMessage(
+      JSON.stringify({ type: "result", content: { markdownTable: `${live}\n` } }),
+      String(frames.length + 1)
+    );
+    expect(messages.value[1]?.snapshot?.primaryText).toBe(`${live}\n`);
+  });
+
+  it("keeps the server's dataset ids on live datasets, so body placements find them", async () => {
+    const { sender, messages } = makeSender();
+    await sender.resumeStandardMessage({ threadId: "thread-1", requestSeq: 0, token: "token-1" });
+    const source = FakeEventSource.instances[0]!;
+    source.emitOpen();
+    await source.emitMessage(
+      JSON.stringify({
+        type: "query_datasets",
+        datasets: [
+          { id: "ds-1", subQuestion: "Revenue", data: [{ a: 1 }] },
+          { id: "ds-2", subQuestion: "Revenue", data: [] },
+        ],
+        nodeIds: [],
+      }),
+      "1"
+    );
+
+    expect(
+      messages.value[1]?.snapshot?.datasets?.map(({ datasetId, title }) => ({ datasetId, title }))
+    ).toEqual([
+      { datasetId: "ds-1", title: "Revenue" },
+      { datasetId: "ds-2", title: "Revenue" },
+    ]);
+  });
+
   it("keeps partial content when the run fails after producing results", async () => {
     // Same rule as response-node partial failure snapshots: when the live stream receives an error after partial results,
     // it only marks failure and keeps the body and execution facts instead of overwriting the partial content with the error.
