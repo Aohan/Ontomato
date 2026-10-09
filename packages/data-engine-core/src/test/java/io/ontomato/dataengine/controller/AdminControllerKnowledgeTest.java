@@ -24,7 +24,10 @@ import io.ontomato.dataengine.service.KnowledgeService;
 import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.util.SpringBeanUtil;
 
-/** Knowledge without content used to be skipped while the endpoints still answered success, so the Manager reported it as saved. */
+/**
+ * Knowledge without content, and edits or deletes without an ID, used to be skipped while the endpoints still answered
+ * success, so the caller reported a save or delete that never happened.
+ */
 class AdminControllerKnowledgeTest {
 
 	private final AdminController controller = new AdminController();
@@ -56,8 +59,12 @@ class AdminControllerKnowledgeTest {
 	}
 
 	private static void assertRefused(JSONObject ret) {
+		assertRefused("Admin.knowledge.textRequired", ret);
+	}
+
+	private static void assertRefused(String key, JSONObject ret) {
 		assertFalse(ret.getBooleanValue("success"), ret.toString());
-		assertEquals("zh-CN:Admin.knowledge.textRequired", ret.getString("message"));
+		assertEquals("zh-CN:" + key, ret.getString("message"));
 	}
 
 	@Test
@@ -67,6 +74,22 @@ class AdminControllerKnowledgeTest {
 		assertRefused(controller.editBussinessKnowledge("zh-CN", payload("k1", "")));
 		assertRefused(controller.editBussinessKnowledge("zh-CN", payload("k1", "   ")));
 		verifyNoInteractions(knowledgeService);
+	}
+
+	@Test
+	void editAndDeleteRefuseAMissingOrBlankIdInTheRequestLanguageWithoutTouchingTheStore() {
+		assertRefused("Admin.knowledge.idRequired", controller.editBussinessKnowledge("zh-CN", payload(null, "Within 7 days")));
+		assertRefused("Admin.knowledge.idRequired", controller.editBussinessKnowledge("zh-CN", payload(" ", "Within 7 days")));
+		assertRefused("Admin.knowledge.idRequired", controller.delBussinessKnowledge("zh-CN", new JSONObject()));
+		assertRefused("Admin.knowledge.idRequired",
+				controller.delBussinessKnowledge("zh-CN", new JSONObject().fluentPut("knowledgeID", "")));
+		verifyNoInteractions(knowledgeService);
+	}
+
+	@Test
+	void deleteWithAnIdDeletesIt() {
+		assertTrue(controller.delBussinessKnowledge("en", new JSONObject().fluentPut("knowledgeID", "k1")).getBooleanValue("success"));
+		verify(knowledgeService).delBussinessKnowledge("k1", user);
 	}
 
 	@Test
