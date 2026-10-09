@@ -8,8 +8,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -29,6 +32,7 @@ import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
+import io.ontomato.dataengine.service.DomainSvc;
 
 /**
  * Star chart reads never wait: they report READY, GENERATING or NOT_GENERATED immediately,
@@ -142,6 +146,21 @@ class StarChartStatusTest {
 		assertEquals(true, ret.getBoolean("success"));
 		assertEquals("GENERATING", ret.getString("status"));
 		verifyNoInteractions(businessConfigService, registry, starChartDao, adminService);
+	}
+
+	@Test
+	void startupEnumerationGeneratesEveryDomainFromDomainSvc() throws Exception {
+		DomainSvc domainSvc = mock(DomainSvc.class);
+		when(domainSvc.listDomainIds()).thenReturn(List.of(DOMAIN));
+		ReflectionTestUtils.setField(service, "domainSvc", domainSvc);
+		stubBuild();
+		service.initService();
+		verify(domainSvc, timeout(5000).atLeastOnce()).listDomainIds();
+		long deadline = System.currentTimeMillis() + 5000;
+		while (!"A".equals(service.currentSuffix.get(DOMAIN)) && System.currentTimeMillis() < deadline) {
+			Thread.sleep(50);
+		}
+		assertEquals("A", service.currentSuffix.get(DOMAIN));
 	}
 
 	private void stubBuild() {
