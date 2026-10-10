@@ -34,7 +34,6 @@ import io.ontomato.dataengine.util.DslUtil;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import cn.hutool.core.lang.UUID;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -80,47 +79,11 @@ public class DataServiceImpl implements DataService {
 	// Package-visible so focused unit tests can drive the read states without a database.
 	final Set<String> generatingDomains = ConcurrentHashMap.newKeySet();
 	private final Map<String, InstanceGraphIndex> instanceGraphIndexes = new ConcurrentHashMap<>();
+	@Autowired
+	private LiveInstanceGraph liveInstanceGraph;
 	
-	@PostConstruct
 	public void initService() {
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				while (true) {
-					try {
-						List<String> domainIds = domainSvc.listDomainIds();
-						for (String domainId : domainIds) {
-							startBackgroundGeneration(domainId);
-						}
-
-						break;
-					} catch (Exception e) {
-						log.error(e.getMessage(), e);
-					}
-					try {
-						Thread.sleep(5 * 60 * 1000);
-					} catch (Exception e) {}
-				}
-			}
-		}).start();
-	}
-
-	private void startBackgroundGeneration(String domainId) {
-		if (!generatingDomains.add(domainId)) {
-			return;
-		}
-		new Thread(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					generate(domainId);
-				} catch (Exception e) {
-					log.error(e.getMessage(), e);
-				} finally {
-					generatingDomains.remove(domainId);
-				}
-			}
-		}).start();
+		// Legacy star-chart files are generated only by the explicit refresh endpoint.
 	}
 
 	@Override
@@ -188,6 +151,7 @@ public class DataServiceImpl implements DataService {
 
 	@Override
 	public JSONObject queryInstanceGraph(String operation, JSONObject request, String domainId) {
+		if (liveInstanceGraph != null) return liveInstanceGraph.query(operation, request, domainId);
 		JSONObject ret = new JSONObject();
 		ret.put("success", true);
 		InstanceGraphIndex index = instanceGraphIndexes.get(domainId);

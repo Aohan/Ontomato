@@ -56,6 +56,11 @@ public class DataController {
 		return dataService.queryInstanceGraph("summary", new JSONObject(), SystemUtils.getCurUser().getDomainId());
 	}
 
+	@GetMapping("/data/instanceGraph/statistics")
+	public JSONObject instanceGraphStatistics() {
+		return dataService.queryInstanceGraph("statistics", new JSONObject(), SystemUtils.getCurUser().getDomainId());
+	}
+
 	@PostMapping("/data/instanceGraph/search")
 	public JSONObject instanceGraphSearch(@RequestBody JSONObject param) {
 		return dataService.queryInstanceGraph("search", param, SystemUtils.getCurUser().getDomainId());

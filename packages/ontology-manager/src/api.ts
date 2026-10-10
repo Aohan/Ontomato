@@ -120,10 +120,10 @@ export interface InstanceGraphData {
 }
 
 export interface InstanceGraphSummary {
-  classes: Array<{ class: string; instanceCount: number }>;
+  classes: Array<{ class: string; instanceCount: number | null; sampleCount?: number }>;
   relationships: Array<{ source: string; target: string; count: number; type?: string; types?: string[] }>;
-  nodeCount: number;
-  edgeCount: number;
+  nodeCount: number | null;
+  edgeCount: number | null;
   componentCount: number;
   isolatedNodeCount: number;
   largestComponentSize: number;
@@ -138,7 +138,7 @@ export interface InstanceGraphSummary {
 }
 
 export interface InstanceNeighborhood extends InstanceGraphData {
-  total: number;
+   total: number | null;
   nextOffset: number | null;
   version: string;
 }
@@ -479,6 +479,10 @@ export function createManagerClient(
       : { status: response.status };
   }
 
+  async function loadInstanceGraphStatistics() {
+    return (await send("/data/instanceGraph/statistics", { method: "GET" })).data as { nodeCount: number; classes: Array<{ class: string; instanceCount: number }> };
+  }
+
   async function searchInstanceGraph(term: string, version: string, className?: string) {
     const response = await post("/data/instanceGraph/search", { term, version, class: className, limit: 50 });
     if (response.status !== "READY") throw new Error(ontologyText(context.messages, "instanceGraphNotGenerated"));
@@ -559,6 +563,7 @@ export function createManagerClient(
   }
 
   return {
+    loadInstanceGraphStatistics,
     dispose: () => {
       disposed = true;
     },

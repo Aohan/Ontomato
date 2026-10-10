@@ -2,7 +2,6 @@
 import { Graph } from "@antv/g6";
 import {
   Box,
-  DatabaseZap,
   Download,
   Crosshair,
   Scan,
@@ -35,16 +34,16 @@ import {
 } from "./instance-graph-rendering";
 
 const context = useManagerContext();
-const { message, confirm } = useManagerFeedback();
+const { message } = useManagerFeedback();
 const { ot } = useOntologyText();
 const { t } = useSharedText();
-const { loadInstanceGraphSummary, searchInstanceGraph, loadInstanceNeighborhood, refreshStarChartData, queryInstanceInfo, loadOntology } =
+const { loadInstanceGraphSummary, loadInstanceGraphStatistics, searchInstanceGraph, loadInstanceNeighborhood, queryInstanceInfo, loadOntology } =
   useManagerClient();
 
 const graphRef = ref<HTMLDivElement | null>(null);
 const loading = ref(false);
-const regenerating = ref(false);
 const error = ref("");
+const statisticsError = ref("");
 const status = ref<InstanceGraphResult["status"]>("READY");
 const nodes = shallowRef<InstanceGraphNode[]>([]);
 const edges = shallowRef<InstanceGraphEdge[]>([]);
@@ -76,7 +75,7 @@ const searchNodes = shallowRef<InstanceGraphNode[]>([]);
 const searching = ref(false);
 const searchMore = ref(false);
 const expanding = ref(false);
-const neighborPages = shallowRef<Record<string, { nextOffset: number | null; total: number; loaded: number }>>({});
+const neighborPages = shallowRef<Record<string, { nextOffset: number | null; total: number | null; loaded: number }>>({});
 const currentPage = computed(() => selectedNode.value ? neighborPages.value[selectedNode.value.id] : undefined);
 let searchRequest = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -607,6 +606,7 @@ function downloadGraph() {
 async function refresh() {
   clearTimeout(generationTimer);
   versionChanged.value = false;
+  statisticsError.value = "";
   const request = ++graphRequest;
   clearTimeout(searchTimer);
   searchRequest++;
@@ -635,6 +635,12 @@ async function refresh() {
     if (result.status === "READY") {
       summary.value = result.summary;
       await showOverview(request);
+      const statisticsSummary = summary.value;
+      void loadInstanceGraphStatistics().then((statistics) => {
+        if (summary.value !== statisticsSummary) return;
+        summary.value = { ...summary.value, nodeCount: statistics.nodeCount,
+          classes: summary.value.classes.map((item) => ({ ...item, instanceCount: statistics.classes.find((entry) => entry.class === item.class)?.instanceCount ?? item.instanceCount })) };
+      }).catch(() => { if (summary.value === statisticsSummary) statisticsError.value = ot('instanceGraphStatisticsUnavailable'); });
     } else if (result.status === "GENERATING") {
       generationTimer = setTimeout(() => { void refresh(); }, 2000);
     }
@@ -647,28 +653,6 @@ async function refresh() {
 }
 
 // Generation scans all star-chart data, so it is confirmed first; the empty state and the toolbar share this entry.
-async function regenerate() {
-  try {
-    await confirm(ot("instanceGraphGenerateConfirm"), ot("generateInstanceGraph"));
-  } catch {
-    return;
-  }
-  regenerating.value = true;
-  try {
-    if ((await refreshStarChartData()) === "GENERATED") {
-      message.success(ot("instanceGraphGenerated"));
-      await refresh();
-    } else {
-      message.info(ot("instanceGraphGenerating"));
-      generationTimer = setTimeout(() => { void refresh(); }, 2000);
-    }
-  } catch (reason) {
-    message.error((reason as Error).message);
-  } finally {
-    regenerating.value = false;
-  }
-}
-
 const isEmpty = computed(() => !loading.value && !error.value && nodes.value.length === 0);
 
 onMounted(() => {
@@ -695,7 +679,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section
-    v-loading="loading || regenerating"
+    v-loading="loading"
     :element-loading-text="rendering ? ot('instanceGraphRenderProgress', { completed: renderedElements, total: nodes.length + edges.length }) : undefined"
     class="instance-graph"
   >
@@ -717,8 +701,8 @@ onBeforeUnmount(() => {
       <Unplug :size="30" />
       <template v-if="status === 'NOT_GENERATED'">
         <strong>{{ ot("instanceGraphNotGenerated") }}</strong>
-        <el-button type="primary" :icon="DatabaseZap" @click="regenerate">
-          {{ ot("generateInstanceGraph") }}
+        <el-button type="primary" :icon="RefreshCw" @click="refresh">
+          {{ t("common.refresh") }}
         </el-button>
       </template>
       <strong v-else-if="status === 'GENERATING'">{{ ot("instanceGraphGenerating") }}</strong>
@@ -738,9 +722,6 @@ onBeforeUnmount(() => {
       <span class="toolbar-separator" aria-hidden="true" />
       <button :title="ot('downloadPng')" :aria-label="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
       <button :title="t('common.refresh')" :aria-label="t('common.refresh')" :disabled="expanding" @click="refresh"><RefreshCw :size="17" /></button>
-      <button :title="ot('regenerateInstanceGraph')" :aria-label="ot('regenerateInstanceGraph')" :disabled="regenerating" @click="regenerate">
-        <DatabaseZap :size="17" />
-      </button>
     </div>
 
     <div class="graph-hint">
@@ -751,23 +732,23 @@ onBeforeUnmount(() => {
     <div v-if="summary" class="graph-summary">
       <div class="summary-row">
         <strong class="summary-title">{{ overview ? ot('instanceGraphOverview') : selectedNode?.name }}</strong>
-        <span class="summary-counts">{{ ot('instanceGraphCompactCount', { nodes: nodes.length.toLocaleString(context.locale), totalNodes: summary.nodeCount.toLocaleString(context.locale), edges: edges.length.toLocaleString(context.locale), totalEdges: summary.edgeCount.toLocaleString(context.locale) }) }}</span>
+        <span class="summary-counts">{{ ot('instanceGraphLiveCount', { nodes: nodes.length.toLocaleString(context.locale), totalNodes: summary.nodeCount == null ? '…' : summary.nodeCount.toLocaleString(context.locale), edges: edges.length.toLocaleString(context.locale) }) }}</span>
         <el-popover trigger="click" :width="300" :teleported="false" placement="bottom-start">
           <template #reference>
             <button class="summary-info" :title="ot('instanceGraphStatistics')" :aria-label="ot('instanceGraphStatistics')"><Info :size="15" /></button>
           </template>
           <div class="summary-details">
             <strong>{{ ot('instanceGraphStatistics') }}</strong>
-            <span>{{ ot('instanceGraphSummary', { nodes: summary.nodeCount, edges: summary.edgeCount }) }}</span>
-            <span>{{ ot('instanceGraphStructure', { isolated: summary.isolatedNodeCount, largest: summary.largestComponentSize, time: new Date(summary.generatedAt).toLocaleString(context.locale) }) }}</span>
-            <span v-if="overview">{{ ot('instanceGraphSample', { shown: nodes.length, total: summary.nodeCount, edges: edges.length }) }}</span>
+            <span>{{ ot('instanceGraphLiveDescription') }}</span>
+            <span v-if="statisticsError">{{ statisticsError }}</span>
+            <span v-if="overview">{{ ot('instanceGraphSample', { shown: nodes.length, total: summary.nodeCount == null ? '…' : summary.nodeCount, edges: edges.length }) }}</span>
             <span v-if="overview && summary.overviewEdgesTruncated" class="graph-warning">{{ ot('instanceGraphSampleEdgesLimited') }}</span>
           </div>
         </el-popover>
         <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
       </div>
       <div v-if="overview" class="sample-legend">
-        <button v-for="item in summary.classes" :key="item.class" :class="{ 'is-selected': selectedClass === item.class }" :title="`${classLabels[item.class] || item.class}: ${Math.min(item.instanceCount, 50)} / ${item.instanceCount}`" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }}</button>
+        <button v-for="item in summary.classes" :key="item.class" :class="{ 'is-selected': selectedClass === item.class }" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }}</button>
       </div>
       <small v-if="summary.complete === false" role="alert" class="graph-warning">{{ ot('instanceGraphPartial', { failures: (summary.failures || []).join(', ') }) }}</small>
       <el-button v-if="versionChanged" size="small" :icon="RefreshCw" @click="refresh">{{ ot('instanceGraphVersionChanged') }}</el-button>
@@ -781,7 +762,7 @@ onBeforeUnmount(() => {
           :placeholder="ot('searchInstanceNodes')"
           :aria-label="ot('searchInstanceNodes')"
           :no-match-text="ot('noMatchingResources')"
-          :disabled="loading || regenerating || layouting || rendering || expanding || !summary"
+          :disabled="loading || layouting || rendering || expanding || !summary"
           :loading="searching"
           remote
           :debounce="0"
@@ -851,7 +832,7 @@ onBeforeUnmount(() => {
             <el-checkbox v-model="fitAfterExpand">{{ ot('instanceGraphKeepView') }}</el-checkbox>
             <el-button :icon="SlidersHorizontal" type="primary" :loading="expanding" :disabled="expanding || rendering" @click="applyNeighborhoodFilters">{{ ot('instanceGraphApply') }}</el-button>
             <el-button :icon="GitFork" :loading="expanding" :disabled="rendering || filtersDirty || versionChanged || currentPage?.nextOffset === null" @click="expandNeighbors">{{ ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand') }}</el-button>
-            <p v-if="currentPage" class="neighbor-progress" role="status">{{ ot('instanceGraphConnections', { loaded: currentPage.loaded, total: currentPage.total }) }}</p>
+            <p v-if="currentPage" class="neighbor-progress" role="status">{{ currentPage.total == null ? ot('instanceGraphConnectionsMore', { loaded: currentPage.loaded }) : ot('instanceGraphConnections', { loaded: currentPage.loaded, total: currentPage.total }) }}</p>
           </div>
         </div>
         <div class="detail-title">

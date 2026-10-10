@@ -92,6 +92,17 @@ starts only the three processes above and is not a full-stack start.
 
 ## Local development (Java data engine)
 
+Instance graph browsing queries PostgreSQL on demand. Startup does not scan business
+tables or build an in-memory instance graph. Overview reads up to 50 records per
+`inStarChart` object type and at most 2,000 connections between those records; search
+returns up to 50 matches, and neighborhood expansion returns 100 connections per page.
+Queries are read-only, have a 10-second statement timeout and share a four-request
+concurrency limit. Instance counts load separately and are cached for 60 seconds;
+full connection counts and connectivity statistics are not calculated during browsing.
+Refresh reads current data; the legacy star-chart generation endpoint remains an
+explicit operation for its existing callers. Stable ordering makes pages reproducible
+for unchanged data, but concurrent source edits can change offset-based page boundaries.
+
 `node apps/data-engine/dev.mjs [extra Maven arguments]`: runs the platform's official
 Maven wrapper (`./mvnw` on POSIX, `mvnw.cmd` on Windows) in the foreground from this
 repository's reactor root with

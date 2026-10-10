@@ -165,18 +165,13 @@ class StarChartStatusTest {
 	}
 
 	@Test
-	void startupEnumerationGeneratesEveryDomainFromDomainSvc() throws Exception {
+	void startupDoesNotScanDomainsOrGenerateGraphs() throws Exception {
 		DomainSvc domainSvc = mock(DomainSvc.class);
 		when(domainSvc.listDomainIds()).thenReturn(List.of(DOMAIN));
 		ReflectionTestUtils.setField(service, "domainSvc", domainSvc);
-		stubBuild();
 		service.initService();
-		verify(domainSvc, timeout(5000).atLeastOnce()).listDomainIds();
-		long deadline = System.currentTimeMillis() + 5000;
-		while (!"A".equals(service.currentSuffix.get(DOMAIN)) && System.currentTimeMillis() < deadline) {
-			Thread.sleep(50);
-		}
-		assertEquals("A", service.currentSuffix.get(DOMAIN));
+		verifyNoInteractions(domainSvc, registry, businessConfigService, starChartDao);
+		assertTrue(service.currentSuffix.isEmpty());
 	}
 
 	private void stubBuild() {
