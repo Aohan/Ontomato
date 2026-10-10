@@ -663,7 +663,7 @@ public class DuckDBAdapter implements DataAdapter {
 	@Override
 	public void truncateNamespace(String namespace) {
 		try {
-			JSONArray current_schemas = querySql("SELECT current_schema();");
+			JSONArray current_schemas = querySql("SELECT current_schema() AS current_schema;");
 			String current_schema = current_schemas.getJSONObject(0).getString("current_schema");
 			JSONArray tableNames = querySql("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
 			for (int i = 0; i < tableNames.size(); i++) {
@@ -680,7 +680,7 @@ public class DuckDBAdapter implements DataAdapter {
 	@Override
 	public void dropNamespace(String namespace) {
 		try {
-			JSONArray current_schemas = querySql("SELECT current_schema();");
+			JSONArray current_schemas = querySql("SELECT current_schema() AS current_schema;");
 			String current_schema = current_schemas.getJSONObject(0).getString("current_schema");
 			JSONArray tableNames = querySql("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
 			for (int i = 0; i < tableNames.size(); i++) {

@@ -18,6 +18,7 @@
 
     <modules>
         <module>packages/data-engine-core</module>
+        <module>packages/data-adapter-test-support</module>
         <module>packages/data-adapters/postgresql</module>
         <module>packages/data-adapters/mysql</module>
         <module>packages/data-adapters/oracle</module>
