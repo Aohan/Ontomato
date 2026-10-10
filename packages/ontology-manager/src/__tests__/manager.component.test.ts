@@ -69,6 +69,8 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   if (path === "/data/instanceGraph/summary") return json({ success: true, status: "READY", data: {
     classes: [{ class: "Order", instanceCount: instanceNodeCount }, { class: "Item", instanceCount: 1 }],
     relationships: [{ source: "Order", target: "Item", count: 1 }],
+    overviewNodes: [{ id: "Order:1", name: "First order", class: "Order" }, { id: "Item:2", name: "Spare part", class: "Item" }],
+    overviewEdges: [{ source: "Order:1", target: "Item:2" }],
     nodeCount: instanceNodeCount, edgeCount: 1, componentCount: 1, isolatedNodeCount: 0,
     largestComponentSize: instanceNodeCount, version: "v1", generatedAt: "2026-10-10T00:00:00Z",
   } });
@@ -272,7 +274,7 @@ describe("OntologyManager root component with real pages", () => {
     (root().querySelector(".graph-toolbar button[title='Relayout']") as HTMLButtonElement).click();
     await settle();
     await settle();
-    expect(graphRecord.layouts.length).toBe(2);
+    expect(graphRecord.layouts.length).toBe(0);
   });
 
   it("instance graph search filters nodes and focuses the selected result without stale record details", async () => {
@@ -765,10 +767,12 @@ describe("OntologyManager root component with real pages", () => {
     expect(fills).toEqual(byClass);
   });
 
-  it("the data browser header description comes from the host function with the current object's display name", async () => {
+  it("the data browser keeps its controls without a redundant content header", async () => {
     const { root } = mountHost({ ...base, view: "/data/Order" });
     await settle();
-    expect(root().textContent).toContain("description of Order-label");
+    expect(root().querySelector(".content-header")).toBeNull();
+    expect(root().querySelector(".mode-bar")).not.toBeNull();
+    expect(root().querySelector(".toolbar")?.textContent).toContain("Order-label");
   });
 
   it("the description fallback pre-fills the form with the host value, is unchanged by locale/theme switches, and is submitted in the original field after editing", async () => {

@@ -10,7 +10,6 @@ import DataBrowser from "./data-browser/DataBrowser.vue";
 import VisualModeling from "./visual-modeling/VisualModeling.vue";
 import OntologyAssetCatalog from "./components/OntologyAssetCatalog.vue";
 import OntologyAssetDetail from "./components/OntologyAssetDetail.vue";
-import OntologyContentHeader from "./components/OntologyContentHeader.vue";
 import OntologyModelCatalog from "./components/OntologyModelCatalog.vue";
 import OntologyPlayground from "./components/OntologyPlayground.vue";
 import OntologyObjectCreateDialog from "./components/OntologyObjectCreateDialog.vue";
@@ -281,32 +280,6 @@ async function loadResourceCounts() {
   if (tasks.status === "fulfilled") resourceCounts.value.tasks = tasks.value.length;
 }
 
-const workspaceTitle = computed(() => {
-  if (activeWorkspace.value === "browser") {
-    const objectLabel = objectLabels.value[browserObjectClass.value];
-    return {
-      title: objectLabel ? `${t("nav.dataBrowser")} / ${objectLabel}` : t("nav.dataBrowser"),
-      description: context.presentation.dataBrowserDescription(objectLabel),
-    };
-  }
-  if (activeWorkspace.value === "assets") {
-    return {
-      title: t("nav.intelligenceAssets"),
-      description: "",
-    };
-  }
-  if (activeWorkspace.value === "playground") {
-    return { title: t("nav.ontologyGraph"), description: "" };
-  }
-  if (activeWorkspace.value === "visual-modeling") {
-    return { title: t("nav.visualModeling"), description: "" };
-  }
-  if (activeWorkspace.value === "knowledge") {
-    return { title: t("nav.businessKnowledge"), description: "" };
-  }
-  return { title: t("nav.ontologyModeling"), description: "" };
-});
-
 onMounted(() => {
   void loadResourceCounts();
 });
@@ -331,13 +304,6 @@ onMounted(() => {
       />
 
       <section class="content-area">
-        <OntologyContentHeader
-          v-if="activeWorkspace === 'browser'"
-          :workspace="activeWorkspace"
-          :title="workspaceTitle.title"
-          :description="workspaceTitle.description"
-          @browse="changeWorkspace('browser')"
-        />
         <section v-if="activeWorkspace === 'model'" class="model-surface">
           <OntologyModelCatalog
             v-if="!selectedObjectClass && !selectedRelation"

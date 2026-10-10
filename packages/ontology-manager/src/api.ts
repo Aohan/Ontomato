@@ -130,6 +130,9 @@ export interface InstanceGraphSummary {
   complete?: boolean;
   failures?: string[];
   relationTypes?: string[];
+  overviewNodes?: InstanceGraphNode[];
+  overviewEdges?: InstanceGraphEdge[];
+  overviewEdgesTruncated?: boolean;
   version: string;
   generatedAt: string;
 }
