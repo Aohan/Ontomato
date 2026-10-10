@@ -231,6 +231,8 @@ export function copyWorkspace(app, context, record, owners) {
       owned.add(candidate.path.slice(0, -"/package.json".length));
     }
     const selected = selectOwners(source.id, owned, owners);
+    // Cached Git entries still include unstaged deletions, which are no longer build inputs.
+    const deleted = new Set(git(source.root, ["ls-files", "--deleted", "-z"]).split("\0"));
     const files = output("git", [
       "-C",
       source.root,
@@ -241,7 +243,7 @@ export function copyWorkspace(app, context, record, owners) {
       "-z",
     ])
       .split("\0")
-      .filter((path) => path !== "");
+      .filter((path) => path !== "" && !deleted.has(path));
     for (const rel of files) {
       if (!workspaceAllowed(rel)) continue;
       // Metadata already came from the captured bytes above; a live

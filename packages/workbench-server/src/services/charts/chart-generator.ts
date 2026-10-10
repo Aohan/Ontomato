@@ -11,7 +11,7 @@ import { loadSkillContent } from "../../core/skills/discovery/loader";
 import { skillRuntime } from "../../core/skills/execution/runtime";
 import { skillRegistryManager } from "../../core/skills/registry/manager";
 import type { SkillMeta } from "../../core/skills/types";
-import { t, tApp } from "../../i18n";
+import { tApp } from "../../i18n";
 import { createLogger } from "../../logging/logger";
 import { buildModelDataView } from "../../utils/model-data-view";
 
@@ -47,10 +47,21 @@ function isNumeric(value: unknown): boolean {
   );
 }
 
-function hasValidFields(plan: ChartPlan, data: ChartDatasetCandidate["data"]): boolean {
+function fieldValidationError(plan: ChartPlan, data: ChartDatasetCandidate["data"]): string | undefined {
   const fields = new Set(data.flatMap((row) => Object.keys(row)));
-  if ([plan.xField, plan.yField, plan.seriesField].some((field) => field && !fields.has(field))) {
-    return false;
+  const boundFields: Array<{ param: "xField" | "yField" | "seriesField"; value: string | undefined }> = [
+    { param: "xField", value: plan.xField },
+    { param: "yField", value: plan.yField },
+    { param: "seriesField", value: plan.seriesField },
+  ];
+  for (const { param, value } of boundFields) {
+    if (value && !fields.has(value)) {
+      return tApp("queryFixed.273", {
+        param,
+        field: value,
+        existingFields: [...fields].join(", "),
+      });
+    }
   }
   const requiresAxes = [
     "bar",
@@ -63,17 +74,24 @@ function hasValidFields(plan: ChartPlan, data: ChartDatasetCandidate["data"]): b
     "treemap",
     "sunburst",
   ].includes(plan.chartType);
-  if (requiresAxes && (!plan.xField || !plan.yField)) return false;
+  if (requiresAxes && (!plan.xField || !plan.yField)) {
+    const missingField = ([!plan.xField && "xField", !plan.yField && "yField"].filter(Boolean) as string[]).join(", ");
+    return tApp("queryFixed.274", { chartType: plan.chartType, missingField });
+  }
   if (
     plan.yField &&
     plan.chartType !== "heatmap" &&
     !data.some((row) => isNumeric(row[plan.yField!]))
   ) {
-    return false;
+    return tApp("queryFixed.275", { yField: plan.yField });
   }
-  return plan.excludeCategoryValues.every(
-    (value) => plan.xField && data.some((row) => row[plan.xField!] === value)
+  const missingExclude = plan.excludeCategoryValues.find(
+    (value) => !plan.xField || !data.some((row) => row[plan.xField!] === value)
   );
+  if (missingExclude !== undefined) {
+    return tApp("queryFixed.276", { value: String(missingExclude), xField: plan.xField || "" });
+  }
+  return undefined;
 }
 
 /** The planning, hard-validation, and skill rendering chain shared by query and reports; ownership fields keep the existing presentation contract. */
@@ -85,7 +103,6 @@ export async function generateChartsFromCandidates(params: {
   /** When unspecified, all skills available in the domain are used; an explicit empty array means no charts. */
   enabledVisualizationSkillIds?: string[];
   maxCharts: number;
-  failurePolicy: "error" | "diagnostic";
   signal?: AbortSignal;
   onProgress?: (
     progress:
@@ -95,7 +112,6 @@ export async function generateChartsFromCandidates(params: {
 }): Promise<{
   charts: AnalysisChartResult[];
   diagnostics: AnalysisChartDiagnostic[];
-  error?: string;
 }> {
   const { scopeId, candidates, signal } = params;
   signal?.throwIfAborted();
@@ -157,23 +173,44 @@ export async function generateChartsFromCandidates(params: {
       const content = String(response.content || "").trim();
       const json = content.replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/, "$1");
       const plans = z.array(z.unknown()).parse(JSON.parse(json));
-      if (plans.length === 0) diagnose("no_viable_plan", tApp("queryFixed.7"));
+      if (plans.length === 0) {
+        const candidateFields = candidates
+          .map((candidate) => {
+            const fields = [...new Set(candidate.data.flatMap((row) => Object.keys(row)))];
+            return `${candidate.sourceSubQuestion}: [${fields.join(", ")}]`;
+          })
+          .join("; ");
+        diagnose("no_viable_plan", tApp("queryFixed.7", { fields: candidateFields }));
+      }
       for (const rawPlan of plans) {
         if (charts.length >= params.maxCharts) break;
         const parsed = chartPlanSchema.safeParse(rawPlan);
         if (!parsed.success) {
-          diagnose("invalid_plan", tApp("queryFixed.8"));
+          const paths = parsed.error.issues.map((i) => i.path.join(".") || "(root)").join(", ");
+          diagnose("invalid_plan", tApp("queryFixed.279", { paths }));
           continue;
         }
         const plan = parsed.data;
         const source = candidates.find(
           (candidate) => candidate.sourceSubQuestion === plan.sourceSubQuestion
         );
+        if (!source?.data.length) {
+          diagnose(
+            "invalid_plan",
+            tApp("queryFixed.277", { sourceSubQuestion: plan.sourceSubQuestion })
+          );
+          continue;
+        }
         const skill = availableSkills.find(
           ({ skill: candidate }) => candidate.id === plan.skillId
         )?.skill;
-        if (!source?.data.length || !skill || !hasValidFields(plan, source.data)) {
-          diagnose("invalid_plan", tApp("queryFixed.1", { v0: (plan.title) }));
+        if (!skill) {
+          diagnose("invalid_plan", tApp("queryFixed.278", { skillId: plan.skillId }));
+          continue;
+        }
+        const fieldError = fieldValidationError(plan, source.data);
+        if (fieldError) {
+          diagnose("invalid_plan", fieldError);
           continue;
         }
         signal?.throwIfAborted();
@@ -240,19 +277,5 @@ export async function generateChartsFromCandidates(params: {
     logger.warn(tApp("queryFixed.10"), { scopeId, error: cause.message });
   }
 
-  if (params.failurePolicy === "error" && charts.length === 0) {
-    const reason = diagnostics[0]?.reason;
-    const key =
-      reason === "no_visualization_skill"
-        ? "viz.noRenderSkillsAvailableCheck"
-        : reason === "no_data_candidates"
-          ? "viz.missingData"
-          : reason === "invalid_plan"
-            ? "viz.missingChartConfig"
-            : reason === "no_viable_plan"
-              ? "viz.noValidConfigJson"
-              : "viz.generationFailedNoHtml";
-    return { charts, diagnostics, error: t(key) };
-  }
   return { charts, diagnostics };
 }

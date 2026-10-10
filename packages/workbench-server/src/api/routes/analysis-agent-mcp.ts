@@ -86,7 +86,10 @@ function createAnalysisAgentMcpServer(req: Request) {
     },
     async ({ taskId }) =>
       withMcpIdentity(req, async (identity) => {
-        const task = await getAnalysisTaskService().getTask(taskId, identity.domainId);
+        const task = await getAnalysisTaskService().getTask(taskId, identity.domainId, {
+          payload: "report",
+          runs: "none",
+        });
         if (
           !task ||
           !requireOwner(task.userId, identity.userId) ||
@@ -111,7 +114,10 @@ function createAnalysisAgentMcpServer(req: Request) {
     },
     async ({ taskId }) =>
       withMcpIdentity(req, async (identity) => {
-        const task = await getAnalysisTaskService().getTask(taskId, identity.domainId);
+        const task = await getAnalysisTaskService().getTask(taskId, identity.domainId, {
+          payload: "report",
+          runs: "none",
+        });
         if (
           !task ||
           !requireOwner(task.userId, identity.userId) ||

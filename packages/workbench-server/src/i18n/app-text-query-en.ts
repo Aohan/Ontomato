@@ -1,13 +1,11 @@
 /** Fixed query copy for appTextLocale=en. Keys do not overlap request-locale packs. */
 export const appTextQueryEn = {
-  "queryFixed.1": "Chart plan {v0} failed data or skill validation, skipped",
   "queryFixed.2": "Chart skill {v0} did not return valid HTML output",
   "queryFixed.3": "Chart skill execution failed: {v0}",
   "queryFixed.4": "Chart planning failed: {v0}",
   "queryFixed.5": "No usable visualization skill found",
   "queryFixed.6": "No valid data candidates available for generating charts",
-  "queryFixed.7": "The chart planning stage produced no executable chart plan",
-  "queryFixed.8": "Chart plan format is incomplete, skipped",
+  "queryFixed.7": "The chart planning stage produced no executable chart plan (candidate fields: {fields})",
   "queryFixed.9": "Chart skill execution failed",
   "queryFixed.10": "Chart planning failed",
   "queryFixed.11": "{v0}: {v1} ({v2} samples)",
@@ -272,4 +270,11 @@ export const appTextQueryEn = {
   "queryFixed.270": "[QualityCheck] The quality-check stream ended without receiving the final conclusion/score",
   "queryFixed.271": ": {v0}",
   "queryFixed.272": "ABC query process:",
+  "queryFixed.273": "Field '{field}' bound to {param} does not exist in data (existing fields: {existingFields})",
+  "queryFixed.274": "Chart type '{chartType}' requires coordinate axes but is missing {missingField}",
+  "queryFixed.275": "Field '{yField}' bound to yField contains no numeric values in data",
+  "queryFixed.276": "Value '{value}' in excludeCategoryValues does not appear in xField '{xField}'",
+  "queryFixed.277": "Data candidate '{sourceSubQuestion}' was not found or has no data",
+  "queryFixed.278": "Visualization skill '{skillId}' is not available",
+  "queryFixed.279": "Chart plan schema validation failed at: {paths}",
 };

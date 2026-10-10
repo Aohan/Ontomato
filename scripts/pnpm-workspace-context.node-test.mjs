@@ -275,6 +275,14 @@ const MANAGER_OWNERS = {
   enterprise: ["apps/ontology-manager"],
 };
 
+test("unstaged source deletions stay absent from the build context", (t) => {
+  const fixture = managerPair(t);
+  rmSync(join(fixture.publicRoot, "apps/ontology-manager/src/main.ts"));
+  const { context, copy } = stage(fixture, MANAGER_OWNERS);
+  copy();
+  assert.equal(existsSync(join(context, "workspace/ontomato/apps/ontology-manager/src/main.ts")), false);
+});
+
 test("named owners per source id get their sources; every other package keeps only captured metadata", (t) => {
   const fixture = managerPair(t);
   const { context, record, copy } = stage(fixture, MANAGER_OWNERS);

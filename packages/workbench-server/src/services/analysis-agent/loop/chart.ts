@@ -171,7 +171,6 @@ export function createGenerateChartTool(params: {
           candidates,
           enabledVisualizationSkillIds: deps.visualizationSkillIds,
           maxCharts: Math.min(MAX_CHARTS_PER_REQUEST, candidates.length),
-          failurePolicy: "diagnostic",
         });
 
         const charts = attachChartMarkers(

@@ -1,4 +1,4 @@
-import type { AnalysisTaskDetail as AnalysisTask } from "@ontomato/contracts/analysis-task";
+import type { AnalysisTask } from "@ontomato/contracts/analysis-task";
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { useRoute, useRouter } from "vue-router";

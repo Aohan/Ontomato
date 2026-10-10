@@ -1,5 +1,12 @@
-import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const getQuestionExecution = vi.fn();
+vi.mock("../../api", () => ({
+  analysisTaskApi: {
+    getQuestionExecution: (...args: unknown[]) => getQuestionExecution(...args),
+  },
+}));
 
 import DeepAnalysisResult from "../DeepAnalysisResult.vue";
 import { MessageContent, QueryExecutionView } from "../../../query-view";
@@ -75,7 +82,7 @@ const activities: AnalysisActivity[] = [
 
 const render = () =>
   mount(DeepAnalysisResult, {
-    props: { activities },
+    props: { activities, executionScope: { taskId: "task-1" } },
     global,
   });
 
@@ -103,5 +110,104 @@ describe("report provenance entry", () => {
     // The data query body appears only once (the quality check conclusion is separate content).
     expect(bodies.filter((m) => m.props("content") === "Construction sites per town are as follows")).toHaveLength(1);
     expect(w.find(".data-preview").exists()).toBe(false);
+  });
+});
+
+// Legacy chat-history deep-analysis snapshots carry inline facts and no task; they stay readable.
+it("shows inline facts of a snapshot without a task and reads nothing", async () => {
+  getQuestionExecution.mockReset();
+  const w = mount(DeepAnalysisResult, { props: { activities }, global });
+  await w.find(".question-left").trigger("click");
+  await flushPromises();
+  expect(w.findComponent(QueryExecutionView).props("facts")).toMatchObject({
+    fullContent: "Construction sites per town are as follows",
+  });
+  expect(getQuestionExecution).not.toHaveBeenCalled();
+});
+
+/** A question whose query run was saved carries only its state and identity until expanded. */
+describe("deferred query facts", () => {
+  const deferred: AnalysisActivity[] = activities.map((activity) =>
+    activity.kind === "evidence"
+      ? {
+          ...activity,
+          questions: activity.questions!.map((question) => ({
+            ...question,
+            execution: { dataCount: 12, thinkingSummary: "ABC decomposition complete" },
+            executionDeferred: true as const,
+          })),
+        }
+      : activity
+  );
+  const mountDeferred = (executionScope: { taskId: string; runId?: string }) =>
+    mount(DeepAnalysisResult, { props: { activities: deferred, executionScope }, global });
+
+  beforeEach(() => getQuestionExecution.mockReset());
+
+  it("reads the question's facts only when it is expanded, from the viewed run", async () => {
+    getQuestionExecution.mockResolvedValue(EXECUTION);
+    const w = mountDeferred({ taskId: "task-1", runId: "run-old" });
+    await flushPromises();
+    expect(getQuestionExecution).not.toHaveBeenCalled();
+
+    await w.find(".question-left").trigger("click");
+    await flushPromises();
+    expect(getQuestionExecution).toHaveBeenCalledTimes(1);
+    expect(getQuestionExecution).toHaveBeenCalledWith("task-1", "q-1", {
+      runId: "run-old",
+      requestSeq: undefined,
+    });
+    expect(w.findComponent(QueryExecutionView).props("facts")).toMatchObject({
+      fullContent: "Construction sites per town are as follows",
+    });
+  });
+
+  it("drops a late answer for a run the view has already left", async () => {
+    let answerOld!: (facts: unknown) => void;
+    getQuestionExecution
+      .mockImplementationOnce(() => new Promise((resolve) => (answerOld = resolve)))
+      .mockResolvedValueOnce({ ...EXECUTION, fullContent: "current run facts" });
+    const w = mountDeferred({ taskId: "task-1", runId: "run-old" });
+    await w.find(".question-left").trigger("click");
+    await w.setProps({ executionScope: { taskId: "task-1" } });
+    await flushPromises();
+    answerOld({ ...EXECUTION, fullContent: "old run facts" });
+    await flushPromises();
+    expect(w.findComponent(QueryExecutionView).props("facts")).toMatchObject({
+      fullContent: "current run facts",
+    });
+  });
+});
+
+/** The skill block reports real skills; a skill stage without entries is a placeholder. */
+describe("skill execution block", () => {
+  const skillStage = (skills: NonNullable<AnalysisActivity["skills"]>): AnalysisActivity => ({
+    activityId: "skill",
+    kind: "skill",
+    seq: 3,
+    revision: 3,
+    status: "completed",
+    startedAt: 1,
+    skills,
+  });
+  const mountWith = (extra: AnalysisActivity[], status: "completed" | "cancelled" = "completed") =>
+    mount(DeepAnalysisResult, {
+      props: {
+        activities: [...activities, ...extra],
+        runState: { status, revision: 1, progress: { done: 100, label: "" } },
+      },
+      global,
+    });
+
+  it("is hidden for a completed or stopped run whose skill stage has no skills", () => {
+    expect(mountWith([skillStage([])]).find(".skill-execution-status").exists()).toBe(false);
+    const stopped = mountWith([skillStage([])], "cancelled");
+    expect(stopped.find(".skill-execution-status").exists()).toBe(false);
+    expect(stopped.find(".thinking-status.stopped").exists()).toBe(true);
+  });
+
+  it("reports real skills as before", () => {
+    const w = mountWith([skillStage([{ skillId: "s1", action: "run", status: "completed" }])]);
+    expect(w.find(".skill-status-item.complete").exists()).toBe(true);
   });
 });

@@ -274,7 +274,6 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
       scopeId: `visualization-${requestSeq}`,
       candidates: [{ sourceSubQuestion: visualizationInstruction, data }],
       maxCharts: 1,
-      failurePolicy: "error",
       signal: config?.configurable?.signal,
       onProgress(progress) {
         if (progress.stage === "planning") {
@@ -314,7 +313,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
     });
     const chart = generation.charts[0];
     if (!chart) {
-      const errorMsg = generation.error!;
+      const errorMsg = generation.diagnostics.map((d) => d.message).join("\n");
       const reason = generation.diagnostics[0]?.reason;
       visThinking = failVisStep(
         visThinking,

@@ -12,6 +12,7 @@ const continueConversation = vi.fn();
 const streamTaskExecution = vi.fn();
 const streamFollowUp = vi.fn();
 const getEnabledAgents = vi.fn();
+const getRunSnapshot = vi.fn();
 
 vi.mock("../../api", () => ({
   analysisAgentApi: { getEnabledAgents: () => getEnabledAgents() },
@@ -24,6 +25,7 @@ vi.mock("../../api", () => ({
     getTaskMessages: (...args: unknown[]) => getTaskMessages(...args),
     getTurns: (...args: unknown[]) => getTurns(...args),
     continueConversation: (...args: unknown[]) => continueConversation(...args),
+    getRunSnapshot: (...args: unknown[]) => getRunSnapshot(...args),
   },
   streamTaskExecution: (...args: unknown[]) => streamTaskExecution(...args),
   streamFollowUp: (...args: unknown[]) => streamFollowUp(...args),
@@ -195,18 +197,96 @@ it("identifies a selected past run by the task thread and that run's request seq
   const task = sessionTask({ reportDeliverableEnabled: true, threadId: "thread-r" });
   listTaskPage.mockResolvedValue({ tasks: [task], total: 1, limit: 50, offset: 0 });
   getTask.mockResolvedValue(task);
+  // Run summaries carry no replay snapshot; the selected run's own snapshot is read on selection.
   listRuns.mockResolvedValue([
-    { id: "run-1", status: "completed", requestSeq: 2, snapshot: { mode: "deep-analysis" } },
-    { id: "run-2", status: "completed", requestSeq: 5, snapshot: { mode: "deep-analysis" } },
+    { id: "run-1", status: "completed", requestSeq: 2 },
+    { id: "run-2", status: "completed", requestSeq: 5 },
   ]);
+  getRunSnapshot.mockResolvedValue({ mode: "deep-analysis" });
   const store = useAnalysisStore();
   await store.loadAgents();
   await store.selectTask(task as never, () => {});
-  store.selectRun(0);
+  expect(getRunSnapshot).not.toHaveBeenCalled();
+  await store.selectRun(0);
+  expect(getRunSnapshot).toHaveBeenCalledWith("saved", "run-1");
   expect(store.selectedRunMessages.at(-1)?.snapshot).toMatchObject({
     threadId: "thread-r",
     requestSeq: 2,
   });
+});
+
+// A slow snapshot of a run the user already left must not replace the run now on screen.
+it("drops a late snapshot of a previously selected run", async () => {
+  const task = sessionTask({ reportDeliverableEnabled: true, threadId: "thread-r" });
+  listTaskPage.mockResolvedValue({ tasks: [task], total: 1, limit: 50, offset: 0 });
+  getTask.mockResolvedValue(task);
+  listRuns.mockResolvedValue([
+    { id: "run-1", status: "completed", requestSeq: 2 },
+    { id: "run-2", status: "completed", requestSeq: 3 },
+    { id: "run-3", status: "completed", requestSeq: 5 },
+  ]);
+  let answerFirst!: (snapshot: unknown) => void;
+  getRunSnapshot
+    .mockImplementationOnce(() => new Promise((resolve) => (answerFirst = resolve)))
+    .mockResolvedValueOnce({ mode: "deep-analysis", primaryText: "second" });
+  const store = useAnalysisStore();
+  await store.loadAgents();
+  await store.selectTask(task as never, () => {});
+  const first = store.selectRun(0);
+  await store.selectRun(1);
+  answerFirst({ mode: "deep-analysis", primaryText: "first" });
+  await first;
+  expect(store.selectedRunMessages.at(-1)?.content).toBe("second");
+});
+
+// Background list refreshes keep the list on screen: no loading mask, and never two requests at once.
+it("refreshes the task list in the background without the loading mask or overlap", async () => {
+  vi.useFakeTimers();
+  const running = sessionTask({ id: "r", status: "running", reportDeliverableEnabled: true });
+  listTaskPage.mockResolvedValue({ tasks: [running], total: 1, limit: 50, offset: 0 });
+  const store = useAnalysisStore();
+  await store.loadAgents();
+  await store.selectAgent("report");
+  let release!: () => void;
+  listTaskPage.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        release = () => resolve({ tasks: [running], total: 1, limit: 50, offset: 0 });
+      })
+  );
+  listTaskPage.mockClear();
+  store.startTaskListPolling();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(listTaskPage).toHaveBeenCalledTimes(1);
+  expect(store.loadingTasks).toBe(false);
+  await vi.advanceTimersByTimeAsync(20000);
+  expect(listTaskPage).toHaveBeenCalledTimes(1);
+  release();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(listTaskPage).toHaveBeenCalledTimes(2);
+  store.stopTaskListPolling();
+});
+
+// The current-task poll waits for its previous request, and a stop discards a request still in flight.
+it("polls the current task without overlap and ignores a result after switching away", async () => {
+  vi.useFakeTimers();
+  const running = sessionTask({ id: "r", status: "running", reportDeliverableEnabled: true });
+  listTaskPage.mockResolvedValue({ tasks: [running], total: 1, limit: 50, offset: 0 });
+  getTask.mockResolvedValue(running);
+  const store = useAnalysisStore();
+  await store.loadAgents();
+  await store.selectAgent("report");
+  await store.selectTask(running as never, () => {});
+  let answer!: (task: unknown) => void;
+  getTask.mockReset().mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+  await vi.advanceTimersByTimeAsync(3000);
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(getTask).toHaveBeenCalledTimes(1);
+  store.closeCurrentTask();
+  answer({ ...running, status: "completed", name: "late" });
+  await vi.advanceTimersByTimeAsync(9000);
+  expect(store.tasks[0].name).toBe("conversation-task");
+  expect(getTask).toHaveBeenCalledTimes(1);
 });
 
 // Public surface under test: deliverable check of a failed task; observable result: an already generated body stays deliverable and is not cleared by the failed final state.

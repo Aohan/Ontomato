@@ -144,7 +144,8 @@ The images are published to GitHub Container Registry for amd64 and arm64. On th
 git clone https://github.com/Aohan/Ontomato.git
 cd Ontomato/deploy
 cp .env.example .env    # set ARCH (amd64 or arm64), POSTGRES_PASSWORD and PUBLIC_HOST
-docker compose -f docker-compose.ghcr.yml up -d
+echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
+docker compose up -d
 ```
 
 The workbench and the data engine each come as a runtime image and an app image, which

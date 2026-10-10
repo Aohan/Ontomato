@@ -27,7 +27,11 @@ import {
   buildAnalysisSubQuestionTurnKey,
   runWithTurnContext,
 } from "../../../logging/log-context";
-import { buildQueryRunInput, toDisplayFact } from "../../data-query/query-fact";
+import {
+  buildQueryRunInput,
+  toDisplayFact,
+  withoutPersistedResult,
+} from "../../data-query/query-fact";
 import { upsertQueryRun } from "../../data-query/query-run-store";
 import { createLogger } from "../../../logging/logger";
 import { generateChartsFromCandidates } from "../../charts/chart-generator";
@@ -186,7 +190,11 @@ async function runDimensionStage(
         (dimensionOrder.get(b.dimensionId) ?? Number.MAX_SAFE_INTEGER)
     );
 
-  const saveSubQuestionQueryRun = async (result: DimensionQueryResult, datasets: Dataset[]) => {
+  /** Resolves whether the query run was saved; a failed save is only logged, as before. */
+  const saveSubQuestionQueryRun = async (
+    result: DimensionQueryResult,
+    datasets: Dataset[]
+  ): Promise<boolean> => {
     try {
       await upsertQueryRun(
         buildQueryRunInput({
@@ -207,6 +215,7 @@ async function runDimensionStage(
           },
         })
       );
+      return true;
     } catch (error) {
       logger.error(tApp("analysis.dimension.execute.102"), {
         threadId: ctx.threadId,
@@ -214,6 +223,7 @@ async function runDimensionStage(
         subQuestion: result.subQuestion,
         error: error instanceof Error ? error.message : String(error),
       });
+      return false;
     }
   };
 
@@ -367,6 +377,11 @@ async function runDimensionStage(
       winner: branchResult.winner,
     };
 
+    const datasets = branchResult.datasets || [];
+    // Persist the query run before publishing the settled question, so a deferred execution is
+    // always readable from query_runs; when saving fails the full facts stay inline instead.
+    const saved = await saveSubQuestionQueryRun(result, datasets);
+    const execution = { ...toDisplayFact(result), dataCount };
     store.question(`evidence:${question.dimensionId}`, question.id, {
       status: result.status === "completed" ? "completed" : "failed",
       dataCount,
@@ -375,11 +390,10 @@ async function runDimensionStage(
         result.status === "completed"
           ? t("analysis.queryComplete", { count: dataCount })
           : result.error || t("query.status.queryFailed"),
-      execution: { ...toDisplayFact(result), dataCount },
+      ...(saved
+        ? { execution: withoutPersistedResult(execution), executionDeferred: true }
+        : { execution }),
     });
-
-    const datasets = branchResult.datasets || [];
-    await saveSubQuestionQueryRun(result, datasets);
     return { result, datasets };
   };
 
@@ -479,7 +493,6 @@ async function runDimensionStage(
         data: item.data,
       })),
       maxCharts: Math.min(3, Math.max(2, successfulEvidence.length)),
-      failurePolicy: "diagnostic",
       signal: ctx.signal,
       enabledVisualizationSkillIds: visualizationSkillIds,
     });
