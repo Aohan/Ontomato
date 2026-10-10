@@ -535,3 +535,10 @@
   font-size: var(--text-sm);
   color: var(--el-text-color-secondary);
 }
+
+/* Vector rebuild status under the embedding row: progress, the need to rebuild, and the last failure. */
+.vector-rebuild-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}

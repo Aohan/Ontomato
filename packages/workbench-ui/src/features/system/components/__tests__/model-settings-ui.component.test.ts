@@ -10,7 +10,7 @@ import SkillDirConfigCard from "../business-config/SkillDirConfigCard.vue";
 import QuerySettingsCard from "../business-config/QuerySettingsCard.vue";
 import BusinessConfig from "../BusinessConfig.vue";
 import ModelConfig from "../ModelConfig.vue";
-import type { EmbeddingModelConfig, ModelEntry, RoleModels } from "../../types";
+import type { EmbeddingModelConfig, ModelEntry, RoleModels, VectorRebuildStatus } from "../../types";
 import { adminApi } from "../../../admin";
 import { workbenchI18n } from "../../../../i18n";
 import { businessConfig } from "../../../../../../../apps/workbench/web/src/business-config";
@@ -80,8 +80,10 @@ const fixtures = vi.hoisted(() => ({
     apiKey: "sk-embed",
     modelName: "text-embedding-v3",
     timeout: "PT300S",
+    dimensions: 2048,
     customHeaders: { "X-Embed-Key": "keep" },
   },
+  rebuildIdle: { needed: false, running: false, total: 0, done: 0, error: null },
 }));
 
 function settingsData() {
@@ -173,6 +175,8 @@ vi.mock("../../../admin", () => ({
       sent.embeddingTest = JSON.parse(JSON.stringify(payload));
       return { success: true };
     }),
+    getVectorRebuildStatus: vi.fn(async () => ({ success: true, data: { ...fixtures.rebuildIdle } })),
+    rebuildVectors: vi.fn(async () => ({ success: true })),
   },
 }));
 
@@ -497,7 +501,15 @@ describe("embedding model card", () => {
     const save = vi.fn(async (_model: EmbeddingModelConfig) => true);
     const wrapper = track(
       mount(EmbeddingModelConfigCard, {
-        props: { model: { ...fixtures.embedding }, loading: false, saving: false, loadError: "", save, ...extra },
+        props: {
+          model: { ...fixtures.embedding },
+          loading: false,
+          saving: false,
+          loadError: "",
+          save,
+          rebuildStatus: { ...fixtures.rebuildIdle },
+          ...extra,
+        },
         global,
       })
     );
@@ -535,10 +547,74 @@ describe("embedding model card", () => {
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
     await button(wrapper, t("admin.addModel"))!.trigger("click");
     await wrapper.find("section").findAll("input")[0]!.setValue("https://new.example/v1");
+    // Dimensions have no page default (the backend owns the new-domain default): save and test wait until they are filled.
+    expect(button(wrapper.find("section"), t("common.save"))!.attributes("disabled")).toBeDefined();
+    expect(button(wrapper.find("section"), t("common.testModel"))!.attributes("disabled")).toBeDefined();
+    await wrapper.find("section").findAll(".el-input-number input")[1]!.setValue("1024");
     await saveDialog(wrapper);
     const updated = save.mock.calls[0]![0];
     expect(updated.baseUrl).toBe("https://new.example/v1");
     expect(updated.timeout).toBe("PT300S");
+    expect(updated.dimensions).toBe(1024);
+  });
+
+  // Design item 1: dimensions belong to this domain's embedding config and are shown, edited and saved with it.
+  it("shows the dimensions and saves the edited dimensions with the config", async () => {
+    const { wrapper, save } = mountEmbedding();
+    expect(wrapper.find(".model-item").text()).toContain(`${t("admin.embeddingDimensions")}`);
+    expect(wrapper.find(".model-item").text()).toContain("2048");
+    await button(wrapper, t("common.edit"))!.trigger("click");
+    const dimensions = wrapper.find("section").findAll(".el-input-number input")[1]!;
+    expect((dimensions.element as HTMLInputElement).value).toBe("2048");
+    await dimensions.setValue("1024");
+    await saveDialog(wrapper);
+    expect(save.mock.calls[0]![0]).toEqual({ ...fixtures.embedding, dimensions: 1024 });
+  });
+
+  // Design item 6: the test runs on the dimensions filled in the dialog, before anything is saved.
+  it("tests the dialog draft with its dimensions without saving", async () => {
+    const { wrapper, save } = mountEmbedding();
+    await button(wrapper, t("common.edit"))!.trigger("click");
+    await wrapper.find("section").findAll(".el-input-number input")[1]!.setValue("4096");
+    await button(wrapper.find("section"), t("common.testModel"))!.trigger("click");
+    expect(wrapper.emitted("test")![0]).toEqual([{ ...fixtures.embedding, dimensions: 4096 }]);
+    expect(save).not.toHaveBeenCalled();
+    expect(wrapper.find("section").exists()).toBe(true);
+  });
+
+  // Design item 4 / contract 4: the rebuild button follows only the backend's needed/running, never a page-side comparison.
+  it.each([
+    ["not read yet", null, false],
+    ["not needed", { needed: false, running: false }, false],
+    ["needed", { needed: true, running: false }, true],
+    ["needed while running", { needed: true, running: true }, false],
+    ["running after the config was rebuilt", { needed: false, running: true }, false],
+  ] as const)("enables the rebuild button only when needed and not running: %s", async (_name, flags, enabled) => {
+    const rebuildStatus = flags && { ...fixtures.rebuildIdle, ...flags };
+    const { wrapper } = mountEmbedding({ rebuildStatus });
+    const rebuild = button(wrapper, t("admin.rebuildVectors"))!;
+    expect(rebuild.attributes("disabled") === undefined).toBe(enabled);
+    expect(wrapper.text().includes(t("admin.vectorRebuildNeeded"))).toBe(enabled);
+    if (enabled) {
+      await rebuild.trigger("click");
+      expect(wrapper.emitted("rebuild")).toHaveLength(1);
+    }
+  });
+
+  // Contract 4: progress while running, and the last failure reason when there is one.
+  it("shows the rebuild progress and the last failure", () => {
+    const running = mountEmbedding({
+      rebuildStatus: { needed: true, running: true, total: 120, done: 45, error: null },
+    }).wrapper;
+    expect(running.text()).toContain(t("admin.vectorRebuildRunning", { done: 45, total: 120 }));
+    expect(running.text()).not.toContain(t("admin.vectorRebuildNeeded"));
+
+    const failed = mountEmbedding({
+      rebuildStatus: { needed: true, running: false, total: 120, done: 30, error: "embedding service timed out" },
+    }).wrapper;
+    expect(failed.text()).toContain(t("admin.vectorRebuildFailed", { error: "embedding service timed out" }));
+    expect(failed.text()).toContain(t("admin.vectorRebuildNeeded"));
+    expect(button(failed, t("admin.rebuildVectors"))!.attributes("disabled")).toBeUndefined();
   });
 });
 
@@ -599,6 +675,7 @@ describe("password visibility with the real dialog", () => {
           saving: false,
           loadError: "",
           save: async () => true,
+          rebuildStatus: { ...fixtures.rebuildIdle },
         },
         global: realDialog,
         attachTo: document.body,
@@ -938,6 +1015,124 @@ describe("model config page", () => {
       modelConfig: { ...fixtures.embedding, apiKey: "sk-embed-2" },
       userContent: "hello",
     });
+  });
+});
+
+describe("vector rebuild and embedding test on the model config page", () => {
+  const status = (extra: Partial<VectorRebuildStatus>) => ({
+    success: true,
+    data: { ...fixtures.rebuildIdle, ...extra },
+  });
+  const rebuildButton = (page: ReturnType<typeof mount>) =>
+    button(page.findComponent(EmbeddingModelConfigCard), t("admin.rebuildVectors"))!;
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Design item 3/4: rebuilding is a separate, confirmed step; cancelling the confirmation starts nothing.
+  it("confirms before rebuilding with the cost explained", async () => {
+    const confirm = vi.spyOn(ElMessageBox, "confirm");
+    vi.mocked(adminApi.getVectorRebuildStatus).mockResolvedValue(status({ needed: true }));
+    const page = await mountModelPage();
+    confirm.mockRejectedValueOnce("cancel");
+    await rebuildButton(page).trigger("click");
+    await flushPromises();
+    expect(confirm.mock.calls[0]![0]).toBe(t("admin.vectorRebuildConfirm"));
+    expect(adminApi.rebuildVectors).not.toHaveBeenCalled();
+
+    confirm.mockResolvedValueOnce("confirm" as never);
+    await rebuildButton(page).trigger("click");
+    await flushPromises();
+    expect(adminApi.rebuildVectors).toHaveBeenCalledTimes(1);
+  });
+
+  // Contract 4/5: after starting, progress is polled while running and polling stops once the rebuild ends.
+  it("polls the progress while a rebuild runs and stops when it ends", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValueOnce("confirm" as never);
+    const read = vi.mocked(adminApi.getVectorRebuildStatus);
+    read
+      .mockResolvedValueOnce(status({ needed: true }))
+      .mockResolvedValueOnce(status({ needed: true, running: true, total: 10, done: 0 }))
+      .mockResolvedValueOnce(status({ needed: true, running: true, total: 10, done: 6 }))
+      .mockResolvedValueOnce(status({ total: 10, done: 10 }));
+    const page = await mountModelPage();
+    await rebuildButton(page).trigger("click");
+    await flushPromises();
+    const card = page.findComponent(EmbeddingModelConfigCard);
+    expect(card.text()).toContain(t("admin.vectorRebuildRunning", { done: 0, total: 10 }));
+    expect(rebuildButton(page).attributes("disabled")).toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(card.text()).toContain(t("admin.vectorRebuildRunning", { done: 6, total: 10 }));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(card.text()).not.toContain(t("admin.vectorRebuildRunning", { done: 10, total: 10 }));
+    expect(card.text()).not.toContain(t("admin.vectorRebuildNeeded"));
+    expect(read).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(read).toHaveBeenCalledTimes(4);
+  });
+
+  // Task item 3: leaving the page stops the polling.
+  it("stops polling when the page is left", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const read = vi.mocked(adminApi.getVectorRebuildStatus);
+    read.mockResolvedValue(status({ needed: true, running: true, total: 10, done: 1 }));
+    const page = await mountModelPage();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(read).toHaveBeenCalledTimes(2);
+    page.unmount();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  // Design item 4: saving only stores the config; the page then reads the status again so the button can light up.
+  // While a rebuild runs the backend rejects the save, and its message is shown verbatim.
+  it("reads the rebuild status again after saving and shows a rejected save verbatim", async () => {
+    const error = vi.spyOn(ElMessage, "error");
+    const read = vi.mocked(adminApi.getVectorRebuildStatus);
+    const page = await mountModelPage();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(rebuildButton(page).attributes("disabled")).toBeDefined();
+
+    read.mockResolvedValueOnce(status({ needed: true }));
+    const embedding = page.findComponent(EmbeddingModelConfigCard);
+    await button(embedding, t("common.edit"))!.trigger("click");
+    await embedding.find("section").findAll(".el-input-number input")[1]!.setValue("1024");
+    await saveDialog(embedding);
+    expect(sent.embedding).toEqual({ ...fixtures.embedding, dimensions: 1024 });
+    expect(adminApi.rebuildVectors).not.toHaveBeenCalled();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(rebuildButton(page).attributes("disabled")).toBeUndefined();
+
+    vi.mocked(adminApi.saveEmbeddingModel).mockRejectedValueOnce(new Error("Vectors are being rebuilt; change the config after it finishes"));
+    await button(embedding, t("common.edit"))!.trigger("click");
+    await saveDialog(embedding);
+    expect(error).toHaveBeenCalledWith("Vectors are being rebuilt; change the config after it finishes");
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  // Design item 6: the test request carries the dimensions filled in the dialog, and a mismatch shows the backend message.
+  it("sends the draft dimensions to the embedding test and shows its failure message", async () => {
+    vi.mocked(adminApi.testEmbeddingModel).mockRejectedValueOnce(
+      new Error("Configured dimensions 4096, but the model returned 2048")
+    );
+    const page = await mountModelPage();
+    const embedding = page.findComponent(EmbeddingModelConfigCard);
+    await button(embedding, t("common.edit"))!.trigger("click");
+    await embedding.find("section").findAll(".el-input-number input")[1]!.setValue("4096");
+    await button(embedding.find("section"), t("common.testModel"))!.trigger("click");
+    const testDialog = page.findAll("section").at(-1)!;
+    await testDialog.find("textarea").setValue("hello");
+    await button(testDialog, t("common.sendTest"))!.trigger("click");
+    await flushPromises();
+    expect(vi.mocked(adminApi.testEmbeddingModel).mock.calls[0]![0]).toEqual({
+      modelConfig: { ...fixtures.embedding, dimensions: 4096 },
+      userContent: "hello",
+    });
+    expect(testDialog.text()).toContain("Configured dimensions 4096, but the model returned 2048");
+    expect(adminApi.saveEmbeddingModel).not.toHaveBeenCalled();
   });
 });
 
