@@ -35,6 +35,9 @@ export const app = {
         ".mvn",
         "packages/data-engine-core/pom.xml",
         "packages/data-engine-core/src/main",
+        // Every adapter depends on the shared contract tests in test scope, so Maven resolves it even with tests skipped.
+        "packages/data-adapter-test-support/pom.xml",
+        "packages/data-adapter-test-support/src/main",
         ...PUBLIC_ADAPTERS.flatMap((type) => [`packages/data-adapters/${type}/pom.xml`, `packages/data-adapters/${type}/src/main`]),
         "apps/data-engine/pom.xml",
         "apps/data-engine/src/main",
