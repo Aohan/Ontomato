@@ -70,6 +70,16 @@ class VectorRetrievalGateTest {
     }
 
     @Test
+    void missingEmbeddingConfigurationFailsExplicitly() {
+        BusinessConfig businessConfig = config("http://emb/v1", "m1", 2048, 2048);
+        businessConfig.setEmbeddingModelProperties(null);
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> VectorRetrievalGate.isRebuildNeeded(businessConfig));
+        assertTrue(error.getMessage().contains("embeddingModelProperties"), error.getMessage());
+    }
+
+    @Test
     void retrievalFailsWhenARebuildIsNeededAndNoneRuns() {
         BusinessConfig businessConfig = config("http://emb/v1", "m1", 2048, 1024);
         when(businessConfigService.get("d1")).thenReturn(businessConfig);

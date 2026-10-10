@@ -33,12 +33,13 @@ public class VectorRetrievalGate {
                     "The embeddingVectorSource of this domain is missing; run the upgrade migration first");
         }
         BusinessConfig.EmbeddingModelProperties current = businessConfig.getEmbeddingModelProperties();
-        String currentBaseUrl = current == null ? null : current.getBaseUrl();
-        String currentModelName = current == null ? null : current.getModelName();
-        Integer currentDimensions = current == null ? null : current.getDimensions();
-        return !Objects.equals(source.getBaseUrl(), currentBaseUrl)
-                || !Objects.equals(source.getModelName(), currentModelName)
-                || !Objects.equals(source.getDimensions(), currentDimensions);
+        if (current == null) {
+            throw new IllegalStateException(
+                    "The embeddingModelProperties of this domain is missing; run the upgrade migration first");
+        }
+        return !Objects.equals(source.getBaseUrl(), current.getBaseUrl())
+                || !Objects.equals(source.getModelName(), current.getModelName())
+                || !Objects.equals(source.getDimensions(), current.getDimensions());
     }
 
     /**

@@ -385,8 +385,7 @@ public class VectorResourceDao extends BaseDao {
 	}
 
 	public int countTableRows(String indexName) {
-		Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + quotedTable(indexName), Integer.class);
-		return count == null ? 0 : count;
+		return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + quotedTable(indexName), Integer.class);
 	}
 
 	/**
@@ -416,7 +415,8 @@ public class VectorResourceDao extends BaseDao {
 	 * Clear the data of every vector table belonging to this sandbox (prefix-matched by namespace and domain),
 	 * keeping the tables and their file directories in place.
 	 */
-	public void truncateNamespace(String tmpNamespace, String domainId) {		String prefix = generateIndexNamePrefix(tmpNamespace);
+	public void truncateNamespace(String tmpNamespace, String domainId) {
+		String prefix = generateIndexNamePrefix(tmpNamespace);
 		for (String tableName : listVectorTables(prefix, domainId)) {
 			jdbcTemplate.execute("DELETE FROM " + quotedTable(tableName));
 			deleteFilesInDirectory(tableName);

@@ -4,8 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,6 +27,7 @@ import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.IdentityService;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 import io.ontomato.dataengine.service.vector.VectorRebuildService;
 import io.ontomato.dataengine.service.vector.VectorRebuildStatus;
@@ -41,6 +41,7 @@ class BusinessConfigControllerVectorRebuildTest {
 
     private final BusinessConfigService businessConfigService = mock(BusinessConfigService.class);
     private final EmbeddingService embeddingService = mock(EmbeddingService.class);
+    private final LangService langService = mock(LangService.class);
     private final VectorRebuildService vectorRebuildService = mock(VectorRebuildService.class);
     private final BusinessConfigController controller = new BusinessConfigController();
     private BusinessConfig stored;
@@ -67,8 +68,10 @@ class BusinessConfigControllerVectorRebuildTest {
         stored.setAgents(agents);
 
         when(businessConfigService.get("d1")).thenReturn(stored);
+        when(langService.get(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         ReflectionTestUtils.setField(controller, "businessConfigService", businessConfigService);
         ReflectionTestUtils.setField(controller, "embeddingService", embeddingService);
+        ReflectionTestUtils.setField(controller, "langService", langService);
         ReflectionTestUtils.setField(controller, "vectorRebuildService", vectorRebuildService);
     }
 
@@ -109,7 +112,7 @@ class BusinessConfigControllerVectorRebuildTest {
         JSONObject response = controller.saveEmbeddingModel(embeddingInput(2048));
 
         assertFalse(response.getBooleanValue("success"));
-        assertTrue(response.getString("message").contains("rebuild"), response.toJSONString());
+        assertTrue(response.getString("message").contains("Vector.saveRefusedWhileRebuilding"), response.toJSONString());
         verify(businessConfigService, org.mockito.Mockito.never()).set(any(), anyString());
     }
 
@@ -162,13 +165,13 @@ class BusinessConfigControllerVectorRebuildTest {
 
     @Test
     void rebuildVectorsRefusesWhenNotNeeded() {
-        org.mockito.Mockito.doThrow(new IllegalStateException("The vectors of this domain do not need rebuilding"))
+        org.mockito.Mockito.doThrow(new IllegalStateException("Vector.rebuildNotNeeded"))
                 .when(vectorRebuildService).start("d1");
 
         JSONObject response = controller.rebuildVectors();
 
         assertFalse(response.getBooleanValue("success"));
-        assertTrue(response.getString("message").contains("do not need rebuilding"), response.toJSONString());
+        assertTrue(response.getString("message").contains("Vector.rebuildNotNeeded"), response.toJSONString());
     }
 
     @Test

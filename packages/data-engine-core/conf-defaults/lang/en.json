@@ -352,9 +352,21 @@
     "value": "The vectors of this domain need rebuilding: the embedding configuration changed. Rebuild the vectors before searching."
   },
   {
+    "key": "Vector.saveRefusedWhileRebuilding",
+    "value": "A vector rebuild of this domain is running; modify the embedding configuration after it finishes."
+  },
+  {
+    "key": "Vector.rebuildNotNeeded",
+    "value": "The vectors of this domain do not need rebuilding."
+  },
+  {
+    "key": "Vector.rebuildAlreadyRunning",
+    "value": "A vector rebuild of this domain is already running."
+  },
+  {
     "key": "AgentRole.notConfigured",
     "value": "No model is configured for role \"{0}\". Choose one in Model Configuration."
-  },,
+  },
   {
     "key": "AgentRole.query",
     "value": "Query"

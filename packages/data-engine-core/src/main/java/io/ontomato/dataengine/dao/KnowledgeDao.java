@@ -48,9 +48,9 @@ public class KnowledgeDao extends BaseDao {
                         + "creator_type INTEGER DEFAULT 0, "
                         + "status INTEGER DEFAULT 0, "
                         + "modify_time TIMESTAMP, "
-                         + "domain_id VARCHAR(64), "
-                         + "knowledge_vector vector"
-                         + ")");
+                        + "domain_id VARCHAR(64), "
+                        + "knowledge_vector vector"
+                        + ")");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_domain_id ON " + TABLE_NAME + "(domain_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_status ON " + TABLE_NAME + "(status)");
     }
@@ -127,9 +127,8 @@ public class KnowledgeDao extends BaseDao {
     }
 
     public int countDomainRows(String domainId) {
-        Integer count = jdbcTemplate.queryForObject(
+        return jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
-        return count == null ? 0 : count;
     }
 
     public List<VectorRebuildItem> listDomainVectors(String domainId) {

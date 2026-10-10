@@ -32,6 +32,7 @@ import io.ontomato.dataengine.dao.MetricViewDao;
 import io.ontomato.dataengine.dao.VectorRebuildItem;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.BusinessConfigService;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 
 /**
@@ -42,6 +43,7 @@ class VectorRebuildServiceTest {
 
     private final BusinessConfigService businessConfigService = mock(BusinessConfigService.class);
     private final EmbeddingService embeddingService = mock(EmbeddingService.class);
+    private final LangService langService = mock(LangService.class);
     private final KnowledgeDao knowledgeDao = mock(KnowledgeDao.class);
     private final BussinessExampleDao exampleDao = mock(BussinessExampleDao.class);
     private final BusinessExampleQuestionSpliterDao spliterDao = mock(BusinessExampleQuestionSpliterDao.class);
@@ -58,6 +60,7 @@ class VectorRebuildServiceTest {
         service = new VectorRebuildService();
         ReflectionTestUtils.setField(service, "businessConfigService", businessConfigService);
         ReflectionTestUtils.setField(service, "embeddingService", embeddingService);
+        ReflectionTestUtils.setField(service, "langService", langService);
         ReflectionTestUtils.setField(service, "rebuildTracker", rebuildTracker);
         ReflectionTestUtils.setField(service, "knowledgeDao", knowledgeDao);
         ReflectionTestUtils.setField(service, "bussinessExampleDao", exampleDao);
@@ -65,6 +68,7 @@ class VectorRebuildServiceTest {
         ReflectionTestUtils.setField(service, "actionDao", actionDao);
         ReflectionTestUtils.setField(service, "metricViewDao", metricViewDao);
         ReflectionTestUtils.setField(service, "vectorResourceDao", resourceDao);
+        when(langService.get(any(), anyString())).thenAnswer(invocation -> invocation.getArgument(1));
         when(resourceDao.listDomainTables(anyString())).thenReturn(List.of());
         when(embeddingService.embedWith(any(), anyString()))
                 .thenReturn(new Response<>(Embedding.from(new float[] { 0.1f, 0.2f })));
@@ -75,7 +79,7 @@ class VectorRebuildServiceTest {
         when(businessConfigService.get("d1")).thenReturn(config(2048, 2048));
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.start("d1"));
-        assertTrue(error.getMessage().contains("do not need rebuilding"), error.getMessage());
+        assertTrue(error.getMessage().contains("Vector.rebuildNotNeeded"), error.getMessage());
         assertFalse(service.isRunning("d1"));
     }
 
@@ -85,7 +89,7 @@ class VectorRebuildServiceTest {
         rebuildTracker.tryStart("d1");
 
         IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.start("d1"));
-        assertTrue(error.getMessage().contains("already running"), error.getMessage());
+        assertTrue(error.getMessage().contains("Vector.rebuildAlreadyRunning"), error.getMessage());
     }
 
     @Test

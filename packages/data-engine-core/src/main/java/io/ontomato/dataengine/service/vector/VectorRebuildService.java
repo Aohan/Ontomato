@@ -14,6 +14,7 @@ import io.ontomato.dataengine.dao.MetricViewDao;
 import io.ontomato.dataengine.dao.VectorRebuildItem;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.BusinessConfigService;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,9 @@ public class VectorRebuildService {
 
     @Autowired
     private EmbeddingService embeddingService;
+
+    @Autowired
+    private LangService langService;
 
     @Autowired
     private VectorRebuildTracker rebuildTracker;
@@ -74,11 +78,12 @@ public class VectorRebuildService {
     /** Start the background rebuild of this domain and return at once. */
     public void start(String domainId) {
         BusinessConfig businessConfig = businessConfigService.get(domainId);
+        String lang = businessConfig.getLang();
         if (!VectorRetrievalGate.isRebuildNeeded(businessConfig)) {
-            throw new IllegalStateException("The vectors of this domain do not need rebuilding");
+            throw new IllegalStateException(langService.get(lang, "Vector.rebuildNotNeeded"));
         }
         if (!rebuildTracker.tryStart(domainId)) {
-            throw new IllegalStateException("A vector rebuild of this domain is already running");
+            throw new IllegalStateException(langService.get(lang, "Vector.rebuildAlreadyRunning"));
         }
         BusinessConfig.EmbeddingModelProperties snapshot = businessConfig.getEmbeddingModelProperties();
         Thread thread = new Thread(() -> run(domainId, snapshot), "vector-rebuild-" + domainId);
@@ -138,11 +143,9 @@ public class VectorRebuildService {
             }
 
             BusinessConfig.EmbeddingVectorSource source = new BusinessConfig.EmbeddingVectorSource();
-            if (snapshot != null) {
-                source.setBaseUrl(snapshot.getBaseUrl());
-                source.setModelName(snapshot.getModelName());
-                source.setDimensions(snapshot.getDimensions());
-            }
+            source.setBaseUrl(snapshot.getBaseUrl());
+            source.setModelName(snapshot.getModelName());
+            source.setDimensions(snapshot.getDimensions());
             // A fresh read before publishing the source, so a configuration saved for another
             // reason while the rebuild ran is not overwritten with the copy taken at the start.
             BusinessConfig current = businessConfigService.get(domainId);

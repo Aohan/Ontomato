@@ -93,9 +93,8 @@ public class BusinessExampleQuestionSpliterDao extends BaseDao {
 	}
 
 	public int countDomainRows(String domainId) {
-		Integer count = jdbcTemplate.queryForObject(
+		return jdbcTemplate.queryForObject(
 				"SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
-		return count == null ? 0 : count;
 	}
 
 	public List<VectorRebuildItem> listDomainVectors(String domainId) {

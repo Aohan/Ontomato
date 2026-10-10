@@ -123,21 +123,21 @@ public class BusinessConfig {
 		businessConfig.setModels(models);
 		businessConfig.setAgents(agents);
 			
-		EmbeddingModelProperties embeddingModelProperties = businessConfig.new EmbeddingModelProperties();
-		embeddingModelProperties.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
-		embeddingModelProperties.setApiKey(fileEmbeddingModelProperties.getApiKey());
-		embeddingModelProperties.setModelName(fileEmbeddingModelProperties.getModelName());
-		embeddingModelProperties.setDimensions(fileEmbeddingModelProperties.getDimensions());
-		embeddingModelProperties.setTimeout(fileEmbeddingModelProperties.getTimeout());
-		embeddingModelProperties.setLogRequests(fileEmbeddingModelProperties.getLogRequests());
-		embeddingModelProperties.setLogResponses(fileEmbeddingModelProperties.getLogResponses());
-		businessConfig.setEmbeddingModelProperties(embeddingModelProperties);
-		// A new domain has no vectors yet, so the configuration its vectors were generated with equals its initial configuration.
-		EmbeddingVectorSource embeddingVectorSource = new EmbeddingVectorSource();
-		embeddingVectorSource.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
-		embeddingVectorSource.setModelName(fileEmbeddingModelProperties.getModelName());
-		embeddingVectorSource.setDimensions(fileEmbeddingModelProperties.getDimensions());
-		businessConfig.setEmbeddingVectorSource(embeddingVectorSource);
+			EmbeddingModelProperties embeddingModelProperties = businessConfig.new EmbeddingModelProperties();
+			embeddingModelProperties.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
+			embeddingModelProperties.setApiKey(fileEmbeddingModelProperties.getApiKey());
+			embeddingModelProperties.setModelName(fileEmbeddingModelProperties.getModelName());
+			embeddingModelProperties.setDimensions(fileEmbeddingModelProperties.getDimensions());
+			embeddingModelProperties.setTimeout(fileEmbeddingModelProperties.getTimeout());
+			embeddingModelProperties.setLogRequests(fileEmbeddingModelProperties.getLogRequests());
+			embeddingModelProperties.setLogResponses(fileEmbeddingModelProperties.getLogResponses());
+			businessConfig.setEmbeddingModelProperties(embeddingModelProperties);
+			// A new domain has no vectors yet, so the configuration its vectors were generated with equals its initial configuration.
+			EmbeddingVectorSource embeddingVectorSource = new EmbeddingVectorSource();
+			embeddingVectorSource.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
+			embeddingVectorSource.setModelName(fileEmbeddingModelProperties.getModelName());
+			embeddingVectorSource.setDimensions(fileEmbeddingModelProperties.getDimensions());
+			businessConfig.setEmbeddingVectorSource(embeddingVectorSource);
 			
 			businessConfig.setKnowledgeMaxResult(dataRagConfig.getKnowledgeMaxResult());
 			
