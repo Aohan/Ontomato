@@ -479,7 +479,6 @@ async function runDimensionStage(
         data: item.data,
       })),
       maxCharts: Math.min(3, Math.max(2, successfulEvidence.length)),
-      failurePolicy: "diagnostic",
       signal: ctx.signal,
       enabledVisualizationSkillIds: visualizationSkillIds,
     });
