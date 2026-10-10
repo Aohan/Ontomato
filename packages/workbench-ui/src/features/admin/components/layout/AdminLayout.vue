@@ -710,22 +710,32 @@ function openObserve() {
   background: var(--el-bg-color-page);
 }
 
+/* Title and description share one baseline row; the description wraps below on narrow screens. */
 .admin-page-heading {
   flex-shrink: 0;
-  padding: var(--spacing-xl) var(--spacing-xl) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl) 0;
+}
+
+.admin-page-heading + .admin-main {
+  padding-top: var(--spacing-md);
 }
 
 .admin-page-heading h1 {
   margin: 0;
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
+  line-height: 1.4;
   font-weight: var(--font-semibold);
   color: var(--el-text-color-primary);
 }
 
 .admin-page-heading p {
-  margin: var(--spacing-xs) 0 0;
+  margin: 0;
   font-size: var(--text-sm);
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--el-text-color-secondary);
 }
 
