@@ -135,7 +135,7 @@ async function main() {
 
   const archive = `${staging}.tar.gz`;
   rmSync(archive, { force: true });
-  execute("tar", ["--exclude=.DS_Store", "-czf", archive, "-C", bundleRoot, base], {
+  execute("tar", ["--no-xattrs", "--exclude=.DS_Store", "-czf", archive, "-C", bundleRoot, base], {
     env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
   console.log(`BUNDLE_TAR=${archive}`);
