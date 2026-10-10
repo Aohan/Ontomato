@@ -37,6 +37,7 @@ final class InstanceGraphIndex {
         sorted.forEach(n -> nodes.put(n.getString("id"), n));
         Map<String, Integer> counts = new java.util.TreeMap<>();
         Map<String, Map<String, Integer>> pairs = new java.util.TreeMap<>();
+        Map<String, Map<String, Map<String, Integer>>> pairTypes = new java.util.TreeMap<>();
         Map<String, String> parents = new HashMap<>();
         nodes.forEach((id, node) -> {
             counts.merge(node.getString("class"), 1, Integer::sum);
@@ -52,10 +53,18 @@ final class InstanceGraphIndex {
             JSONObject copy = new JSONObject();
             copy.put("source", source);
             copy.put("target", target);
+            copy.put("type", edge.getString("type"));
+            copy.put("label", edge.getString("label"));
             adjacency.get(source).add(copy);
             if (!source.equals(target)) adjacency.get(target).add(copy);
             pairs.computeIfAbsent(nodes.get(source).getString("class"), ignored -> new java.util.TreeMap<>())
                 .merge(nodes.get(target).getString("class"), 1, Integer::sum);
+            String type = copy.getString("type");
+            if (type != null) {
+                pairTypes.computeIfAbsent(nodes.get(source).getString("class"), ignored -> new java.util.TreeMap<>())
+                    .computeIfAbsent(nodes.get(target).getString("class"), ignored -> new java.util.TreeMap<>())
+                    .merge(type, 1, Integer::sum);
+            }
             parents.put(find(parents, source), find(parents, target));
             edgeCount++;
         }
@@ -80,6 +89,9 @@ final class InstanceGraphIndex {
             item.put("source", source);
             item.put("target", target);
             item.put("count", count);
+            Map<String, Integer> types = pairTypes.getOrDefault(source, Map.of()).getOrDefault(target, Map.of());
+            if (types.size() == 1) item.put("type", types.keySet().iterator().next());
+            else if (!types.isEmpty()) item.put("types", new JSONArray(types.keySet()));
             relationships.add(item);
         }));
         summary = new JSONObject();
@@ -92,6 +104,10 @@ final class InstanceGraphIndex {
         summary.put("largestComponentSize", components.values().stream().mapToInt(Integer::intValue).max().orElse(0));
         summary.put("version", version);
         summary.put("generatedAt", generatedAt);
+        summary.put("complete", graph.getBoolean("complete"));
+        summary.put("failures", graph.getJSONArray("failures"));
+        summary.put("relationTypes", rawEdges == null ? new JSONArray() : new JSONArray(rawEdges.stream()
+            .map(raw -> ((JSONObject) raw).getString("type")).filter(java.util.Objects::nonNull).distinct().sorted().toList()));
     }
 
     private static String find(Map<String, String> parents, String id) {
@@ -134,12 +150,24 @@ final class InstanceGraphIndex {
         int offset = request.getIntValue("offset");
         if (offset < 0) throw new IllegalArgumentException("Offset must not be negative");
         List<JSONObject> incident = adjacency.get(id);
-        int end = (int) Math.min(incident.size(), (long) offset + limit(request));
+        String relationType = request.getString("relationType");
+        String neighborClass = request.getString("neighborClass");
+        String direction = request.getString("direction");
+        if (direction != null && !List.of("both", "incoming", "outgoing").contains(direction))
+            throw new IllegalArgumentException("Unknown relationship direction");
+        List<JSONObject> filtered = incident.stream().filter(edge -> {
+            JSONObject other = nodes.get(id.equals(edge.getString("source")) ? edge.getString("target") : edge.getString("source"));
+            return (!"incoming".equals(direction) || id.equals(edge.getString("target")))
+                && (!"outgoing".equals(direction) || id.equals(edge.getString("source")))
+                && (relationType == null || relationType.isBlank() || relationType.equals(edge.getString("type")))
+                && (neighborClass == null || neighborClass.isBlank() || (other != null && neighborClass.equals(other.getString("class"))));
+        }).toList();
+        int end = (int) Math.min(filtered.size(), (long) offset + limit(request));
         JSONArray edges = new JSONArray();
         Map<String, JSONObject> pageNodes = new LinkedHashMap<>();
         pageNodes.put(id, nodes.get(id));
         for (int i = offset; i < end; i++) {
-            JSONObject edge = incident.get(i);
+            JSONObject edge = filtered.get(i);
             edges.add(edge);
             pageNodes.put(edge.getString("source"), nodes.get(edge.getString("source")));
             pageNodes.put(edge.getString("target"), nodes.get(edge.getString("target")));
@@ -147,8 +175,8 @@ final class InstanceGraphIndex {
         JSONObject result = new JSONObject();
         result.put("nodes", new JSONArray(pageNodes.values()));
         result.put("edges", edges);
-        result.put("total", incident.size());
-        result.put("nextOffset", end < incident.size() ? end : null);
+        result.put("total", filtered.size());
+        result.put("nextOffset", end < filtered.size() ? end : null);
         result.put("version", version);
         return result;
     }

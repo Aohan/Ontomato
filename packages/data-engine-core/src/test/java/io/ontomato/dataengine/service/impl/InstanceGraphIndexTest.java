@@ -5,6 +5,39 @@ import org.junit.jupiter.api.Test;
 import com.alibaba.fastjson2.JSONObject;
 
 class InstanceGraphIndexTest {
+    @Test void typedRelationshipsAndGenericFiltersKeepParallelConnectionsDistinct() {
+        InstanceGraphIndex index = new InstanceGraphIndex(JSONObject.parseObject("""
+            {"complete":false,"failures":["class:Missing"],"nodes":[
+              {"id":"Entity:1","class":"Entity","name":"Business name"},
+              {"id":"Metric:1","class":"Metric","name":"Revenue August","period":"2026-08"},
+              {"id":"Metric:2","class":"Metric","name":"Revenue July","period":"2026-07"},
+              {"id":"Entity:2","class":"Entity","name":"Unconnected"}],
+             "edges":[
+              {"source":"Metric:1","target":"Entity:1","type":"owner"},
+              {"source":"Metric:1","target":"Entity:1","type":"reviewer"},
+              {"source":"Metric:2","target":"Entity:1","type":"owner"}]}
+            """));
+        assertEquals(3, index.summary().getIntValue("edgeCount"));
+        JSONObject relation = index.summary().getJSONArray("relationships").getJSONObject(0);
+        assertEquals(3, relation.getIntValue("count"));
+        assertEquals(java.util.List.of("owner", "reviewer"), relation.getJSONArray("types").toList(String.class));
+        assertEquals(1, index.summary().getIntValue("isolatedNodeCount"));
+        assertFalse(index.summary().getBooleanValue("complete"));
+        JSONObject page = index.neighborhood(JSONObject.parseObject("""
+            {"id":"Entity:1","neighborClass":"Metric","direction":"incoming"}
+            """));
+        assertEquals(3, page.getIntValue("total"));
+        assertEquals("owner", page.getJSONArray("edges").getJSONObject(0).getString("type"));
+        JSONObject request = JSONObject.parseObject("""
+            {"id":"Entity:1","relationType":"reviewer"}
+            """ );
+        assertEquals(1, index.neighborhood(request).getIntValue("total"));
+        request.put("direction", "outgoing");
+        assertEquals(0, index.neighborhood(request).getIntValue("total"));
+        request.put("offset", 100);
+        assertTrue(index.neighborhood(request).getJSONArray("edges").isEmpty());
+    }
+
     @Test void fiftyThousandInstancesKeepInitialResponseAggregatedAndNeighborhoodBounded() {
         com.alibaba.fastjson2.JSONArray nodes = new com.alibaba.fastjson2.JSONArray();
         com.alibaba.fastjson2.JSONArray edges = new com.alibaba.fastjson2.JSONArray();

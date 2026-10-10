@@ -110,6 +110,8 @@ export interface InstanceGraphNode {
 export interface InstanceGraphEdge {
   source: string;
   target: string;
+  type?: string;
+  label?: string;
 }
 
 export interface InstanceGraphData {
@@ -119,12 +121,15 @@ export interface InstanceGraphData {
 
 export interface InstanceGraphSummary {
   classes: Array<{ class: string; instanceCount: number }>;
-  relationships: Array<{ source: string; target: string; count: number }>;
+  relationships: Array<{ source: string; target: string; count: number; type?: string; types?: string[] }>;
   nodeCount: number;
   edgeCount: number;
   componentCount: number;
   isolatedNodeCount: number;
   largestComponentSize: number;
+  complete?: boolean;
+  failures?: string[];
+  relationTypes?: string[];
   version: string;
   generatedAt: string;
 }
@@ -241,7 +246,7 @@ export function createManagerClient(
     const json = await response.json();
     assertCurrent();
     if (json?.success === false) {
-      throw new Error(json.message || json.error || ontologyText(context.messages, "requestFailed"));
+      throw Object.assign(new Error(json.message || json.error || ontologyText(context.messages, "requestFailed")), { code: json.code });
     }
     return json;
   }
@@ -477,8 +482,8 @@ export function createManagerClient(
     return response.data as { nodes: InstanceGraphNode[]; hasMore: boolean; version: string };
   }
 
-  async function loadInstanceNeighborhood(id: string, version: string, offset = 0) {
-    const response = await post("/data/instanceGraph/neighborhood", { id, version, offset, limit: 100 });
+  async function loadInstanceNeighborhood(id: string, version: string, offset = 0, filters?: { relationType?: string; neighborClass?: string; direction?: string }) {
+    const response = await post("/data/instanceGraph/neighborhood", { id, version, offset, limit: 100, ...filters });
     if (response.status !== "READY") throw new Error(ontologyText(context.messages, "instanceGraphNotGenerated"));
     return response.data as InstanceNeighborhood;
   }

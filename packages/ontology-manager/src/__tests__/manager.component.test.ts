@@ -303,6 +303,11 @@ describe("OntologyManager root component with real pages", () => {
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
     expect(requests.find((request) => request.url.endsWith("/instanceGraph/search"))?.body)
       .toEqual({ term: "spare", version: "v1", limit: 50 });
+    expect(requests.some((request) => request.url.endsWith("/instanceGraph/neighborhood"))).toBe(false);
+    const expandButton = Array.from(root().querySelectorAll<HTMLButtonElement>(".detail-content button"))
+      .find((button) => button.textContent?.includes("Expand neighbors"))!;
+    expandButton.click();
+    await settle();
     expect(requests.find((request) => request.url.endsWith("/instanceGraph/neighborhood"))?.body)
       .toEqual({ id: "Item:2", version: "v1", offset: 0, limit: 100 });
 

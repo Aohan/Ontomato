@@ -5,6 +5,8 @@ import {
   GRAPH_BATCH_SIZE,
   instanceNodePosition,
   isLargeInstanceGraph,
+  instanceEdgeGeometry,
+  neighborNodePosition,
 } from "../data-browser/instance-graph-rendering";
 
 const nodes = Array.from({ length: 451 }, (_, index) => ({
@@ -13,6 +15,23 @@ const nodes = Array.from({ length: 451 }, (_, index) => ({
 const edges = nodes.slice(1).map((node) => ({ source: nodes[0].id, target: node.id }));
 
 describe("instance graph incremental drawing", () => {
+  it("separates parallel relationships and draws self relationships as loops", () => {
+    const geometry = instanceEdgeGeometry([
+      { source: "A", target: "B", type: "owns" },
+      { source: "A", target: "B", type: "reviews" },
+      { source: "A", target: "A", type: "parent" },
+    ]);
+    expect(geometry[0].type).toBe("quadratic");
+    expect(geometry[0].style.curveOffset).not.toBe(geometry[1].style.curveOffset);
+    expect(geometry[2].style.loop).toBe(true);
+  });
+
+  it("places later neighborhood pages beyond earlier positions", () => {
+    const center = { x: 15, y: 20 };
+    const first = neighborNodePosition(0, center);
+    const later = neighborNodePosition(100, center);
+    expect(Math.hypot(later.x - center.x, later.y - center.y)).toBeGreaterThan(Math.hypot(first.x - center.x, first.y - center.y));
+  });
   it("draws bounded batches, yields between draws and adds edges only after their endpoints", async () => {
     const batches: GraphData[] = [];
     const knownIds = new Set<string>();
