@@ -1,7 +1,7 @@
 // Offline deployment pack: one tar.gz holding the deploy template, the assembly
 // recipes and one gzip archive per already imported image of one architecture.
 // Node built-ins and the Docker CLI only; no host shell.
-import { cpSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execute, exportImage, inspectImage, parseOptions } from "./build-support.mjs";
@@ -9,7 +9,24 @@ import { execute, exportImage, inspectImage, parseOptions } from "./build-suppor
 // Only the deploy template goes into the pack. .env, backend_data and
 // frontend_data are onsite state and are never packed.
 export const TEMPLATE_ENTRIES = ["docker-compose.yml", "initdb.sql", "README.md", "assemble"];
-const FLAGS = { "--arch": "value", "--deploy-dir": "value", "--name": "value", "--image": "list" };
+// The fresh-install entry is assembled on the enterprise side (its build.sh
+// inlines the shared shell library and injects the version); the pack only
+// stages the assembled files. Paths are relative to --install-dir.
+// The edition hands over one directory of assembled onsite entries (install.sh and any
+// other entry with its helper scripts); the whole directory lands at the pack root, so a
+// new entry needs no change here. Top-level shell entries stay executable whatever the umask.
+export function stageInstallEntry(installDir, staging) {
+  try {
+    readFileSync(join(installDir, "install.sh"));
+  } catch {
+    throw new Error(`Install entry missing: ${join(installDir, "install.sh")}`);
+  }
+  cpSync(installDir, staging, { recursive: true });
+  for (const name of readdirSync(installDir))
+    if (name.endsWith(".sh")) chmodSync(join(staging, name), 0o755);
+}
+
+const FLAGS = { "--arch": "value", "--deploy-dir": "value", "--name": "value", "--image": "list", "--install-dir": "value" };
 
 // The pack is the only place that rewrites a template file, and only this line.
 export function renderEnvExample(text, arch) {
@@ -106,6 +123,8 @@ async function main() {
   // realpathSync dereferences the deploy/assemble symlink: the pack holds files.
   for (const entry of TEMPLATE_ENTRIES)
     cpSync(realpathSync(join(deployDir, entry)), join(staging, entry), { recursive: true });
+  if (options["--install-dir"])
+    stageInstallEntry(resolve(options["--install-dir"]), staging);
   writeFileSync(
     join(staging, ".env.example"),
     renderEnvExample(readFileSync(join(deployDir, ".env.example"), "utf8"), arch),
@@ -116,7 +135,7 @@ async function main() {
 
   const archive = `${staging}.tar.gz`;
   rmSync(archive, { force: true });
-  execute("tar", ["--exclude=.DS_Store", "-czf", archive, "-C", bundleRoot, base], {
+  execute("tar", ["--no-xattrs", "--exclude=.DS_Store", "-czf", archive, "-C", bundleRoot, base], {
     env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
   console.log(`BUNDLE_TAR=${archive}`);

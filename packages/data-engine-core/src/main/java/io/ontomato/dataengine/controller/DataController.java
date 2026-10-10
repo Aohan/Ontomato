@@ -55,14 +55,7 @@ public class DataController {
     @ResponseBody
     public JSONObject queryNextByNode(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
 		User user = SystemUtils.getCurUser();
-		return dataService.queryNextByNode(param, lang, identityService.getCurrentUserDataPermission(), user.getDomainId());
-	}
-
-	@PostMapping("/data/queryInstanceNodes")
-	@ResponseBody
-	public JSONObject queryInstanceNodes(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
-		User user = SystemUtils.getCurUser();
-		return dataService.queryInstanceNodes(param, lang, identityService.getCurrentUserDataPermission(), user.getDomainId());
+		return dataService.queryNextByNode(param, lang, user.getDomainId());
 	}
 	
 	@PostMapping("/data/queryInfoByNode")

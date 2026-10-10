@@ -16,7 +16,7 @@ import {
 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { analysisTaskApi } from "../api";
-import type { Message, QueryExecutionFacts } from "../../../types/chat";
+import type { Message } from "../../../types/chat";
 import type {
   AnalysisActivity,
   DeepAnalysisTaskPayload,
@@ -29,7 +29,7 @@ import {
 } from "../utils/loop-activity";
 import DeepAnalysisResult from "./DeepAnalysisResult.vue";
 import AgentMessageTrace from "./AgentMessageTrace.vue";
-import { QueryExecutionView } from "../../query-view";
+import QuestionExecution, { type QuestionExecutionScope } from "./QuestionExecution.vue";
 import TurnDiagnoseButton from "../../diagnosis/components/TurnDiagnoseButton.vue";
 import { buildDimensionTree, dimensionStageStates } from "../utils/dimension-view";
 import { workbenchContent } from "../../../content";
@@ -84,6 +84,8 @@ interface TurnGroup {
   /** This turn is streaming: the payload comes from the streaming snapshot, or the standard follow-up body is still growing. */
   streaming: boolean;
   streamingText: string;
+  /** Acceptance sequence of the turn this group shows, when its snapshot carries one. */
+  requestSeq?: number;
 }
 
 const turnGroups = computed<TurnGroup[]>(() => {
@@ -115,6 +117,7 @@ const turnGroups = computed<TurnGroup[]>(() => {
       groups.push(group);
     }
     group.assistant = message;
+    group.requestSeq = message.snapshot?.requestSeq;
     if (message.snapshot?.mode === "deep-analysis" && message.snapshot.deepAnalysis) {
       group.payload = message.snapshot.deepAnalysis;
     }
@@ -138,6 +141,7 @@ const turnGroups = computed<TurnGroup[]>(() => {
       groups.push(group);
     }
     group.streaming = true;
+    group.requestSeq = streaming.requestSeq;
     if (streaming.trace) group.trace = streaming.trace;
     if (streaming.mode === "deep-analysis" && streaming.deepAnalysis) {
       group.payload = streaming.deepAnalysis;
@@ -161,6 +165,16 @@ const followUpDividerIndex = computed(() => {
   }
   return -1;
 });
+
+/**
+ * Where a group's deferred question facts are read: a report addresses the run being viewed (the
+ * current one or a selected historical run); a regular session addresses the group's own turn.
+ */
+function executionScope(group: TurnGroup): QuestionExecutionScope {
+  const taskId = task.value!.id;
+  if (task.value!.reportDeliverableEnabled === false) return { taskId, requestSeq: group.requestSeq };
+  return { taskId, runId: store.isSelectedLatestRun ? undefined : store.selectedRun?.id };
+}
 
 /** Loop-mode progress is expressed by a monotone activity stream, not the dimension-orchestration stage cards and dimension framework. */
 function isLoopMode(payload: DeepAnalysisTaskPayload | null): boolean {
@@ -462,10 +476,11 @@ const isReportTask = computed(() => task.value?.reportDeliverableEnabled !== fal
                     >
                       {{ loopQuestionStatusText(question, t) }}
                     </span>
-                    <QueryExecutionView
+                    <QuestionExecution
                       v-if="question.execution"
                       class="loop-query-execution"
-                      :facts="question.execution as QueryExecutionFacts"
+                      :question="question"
+                      :scope="executionScope(group)"
                     />
                   </div>
                 </div>
@@ -631,6 +646,7 @@ const isReportTask = computed(() => task.value?.reportDeliverableEnabled !== fal
               :run-state="group.payload?.runState"
               :archived="!group.streaming"
               :compact="true"
+              :execution-scope="executionScope(group)"
             />
           </div>
 
@@ -667,12 +683,6 @@ const isReportTask = computed(() => task.value?.reportDeliverableEnabled !== fal
             </div>
           </div>
 
-          <!-- Diagnosis entry after the turn closes; same form as the Q&A reply actions -->
-          <TurnDiagnoseButton
-            v-if="group.assistant?.snapshot"
-            class="ui-icon-btn turn-diagnose-btn"
-            :turn="group.assistant.snapshot"
-          />
           <!-- Completed notice: only prompt once after the last turn closes -->
           <div
             v-if="gi === turnGroups.length - 1 && hasCompletedAnalysis(group.payload)"
@@ -702,6 +712,12 @@ const isReportTask = computed(() => task.value?.reportDeliverableEnabled !== fal
               </span>
             </div>
           </div>
+          <!-- Diagnosis entry: a secondary tool after the turn and its closing notice, bound to this turn -->
+          <TurnDiagnoseButton
+            v-if="group.assistant?.snapshot"
+            class="ui-icon-btn turn-diagnose-btn"
+            :turn="group.assistant.snapshot"
+          />
         </template>
 
         <!-- Scheduled task notice -->

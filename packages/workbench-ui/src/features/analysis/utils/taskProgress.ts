@@ -1,9 +1,9 @@
-import type { AnalysisTaskDetail } from "@ontomato/contracts/analysis-task";
+import type { AnalysisTask } from "@ontomato/contracts/analysis-task";
 import type { ResponseSnapshot } from "../../../types/chat";
 import type { TaskProgressState } from "../../workbench";
 
 export function buildTaskProgressMap(
-  tasks: AnalysisTaskDetail[],
+  tasks: AnalysisTask[],
   sessions: Record<
     string,
     {

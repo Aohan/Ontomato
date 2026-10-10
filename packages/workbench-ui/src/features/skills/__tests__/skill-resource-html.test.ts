@@ -4,14 +4,15 @@ import { installAuthHost } from "../../../utils/auth";
 
 // The original test wrote credentials through the auth module; shared code now reads them through the app host, so an in-memory credential with the same semantics is used here.
 const credential: { token: string | null; apiKey: string | null } = { token: null, apiKey: null };
-installAuthHost({
+const host = {
   getToken: () => credential.token,
   getApiKey: () => credential.apiKey,
-  verifySessionOnce: () => Promise.resolve("valid"),
+  verifySessionOnce: () => Promise.resolve("valid" as const),
   handleAuthExpired: () => {},
   getUserInfo: () => null,
   responseStatusError: () => null,
-});
+};
+installAuthHost(host);
 const setApiKey = (apiKey: string) => (credential.apiKey = apiKey);
 const setToken = (token: string) => (credential.token = token);
 
@@ -56,5 +57,24 @@ describe("skill resource HTML credentials", () => {
 
     expect(displayedHtml).not.toMatch(/(?:tk|apiKey)=/);
     expect(historicalHtml).toContain("tk=stale");
+  });
+
+  it("resolves saved root /api resources under the deployment's API base", async () => {
+    setToken("current-token");
+    vi.stubGlobal("window", { __APP_CONFIG__: { API_BASE: "/chat-bi-v4-demo/api/" } });
+    // The API base is read once at load, as the page reads its injected config.js.
+    vi.resetModules();
+    (await import("../../../utils/auth")).installAuthHost(host);
+    const { withSkillResourceCredentials: underPrefix } = await import("../utils/skill-resource");
+    const displayed = underPrefix(
+      '<script src="/api/skills/resources/executable/visualization/echarts/scripts/echarts.min.js?tk=old"></script>' +
+        '<script src="/api/skills/resources/example.js?v=2"></script>'
+    );
+
+    // Public ECharts carries no credential; skill resources carry the current one.
+    expect(displayed).toContain('src="/chat-bi-v4-demo/api/echart/echarts.min.js"');
+    expect(displayed).toContain(
+      'src="/chat-bi-v4-demo/api/skills/resources/example.js?v=2&tk=current-token"'
+    );
   });
 });

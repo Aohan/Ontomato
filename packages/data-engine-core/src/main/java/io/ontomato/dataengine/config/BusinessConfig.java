@@ -20,6 +20,9 @@ public class BusinessConfig {
 	private Map<String, AgentConfig> agents = new LinkedHashMap<>();
 	
 	private EmbeddingModelProperties EmbeddingModelProperties;
+
+	/** The embedding connection, model name and dimensions the vectors of this domain were generated with. */
+	private EmbeddingVectorSource embeddingVectorSource;
 	
 	private int knowledgeMaxResult;
 	
@@ -44,10 +47,18 @@ public class BusinessConfig {
 		private String baseUrl;
 		private String apiKey;
 		private String modelName;
+		private Integer dimensions;
 		private Duration timeout;
 		private Boolean logRequests;
 	    private Boolean logResponses;
 	    private Map<String, String> customHeaders;
+	}
+
+	@Data
+	public static class EmbeddingVectorSource {
+		private String baseUrl;
+		private String modelName;
+		private Integer dimensions;
 	}
 	
 	public static BusinessConfig from(
@@ -116,10 +127,17 @@ public class BusinessConfig {
 			embeddingModelProperties.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
 			embeddingModelProperties.setApiKey(fileEmbeddingModelProperties.getApiKey());
 			embeddingModelProperties.setModelName(fileEmbeddingModelProperties.getModelName());
+			embeddingModelProperties.setDimensions(fileEmbeddingModelProperties.getDimensions());
 			embeddingModelProperties.setTimeout(fileEmbeddingModelProperties.getTimeout());
 			embeddingModelProperties.setLogRequests(fileEmbeddingModelProperties.getLogRequests());
 			embeddingModelProperties.setLogResponses(fileEmbeddingModelProperties.getLogResponses());
 			businessConfig.setEmbeddingModelProperties(embeddingModelProperties);
+			// A new domain has no vectors yet, so the configuration its vectors were generated with equals its initial configuration.
+			EmbeddingVectorSource embeddingVectorSource = new EmbeddingVectorSource();
+			embeddingVectorSource.setBaseUrl(fileEmbeddingModelProperties.getBaseUrl());
+			embeddingVectorSource.setModelName(fileEmbeddingModelProperties.getModelName());
+			embeddingVectorSource.setDimensions(fileEmbeddingModelProperties.getDimensions());
+			businessConfig.setEmbeddingVectorSource(embeddingVectorSource);
 			
 			businessConfig.setKnowledgeMaxResult(dataRagConfig.getKnowledgeMaxResult());
 			

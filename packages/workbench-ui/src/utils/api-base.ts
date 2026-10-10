@@ -7,8 +7,8 @@
  * At runtime it reads `window.__APP_CONFIG__?.API_BASE` (injected by the backend `/config.js`),
  * falling back to `/api` (usable in dev via vite proxy with zero config).
  *
- * When multiple instances are deployed under the same domain, each instance sets a different
- * `API_BASE` (e.g. `/api-itsm`), and nginx rewrites `/api-itsm/` back to the backend `/api/`.
+ * The service-generated config resolves `API_BASE` from the config script URL, so root and
+ * subpath deployments use the same image without a gateway config.js override.
  */
 
 function resolveApiBase(): string {

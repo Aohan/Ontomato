@@ -2,7 +2,10 @@ import type { SseHeartbeatData } from "@ontomato/contracts/sse";
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { createLogger } from "../../logging/logger";
-import { getAnalysisTaskService } from "../../services/analysis-agent/task/task-service";
+import {
+  getAnalysisTaskService,
+  type TaskReadScope,
+} from "../../services/analysis-agent/task/task-service";
 import {
   getAnalysisScheduleRuleService,
   toScheduleRuleTask,
@@ -34,8 +37,8 @@ import {
 } from "../../services/analysis-agent/task/events";
 import { listChatRenderSnapshots } from "../../services/chat/chat-snapshot-store";
 import {
-  attachQuestionExecution,
-  buildTaskProvenance,
+  mergeQueryRunExecution,
+  readQuestionQueryRun,
   toClientTask,
   toSubagentAuditEgress,
 } from "../../services/analysis-agent/task/task-read-model";
@@ -99,18 +102,11 @@ function toVisibleMessages(messages: Parameters<typeof toEgressMessages>[0]): Eg
 
 /**
  * Turn exit: messages become the exit view, while worker audit and evidence references stay out of ordinary reads;
- * activity questions get query execution facts filled in by this turn's own thread and acceptance sequence (the same read rule as report snapshots).
+ * question executions stay as stored (deferred results are read per question on expansion).
  */
-async function toClientTurn(
-  turn: AnalysisConversationTurnRecord,
-  scope: { threadId?: string; requestSeq?: number }
-) {
+function toClientTurn(turn: AnalysisConversationTurnRecord) {
   const { messages, evidenceRefs: _evidenceRefs, harnessTurnId: _harnessTurnId, ...visible } = turn;
-  return {
-    ...visible,
-    activities: await attachQuestionExecution(turn.activities, scope),
-    messages: toVisibleMessages(messages),
-  };
+  return { ...visible, messages: toVisibleMessages(messages) };
 }
 
 /** Persisted task terminal states are expressed in one uniform shape; non-terminal tasks never emit task status events. */
@@ -175,12 +171,16 @@ async function resolveSubscribedTurnTerminal(
   };
 }
 
+/** Terminal events carry the body, final answer and the subscribed run's own record. */
+const TERMINAL_READ: TaskReadScope = { payload: "report", runs: "summary" };
+const OWNERSHIP_READ: TaskReadScope = { payload: "none", runs: "none" };
+
 /**
  * The task may finish between subscription setup and the status read; re-check once and re-emit the terminal state.
  * Non-terminal states no longer emit events — historically this emitted `task_pending` that no frontend consumer handled.
  */
 async function emitTerminalIfAlreadyFinished(taskId: string, domainId: string): Promise<void> {
-  const task = await getAnalysisTaskService().getTask(taskId, domainId);
+  const task = await getAnalysisTaskService().getTask(taskId, domainId, TERMINAL_READ);
   const terminalEvent = task && buildTerminalEventFromTask(task);
   if (terminalEvent) taskEventBus.emit(taskId, terminalEvent);
 }
@@ -262,10 +262,12 @@ interface OwnedTaskEntity {
   rule?: AnalysisScheduleRule;
 }
 
-async function getOwnedTask(req: Request): Promise<OwnedTaskEntity> {
+/** Checks ownership with the same single read that loads what the route needs. */
+async function getOwnedTask(req: Request, scope: TaskReadScope): Promise<OwnedTaskEntity> {
   const task = await getAnalysisTaskService().getTask(
     req.params.id,
-    requireDomainId(req as AuthenticatedRequest)
+    requireDomainId(req as AuthenticatedRequest),
+    scope
   );
   const rule = task
     ? undefined
@@ -292,16 +294,8 @@ async function getOwnedTask(req: Request): Promise<OwnedTaskEntity> {
 router.get(
   "/:id",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
-
-    const finalAnswer = owned.task.analysisPayload?.finalAnswer;
-    res.json({
-      success: true,
-      data: {
-        ...toClientTask(owned.task),
-        ...(typeof finalAnswer === "string" ? { finalAnswer } : {}),
-      },
-    });
+    const owned = await getOwnedTask(req, { payload: "state", runs: "none" });
+    res.json({ success: true, data: toClientTask(owned.task) });
   })
 );
 
@@ -312,7 +306,7 @@ router.get(
 router.get(
   "/:id/report.pdf",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, { payload: "report", runs: "none" });
     const source = analysisReportPdfSource(owned);
     if (!source) throw new HttpError(404, t("api.noReportToExport"));
     const { bytes, fileName } = await exportAnalysisReportPdf(source, new Date());
@@ -329,14 +323,9 @@ router.get(
 router.get(
   "/:id/turns",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
     const turns = await getAnalysisTaskService().listConversationTurns(owned.task.id);
-    const visibleTurns = await Promise.all(
-      turns.map((turn) =>
-        // Each turn reads its own query facts by its own acceptance sequence, never backfilled with the task's latest sequence.
-        toClientTurn(turn, { threadId: owned.task.threadId, requestSeq: turn.requestSeq })
-      )
-    );
+    const visibleTurns = turns.map(toClientTurn);
     res.json({ success: true, data: { turns: visibleTurns } });
   })
 );
@@ -350,7 +339,7 @@ router.post(
   validateBody(z.object({ message: z.string().trim().min(1) })),
   asyncHandler(async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
     const { task } = owned;
     if (task.reportDeliverableEnabled !== false) {
       throw new HttpError(400, "Only normal Harness sessions accept new turns");
@@ -379,7 +368,7 @@ router.post(
 router.get(
   "/:id/runs",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, { payload: "none", runs: "summary" });
     const runs = owned.task.runHistory || [];
     if (!owned.task.threadId || runs.length === 0) {
       res.json({ success: true, data: runs });
@@ -439,13 +428,64 @@ router.get(
 );
 
 /**
+ * GET /api/analysis-tasks/:id/runs/:runId
+ * One historical run's replay snapshot with deferred question executions; null for a legacy run without one.
+ */
+router.get(
+  "/:id/runs/:runId",
+  asyncHandler(async (req: Request, res: Response) => {
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
+    const snapshot = await getAnalysisTaskService().getRunSnapshot(owned.task.id, req.params.runId);
+    if (snapshot === undefined) throw new HttpError(404, "Analysis run not found");
+    res.json({ success: true, data: snapshot });
+  })
+);
+
+/**
+ * GET /api/analysis-tasks/:id/questions/:questionId/execution
+ * Full query facts of one question: `runId` selects a historical report run, `requestSeq` a regular-session
+ * turn, neither the current report run. The question's query run is read by that run's own acceptance
+ * sequence; a run without a sequence, or a question whose query run is missing, keeps the facts stored with it.
+ */
+router.get(
+  "/:id/questions/:questionId/execution",
+  asyncHandler(async (req: Request, res: Response) => {
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
+    const { task } = owned;
+    const questionId = req.params.questionId;
+    const runId = typeof req.query.runId === "string" ? req.query.runId : undefined;
+    const requestSeq = req.query.requestSeq === undefined ? undefined : Number(req.query.requestSeq);
+    if (requestSeq !== undefined && !Number.isInteger(requestSeq)) {
+      throw new HttpError(400, "requestSeq must be an integer");
+    }
+    const at = { runId, requestSeq };
+    const service = getAnalysisTaskService();
+    // Identity and the question's own state first; its stored result copy is read only when the
+    // query run (the authority for saved queries) is missing.
+    const stored = await service.getStoredQuestion(task.id, questionId, at, "light");
+    if (!stored) throw new HttpError(404, "Analysis run not found");
+    const run = await readQuestionQueryRun(
+      { threadId: task.threadId, requestSeq: stored.requestSeq },
+      questionId
+    );
+    if (run) {
+      res.json({ success: true, data: mergeQueryRunExecution(stored.question ?? {}, run) });
+      return;
+    }
+    if (!stored.question) throw new HttpError(404, "Question not found");
+    const full = await service.getStoredQuestion(task.id, questionId, at, "full");
+    res.json({ success: true, data: mergeQueryRunExecution(full!.question!, null) });
+  })
+);
+
+/**
  * GET /api/analysis-tasks/:id/trajectory/:activityId
  * One loop activity with its evidence question facts: regular sessions read the turn; report tasks read the current analysis artifacts.
  */
 router.get(
   "/:id/trajectory/:activityId",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, { payload: "light", runs: "none" });
     const { task } = owned;
     const activityId = req.params.activityId;
     const turns = await getAnalysisTaskService().listConversationTurns(task.id);
@@ -469,7 +509,7 @@ router.get(
 router.get(
   "/:id/trajectory/:activityId/subagent",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
 
     const audit = await getAnalysisTaskService().getSubagentAudit(
       owned.task.id,
@@ -591,7 +631,7 @@ router.post(
   "/:id/execute",
   asyncHandler(async (req: Request, res: Response) => {
     const taskService = getAnalysisTaskService();
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
     const { task, rule } = owned;
 
     if (task.status === "running") {
@@ -651,7 +691,7 @@ router.post(
   "/:id/cancel",
   asyncHandler(async (req: Request, res: Response) => {
     const taskService = getAnalysisTaskService();
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, { payload: "none", runs: "meta" });
     const { task } = owned;
 
     if (task.status === "cancelled") {
@@ -681,7 +721,7 @@ router.post(
 router.put(
   "/:id",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
 
     const ruleService = getAnalysisScheduleRuleService();
     const updates = { ...req.body, token: undefined } as Partial<AnalysisTask>;
@@ -736,7 +776,7 @@ router.put(
 router.delete(
   "/:id",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, OWNERSHIP_READ);
 
     if (owned.rule) {
       await getAnalysisScheduleRuleService().remove(owned.rule.id, owned.rule.domainId);
@@ -761,19 +801,19 @@ router.delete(
 router.get(
   "/:id/messages",
   asyncHandler(async (req: Request, res: Response) => {
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, { payload: "light", runs: "meta" });
     const { task } = owned;
 
     // The review snapshot is derived at read time from the single authoritative artifact: the same fields as the live terminal-state view, with no second copy on the write side.
+    // Question executions arrive deferred; each question's query facts are read on demand from its own run.
     const payload = task.analysisPayload;
-    const provenance = payload ? await buildTaskProvenance(task) : null;
     const taskSnapshot = payload
       ? buildDeepAnalysisTaskSnapshot({
           taskId: task.id,
           threadId: task.threadId,
           status: task.status,
           requestSeq: task.requestSeq,
-          payload: { ...payload, activities: provenance!.activities },
+          payload,
           fallbackText: task.resultSummary,
         })
       : null;
@@ -844,7 +884,7 @@ router.get(
   "/:id/stream",
   asyncHandler(async (req: Request, res: Response) => {
     const taskService = getAnalysisTaskService();
-    const owned = await getOwnedTask(req);
+    const owned = await getOwnedTask(req, TERMINAL_READ);
     const { task } = owned;
 
     try {
@@ -929,7 +969,7 @@ router.get(
               res.end();
               return;
             }
-            const updated = await taskService.getTask(req.params.id, task.domainId);
+            const updated = await taskService.getTask(req.params.id, task.domainId, TERMINAL_READ);
             if (!updated) {
               clearInterval(pollInterval);
               clearInterval(heartbeatInterval);

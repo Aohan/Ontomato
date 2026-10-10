@@ -3,7 +3,12 @@ import { parseIsoDurationSeconds } from "@ontomato/contracts/model-settings";
 import { computed, reactive, ref } from "vue";
 import { BarChart3 } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
-import { formatTimeout, type EmbeddingModelConfig, type SaveAction } from "../../types";
+import {
+  formatTimeout,
+  type EmbeddingModelConfig,
+  type SaveAction,
+  type VectorRebuildStatus,
+} from "../../types";
 import { workbenchContent } from "../../../../content";
 
 const { t } = useI18n();
@@ -16,20 +21,30 @@ const props = defineProps<{
   saving: boolean;
   loadError: string;
   save: SaveAction<EmbeddingModelConfig>;
+  /** This domain's vector rebuild status, or null until it is first read. */
+  rebuildStatus: VectorRebuildStatus | null;
 }>();
 
 const emit = defineEmits<{
-  test: [];
+  /** Test this config: the saved one from the row, or the dialog draft before saving. */
+  test: [model: EmbeddingModelConfig];
   retry: [];
+  rebuild: [];
 }>();
 
 // While loading or after a failed load, no model row is rendered and test/edit are not allowed.
 const writable = computed(() => !props.loading && !props.loadError);
 
+// Whether a rebuild can be started is the backend's judgement (needed and not running); the page does not compare configs.
+const rebuildEnabled = computed(
+  () => props.rebuildStatus !== null && props.rebuildStatus.needed && !props.rebuildStatus.running
+);
+
 const dialogVisible = ref(false);
 
 function emptyDraft() {
-  return { baseUrl: "", apiKey: "", modelName: "", timeoutSeconds: 300 };
+  // A new entry has no dimensions until the user fills them in: their default for new domains is owned by the backend.
+  return { baseUrl: "", apiKey: "", modelName: "", timeoutSeconds: 300, dimensions: null as number | null };
 }
 
 const draft = reactive(emptyDraft());
@@ -45,21 +60,28 @@ function openEditDialog() {
           apiKey: current.apiKey,
           modelName: current.modelName,
           timeoutSeconds: parseIsoDurationSeconds(current.timeout),
+          dimensions: current.dimensions,
         }
       : emptyDraft()
   );
   dialogVisible.value = true;
 }
 
-async function saveDialog() {
-  // Complete snapshot: only the 4 fields in the dialog are overwritten; fields from GET that are not shown (such as customHeaders) are kept as-is.
-  const saved = await props.save({
+// Complete snapshot: only the fields in the dialog are overwritten; fields from GET that are not shown (such as customHeaders) are kept as-is.
+// Dimensions are non-null here: save and test stay disabled while the dimensions input is empty.
+function draftModel(): EmbeddingModelConfig {
+  return {
     ...props.model,
     baseUrl: draft.baseUrl,
     apiKey: draft.apiKey,
     modelName: draft.modelName,
     timeout: formatTimeout(draft.timeoutSeconds),
-  });
+    dimensions: draft.dimensions!,
+  };
+}
+
+async function saveDialog() {
+  const saved = await props.save(draftModel());
   if (saved) dialogVisible.value = false;
 }
 </script>
@@ -93,17 +115,46 @@ async function saveDialog() {
               <span class="model-keys">
                 {{ t("common.timeoutSec") }}{{ businessConfigSeparator }}{{ parseIsoDurationSeconds(props.model.timeout) }}
               </span>
+              <span class="model-keys">
+                {{ t("admin.embeddingDimensions") }}{{ businessConfigSeparator }}{{ props.model.dimensions }}
+              </span>
             </div>
             <div class="model-actions">
-              <el-button link type="primary" :disabled="props.saving" @click="emit('test')">
+              <el-button link type="primary" :disabled="props.saving" @click="emit('test', props.model)">
                 {{ t("common.testModel") }}
               </el-button>
               <el-button link type="primary" :disabled="props.saving" @click="openEditDialog">
                 {{ t("common.edit") }}
               </el-button>
+              <el-button link type="primary" :disabled="!rebuildEnabled" @click="emit('rebuild')">
+                {{ t("admin.rebuildVectors") }}
+              </el-button>
             </div>
           </li>
         </ul>
+        <div v-if="props.rebuildStatus" class="vector-rebuild-status">
+          <el-alert
+            v-if="props.rebuildStatus.running"
+            type="info"
+            :title="t('admin.vectorRebuildRunning', { done: props.rebuildStatus.done, total: props.rebuildStatus.total })"
+            :closable="false"
+            show-icon
+          />
+          <el-alert
+            v-else-if="props.rebuildStatus.needed"
+            type="warning"
+            :title="t('admin.vectorRebuildNeeded')"
+            :closable="false"
+            show-icon
+          />
+          <el-alert
+            v-if="props.rebuildStatus.error !== null"
+            type="error"
+            :title="t('admin.vectorRebuildFailed', { error: props.rebuildStatus.error })"
+            :closable="false"
+            show-icon
+          />
+        </div>
       </template>
 
       <el-dialog
@@ -134,10 +185,26 @@ async function saveDialog() {
               controls-position="right"
             />
           </el-form-item>
+          <el-form-item :label="t('admin.embeddingDimensions')">
+            <el-input-number
+              v-model="draft.dimensions"
+              :min="1"
+              :precision="0"
+              controls-position="right"
+            />
+          </el-form-item>
         </el-form>
         <template #footer>
           <el-button @click="dialogVisible = false">{{ t("common.cancel") }}</el-button>
-          <el-button type="primary" :loading="props.saving" @click="saveDialog">
+          <el-button :disabled="draft.dimensions === null" @click="emit('test', draftModel())">
+            {{ t("common.testModel") }}
+          </el-button>
+          <el-button
+            type="primary"
+            :loading="props.saving"
+            :disabled="draft.dimensions === null"
+            @click="saveDialog"
+          >
             {{ t("common.save") }}
           </el-button>
         </template>

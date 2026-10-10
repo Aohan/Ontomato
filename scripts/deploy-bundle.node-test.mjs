@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import {
   assertImagePlatform,
@@ -7,6 +10,7 @@ import {
   bundleVersion,
   imageFileName,
   renderEnvExample,
+  stageInstallEntry,
   TEMPLATE_ENTRIES,
 } from "./deploy-bundle.mjs";
 
@@ -87,4 +91,29 @@ test("the pack name carries product, version, local time and architecture", () =
     "ontomato-4.0.0-dev-20260928-152224-arm64",
   );
   assert.equal(imageFileName("pgvector/pgvector:pg18"), "pgvector-pgvector-pg18.tar.gz");
+});
+
+test("the whole entry directory stages at the pack root and its shell entries stay executable", () => {
+  const installDir = mkdtempSync(join(tmpdir(), "install-entry-"));
+  const staging = mkdtempSync(join(tmpdir(), "install-staging-"));
+  mkdirSync(join(installDir, "scripts"), { recursive: true });
+  writeFileSync(join(installDir, "install.sh"), "#!/usr/bin/env bash\n");
+  writeFileSync(join(installDir, "scripts", "image-artifacts.py"), "# helper\n");
+  writeFileSync(join(installDir, "scripts", "check-services.py"), "# checker\n");
+  mkdirSync(join(installDir, "maintenance-scripts"));
+  writeFileSync(join(installDir, "rebuild-vectors.sh"), "#!/usr/bin/env bash\n");
+  writeFileSync(join(installDir, "maintenance-scripts", "rebuild_worker.py"), "# worker\n");
+  stageInstallEntry(installDir, staging);
+  assert.equal(readFileSync(join(staging, "maintenance-scripts", "rebuild_worker.py"), "utf8"), "# worker\n");
+  assert.equal(statSync(join(staging, "rebuild-vectors.sh")).mode & 0o777, 0o755);
+  assert.equal(readFileSync(join(staging, "install.sh"), "utf8"), "#!/usr/bin/env bash\n");
+  assert.equal(readFileSync(join(staging, "scripts", "image-artifacts.py"), "utf8"), "# helper\n");
+  assert.equal(readFileSync(join(staging, "scripts", "check-services.py"), "utf8"), "# checker\n");
+  assert.equal(statSync(join(staging, "install.sh")).mode & 0o777, 0o755);
+});
+
+test("a missing assembled install file fails loudly", () => {
+  const installDir = mkdtempSync(join(tmpdir(), "install-entry-"));
+  const staging = mkdtempSync(join(tmpdir(), "install-staging-"));
+  assert.throws(() => stageInstallEntry(installDir, staging), /Install entry missing/);
 });

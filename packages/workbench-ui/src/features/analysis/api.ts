@@ -1,11 +1,12 @@
 import type {
-  AnalysisTaskDetail as AnalysisTask,
+  AnalysisTask,
   AnalysisTaskPage,
   AnalysisTaskRun,
   AnalysisConversationTurn,
   LoopSubagentTrace,
 } from "@ontomato/contracts/analysis-task";
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
+import type { QueryExecutionDisplayFact } from "@ontomato/contracts/query-execution";
 import type { AnalysisReportHotCardSummary } from "@ontomato/contracts/analysis-report";
 import type { AnalysisStreamEvent } from "@ontomato/contracts/analysis-events";
 import { workbenchI18n } from "../../i18n";
@@ -426,6 +427,31 @@ export const analysisTaskApi = {
     const res = await nodeApiGet(`/analysis-tasks/${id}/runs`);
     const data = res.data || res;
     return Array.isArray(data) ? data : [];
+  },
+  /** One historical run's replay snapshot; null when that legacy run saved none. */
+  async getRunSnapshot(taskId: string, runId: string): Promise<unknown> {
+    const res = await nodeApiGet(
+      `/analysis-tasks/${encodeURIComponent(taskId)}/runs/${encodeURIComponent(runId)}`
+    );
+    return res.data;
+  },
+  /**
+   * Full query facts of a deferred question: `runId` for a historical report run, `requestSeq` for a
+   * regular-session turn, neither for the current report run.
+   */
+  async getQuestionExecution(
+    taskId: string,
+    questionId: string,
+    scope: { runId?: string; requestSeq?: number }
+  ): Promise<QueryExecutionDisplayFact> {
+    const query = new URLSearchParams();
+    if (scope.runId !== undefined) query.set("runId", scope.runId);
+    if (scope.requestSeq !== undefined) query.set("requestSeq", String(scope.requestSeq));
+    const suffix = query.size ? `?${query}` : "";
+    const res = await nodeApiGet(
+      `/analysis-tasks/${encodeURIComponent(taskId)}/questions/${encodeURIComponent(questionId)}/execution${suffix}`
+    );
+    return res.data;
   },
   /** Regular conversations are read by turn; turns and the report body are saved separately so later turns don't overwrite earlier ones. */
   async getTurns(id: string): Promise<AnalysisConversationTurn[]> {

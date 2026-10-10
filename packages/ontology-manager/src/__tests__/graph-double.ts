@@ -31,7 +31,6 @@ export const graphRecord = {
   dataBatches: [] as any[],
   layouts: [] as unknown[][],
   nodeUpdates: [] as any[],
-  data: [] as any[],
 };
 
 export class GraphDouble {
@@ -54,8 +53,6 @@ export class GraphDouble {
             };
           }
           if (key === "getZoom") return () => graphRecord.zoom;
-          if (key === "getNodeData") return () => graphRecord.data.at(-1)?.nodes || [];
-          if (key === "setData") return (data: unknown) => { graphRecord.data.push(data); };
           if (key === "zoomTo") {
             return (...args: unknown[]) => {
               graphRecord.zoomTo.push(args);

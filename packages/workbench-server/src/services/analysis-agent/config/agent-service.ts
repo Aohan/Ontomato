@@ -88,24 +88,13 @@ export class AnalysisAgentService {
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`seed-agent-${domainId}`]);
       const existing = await client.query(
-        `SELECT id, name FROM ${qualifiedTable("analysis_agents")}
-         WHERE sort_order = $1 AND domain_id = $2 LIMIT 1`,
-        [DEFAULT_AGENT_SORT_ORDER, domainId]
+        `SELECT id FROM ${qualifiedTable("analysis_agents")}
+         WHERE domain_id = $1 LIMIT 1`,
+        [domainId]
       );
-      const name = defaultAgentName();
-      const description = defaultAgentDescription();
-
-      if ((existing.rowCount ?? 0) > 0) {
-        const row = existing.rows[0];
-        if (row.name !== name) {
-          await client.query(
-            `UPDATE ${qualifiedTable("analysis_agents")}
-             SET name = $1, description = $2, updated_at = $3
-             WHERE id = $4 AND domain_id = $5`,
-            [name, description, Date.now(), row.id, domainId]
-          );
-        }
-      } else {
+      if ((existing.rowCount ?? 0) === 0) {
+        const name = defaultAgentName();
+        const description = defaultAgentDescription();
         const now = Date.now();
         await client.query(
           `INSERT INTO ${qualifiedTable("analysis_agents")}
