@@ -2,7 +2,7 @@
   "schema": 3,
   "family": "java-app",
   "runtimes": {
-    "linux/amd64": "f1fe867ae604cfd4c313ad6b8c1680a219e98ae598a85307dca15ce5d101ecf5",
-    "linux/arm64": "b4858369e64f99965dcda955a7c03c34b03363f98ec2f330ceb8cb09e399a8b4"
+    "linux/amd64": "a5ad1b38448aaf486f92727d0157b2ce9ac1298d12191358ff98439e4f0181bb",
+    "linux/arm64": "d12b8152dbe9b84a9454a6db5cbb2e60994dc9d5da0743a87884294da63987c8"
   }
 }
