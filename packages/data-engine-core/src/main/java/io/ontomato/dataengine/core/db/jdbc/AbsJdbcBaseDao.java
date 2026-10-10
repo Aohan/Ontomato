@@ -83,9 +83,7 @@ public abstract class AbsJdbcBaseDao<E extends Entity, C extends Condition> impl
 
     @Override
     public String insert(E e) {
-        if (e.getId() == null) {
-            e.setId(PrimaryKeyUtil.nextObjectId());
-        }
+        assignMissingId(e);
         Date date = new Date();
         tableDesc.setCreateTime(e, date);
         tableDesc.setModifyTime(e, date);
@@ -101,15 +99,20 @@ public abstract class AbsJdbcBaseDao<E extends Entity, C extends Condition> impl
             if (e == null) {
                 continue;
             }
-            if (e.getId() == null) {
-                e.setId(PrimaryKeyUtil.nextObjectId());
-            }
+            assignMissingId(e);
             tableDesc.setCreateTime(e, date);
             tableDesc.setModifyTime(e, date);
             batchArgs.add(extract(e).toArray());
         }
         jdbcTemplate.batchUpdate(tableDesc.insertSql, batchArgs);
         return batchArgs.size();
+    }
+
+    /** A blank id counts as missing, the same test saveOrUpdate uses to choose insert, so no row is stored under "". */
+    private void assignMissingId(E e) {
+        if (CommUtils.isEmpty(e.getId())) {
+            e.setId(PrimaryKeyUtil.nextObjectId());
+        }
     }
 
     @Override
@@ -123,9 +126,7 @@ public abstract class AbsJdbcBaseDao<E extends Entity, C extends Condition> impl
 
     @Override
     public String upsert(E e) {
-        if (e.getId() == null) {
-            e.setId(PrimaryKeyUtil.nextObjectId());
-        }
+        assignMissingId(e);
         Date date = new Date();
         tableDesc.setModifyTime(e, date);
 
@@ -188,9 +189,7 @@ public abstract class AbsJdbcBaseDao<E extends Entity, C extends Condition> impl
             if (e == null) {
                 continue;
             }
-            if (e.getId() == null) {
-                e.setId(PrimaryKeyUtil.nextObjectId());
-            }
+            assignMissingId(e);
             tableDesc.setModifyTime(e, date);
             List<Object> values = extract(e);
             batchArgs.add(values.toArray());
