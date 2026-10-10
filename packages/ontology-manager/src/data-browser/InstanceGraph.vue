@@ -16,7 +16,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { ElButton, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
-import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult } from "../api";
+import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult, InstanceGraphSummary } from "../api";
 import { useManagerClient, useManagerContext, useOntologyText, useSharedText } from "../context";
 import {
   drawInstanceGraphBatches,
@@ -29,7 +29,7 @@ const context = useManagerContext();
 const { message, confirm } = useManagerFeedback();
 const { ot } = useOntologyText();
 const { t } = useSharedText();
-const { loadInstanceGraph, refreshStarChartData, queryInstanceInfo, loadOntology } =
+const { loadInstanceGraphSummary, searchInstanceGraph, loadInstanceNeighborhood, refreshStarChartData, queryInstanceInfo, loadOntology } =
   useManagerClient();
 
 const graphRef = ref<HTMLDivElement | null>(null);
@@ -47,6 +47,17 @@ const layouting = ref(false);
 const rendering = ref(false);
 const renderedElements = ref(0);
 const largeGraph = computed(() => isLargeInstanceGraph(nodes.value.length, edges.value.length));
+const summary = shallowRef<InstanceGraphSummary | null>(null);
+const overview = ref(true);
+const selectedClass = ref("");
+const searchNodes = shallowRef<InstanceGraphNode[]>([]);
+const searching = ref(false);
+const searchMore = ref(false);
+const expanding = ref(false);
+const neighborPages = shallowRef<Record<string, { nextOffset: number | null; total: number; loaded: number }>>({});
+const currentPage = computed(() => selectedNode.value ? neighborPages.value[selectedNode.value.id] : undefined);
+let searchRequest = 0;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 let graph: Graph | null = null;
 let selectedId = "";
@@ -55,7 +66,7 @@ let graphRequest = 0;
 let resizeObserver: ResizeObserver | null = null;
 
 const searchOptions = computed(() =>
-  nodes.value.map((node) => ({
+  searchNodes.value.map((node) => ({
     value: node.id,
     label: `${node.name || node.id} · ${node.id} · ${classLabels.value[node.class] || node.class} · ${node.class}`,
     name: node.name || node.id,
@@ -113,13 +124,17 @@ function nodeOptions(colors: ReturnType<typeof graphColors>) {
   return {
     type: "circle" as const,
     style: {
-      size: 46,
+      size: (datum: any) => {
+        if (!overview.value) return 32;
+        const count = summary.value?.classes.find((item) => item.class === datum.id)?.instanceCount ?? 1;
+        return Math.min(100, 40 + Math.log2(count + 1) * 4);
+      },
       fill: (datum: any) => datum.data.color,
       stroke: colors.nodeStroke,
       lineWidth: 4,
       shadowColor: colors.shadow,
       shadowBlur: largeGraph.value ? 0 : 10,
-      labelText: (datum: any) => datum.data.node.name || datum.id,
+      labelText: (datum: any) => largeGraph.value ? "" : datum.data.node.name || datum.id,
       labelFill: colors.text,
       labelFontSize: 12,
       labelFontWeight: 600,
@@ -139,7 +154,9 @@ function edgeOptions(colors: ReturnType<typeof graphColors>) {
     style: {
       stroke: colors.edge,
       lineWidth: 1.5,
-      endArrow: true,
+      endArrow: !largeGraph.value,
+      labelText: (datum: any) => overview.value ? String(datum.data?.count ?? "") : "",
+      labelFill: colors.muted,
     },
   };
 }
@@ -185,7 +202,10 @@ async function renderGraph(request: number) {
   });
   graph = target;
   target.on("node:click", (event: any) => {
-    if (!rendering.value) void selectNode(event.target.id);
+    if (!rendering.value && !expanding.value) {
+      if (overview.value) void chooseClass(event.target.id);
+      else void selectNode(event.target.id);
+    }
   });
   target.on("canvas:click", clearSelection);
   const isCurrent = () => request === graphRequest && graph === target;
@@ -200,6 +220,12 @@ async function renderGraph(request: number) {
       onProgress: (completed) => { renderedElements.value = completed; },
     });
     if (!complete) return;
+    if (overview.value && summary.value) {
+      target.updateEdgeData(summary.value.relationships.map((edge, index) => ({
+        id: `edge:${index}:${edge.source}:${edge.target}`, data: { count: edge.count },
+      })));
+      await target.draw();
+    }
     if (!largeGraph.value && nodes.value.length) await target.layout(graphLayout());
     if (isCurrent()) await fitGraph(target);
   } finally {
@@ -208,7 +234,7 @@ async function renderGraph(request: number) {
 }
 
 async function relayoutGraph() {
-  if (!graph || layouting.value || loading.value || rendering.value) return;
+  if (!graph || layouting.value || loading.value || rendering.value || expanding.value) return;
   const target = graph;
   const request = graphRequest;
   const isCurrent = () => request === graphRequest && graph === target;
@@ -289,10 +315,122 @@ async function selectNode(id: string) {
 
 async function focusNode(id: string | undefined) {
   const target = graph;
-  if (!id || !target || loading.value || rendering.value || layouting.value) return;
+  if (!id || !target || loading.value || rendering.value || layouting.value || expanding.value) return;
+  const match = searchNodes.value.find((node) => node.id === id);
+  if (!match) return;
+  overview.value = false;
+  clearSelection();
+  nodes.value = [match];
+  edges.value = [];
+  neighborPages.value = {};
+  await renderGraph(++graphRequest);
   await selectNode(id);
-  await target.zoomTo(Math.max(1, target.getZoom()), false);
-  await target.focusElement(id, false);
+  await expandNeighbors();
+  if (graph) {
+    await graph.zoomTo(Math.max(1, graph.getZoom()), false);
+    await graph.focusElement(id, false);
+  }
+}
+
+function scheduleSearch(term: string) {
+  clearTimeout(searchTimer);
+  const request = ++searchRequest;
+  searchNodes.value = [];
+  searchMore.value = false;
+  searching.value = false;
+  if (!term.trim() && !selectedClass.value) return;
+  searching.value = true;
+  searchTimer = setTimeout(() => { void runSearch(term, request); }, 250);
+}
+
+async function runSearch(term: string, request: number) {
+  const version = summary.value?.version;
+  if (!version) { searching.value = false; return; }
+  try {
+    const result = await searchInstanceGraph(term, version, selectedClass.value || undefined);
+    if (request !== searchRequest) return;
+    searchNodes.value = result.nodes;
+    searchMore.value = result.hasMore;
+  } catch (reason) {
+    if (request === searchRequest) message.error((reason as Error).message);
+  } finally {
+    if (request === searchRequest) searching.value = false;
+  }
+}
+
+async function chooseClass(id: string) {
+  clearSelection();
+  selectedClass.value = id;
+  clearTimeout(searchTimer);
+  searching.value = true;
+  await runSearch("", ++searchRequest);
+}
+
+async function showOverview(request = ++graphRequest) {
+  if (!summary.value) return;
+  clearSelection();
+  clearTimeout(searchTimer);
+  searchRequest++;
+  searching.value = false;
+  searchNodes.value = [];
+  searchMore.value = false;
+  selectedClass.value = "";
+  neighborPages.value = {};
+  overview.value = true;
+  nodes.value = summary.value.classes.map((item) => ({
+    id: item.class, class: item.class,
+    name: `${classLabels.value[item.class] || item.class} (${item.instanceCount.toLocaleString()})`,
+  }));
+  edges.value = summary.value.relationships;
+  await renderGraph(request);
+}
+
+async function expandNeighbors() {
+  const node = selectedNode.value;
+  const version = summary.value?.version;
+  const target = graph;
+  if (!node || !version || !target || expanding.value || rendering.value) return;
+  const page = neighborPages.value[node.id];
+  if (page?.nextOffset === null) return;
+  if (nodes.value.length >= 1000 || edges.value.length >= 2000) {
+    message.info(ot("instanceGraphBudget"));
+    return;
+  }
+  const request = graphRequest;
+  expanding.value = true;
+  try {
+    const result = await loadInstanceNeighborhood(node.id, version, page?.nextOffset ?? 0);
+    if (request !== graphRequest || graph !== target) return;
+    const knownNodes = new Set(nodes.value.map((item) => item.id));
+    const knownEdges = new Set(edges.value.map((item) => JSON.stringify([item.source, item.target])));
+    const addedNodes = result.nodes.filter((item) => !knownNodes.has(item.id));
+    const addedEdges = result.edges.filter((item) => !knownEdges.has(JSON.stringify([item.source, item.target])));
+    if (nodes.value.length + addedNodes.length > 1000 || edges.value.length + addedEdges.length > 2000) {
+      message.info(ot("instanceGraphBudget"));
+      return;
+    }
+    const center = target.getNodeData(node.id).style ?? { x: 0, y: 0 };
+    nodes.value = [...nodes.value, ...addedNodes];
+    edges.value = [...edges.value, ...addedEdges];
+    target.addData({
+      nodes: addedNodes.map((item, index) => ({ id: item.id, data: { node: item, color: colorForClass(item.class) },
+        style: { x: Number(center.x || 0) + Math.cos(index * 2.399) * (180 + Math.sqrt(index) * 45),
+          y: Number(center.y || 0) + Math.sin(index * 2.399) * (180 + Math.sqrt(index) * 45) },
+      })),
+      edges: addedEdges.map((item) => ({ ...item, id: `connection:${JSON.stringify([item.source, item.target])}` })),
+    });
+    await target.draw();
+    if (request !== graphRequest) return;
+    neighborPages.value = { ...neighborPages.value, [node.id]: {
+      nextOffset: result.nextOffset, total: result.total,
+      loaded: (page?.loaded ?? 0) + result.edges.length,
+    } };
+    await fitGraph(target);
+  } catch (reason) {
+    if (request === graphRequest) message.error((reason as Error).message);
+  } finally {
+    expanding.value = false;
+  }
 }
 
 function zoomIn() {
@@ -340,6 +478,13 @@ function downloadGraph() {
 
 async function refresh() {
   const request = ++graphRequest;
+  clearTimeout(searchTimer);
+  searchRequest++;
+  summary.value = null;
+  selectedClass.value = "";
+  searchMore.value = false;
+  searching.value = false;
+  searchNodes.value = [];
   clearSelection();
   graph?.destroy();
   graph = null;
@@ -350,16 +495,16 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    const [result, ontology] = await Promise.all([loadInstanceGraph(), loadOntology()]);
+    const [result, ontology] = await Promise.all([loadInstanceGraphSummary(), loadOntology()]);
     if (request !== graphRequest) return;
     classLabels.value = Object.fromEntries(
       ontology.objects.map((object) => [object.className, object.showName])
     );
     status.value = result.status;
-    nodes.value = result.status === "READY" ? result.graph.nodes : [];
-    edges.value = result.status === "READY" ? result.graph.edges : [];
-    clearSelection();
-    await renderGraph(request);
+    if (result.status === "READY") {
+      summary.value = result.summary;
+      await showOverview(request);
+    }
   } catch (reason) {
     if (request !== graphRequest) return;
     error.value = reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed");
@@ -403,6 +548,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(searchTimer);
+  searchRequest++;
   graphRequest += 1;
   nodeInfoRequest += 1;
   resizeObserver?.disconnect();
@@ -439,11 +586,11 @@ onBeforeUnmount(() => {
       <button :title="ot('zoomIn')" @click="zoomIn"><ZoomIn :size="17" /></button>
       <button :title="ot('zoomOut')" @click="zoomOut"><ZoomOut :size="17" /></button>
       <button :title="ot('fitCanvas')" @click="fitGraphView"><Maximize2 :size="17" /></button>
-      <button :title="ot('relayout')" :disabled="loading || rendering || layouting" @click="relayoutGraph">
+      <button :title="ot('relayout')" :disabled="loading || rendering || layouting || expanding" @click="relayoutGraph">
         <Focus :size="17" />
       </button>
       <button :title="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
-      <button :title="t('common.refresh')" @click="refresh"><RefreshCw :size="17" /></button>
+      <button :title="t('common.refresh')" :disabled="expanding" @click="refresh"><RefreshCw :size="17" /></button>
       <button :title="ot('regenerateInstanceGraph')" :disabled="regenerating" @click="regenerate">
         <DatabaseZap :size="17" />
       </button>
@@ -454,6 +601,13 @@ onBeforeUnmount(() => {
       {{ ot("instanceGraphHint") }}
     </div>
 
+    <div v-if="summary" class="graph-summary">
+      <strong>{{ ot('instanceGraphSummary', { nodes: summary.nodeCount, edges: summary.edgeCount, components: summary.componentCount }) }}</strong>
+      <small>{{ ot('instanceGraphStructure', { isolated: summary.isolatedNodeCount, largest: summary.largestComponentSize, time: new Date(summary.generatedAt).toLocaleString(context.locale) }) }}</small>
+      <small v-if="!overview">{{ ot('instanceGraphVisible', { nodes: nodes.length, edges: edges.length }) }}</small>
+      <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
+    </div>
+
     <aside class="inspector-panel">
       <div class="node-search">
         <el-select-v2
@@ -462,7 +616,11 @@ onBeforeUnmount(() => {
           :placeholder="ot('searchInstanceNodes')"
           :aria-label="ot('searchInstanceNodes')"
           :no-match-text="ot('noMatchingResources')"
-          :disabled="loading || regenerating || layouting || !nodes.length"
+          :disabled="loading || regenerating || layouting || rendering || expanding || !summary"
+          :loading="searching"
+          remote
+          :debounce="0"
+          :remote-method="scheduleSearch"
           :item-height="52"
           filterable
           clearable
@@ -471,7 +629,7 @@ onBeforeUnmount(() => {
         >
           <template #prefix><Search :size="15" /></template>
           <template #label="{ value }">
-            {{ nodes.find((node) => node.id === value)?.name || value }}
+            {{ selectedNode?.name || value }}
           </template>
           <template #default="{ item }">
             <div class="node-search-option">
@@ -480,6 +638,11 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </el-select-v2>
+        <small v-if="selectedClass">{{ classLabels[selectedClass] || selectedClass }} <button @click="selectedClass = ''; scheduleSearch('')">×</button></small>
+        <small v-if="searchMore">{{ ot('instanceGraphSearchMore') }}</small>
+        <div v-if="overview && searchNodes.length" class="instance-candidates">
+          <button v-for="node in searchNodes" :key="node.id" :disabled="rendering || expanding" @click="focusNode(node.id)">{{ node.name || node.id }} <small>{{ node.id }}</small></button>
+        </div>
       </div>
       <div class="panel-heading">
         <div>
@@ -488,6 +651,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div v-if="selectedNode" class="detail-content">
+        <el-button :loading="expanding" :disabled="rendering || currentPage?.nextOffset === null" @click="expandNeighbors">{{ ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand') }}</el-button>
+        <p v-if="currentPage" class="empty-hint">{{ ot('instanceGraphConnections', { loaded: currentPage.loaded, total: currentPage.total }) }}</p>
         <div class="detail-title">
           <span class="resource-icon"><Box :size="16" /></span>
           <div class="detail-title-copy">
@@ -522,7 +687,7 @@ onBeforeUnmount(() => {
       <div v-else class="inspector-empty">
         <div class="empty-mark"><MousePointerClick :size="24" /></div>
         <strong>{{ ot("selectGraphElement") }}</strong>
-        <span>{{ ot("inspectorEmptyDesc") }}</span>
+        <span>{{ ot("instanceGraphChoose") }}</span>
       </div>
     </aside>
   </section>
@@ -641,6 +806,26 @@ onBeforeUnmount(() => {
 .node-search :deep(.el-select-v2) {
   width: 100%;
 }
+.graph-summary {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 298px;
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-xs);
+}
+.graph-summary .el-button { pointer-events: auto; }
+.instance-candidates { display: grid; gap: 4px; max-height: 260px; overflow: auto; margin-top: 8px; }
+.instance-candidates button {
+  text-align: left; padding: 8px; border: 1px solid var(--el-border-color-light);
+  border-radius: 4px; background: var(--el-bg-color); color: var(--el-text-color-primary);
+}
+.instance-candidates small, .node-search > small { display: block; color: var(--el-text-color-secondary); }
 .node-search-option {
   display: flex;
   min-width: 0;

@@ -66,6 +66,19 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   if (path === "/admin/delBussinessKnowledge" && knowledgeDeleteFails.has(String(body?.knowledgeID)))
     return json({ success: false, message: "locked" });
   if (path === "/admin/getMetas") return json(metasFor(url));
+  if (path === "/data/instanceGraph/summary") return json({ success: true, status: "READY", data: {
+    classes: [{ class: "Order", instanceCount: instanceNodeCount }, { class: "Item", instanceCount: 1 }],
+    relationships: [{ source: "Order", target: "Item", count: 1 }],
+    nodeCount: instanceNodeCount, edgeCount: 1, componentCount: 1, isolatedNodeCount: 0,
+    largestComponentSize: instanceNodeCount, version: "v1", generatedAt: "2026-10-10T00:00:00Z",
+  } });
+  if (path === "/data/instanceGraph/search") return json({ success: true, status: "READY", data: {
+    nodes: [{ id: "Item:2", name: "Spare part", class: "Item" }], hasMore: false, version: "v1",
+  } });
+  if (path === "/data/instanceGraph/neighborhood") return json({ success: true, status: "READY", data: {
+    nodes: [{ id: "Item:2", name: "Spare part", class: "Item" }, { id: "Order:1", name: "First order", class: "Order" }],
+    edges: [{ source: "Order:1", target: "Item:2" }], total: 1, nextOffset: null, version: "v1",
+  } });
   if (path === "/data/queryWholeDataMode0")
     return json({ success: true, status: "READY", data: {
       nodes: instanceNodeCount > 2 ? Array.from({ length: instanceNodeCount }, (_, index) => ({
@@ -236,8 +249,8 @@ function clickButton(text: string) {
 }
 
 describe("OntologyManager root component with real pages", () => {
-  it("large instance graphs draw incrementally and relayout without starting a force simulation", async () => {
-    instanceNodeCount = 1201;
+  it("a 50,000-instance graph initially loads only the type summary", async () => {
+    instanceNodeCount = 50000;
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
       width: 800, height: 600,
     } as DOMRect);
@@ -249,17 +262,17 @@ describe("OntologyManager root component with real pages", () => {
     const options = graphRecord.options.at(-1);
     expect(options.data).toEqual({ nodes: [], edges: [] });
     expect(options.layout).toBeUndefined();
-    expect(options.node.style.shadowBlur).toBe(0);
-    expect(graphRecord.layouts).toEqual([]);
+    expect(options.node.style.shadowBlur).toBe(10);
     expect(graphRecord.dataBatches.map((batch) => batch.nodes?.length || batch.edges?.length))
-      .toEqual([200, 200, 200, 200, 200, 200, 1, 1]);
+      .toEqual([2, 1]);
+    expect(paths()).toContain("/data/instanceGraph/summary");
+    expect(paths()).not.toContain("/data/queryWholeDataMode0");
     expect(root().querySelector(".node-search input")?.hasAttribute("disabled")).toBe(false);
 
     (root().querySelector(".graph-toolbar button[title='Relayout']") as HTMLButtonElement).click();
     await settle();
     await settle();
-    expect(graphRecord.layouts).toEqual([]);
-    expect(graphRecord.nodeUpdates.map((batch) => batch.length)).toEqual([200, 200, 200, 200, 200, 200, 1]);
+    expect(graphRecord.layouts.length).toBe(2);
   });
 
   it("instance graph search filters nodes and focuses the selected result without stale record details", async () => {
@@ -276,17 +289,22 @@ describe("OntologyManager root component with real pages", () => {
     input.focus();
     input.value = "spare";
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
     await settle();
-    expect(root().querySelector(".node-search-option")?.textContent).toContain("Spare part");
-    expect(root().querySelector(".node-search-option")?.textContent).toContain("Item:2");
-    expect(root().querySelector(".node-search-option")?.textContent).not.toContain("First order");
-    (root().querySelector(".node-search-option") as HTMLElement).click();
+    expect(root().querySelector(".instance-candidates")?.textContent).toContain("Spare part");
+    expect(root().querySelector(".instance-candidates")?.textContent).toContain("Item:2");
+    expect(root().querySelector(".instance-candidates")?.textContent).not.toContain("First order");
+    (root().querySelector(".instance-candidates button") as HTMLElement).click();
     await settle();
     expect(graphRecord.focusElement).toContainEqual(["Item:2", false]);
     expect(graphRecord.zoomTo).toContainEqual([1, false]);
     expect(graphRecord.states).toContainEqual([{ "Item:2": ["selected"] }, false]);
     expect(root().querySelector(".detail-title h2")?.textContent).toBe("Spare part");
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+    expect(requests.find((request) => request.url.endsWith("/instanceGraph/search"))?.body)
+      .toEqual({ term: "spare", version: "v1", limit: 50 });
+    expect(requests.find((request) => request.url.endsWith("/instanceGraph/neighborhood"))?.body)
+      .toEqual({ id: "Item:2", version: "v1", offset: 0, limit: 100 });
 
     holdPaths.add("/data/queryInfoByNode");
     graphHandlers["node:click"]({ target: { id: "Order:1" } });

@@ -140,6 +140,22 @@ class StarChartStatusTest {
 	}
 
 	@Test
+	void explorationUsesPublishedVersionAndRejectsStaleRequests() {
+		stubBuild();
+		service.refreshStarChartData(DOMAIN);
+		JSONObject summary = service.queryInstanceGraph("summary", new JSONObject(), DOMAIN);
+		String version = summary.getJSONObject("data").getString("version");
+		JSONObject request = new JSONObject();
+		request.put("version", version);
+		request.put("term", "n1");
+		assertEquals(1, service.queryInstanceGraph("search", request, DOMAIN).getJSONObject("data").getJSONArray("nodes").size());
+		service.refreshStarChartData(DOMAIN);
+		JSONObject stale = service.queryInstanceGraph("search", request, DOMAIN);
+		assertFalse(stale.getBooleanValue("success"));
+		assertEquals("GRAPH_VERSION_CHANGED", stale.getString("code"));
+	}
+
+	@Test
 	void concurrentRefreshReturnsGeneratingWithoutSecondBuild() {
 		service.generatingDomains.add(DOMAIN);
 		JSONObject ret = service.refreshStarChartData(DOMAIN);

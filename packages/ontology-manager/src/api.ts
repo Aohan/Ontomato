@@ -117,6 +117,24 @@ export interface InstanceGraphData {
   edges: InstanceGraphEdge[];
 }
 
+export interface InstanceGraphSummary {
+  classes: Array<{ class: string; instanceCount: number }>;
+  relationships: Array<{ source: string; target: string; count: number }>;
+  nodeCount: number;
+  edgeCount: number;
+  componentCount: number;
+  isolatedNodeCount: number;
+  largestComponentSize: number;
+  version: string;
+  generatedAt: string;
+}
+
+export interface InstanceNeighborhood extends InstanceGraphData {
+  total: number;
+  nextOffset: number | null;
+  version: string;
+}
+
 /**
  * Star-chart data state reported by the data engine. Only READY carries data; GENERATING and NOT_GENERATED mean the
  * domain has never been generated, with or without a build currently running.
@@ -444,6 +462,27 @@ export function createManagerClient(
     return { status: "READY", graph: normalizeInstanceGraph(response.data) };
   }
 
+  async function loadInstanceGraphSummary(): Promise<
+    { status: "READY"; summary: InstanceGraphSummary } | { status: "GENERATING" | "NOT_GENERATED" }
+  > {
+    const response = await send("/data/instanceGraph/summary", { method: "GET" });
+    return response.status === "READY"
+      ? { status: "READY", summary: response.data as InstanceGraphSummary }
+      : { status: response.status };
+  }
+
+  async function searchInstanceGraph(term: string, version: string, className?: string) {
+    const response = await post("/data/instanceGraph/search", { term, version, class: className, limit: 50 });
+    if (response.status !== "READY") throw new Error(ontologyText(context.messages, "instanceGraphNotGenerated"));
+    return response.data as { nodes: InstanceGraphNode[]; hasMore: boolean; version: string };
+  }
+
+  async function loadInstanceNeighborhood(id: string, version: string, offset = 0) {
+    const response = await post("/data/instanceGraph/neighborhood", { id, version, offset, limit: 100 });
+    if (response.status !== "READY") throw new Error(ontologyText(context.messages, "instanceGraphNotGenerated"));
+    return response.data as InstanceNeighborhood;
+  }
+
   /**
    * Rebuilds the star-chart data from the current Ontology and returns once it is done; GENERATING means a build for
    * this domain was already running.
@@ -530,6 +569,9 @@ export function createManagerClient(
     loadObjectData,
     loadSmartAssets,
     loadInstanceGraph,
+    loadInstanceGraphSummary,
+    searchInstanceGraph,
+    loadInstanceNeighborhood,
     refreshStarChartData,
     queryInstanceInfo,
     listDataAdapters,
