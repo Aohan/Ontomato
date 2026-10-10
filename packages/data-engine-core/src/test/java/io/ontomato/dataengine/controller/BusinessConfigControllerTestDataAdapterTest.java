@@ -40,7 +40,7 @@ class BusinessConfigControllerTestDataAdapterTest {
 	private final BusinessConfigController controller = new BusinessConfigController();
 	private final StubProvider duckdb = new StubProvider("duckdb", List.of("url"));
 	private final StubProvider postgresql = new StubProvider("postgresql", List.of("url", "user", "password"));
-	private final StubProvider m3 = new StubProvider("m3", List.of());
+	private final StubProvider m3 = new StubProvider("m3", List.of("url", "company", "user", "password"));
 
 	@BeforeEach
 	void setUp() {
@@ -91,12 +91,19 @@ class BusinessConfigControllerTestDataAdapterTest {
 	}
 
 	@Test
-	void aTypeWithoutConnectionFieldsFailsWithoutCreatingAnAdapter() {
-		JSONObject ret = controller.testDataAdapter(JSON.parseObject("{\"type\":\"m3\"}"));
+	void anM3TestReceivesItsFourCandidateFields() throws Exception {
+		JSONObject data = JSON.parseObject("{\"elapsedMs\":3,\"tables\":[]}");
+		when(m3.adapter.testConnection()).thenReturn(data);
 
-		assertFalse(ret.getBooleanValue("success"));
-		assertTrue(ret.getString("message").contains("m3"), ret.getString("message"));
-		assertFalse(m3.created);
+		JSONObject ret = controller.testDataAdapter(JSON.parseObject(
+				"{\"type\":\"m3\",\"url\":\"m3.test:8080\",\"company\":\"ontomato\",\"user\":\"admin\",\"password\":\"pw\"}"));
+
+		// Design 5: M3 is tested through the same endpoint with the values on the page.
+		assertTrue(ret.getBooleanValue("success"), ret.toJSONString());
+		assertEquals("m3.test:8080", m3.lastConnection.getUrl());
+		assertEquals("ontomato", m3.lastConnection.getCompany());
+		assertEquals("admin", m3.lastConnection.getUser());
+		assertEquals("pw", m3.lastConnection.getPassword());
 		verify(businessConfigService, never()).set(any(), anyString());
 	}
 
