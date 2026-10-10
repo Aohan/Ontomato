@@ -6,8 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -28,7 +26,6 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.dao.StarChartDao;
-import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
@@ -62,7 +59,7 @@ class StarChartStatusTest {
 		mode0.put("edges", new JSONArray());
 		service = new DataServiceImpl() {
 			@Override
-			JSONObject cutWholeData(String domainId) {
+			JSONObject cutWholeData(String domainId, BusinessConfig businessConfig) {
 				return mode0;
 			}
 		};
@@ -180,11 +177,7 @@ class StarChartStatusTest {
 	}
 
 	private void stubBuild() {
-		BusinessConfig businessConfig = new BusinessConfig();
-		when(businessConfigService.get(DOMAIN)).thenReturn(businessConfig);
-		DataAdapter adapter = mock(DataAdapter.class);
-		when(adapter.useM3()).thenReturn(true);
-		when(registry.create(eq(businessConfig), isNull())).thenReturn(adapter);
+		when(businessConfigService.get(DOMAIN)).thenReturn(new BusinessConfig());
 		Map<String, Object> rule = new HashMap<>();
 		rule.put("classlist", List.of("C"));
 		Map<String, Object> classDef = new HashMap<>();

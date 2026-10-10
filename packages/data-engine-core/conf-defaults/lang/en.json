@@ -12,12 +12,8 @@
     "value": "Authorization activated successfully"
   },
   {
-    "key": "Data.queryM3.error",
-    "value": "Failed to query M3 database"
-  },
-  {
-    "key": "Data.remoteDB.notSupport",
-    "value": "Non-M3 mode does not support this feature"
+    "key": "Data.query.error",
+    "value": "Failed to query the data source"
   },
   {
     "key": "Data.dataPermission.noPermission",
@@ -78,10 +74,6 @@
   {
     "key": "Admin.class.primaryKeyRequired",
     "value": "A new object class needs a primary key field name"
-  },
-  {
-    "key": "Admin.class.m3PrimaryKeyId",
-    "value": "The primary key field of an M3 object class must be id"
   },
   {
     "key": "Admin.attr.primaryKeyLocked",

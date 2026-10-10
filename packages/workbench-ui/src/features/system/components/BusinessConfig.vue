@@ -159,7 +159,7 @@ function selectedDataAdapter(): DataAdapterInfo {
   return dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
 }
 
-// Save and test send the same body: the type plus the current form values of only the connection fields it declares; for types with fields, the card form builds the connection object.
+// Save and test send the same body: the type plus the current form values of only the connection fields it declares; the card form builds the connection object.
 function dataAdapterRequest(adapter: DataAdapterInfo) {
   const connection = config.dataAdapterConnections[adapter.type];
   return {

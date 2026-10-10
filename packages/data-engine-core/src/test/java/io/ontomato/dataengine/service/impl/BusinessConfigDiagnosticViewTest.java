@@ -93,7 +93,6 @@ class BusinessConfigDiagnosticViewTest {
         config.setQuestionSpliterTries(1);
         config.setQuestionSpliterTimeout(180000L);
         DataRagConfig dataRagConfig = new DataRagConfig();
-        dataRagConfig.setM3auth("SECRET-M3");
         dataRagConfig.setProductionEnvPwd("SECRET-PROD");
 
         String body = response(config, dataRagConfig, new MockEnvironment()

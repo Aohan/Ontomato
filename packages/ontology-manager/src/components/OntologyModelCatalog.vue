@@ -481,6 +481,9 @@ p {
   white-space: nowrap;
 }
 .inline-link {
+  justify-self: start;
+  align-self: center;
+  max-width: 100%;
   overflow: hidden;
   padding: 0;
   border: 0;

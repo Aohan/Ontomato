@@ -19,8 +19,6 @@ public interface ChatService {
     
     public void saveCard(Map<String, Object> input, String lang, String domainId);
     
-    public Map<String,Object> getM3Data(String queryJson, UserDataPermission permission, String domainId);
-    
     public JSONArray getMidSet(JSONObject dsl, UserDataPermission permission, String domainId);
     
     public Integer getTaskCountInQueue();

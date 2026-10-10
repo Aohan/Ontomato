@@ -17,9 +17,10 @@ import {
   CircleMinus,
   SlidersHorizontal,
   X,
+  Info,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
-import { ElButton, ElSelect, ElOption, ElCheckbox, ElSelectV2, vLoading } from "element-plus";
+import { ElButton, ElPopover, ElSelect, ElOption, ElCheckbox, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult, InstanceGraphSummary } from "../api";
 import { useManagerClient, useManagerContext, useOntologyText, useSharedText } from "../context";
@@ -30,6 +31,7 @@ import {
   isLargeInstanceGraph,
   neighborNodePosition,
   instanceEdgeGeometry,
+  overviewPositions,
 } from "./instance-graph-rendering";
 
 const context = useManagerContext();
@@ -170,11 +172,7 @@ function nodeOptions(colors: ReturnType<typeof graphColors>) {
   return {
     type: "circle" as const,
     style: {
-      size: (datum: any) => {
-        if (!overview.value) return 32;
-        const count = summary.value?.classes.find((item) => item.class === datum.id)?.instanceCount ?? 1;
-        return Math.min(100, 40 + Math.log2(count + 1) * 4);
-      },
+      size: 32,
       fill: (datum: any) => datum.data.color,
       stroke: colors.nodeStroke,
       lineWidth: 4,
@@ -202,9 +200,7 @@ function edgeOptions(colors: ReturnType<typeof graphColors>) {
       lineWidth: 1.5,
       endArrow: !largeGraph.value,
       labelText: (datum: any) => {
-        if (!overview.value) return relationLabels.value[datum.data?.type] || datum.data?.type || "";
-        const types = Array.isArray(datum.data?.types) ? datum.data.types : datum.data?.type ? [datum.data.type] : [];
-        return types.map((type: string) => relationLabels.value[type] || type).join(" / ");
+        return relationLabels.value[datum.data?.type] || datum.data?.type || "";
       },
       labelFill: colors.muted,
     },
@@ -253,8 +249,7 @@ async function renderGraph(request: number) {
   graph = target;
   target.on("node:click", (event: any) => {
     if (!rendering.value && !expanding.value) {
-      if (overview.value) void chooseClass(event.target.id);
-      else void selectNode(event.target.id);
+      void selectNode(event.target.id);
     }
   });
   target.on("canvas:click", clearSelection);
@@ -263,7 +258,7 @@ async function renderGraph(request: number) {
   target.on("node:dragend", updateNodeActionPosition);
   target.on("node:dragend", saveOverviewLayout);
   target.on("node:dblclick", (event: any) => {
-    if (!overview.value && !rendering.value && !expanding.value) {
+    if (!rendering.value && !expanding.value) {
       void selectNode(event.target.id).then(expandNeighbors);
     }
   });
@@ -277,19 +272,15 @@ async function renderGraph(request: number) {
       isCurrent,
       yieldControl: yieldToBrowser,
       onProgress: (completed) => { renderedElements.value = completed; },
+      positions: overview.value ? overviewPositions(nodes.value) : undefined,
     });
     if (!complete) return;
-    if (overview.value && summary.value) {
-      target.updateEdgeData(summary.value.relationships.map((edge, index) => ({
-        id: `edge:${index}:${edge.source}:${edge.target}`, data: { count: edge.count, type: edge.type, types: edge.types },
-      })));
-      await target.draw();
-    }
     const savedLayout = readOverviewLayout();
     if (savedLayout) {
-      target.updateNodeData(nodes.value.map((node, index) => ({ id: node.id, style: savedLayout[node.id] || instanceNodePosition(index, nodes.value.length) })));
+      const defaults = overviewPositions(nodes.value);
+      target.updateNodeData(nodes.value.map((node, index) => ({ id: node.id, style: savedLayout[node.id] || defaults[node.id] || instanceNodePosition(index, nodes.value.length) })));
       await target.draw();
-    } else if (!largeGraph.value && nodes.value.length) await target.layout(graphLayout());
+    } else if (!overview.value && !largeGraph.value && nodes.value.length) await target.layout(graphLayout());
     if (isCurrent()) await fitGraph(target);
   } finally {
     if (isCurrent()) rendering.value = false;
@@ -303,7 +294,11 @@ async function relayoutGraph() {
   const isCurrent = () => request === graphRequest && graph === target;
   layouting.value = true;
   try {
-    if (largeGraph.value) {
+    if (overview.value) {
+      const positions = overviewPositions(nodes.value);
+      target.updateNodeData(nodes.value.map((node) => ({ id: node.id, style: positions[node.id] })));
+      await target.draw();
+    } else if (largeGraph.value) {
       for (let offset = 0; offset < nodes.value.length; offset += GRAPH_BATCH_SIZE) {
         await yieldToBrowser();
         if (!isCurrent()) return;
@@ -387,7 +382,7 @@ async function selectNode(id: string) {
 }
 
 function updateNodeActionPosition() {
-  if (!graph || !graphRef.value || !selectedNode.value || overview.value) {
+  if (!graph || !graphRef.value || !selectedNode.value) {
     nodeActionPosition.value = null;
     return;
   }
@@ -397,13 +392,14 @@ function updateNodeActionPosition() {
   const { width, height } = graphRef.value.getBoundingClientRect();
   nodeActionPosition.value = {
     x: Math.max(90, Math.min(width - 90, point[0])),
-    y: Math.max(100, Math.min(height - 60, point[1] + 42)),
+    y: graphRef.value.offsetTop + Math.max(42, Math.min(height - 60, point[1] + 42)),
   };
 }
 
 async function centerOnSelection() {
   if (!selectedNode.value || rendering.value || expanding.value) return;
   const node = selectedNode.value;
+  overview.value = false;
   nodes.value = [node];
   edges.value = [];
   neighborPages.value = {};
@@ -489,11 +485,8 @@ async function showOverview(request = ++graphRequest) {
   direction.value = "both";
   appliedNeighborFilters.value = {};
   overview.value = true;
-  nodes.value = summary.value.classes.map((item) => ({
-    id: item.class, class: item.class,
-    name: `${classLabels.value[item.class] || item.class} (${item.instanceCount.toLocaleString()})`,
-  }));
-  edges.value = summary.value.relationships;
+  nodes.value = summary.value.overviewNodes || [];
+  edges.value = summary.value.overviewEdges || [];
   await renderGraph(request);
 }
 
@@ -513,6 +506,7 @@ async function expandNeighbors() {
   try {
     const result = await loadInstanceNeighborhood(node.id, version, page?.nextOffset ?? 0, appliedNeighborFilters.value);
     if (request !== graphRequest || graph !== target) return;
+    overview.value = false;
     const knownNodes = new Set(nodes.value.map((item) => item.id));
     const knownEdges = new Set(edges.value.map((item) => JSON.stringify([item.source, item.target, item.type])));
     const addedNodes = result.nodes.filter((item) => !knownNodes.has(item.id));
@@ -532,7 +526,10 @@ async function expandNeighbors() {
         data: { type: item.type, label: item.label } })),
     });
     const geometry = instanceEdgeGeometry(edges.value);
-    target.updateEdgeData(edges.value.map((item, index) => ({ id: `connection:${JSON.stringify([item.source, item.target, item.type])}`, ...geometry[index] })));
+    target.updateEdgeData(target.getEdgeData().map((item) => {
+      const index = edges.value.findIndex((edge) => edge.source === item.source && edge.target === item.target && edge.type === item.data?.type);
+      return { id: item.id, ...geometry[index] };
+    }));
     await target.draw();
     if (request !== graphRequest) return;
     neighborPages.value = { ...neighborPages.value, [node.id]: {
@@ -555,6 +552,7 @@ async function applyNeighborhoodFilters() {
     ...(relationType.value ? { relationType: relationType.value } : {}),
     ...(direction.value !== 'both' ? { direction: direction.value } : {}),
   };
+  overview.value = false;
   nodes.value = [node];
   edges.value = [];
   neighborPages.value = {};
@@ -702,7 +700,7 @@ onBeforeUnmount(() => {
     class="instance-graph"
   >
     <div ref="graphRef" class="graph-canvas" />
-    <div v-if="selectedNode && nodeActionPosition && !overview" class="node-actions"
+    <div v-if="selectedNode && nodeActionPosition" class="node-actions"
       :style="{ left: `${nodeActionPosition.x}px`, top: `${nodeActionPosition.y}px` }"
       role="toolbar" :aria-label="selectedNode.name || selectedNode.id">
       <button :title="ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand')"
@@ -751,13 +749,28 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="summary" class="graph-summary">
-      <strong>{{ overview ? ot('instanceGraphTypes') : selectedNode?.name }}</strong>
-      <strong>{{ ot('instanceGraphSummary', { nodes: summary.nodeCount, edges: summary.edgeCount, components: summary.componentCount }) }}</strong>
-      <small>{{ ot('instanceGraphStructure', { isolated: summary.isolatedNodeCount, largest: summary.largestComponentSize, time: new Date(summary.generatedAt).toLocaleString(context.locale) }) }}</small>
-      <small v-if="!overview">{{ ot('instanceGraphVisible', { nodes: nodes.length, edges: edges.length }) }}</small>
+      <div class="summary-row">
+        <strong class="summary-title">{{ overview ? ot('instanceGraphOverview') : selectedNode?.name }}</strong>
+        <span class="summary-counts">{{ ot('instanceGraphCompactCount', { nodes: nodes.length.toLocaleString(context.locale), totalNodes: summary.nodeCount.toLocaleString(context.locale), edges: edges.length.toLocaleString(context.locale), totalEdges: summary.edgeCount.toLocaleString(context.locale) }) }}</span>
+        <el-popover trigger="click" :width="300" :teleported="false" placement="bottom-start">
+          <template #reference>
+            <button class="summary-info" :title="ot('instanceGraphStatistics')" :aria-label="ot('instanceGraphStatistics')"><Info :size="15" /></button>
+          </template>
+          <div class="summary-details">
+            <strong>{{ ot('instanceGraphStatistics') }}</strong>
+            <span>{{ ot('instanceGraphSummary', { nodes: summary.nodeCount, edges: summary.edgeCount }) }}</span>
+            <span>{{ ot('instanceGraphStructure', { isolated: summary.isolatedNodeCount, largest: summary.largestComponentSize, time: new Date(summary.generatedAt).toLocaleString(context.locale) }) }}</span>
+            <span v-if="overview">{{ ot('instanceGraphSample', { shown: nodes.length, total: summary.nodeCount, edges: edges.length }) }}</span>
+            <span v-if="overview && summary.overviewEdgesTruncated" class="graph-warning">{{ ot('instanceGraphSampleEdgesLimited') }}</span>
+          </div>
+        </el-popover>
+        <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
+      </div>
+      <div v-if="overview" class="sample-legend">
+        <button v-for="item in summary.classes" :key="item.class" :class="{ 'is-selected': selectedClass === item.class }" :title="`${classLabels[item.class] || item.class}: ${Math.min(item.instanceCount, 50)} / ${item.instanceCount}`" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }}</button>
+      </div>
       <small v-if="summary.complete === false" role="alert" class="graph-warning">{{ ot('instanceGraphPartial', { failures: (summary.failures || []).join(', ') }) }}</small>
       <el-button v-if="versionChanged" size="small" :icon="RefreshCw" @click="refresh">{{ ot('instanceGraphVersionChanged') }}</el-button>
-      <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
     </div>
 
     <aside class="inspector-panel">
@@ -886,7 +899,9 @@ onBeforeUnmount(() => {
   --inspector-width: 320px;
   --el-font-size-base: var(--text-sm);
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--inspector-width);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -901,9 +916,9 @@ onBeforeUnmount(() => {
   background-image: radial-gradient(#3a4265 1px, transparent 1px);
 }
 .graph-canvas {
-  position: absolute;
-  inset: 0;
-  right: var(--inspector-width);
+  position: relative;
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
   overflow: hidden;
 }
@@ -1015,6 +1030,8 @@ onBeforeUnmount(() => {
   border-left: 1px solid var(--el-border-color);
   background: var(--el-bg-color);
   overflow: auto;
+  grid-column: 2;
+  grid-row: 1 / 3;
 }
 .panel-heading {
   display: flex;
@@ -1086,19 +1103,31 @@ onBeforeUnmount(() => {
   line-height: var(--leading-relaxed);
 }
 .graph-summary {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: calc(var(--inspector-width) + 18px);
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  display: grid;
+  min-width: 0;
   gap: 4px;
-  pointer-events: none;
   color: var(--el-text-color-secondary);
   font-size: var(--text-xs);
 }
 .graph-summary .el-button { pointer-events: auto; }
+.summary-row { display: flex; align-items: center; min-width: 0; gap: var(--spacing-sm); min-height: 24px; }
+.summary-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--el-text-color-primary); }
+.summary-counts { flex-shrink: 0; font-size: var(--text-xs); }
+.summary-row > .el-button { margin-left: auto; flex-shrink: 0; }
+.summary-info { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--el-text-color-secondary); }
+.summary-info:hover { color: var(--el-color-primary); background: var(--el-fill-color-light); }
+.summary-details { display: grid; gap: var(--spacing-sm); font-size: var(--text-xs); line-height: var(--leading-relaxed); }
+.summary-details strong { font-size: var(--text-sm); }
+.sample-legend { display: flex; min-width: 0; overflow-x: auto; gap: 12px; }
+.sample-legend button { pointer-events: auto; display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; padding: 2px 0; border: 0; background: transparent; color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 18px; }
+.sample-legend button:hover, .sample-legend button.is-selected { color: var(--el-color-primary); }
+.sample-legend button > span { width: 8px; height: 8px; border-radius: 50%; }
 .instance-candidates { display: grid; gap: 2px; min-width: 0; max-height: 260px; overflow: auto; }
 .instance-candidates button {
   display: flex;
@@ -1281,7 +1310,7 @@ code {
   background: var(--el-color-primary-light-9);
 }
 @container ontology-manager (max-width: 768px) {
-  .instance-graph { flex-direction: column; overflow: auto; }
+  .instance-graph { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 320px auto; overflow: auto; }
   .graph-canvas,
   .graph-empty {
     right: 0;
@@ -1292,7 +1321,9 @@ code {
     position: relative;
     width: 100%;
     flex: 0 0 auto;
-    margin-top: 320px;
+    margin-top: 0;
+    grid-column: 1;
+    grid-row: 3;
     border-left: 0;
     border-top: 1px solid var(--el-border-color);
     overflow: visible;
@@ -1300,7 +1331,6 @@ code {
   .graph-hint {
     display: none;
   }
-  .graph-summary { right: 18px; }
-  .graph-toolbar { z-index: 2; top: 268px; bottom: auto; left: 10px; }
+  .graph-toolbar { position: relative; grid-column: 1; grid-row: 2; align-self: end; justify-self: start; z-index: 2; top: auto; bottom: 10px; left: 10px; }
 }
 </style>

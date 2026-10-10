@@ -4,25 +4,21 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,25 +27,8 @@ import java.util.Set;
 @Slf4j
 public class HttpRequestUtil {
 
-	public enum M3Mode {
-		V0("V0"),// 0: raw mode
-		V1("V1"),// 1: data movement resolution mode
-		;
-		
-		private String type;
-		
-		M3Mode(String type) {
-			this.type = type;
-		}
-		
-		public String getType() {
-			return this.type;
-		}
-	}
-
-    
     // Returns [execution result without permission, row permission execution result]; each item contains the query data or failure fact and the original DSL
-    public static DslExecutionResult[] getM3Data(
+    public static DslExecutionResult[] executeDsl(
     		DataRagConfig dataRagConfig, 
     		DataAdapter adapter, 
     		String queryJson, 
@@ -58,7 +37,7 @@ public class HttpRequestUtil {
     		Map<String, Object> jsonRule,
     		VectorResourceDao vectorResourceDao, 
     		UserDataPermission permission,
-    		M3Mode m3Mode,
+    		DslExecutionMode mode,
     		String domainId) {
     	
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
@@ -68,7 +47,7 @@ public class HttpRequestUtil {
 
 		Object[] dsl_selectAsFilePathsMap_vectorResourceAsSet;
 		try {
-			dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId, adapter.useM3());
+			dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId);
 		} catch (Exception e) {
 			log.error("Failed to process vector: " + e.getMessage(), e);
 			DslExecutionResult failResult = DslExecutionResult.failure(new JSONObject(), e);
@@ -83,11 +62,11 @@ public class HttpRequestUtil {
 		JSONObject rowPermissionDsl = rowPermissionDslResult[0] == null ? null : (JSONObject)rowPermissionDslResult[0];
 		boolean addPermission = rowPermissionDslResult[1] == null ? false : (boolean)rowPermissionDslResult[1];
         
-        DslExecutionResult rowPermissionResult = getM3Data(dataRagConfig, adapter, rowPermissionDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, m3Mode, jsonRule);
+        DslExecutionResult rowPermissionResult = executeOne(dataRagConfig, adapter, rowPermissionDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, mode);
         DslExecutionResult result = DslExecutionResult.success(new JSONObject());
         if (!onlySearchPermissionData) { // when data without permission is needed
         	if (addPermission) { // the DSL after adding row permission differs from the DSL without permission
-				result = getM3Data(dataRagConfig, adapter, originDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, m3Mode, jsonRule);
+				result = executeOne(dataRagConfig, adapter, originDsl, sessionId, selectAsFilePathsMap, vectorResourceAsSet, mode);
         	} else { // no difference
 				result = rowPermissionResult.copy();
         	}
@@ -110,7 +89,7 @@ public class HttpRequestUtil {
 
 		Object[] dsl_selectAsFilePathsMap_vectorResourceAsSet;
 		try {
-			dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId, adapter.useM3());
+			dsl_selectAsFilePathsMap_vectorResourceAsSet = DslUtil.splitToVector(queryJson, classDefs, vectorResourceDao, domainId);
 		} catch (RuntimeException e) {
 			throw e;
 		} catch (Exception e) {
@@ -124,7 +103,7 @@ public class HttpRequestUtil {
     	Set<String> nodeIds = new HashSet<String>();
     	String nodeDslStr = DslUtil.fromQuestionDslToNodeDsl("[" + JSON.toJSONString(rowPermissionDsl, Feature.WriteMapNullValue) + "]");
         try {
-			String nodeResp = getData(adapter, nodeDslStr, null, M3Mode.V1, new ArrayList<String>());
+			String nodeResp = adapter.executeDsl(nodeDslStr, null, DslExecutionMode.OPTIMIZED, new ArrayList<String>());
         	for (Map map : JSON.parseArray(nodeResp, Map.class)) {
         		List answer = (List)map.get("answer");
         		for (Object obj : answer) {
@@ -152,24 +131,23 @@ public class HttpRequestUtil {
         return nodeList;
     }
     
-    private static DslExecutionResult getM3Data(
+    private static DslExecutionResult executeOne(
     		DataRagConfig dataRagConfig, 
     		DataAdapter adapter, 
     		JSONObject dsl, 
     		String sessionId, 
     		Map<String, List<String>> selectAsFilePathsMap, 
     		Set<String> vectorResourceAsSet,
-    		M3Mode m3Mode,
-    		Map<String, Object> jsonRule) {
+    		DslExecutionMode mode) {
     	
     	JSONObject dataMap = new JSONObject();
 		List<String> generatedMqls = new ArrayList<String>();
     	
 		try {
-			String JsonData = getData(adapter, "[" + JSON.toJSONString(dsl, Feature.WriteMapNullValue) + "]", sessionId, m3Mode, generatedMqls);
+			String JsonData = adapter.executeDsl("[" + JSON.toJSONString(dsl, Feature.WriteMapNullValue) + "]", sessionId, mode, generatedMqls);
 			if (JsonData != null) {
-        	log.info("M3 returned data, sessionId-{}>>>:\n{}",sessionId,JsonData);
-            LogHelper.m3ReturnData(JsonData);
+        	log.info("Data source returned data, sessionId-{}>>>:\n{}",sessionId,JsonData);
+            LogHelper.dataSourceReturnData(JsonData);
             
             List<Map> listData = JSON.parseArray(JsonData, Map.class);
 
@@ -269,10 +247,6 @@ public class HttpRequestUtil {
 		return DslExecutionResult.failure(dataMap, cause);
 	}
 
-    private static String getData(DataAdapter adapter, String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
-		return adapter.executeDsl(queryJson, sessionId, m3Mode, generatedMqls);
-    }
-    
     public static String getSampleDataByClassName(DataAdapter adapter, String className, List<String> attrs) {
     	String sampleDataDirName = "sampleData";
     	String sampleDataFileName = adapter.getSampleDataFileName(sampleDataDirName, className);
@@ -325,69 +299,6 @@ public class HttpRequestUtil {
 		return null;
     }
 
-    public static JSONArray getExecMQL(DataRagConfig dataRagConfig, String mql) {
-        RestTemplate restTemplate = new RestTemplate();
-        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-        log.info(">>>m3 execution: " + mql);
-        formData.add("mql", mql);
-
-        HttpHeaders requestHeaders = new HttpHeaders();
-        requestHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        requestHeaders.add("Authorization",dataRagConfig.getM3auth());
-        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(formData, requestHeaders);
-
-        ResponseEntity<String> response = restTemplate.postForEntity(dataRagConfig.getM3SchemaUrl(), requestEntity, String.class);
-        String strResponseBody = response.getBody();
-        log.info("<<<<<m3 execution finished: " + mql);
-        JSONObject jsonResponse = JSON.parseObject(strResponseBody);
-        JSONArray data = jsonResponse.getJSONArray("message");
-        return data;
-    }
-    
-    public static JSONObject queryMql(DataRagConfig dataRagConfig, String mql) {
-    	RestTemplate restTemplate = new RestTemplate();
-    	MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-    	log.info(">>>m3 execution: " + mql);
-        formData.add("mql", mql);
-        
-        HttpHeaders requestHeaders = new HttpHeaders();
-        requestHeaders.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        requestHeaders.add("Authorization",dataRagConfig.getM3auth());
-        HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(formData, requestHeaders);
-        
-        ResponseEntity<String> response = restTemplate.postForEntity(dataRagConfig.getM3SchemaUrl(), requestEntity, String.class);
-        String strResponseBody = response.getBody();
-        log.info("<<<<<m3 execution finished: " + mql);
-        JSONObject jsonResponse = JSON.parseObject(strResponseBody);
-        return jsonResponse;
-    }
-
-    public static Map insertOrUpdateMQL(DataRagConfig dataRagConfig, String mql, List<List> listValues){
-        RestTemplate restTemplate = new RestTemplate();
-        log.info(">>>m3 execution: " + mql);
-
-        HttpHeaders requestHeaders = new HttpHeaders();
-        requestHeaders.add("Authorization",dataRagConfig.getM3auth());
-        requestHeaders.add("Content-Type", "application/json;charset=utf-8");
-
-        Map<String,Object> requestMap = new HashMap<>();
-        requestMap.put("mql",mql);
-        requestMap.put("values",listValues);
-        HttpEntity<Map<String,Object>> requestEntity = new HttpEntity<>(requestMap,requestHeaders);
-
-        ResponseEntity<String> responseEntity =  restTemplate.postForEntity(dataRagConfig.getM3SchemaUrl(), requestEntity,String.class);
-        String result = responseEntity.getBody();
-        ObjectMapper objectMapper = new ObjectMapper();
-        Map mapResult = null;
-        try {
-            mapResult = objectMapper.readValue(result, Map.class);
-        } catch (JsonProcessingException e) {
-            return null;
-        }
-
-        return mapResult;
-    }
-    
     public static String postProductionEnv(String url, Map<String, String> headers, Object param) throws Exception {
     	RestTemplate restTemplate = new RestTemplate();
 

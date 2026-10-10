@@ -48,7 +48,13 @@ const enterpriseAdapters: DataAdapterInfo[] = [
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:postgresql://host:port/db", user: "gaussdb" },
   },
-  { type: "m3", label: "M3", sql: false, fields: [], examples: {} },
+  {
+    type: "m3",
+    label: "M3",
+    sql: false,
+    fields: ["url", "company", "user", "password"],
+    examples: { url: "192.0.2.72:8080" },
+  },
   {
     type: "mysql",
     label: "MySQL",
@@ -172,14 +178,26 @@ describe("the data adapter card renders from the backend list", () => {
     expect(radioLabels(card)).toEqual(enterpriseAdapters.map(({ label }) => label));
   });
 
-  it("a type without fields such as M3 shows no connection form and saves only type", async () => {
-    const card = await mountCard(enterpriseAdapters, "m3");
+  it("M3 shows its four fields with the address example and saves them; the password stays masked", async () => {
+    const card = await mountCard(enterpriseAdapters, "m3", {
+      m3: { url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+    });
 
-    expect(formLabels(card)).toEqual([t("admin.adapterMode")]);
+    expect(formLabels(card)).toEqual([
+      t("admin.adapterMode"),
+      t("admin.connectionUrl"),
+      t("admin.company"),
+      t("common.username"),
+      t("common.password"),
+    ]);
+    expect(placeholders(card)).toEqual(["192.0.2.72:8080", undefined, undefined, "******"]);
+    expect(card.findAll("input.el-input__inner")[3].attributes("type")).toBe("password");
     await card.find("button.el-button--primary").trigger("click");
     await flushPromises();
 
-    expect(backend.used).toEqual([{ type: "m3" }]);
+    expect(backend.used).toEqual([
+      { type: "m3", url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+    ]);
     expect(vi.mocked(adminApi.useDataAdapter)).toHaveBeenCalledTimes(1);
   });
 
@@ -269,12 +287,16 @@ async function selectAdapter(card: Card, label: string) {
 }
 
 describe("testing the data adapter connection", () => {
-  it("a type without connection fields such as M3 offers no test button; a type with fields does", async () => {
-    const card = await mountCard(enterpriseAdapters, "m3");
+  it("M3 is tested like any adapter, with its four form values", async () => {
+    const card = await mountCard(enterpriseAdapters, "m3", {
+      m3: { url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+    });
+    await runTest(card);
 
-    expect(testButton(card)).toBeUndefined();
-    await selectAdapter(card, "DuckDB");
-    expect(testButton(card)).toBeDefined();
+    expect(backend.tested).toEqual([
+      { type: "m3", url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+    ]);
+    expect(backend.used).toEqual([]);
   });
 
   it("tests the current form values of only the selected type's fields, without saving", async () => {

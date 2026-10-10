@@ -54,7 +54,8 @@ class BusinessConfigControllerDataAdapterTest {
 				new FakeDataAdapterProvider("postgresql", "PostgreSQL", List.of("url", "user", "password"),
 						Map.of("url", "jdbc:postgresql://host:port/db", "user", "postgres")),
 				new FakeDataAdapterProvider("duckdb", "DuckDB", List.of("url"), Map.of("url", "jdbc:duckdb:/data/example.duckdb")),
-				new FakeDataAdapterProvider("m3", "M3", List.of())), new DataRagConfig());
+				new FakeDataAdapterProvider("m3", "M3", List.of("url", "company", "user", "password"),
+						Map.of("url", "192.0.2.72:8080"))), new DataRagConfig());
 		ReflectionTestUtils.setField(controller, "businessConfigService", businessConfigService);
 		ReflectionTestUtils.setField(controller, "dataAdapterRegistry", registry);
 	}
@@ -80,7 +81,8 @@ class BusinessConfigControllerDataAdapterTest {
 		assertEquals(JSON.parseArray("["
 				+ "{\"type\":\"duckdb\",\"label\":\"DuckDB\",\"sql\":true,\"fields\":[\"url\"],"
 				+ "\"examples\":{\"url\":\"jdbc:duckdb:/data/example.duckdb\"}},"
-				+ "{\"type\":\"m3\",\"label\":\"M3\",\"sql\":false,\"fields\":[],\"examples\":{}},"
+				+ "{\"type\":\"m3\",\"label\":\"M3\",\"sql\":false,\"fields\":[\"url\",\"company\",\"user\",\"password\"],"
+				+ "\"examples\":{\"url\":\"192.0.2.72:8080\"}},"
 				+ "{\"type\":\"postgresql\",\"label\":\"PostgreSQL\",\"sql\":true,\"fields\":[\"url\",\"user\",\"password\"],"
 				+ "\"examples\":{\"url\":\"jdbc:postgresql://host:port/db\",\"user\":\"postgres\"}}]"),
 				JSON.parseArray(JSON.toJSONString(data.get("adapters"))));
@@ -101,12 +103,18 @@ class BusinessConfigControllerDataAdapterTest {
 	}
 
 	@Test
-	void useDataAdapterWithoutConnectionFieldsKeepsNoConnection() {
-		JSONObject ret = controller.useDataAdapter(JSON.parseObject("{\"type\":\"m3\"}"));
+	void useDataAdapterSavesTheCompanyOfAnAdapterThatDeclaresIt() {
+		JSONObject ret = controller.useDataAdapter(JSON.parseObject(
+				"{\"type\":\"m3\",\"url\":\"m3.test:8080\",\"company\":\"ontomato\",\"user\":\"admin\",\"password\":\"pw\"}"));
 
+		// Design 5: M3's connection is saved per domain like any other adapter's.
 		assertTrue(ret.getBooleanValue("success"), ret.toJSONString());
 		assertEquals("m3", businessConfig.getDataAdapter());
-		assertFalse(businessConfig.getDataAdapterConnections().containsKey("m3"));
+		DataAdapterConnection connection = businessConfig.getDataAdapterConnections().get("m3");
+		assertEquals("m3.test:8080", connection.getUrl());
+		assertEquals("ontomato", connection.getCompany());
+		assertEquals("admin", connection.getUser());
+		assertEquals("pw", connection.getPassword());
 	}
 
 	@Test

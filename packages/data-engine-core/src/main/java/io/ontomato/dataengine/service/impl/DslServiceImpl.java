@@ -23,7 +23,7 @@ import io.ontomato.dataengine.service.DataPermissionLookup;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslUtil;
 import io.ontomato.dataengine.util.HttpRequestUtil;
-import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 
 @Service
 public class DslServiceImpl implements DslService {
@@ -49,15 +49,11 @@ public class DslServiceImpl implements DslService {
 	@Override
 	public Map<String, Object> executeV0(JSONObject dsl, UserDataPermission permission, User user) {
 		DslUtil.setRandomTempTableName(dsl);
-    	return getM3Data(dsl, permission, M3Mode.V0, user);
-	}
-	
-	private Map<String, Object> getM3Data(JSONObject dsl, UserDataPermission permission, M3Mode m3Mode, User user) {
 		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 		JSONArray dsls = new JSONArray();
     	dsls.add(dsl);
 		Map<String, Object> jsonRule = adminService.getJSONRule(user.getDomainId());
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, m3Mode, user.getDomainId());
+		DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.RAW, user.getDomainId());
 		return results[1].rawResponse();
 	}
 
@@ -97,7 +93,7 @@ public class DslServiceImpl implements DslService {
 		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
 		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
     	
-		DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+		DslExecutionResult result = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, null, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId)[1];
 		JSONObject dataMap = new JSONObject();
 		dataMap.putAll(result.data());
 		if (result.failed()) {

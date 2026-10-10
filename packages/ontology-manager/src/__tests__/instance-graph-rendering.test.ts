@@ -7,6 +7,7 @@ import {
   isLargeInstanceGraph,
   instanceEdgeGeometry,
   neighborNodePosition,
+  overviewPositions,
 } from "../data-browser/instance-graph-rendering";
 
 const nodes = Array.from({ length: 451 }, (_, index) => ({
@@ -15,6 +16,14 @@ const nodes = Array.from({ length: 451 }, (_, index) => ({
 const edges = nodes.slice(1).map((node) => ({ source: nodes[0].id, target: node.id }));
 
 describe("instance graph incremental drawing", () => {
+  it("keeps sampled types in separate compact clusters", () => {
+    const sample = Array.from({ length: 100 }, (_, index) => ({ id: String(index), class: index < 50 ? "A" : "B", name: String(index) }));
+    const positions = overviewPositions(sample);
+    expect(Object.keys(positions)).toHaveLength(100);
+    expect(positions["0"]).toEqual({ x: 0, y: 0 });
+    expect(positions["50"]).toEqual({ x: 520, y: 0 });
+    expect(Math.hypot(positions["49"].x, positions["49"].y)).toBeLessThan(200);
+  });
   it("separates parallel relationships and draws self relationships as loops", () => {
     const geometry = instanceEdgeGeometry([
       { source: "A", target: "B", type: "owns" },

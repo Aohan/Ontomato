@@ -18,6 +18,24 @@ export function neighborNodePosition(index: number, center: { x: number; y: numb
   return { x: center.x + Math.cos(angle) * radius, y: center.y + Math.sin(angle) * radius };
 }
 
+export function overviewPositions(nodes: InstanceGraphNode[]) {
+  const groups = new Map<string, InstanceGraphNode[]>();
+  nodes.forEach((node) => groups.set(node.class, [...(groups.get(node.class) || []), node]));
+  const classes = [...groups.keys()].sort();
+  const columns = Math.max(1, Math.ceil(Math.sqrt(classes.length)));
+  const positions: Record<string, { x: number; y: number }> = {};
+  classes.forEach((className, groupIndex) => {
+    const items = groups.get(className)!;
+    items.forEach((node, index) => {
+      const angle = index * 2.399963229728653;
+      const radius = 28 * Math.sqrt(index);
+      positions[node.id] = { x: (groupIndex % columns) * 520 + Math.cos(angle) * radius,
+        y: Math.floor(groupIndex / columns) * 520 + Math.sin(angle) * radius };
+    });
+  });
+  return positions;
+}
+
 export function instanceEdgeGeometry(edges: InstanceGraphEdge[]) {
   const groups = new Map<string, number[]>();
   edges.forEach((edge, index) => {
@@ -45,6 +63,7 @@ export async function drawInstanceGraphBatches(
     isCurrent: () => boolean;
     yieldControl: () => Promise<void>;
     onProgress: (completed: number) => void;
+    positions?: Record<string, { x: number; y: number }>;
   }
 ) {
   let completed = 0;
@@ -55,7 +74,7 @@ export async function drawInstanceGraphBatches(
     const batch = nodes.slice(offset, offset + GRAPH_BATCH_SIZE).map((node, index) => ({
       id: node.id,
       data: { node, color: color(node.class) },
-      style: instanceNodePosition(offset + index, nodes.length),
+      style: options.positions?.[node.id] || instanceNodePosition(offset + index, nodes.length),
     }));
     target.addData({ nodes: batch });
     await target.draw();

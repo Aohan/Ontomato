@@ -133,7 +133,7 @@ export default {
     objectTypes: "Object Types",
     ontologyAttributes: "Properties",
     ontologyBrowse: "Ontology Explorer",
-    ontologyGraph: "Ontology Graph",
+    ontologyGraph: "Ontomap",
     ontologyManager: "Ontology Manager",
     ontologyModeling: "Ontology Model",
     ontologyResources: "Ontology Model",

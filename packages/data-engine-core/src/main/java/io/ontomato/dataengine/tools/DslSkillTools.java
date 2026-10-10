@@ -30,6 +30,7 @@ import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslUtil;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import dev.langchain4j.agent.tool.P;
@@ -110,7 +111,7 @@ public class DslSkillTools {
 			DiagnosticEventLogger.emit("m3.query.started", sessionId, m3StartedPayload);
 			m3Start = System.currentTimeMillis();
 			m3Started = true;
-			DslExecutionResult queryResult = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, sessionId, false, jsonRule, vectorResourceDao, new UserDataPermission(), HttpRequestUtil.M3Mode.V1, callContext.getDomainId())[0];
+			DslExecutionResult queryResult = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, sessionId, false, jsonRule, vectorResourceDao, new UserDataPermission(), DslExecutionMode.OPTIMIZED, callContext.getDomainId())[0];
 			JSONObject dataMap = queryResult.data();
 			if (queryResult.failed()) {
 				String rawError = MultiThreadAIChatService.rawErrorText(queryResult.failure().cause());
