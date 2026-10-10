@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.ontomato</groupId>
+        <artifactId>ontomato</artifactId>
+        <version>${revision}</version>
+        <relativePath>../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>data-adapter-test-support</artifactId>
+
+    <!-- Shared contract test suite for every data adapter (open-source, enterprise, and
+         third-party). Adapters depend on this in test scope and extend the abstract base test. -->
+    <dependencies>
+        <dependency>
+            <groupId>io.ontomato</groupId>
+            <artifactId>data-engine-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <!-- The abstract base class itself declares @Test methods, so JUnit is a compile dependency here. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>compile</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+</project>

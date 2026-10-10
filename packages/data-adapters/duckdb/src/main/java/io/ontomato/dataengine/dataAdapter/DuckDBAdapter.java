@@ -30,7 +30,6 @@ import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslUtil;
 import io.ontomato.dataengine.util.HttpRequestUtil;
-import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -83,7 +82,7 @@ public class DuckDBAdapter implements DataAdapter {
 	}
 
 	@Override
-	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
+	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] DuckDB query DSL: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
@@ -637,8 +636,7 @@ public class DuckDBAdapter implements DataAdapter {
 	}
 
 	@Override
-	public boolean useM3() {
-		return false;
+	public void validatePrimaryKeyName(String attrName) throws Exception {
 	}
 
 	@Override
@@ -663,7 +661,7 @@ public class DuckDBAdapter implements DataAdapter {
 	@Override
 	public void truncateNamespace(String namespace) {
 		try {
-			JSONArray current_schemas = querySql("SELECT current_schema();");
+			JSONArray current_schemas = querySql("SELECT current_schema() AS current_schema;");
 			String current_schema = current_schemas.getJSONObject(0).getString("current_schema");
 			JSONArray tableNames = querySql("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
 			for (int i = 0; i < tableNames.size(); i++) {
@@ -680,7 +678,7 @@ public class DuckDBAdapter implements DataAdapter {
 	@Override
 	public void dropNamespace(String namespace) {
 		try {
-			JSONArray current_schemas = querySql("SELECT current_schema();");
+			JSONArray current_schemas = querySql("SELECT current_schema() AS current_schema;");
 			String current_schema = current_schemas.getJSONObject(0).getString("current_schema");
 			JSONArray tableNames = querySql("SELECT table_name FROM information_schema.tables WHERE table_schema = '" + current_schema + "' AND table_type = 'BASE TABLE';");
 			for (int i = 0; i < tableNames.size(); i++) {
@@ -1224,10 +1222,10 @@ public class DuckDBAdapter implements DataAdapter {
 				classDef.put("className", className);
 			}
 			String sandboxDslStr = addSandboxId(dslStr, sandboxId);
-			result = HttpRequestUtil.getM3Data(dataRagConfig, this, sandboxDslStr, null, true, jsonRule, vectorResourceDao, userDataPermission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+			result = HttpRequestUtil.executeDsl(dataRagConfig, this, sandboxDslStr, null, true, jsonRule, vectorResourceDao, userDataPermission, DslExecutionMode.OPTIMIZED, domainId)[1];
 			data = result.data();
 		} else {
-			result = HttpRequestUtil.getM3Data(dataRagConfig, this, dslStr, null, true, jsonRule, vectorResourceDao, userDataPermission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+			result = HttpRequestUtil.executeDsl(dataRagConfig, this, dslStr, null, true, jsonRule, vectorResourceDao, userDataPermission, DslExecutionMode.OPTIMIZED, domainId)[1];
 			data = result.data();
 		}
 		

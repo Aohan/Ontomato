@@ -31,6 +31,7 @@ import io.ontomato.dataengine.service.sys.bean.permission.FieldPermission;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslPermissionUtil;
 import io.ontomato.dataengine.util.DslUtil;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import cn.hutool.core.lang.UUID;
@@ -130,14 +131,7 @@ public class DataServiceImpl implements DataService {
 	}
 
 	private void generate(String domainId) {
-		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-		JSONObject wholeData;
-		if (adapter.useM3()) {
-			wholeData = cutWholeData(domainId);
-		} else {
-			wholeData = cutWholeDataBySql(domainId, businessConfig);
-		}
+		JSONObject wholeData = cutWholeData(domainId, businessConfigService.get(domainId));
 		String suffix = currentSuffix.get(domainId);
 		String newSuffix = suffix == null ? "A" : (suffix.equals("A") ? "B" : "A");
 		log.info("generate star chart data writeWholeData start...");
@@ -182,76 +176,6 @@ public class DataServiceImpl implements DataService {
 		return ret;
 	}
 	
-	// Package-visible so focused unit tests can stub the data build without a database or remote query.
-	JSONObject cutWholeData(String domainId) {
-		log.info("cutWholeData start...");
-		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
-		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
-		Map relationship_rule = (Map)jsonRule.get("relationship_rule");
-		String rootClass = ((List<?>)jsonRule.get("classlist")).isEmpty() ? "" : (String)((List)jsonRule.get("classlist")).get(0);
-		
-		Map<String, JSONObject> nodeMap = new HashMap<String, JSONObject>();
-		Map<String, Set<String>> sourceTargetsMap = new HashMap<String, Set<String>>();
-		Map<String, Set<String>> targetSourcesMap = new HashMap<String, Set<String>>();
-		Set<String> roots = new HashSet<String>();
-		for (Object key : relationship_rule.keySet()) {
-			try {
-				Map edgeDef = (Map)relationship_rule.get(key);
-				Map<String, Object> sourceClassDef = null;
-				Map<String, Object> targetClassDef = null;
-				for (Map<String, Object> classDef : classDefs) {
-					if (edgeDef.get("fromclass").equals(classDef.get("className"))) {
-						sourceClassDef = classDef;
-					}
-					if (edgeDef.get("toclass").equals(classDef.get("className"))) {
-						targetClassDef = classDef;
-					}
-				}
-				if (sourceClassDef.get("inStarChart") != null && sourceClassDef.get("inStarChart") instanceof Boolean && (Boolean)sourceClassDef.get("inStarChart") 
-						&& targetClassDef.get("inStarChart") != null && targetClassDef.get("inStarChart") instanceof Boolean && (Boolean)targetClassDef.get("inStarChart")) {
-					String mql = "match (a:" + edgeDef.get("fromclass") + ")-[:" + key + "]->(b:" + edgeDef.get("toclass") + ")";
-					JSONObject output = HttpRequestUtil.queryMql(dataRagConfig, mql);
-					JSONArray message = output.getJSONArray("message");
-					for (int i = 0; i < message.size(); i++) {
-						JSONObject graph = message.getJSONObject(i).getJSONObject("graph");
-						JSONArray nodes = graph.getJSONArray("nodes");
-						for (int j = 0; j < nodes.size(); j++) {
-							JSONObject node = nodes.getJSONObject(j);
-							JSONObject obj = new JSONObject();
-							obj.put("id", node.getString("id"));
-							obj.put("name", node.getString("name"));
-							obj.put("class", node.getString("class"));
-							nodeMap.put(obj.getString("id"), obj);
-							if (rootClass.equals(obj.getString("class"))) {
-								roots.add(obj.getString("id"));
-							}
-						}
-						JSONArray edges = graph.getJSONArray("edges");
-						for (int j = 0; j < edges.size(); j++) {
-							JSONObject edge = edges.getJSONObject(j);
-							String source = edge.getString("source");
-							String target = edge.getString("target");
-							Set<String> targets = sourceTargetsMap.get(source);
-							if (targets == null) {
-								targets = new HashSet<String>();
-								sourceTargetsMap.put(source, targets);
-							}
-							targets.add(target);
-							Set<String> sources = targetSourcesMap.get(target);
-							if (sources == null) {
-								sources = new HashSet<String>();
-								targetSourcesMap.put(target, sources);
-							}
-							sources.add(source);
-						}
-					}
-				}
-			} catch (Exception e) {}
-		}
-		
-		return buildStarChartData(nodeMap, sourceTargetsMap, targetSourcesMap, roots);
-	}
-
 	private JSONObject buildStarChartData(Map<String, JSONObject> nodeMap, Map<String, Set<String>> sourceTargetsMap, Map<String, Set<String>> targetSourcesMap, Set<String> roots) {
 		Map<String, Set<String>> rootSourceTargetsMap = new HashMap<String, Set<String>>();
 		Map<String, Set<String>> rootTargetSourcesMap = new HashMap<String, Set<String>>();
@@ -372,8 +296,13 @@ public class DataServiceImpl implements DataService {
 		return data;
 	}
 	
-	private JSONObject cutWholeDataBySql(String domainId, BusinessConfig businessConfig) {
-		log.info("cutWholeDataBySql start...");
+	/**
+	 * The instance graph of every adapter: each in-chart class and relationship becomes a graph-pattern DSL run through
+	 * the domain's adapter. Node ids are {@code className:primaryKeyValue}, the form queryInfoByNode reads back.
+	 * Package-visible so focused unit tests can stub the data build without a database or remote query.
+	 */
+	JSONObject cutWholeData(String domainId, BusinessConfig businessConfig) {
+		log.info("cutWholeData start...");
 		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		Map relationship_rule = (Map)jsonRule.get("relationship_rule");
@@ -476,7 +405,7 @@ public class DataServiceImpl implements DataService {
 					dsls.add(dsl);
 					String sessionId = UUID.randomUUID().toString();
 					List<String> generatedMqls = new ArrayList<String>();
-					String result = adapter.executeDsl(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, null, generatedMqls);
+					String result = adapter.executeDsl(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, DslExecutionMode.RAW, generatedMqls);
 					JSONArray answers = JSONArray.parseArray(result);
 					JSONArray rows = answers.getJSONObject(0).getJSONArray("answer");
 					for (int i = 0; i < rows.size(); i++) {
@@ -530,7 +459,7 @@ public class DataServiceImpl implements DataService {
 				log.error(e.getMessage(), e);
 			}
 		}
-		log.info("cutWholeDataBySql end...");
+		log.info("cutWholeData end...");
 		
 		JSONObject graphData;
 		if (roots.isEmpty()) {
@@ -557,7 +486,7 @@ public class DataServiceImpl implements DataService {
 						JSONArray.of(JSONObject.of("idx", 0, "variable", "n", "class", className)))), "pattern_logic", "and"),
 						"output", JSONObject.of("to_user", true, "fields", fields));
 				JSONObject dsl = JSONObject.of("problem", "", "answer", JSONObject.of("steps", JSONArray.of(step)));
-				String result = adapter.executeDsl(JSONArray.of(dsl).toJSONString(), UUID.randomUUID().toString(), null, new ArrayList<>());
+				String result = adapter.executeDsl(JSONArray.of(dsl).toJSONString(), UUID.randomUUID().toString(), DslExecutionMode.RAW, new ArrayList<>());
 				for (Object raw : JSONArray.parseArray(result).getJSONObject(0).getJSONArray("answer")) {
 					JSONObject row = (JSONObject) raw;
 					String id = className + ":" + row.getString("pk");
@@ -664,81 +593,9 @@ public class DataServiceImpl implements DataService {
 	}
 
 	@Override
-	public JSONObject queryNextByNode(JSONObject n, String lang, String domainId) {
-		JSONObject ret = new JSONObject();
-		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-		if (adapter.useM3()) {
-			try {
-				Map<String, JSONObject> nodeMap = new HashMap<String, JSONObject>();
-				Map<String, String[]> edgeMap = new HashMap<String, String[]>();
-
-				String[] mqls = new String[] {
-						"match ('" + n.getString("id") + "')-[*1..1]->()",
-						"match ('" + n.getString("id") + "')<-[*1..1]-()"
-				};
-				for (String mql : mqls) {
-					JSONObject output = HttpRequestUtil.queryMql(dataRagConfig, mql);
-					JSONArray message = output.getJSONArray("message");
-					for (int i = 0; i < message.size(); i++) {
-						JSONObject graph = message.getJSONObject(i).getJSONObject("graph");
-						JSONArray nodes = graph.getJSONArray("nodes");
-						for (int j = 0; j < nodes.size(); j++) {
-							JSONObject node = nodes.getJSONObject(j);
-							if (!n.getString("id").equals(node.getString("id"))) {
-								JSONObject obj = new JSONObject();
-								obj.put("id", node.getString("id"));
-								obj.put("name", node.getString("name"));
-								obj.put("class", node.getString("class"));
-								nodeMap.put(obj.getString("id"), obj);
-							}
-						}
-						JSONArray edges = graph.getJSONArray("edges");
-						for (int j = 0; j < edges.size(); j++) {
-							JSONObject edge = edges.getJSONObject(j);
-							String source = edge.getString("source");
-							String target = edge.getString("target");
-							edgeMap.put(source + "_" + target, new String[] {source, target});
-						}
-					}
-				}
-
-				JSONObject data = new JSONObject();
-				JSONArray nodes = new JSONArray();
-				for (String key : nodeMap.keySet()) {
-					JSONObject node = nodeMap.get(key);
-					nodes.add(node);
-				}
-				data.put("nodes", nodes);
-				JSONArray edges = new JSONArray();
-				for (String key : edgeMap.keySet()) {
-					String[] st = edgeMap.get(key);
-					JSONObject edge = new JSONObject();
-					edge.put("source", st[0]);
-					edge.put("target", st[1]);
-					edges.add(edge);
-				}
-				data.put("edges", edges);
-				ret.put("success", true);
-				ret.put("data", data);
-			} catch (Exception e) {
-				log.error(e.getMessage(), e);
-				ret.put("message", langService.get(lang, "Data.queryM3.error"));
-				ret.put("success", false);
-			}
-		} else {
-			ret.put("message", langService.get(lang, "Data.remoteDB.notSupport") + ": " + businessConfig.getDataAdapter());
-			ret.put("success", false);
-		}
-
-		return ret;
-	}
-
-	@Override
 	public JSONObject queryInfoByNode(JSONObject node, String lang, UserDataPermission permission, String domainId) {
 		JSONObject ret = new JSONObject();
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
 		try {
 			Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
 			List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
@@ -750,11 +607,9 @@ public class DataServiceImpl implements DataService {
 				}
 			}
 			
-			String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
-			String pkValue = node.getString("id");
-			if (!adapter.useM3()) {
-				pkValue = pkValue.substring(node.getString("class").length() + 1);
-			}
+			// The instance graph names a node className:primaryKeyValue.
+			String pkField = DslUtil.getPrimaryKey(classDef);
+			String pkValue = node.getString("id").substring(node.getString("class").length() + 1);
 			
 			JSONArray dsls = new JSONArray();
 			JSONObject dsl = new JSONObject();
@@ -801,7 +656,7 @@ public class DataServiceImpl implements DataService {
 			answer.put("steps", steps);
 			dsl.put("answer", answer);
 			dsls.add(dsl);
-			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), UUID.randomUUID().toString(), false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), UUID.randomUUID().toString(), false, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 			Map<String, Object> dataMap = results[0].rawResponse();
 			Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			
@@ -830,7 +685,7 @@ public class DataServiceImpl implements DataService {
 			}
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
-			ret.put("message", langService.get(lang, "Data.queryM3.error"));
+			ret.put("message", langService.get(lang, "Data.query.error"));
 			ret.put("success", false);
 		}
 		
@@ -971,7 +826,7 @@ public class DataServiceImpl implements DataService {
 	            dsl.put("answer", answer);
 	            dsls.add(dsl);
 	            
-	            DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+	            DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 	            Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 	            JSONArray rows = new JSONArray();
 	            if (rowPermissionDataMap.get("data") != null 
@@ -1104,7 +959,7 @@ public class DataServiceImpl implements DataService {
         dsls.add(dsl);
         
         BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+		DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 		Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
         if (rowPermissionDataMap.get("data") != null 
         		&& ((List)rowPermissionDataMap.get("data")).size() > 0 
@@ -1232,7 +1087,7 @@ public class DataServiceImpl implements DataService {
             dsl.put("answer", answer);
             dsls.add(dsl);
             
-			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 			Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
             JSONArray rows = new JSONArray();
             if (rowPermissionDataMap.get("data") != null 
@@ -1333,7 +1188,7 @@ public class DataServiceImpl implements DataService {
 			        dsls.add(dsl);
 			        
 			        BusinessConfig businessConfig = businessConfigService.get(domainId);
-			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			        DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), sessionId, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 			        Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			        if (rowPermissionDataMap.get("data") != null 
 			        		&& ((List)rowPermissionDataMap.get("data")).size() > 0 

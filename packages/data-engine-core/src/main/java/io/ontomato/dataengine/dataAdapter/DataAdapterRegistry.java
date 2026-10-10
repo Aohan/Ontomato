@@ -38,7 +38,7 @@ public class DataAdapterRegistry {
 	public DataAdapter create(BusinessConfig businessConfig, Map<String, Object> jsonRule) {
 		String type = businessConfig.getDataAdapter();
 		// A type never configured gets an empty connection, as the old per-database properties were always seeded
-		// empty: many callers create the adapter only for metadata or useM3(), and only a query needs real values.
+		// empty: many callers create the adapter only for metadata, and only a query needs real values.
 		DataAdapterConnection connection = businessConfig.getDataAdapterConnections().getOrDefault(type, new DataAdapterConnection());
 		return provider(type).create(connection, dataRagConfig, jsonRule);
 	}

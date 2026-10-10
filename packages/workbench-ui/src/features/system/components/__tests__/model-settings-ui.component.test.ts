@@ -305,10 +305,9 @@ describe("model list card", () => {
   it("shows an add entry when the library is legitimately empty", async () => {
     const { wrapper } = mountList([]);
     expect(wrapper.text()).toContain(t("admin.modelListEmpty"));
-    const adds = wrapper.findAll("button").filter((b) => b.text().includes(t("admin.addModel")));
-    expect(adds).toHaveLength(2);
-    expect(adds.every((b) => b.attributes("disabled") === undefined)).toBe(true);
-    await adds[1]!.trigger("click");
+    const add = button(wrapper, t("admin.addModel"))!;
+    expect(add.attributes("disabled")).toBeUndefined();
+    await add.trigger("click");
     expect(wrapper.find("section").exists()).toBe(true);
   });
 

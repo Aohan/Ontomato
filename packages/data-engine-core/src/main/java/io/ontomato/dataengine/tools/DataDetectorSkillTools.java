@@ -21,6 +21,7 @@ import io.ontomato.dataengine.logging.AgentCallContext;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DBSchemaUtil;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import dev.langchain4j.agent.tool.P;
@@ -130,7 +131,7 @@ public class DataDetectorSkillTools {
 			        
 			        List<String> values = new ArrayList<String>();
 			        BusinessConfig businessConfig = businessConfigService.get(callContext.getDomainId());
-			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, false, jsonRule, vectorResourceDao, new UserDataPermission(), HttpRequestUtil.M3Mode.V1, callContext.getDomainId());
+			        DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, false, jsonRule, vectorResourceDao, new UserDataPermission(), DslExecutionMode.OPTIMIZED, callContext.getDomainId());
 			        Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			        if (rowPermissionDataMap.get("data") != null 
 			        		&& ((List)rowPermissionDataMap.get("data")).size() > 0 

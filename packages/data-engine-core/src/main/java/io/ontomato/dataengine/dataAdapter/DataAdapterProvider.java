@@ -20,7 +20,7 @@ public interface DataAdapterProvider {
 	/** Whether the adapter's query language is SQL. */
 	boolean sql();
 
-	/** Connection fields the adapter reads, each one of "url", "user", "password". */
+	/** Connection fields the adapter reads, each one of "url", "company", "user", "password". */
 	List<String> connectionFields();
 
 	/** Input hints shown for connection fields, field name to example value; fields without a hint are absent. */

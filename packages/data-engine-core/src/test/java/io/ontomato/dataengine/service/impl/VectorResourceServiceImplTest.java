@@ -80,15 +80,14 @@ class VectorResourceServiceImplTest {
 	}
 
 	@Test
-	void deleteDropsTheEntryUnderTheM3ObjectId() throws Exception {
-		when(adapter.useM3()).thenReturn(true);
-
+	void deleteDropsTheEntryUnderTheModelPrimaryKey() throws Exception {
 		service.deleteAndDetach("/Product", "photos", "P1", "idx/old.png", "d1");
 
 		verify(vectorResourceDao).delete("/Product", "photos", "P1", "idx/old.png", "d1");
 		JSONObject[] update = capturedUpdate();
 		assertEquals(JSON.parseArray("[]"), update[0].getJSONArray("photos"));
-		assertEquals(where("id", "P1"), update[1]);
+		// Design 3: the core writes back by the model key for every adapter; M3's id is its own adapter's concern.
+		assertEquals(where("code", "P1"), update[1]);
 	}
 
 	@Test

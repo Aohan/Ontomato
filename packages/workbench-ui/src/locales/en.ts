@@ -137,6 +137,7 @@ export default {
     "configSaveSuccess": "Configuration saved",
     "switchedDataAdapter": "Switched to {name}",
     "connectionUrl": "Connection URL",
+    "company": "Company",
     "generalParamConfig": "General Parameters",
     "dataAdapterConfig": "Data Adapter Configuration",
     "dataAdapterTestSucceeded": "Connection succeeded",

@@ -35,6 +35,7 @@ import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 import io.ontomato.dataengine.util.FileUtil;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 import io.ontomato.dataengine.util.SystemUtils;
 
@@ -125,17 +126,6 @@ public class AdminServiceImpl implements AdminService {
 				throw new Exception(langService.get(lang, "Admin.relationship.toClassNotFound"));
 			}
 			
-			validatePrimaryKey(jsonRule);
-			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-			DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-			if (adapter.useM3()) {
-				String namespace = fromClassName.substring(1);
-				namespace = namespace.substring(0, namespace.indexOf("/")).trim();
-				String mql = "create edge type if not exists " + namespace + "." + relationName + " ;";
-				HttpRequestUtil.getExecMQL(dataRagConfig, mql);
-			}
-			
-			
 			Map<String, String> relationshipDef = new HashMap<String, String>();
 			relationshipDef.put("fromclass", fromClassName);
 			relationshipDef.put("toclass", toClassName);
@@ -154,7 +144,7 @@ public class AdminServiceImpl implements AdminService {
 	        auditLog.setUserId(user.getId());
 	        auditLog.setUserName(user.getUserName());
 	        auditLog.setOperation(AuditLog.OPERATION_ADD);
-	        String sysLang = businessConfig.getLang();
+	        String sysLang = businessConfigService.get(user.getDomainId()).getLang();
 	        auditLog.setDescription(langService.get(sysLang, "AuditLog.relationship.add") + ": " + relationName);
 	        auditLog.setParamter(JSONObject.toJSONString(relationshipDef));
 	        auditLog.setOperateTime(System.currentTimeMillis());
@@ -221,7 +211,7 @@ public class AdminServiceImpl implements AdminService {
 		}
 		// strip() drops only whitespace, like the Manager's trim(); control characters stay and fail the rule below.
 		primaryKeyName = primaryKeyName.strip();
-		// Same rule as the Manager's attribute names; the name is written into the model and, on M3, into DDL.
+		// Same rule as the Manager's attribute names.
 		if (!primaryKeyName.matches("[A-Za-z_][A-Za-z0-9_]*")) {
 			throw new Exception(langService.get(lang, "Admin.attr.formatError"));
 		}
@@ -230,10 +220,7 @@ public class AdminServiceImpl implements AdminService {
 		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
 		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		adapter.validateClassNameFormat(className);
-		// An M3 object is keyed by its id field (key=manu); the model must not name another field as the key.
-		if (adapter.useM3() && !"id".equals(primaryKeyName)) {
-			throw new Exception(langService.get(lang, "Admin.class.m3PrimaryKeyId"));
-		}
+		adapter.validatePrimaryKeyName(primaryKeyName);
 		
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		boolean exist = false;
@@ -268,11 +255,6 @@ public class AdminServiceImpl implements AdminService {
 			List<String> classList = (List<String>)jsonRule.get("classlist");
 			if (!classList.contains(className)) {
 				classList.add(className);
-			}
-			validatePrimaryKey(jsonRule);
-			if (adapter.useM3()) {
-				String mql = "create class if not exists " + className + " ( id varchar ) with autosearch=true, version=false, key=manu, alias='" + classDesc + "' , nickname='" + className.substring(1).replace("/", "_") + "';";
-				HttpRequestUtil.getExecMQL(dataRagConfig, mql);
 			}
 			writeJSONRule(jsonRule, user.getDomainId());
 			
@@ -310,21 +292,7 @@ public class AdminServiceImpl implements AdminService {
 			classDefs.remove(removeIndex);
 			List<String> classList = (List<String>)jsonRule.get("classlist");
 			classList.remove(className);
-			validatePrimaryKey(jsonRule);
 			BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-			DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-			if (adapter.useM3()) {
-				JSONArray classExistRet = HttpRequestUtil.getExecMQL(dataRagConfig, "select name from /system/class where name='" + className + "'");
-				if (classExistRet.size() > 0) {
-					JSONArray objCountRet = HttpRequestUtil.getExecMQL(dataRagConfig, "select count(id) as c from " + className + "");
-					Integer objCount = objCountRet.getJSONObject(0).getInteger("c");
-					if (objCount == 0) {
-						String mql = "drop class " + className + ";";
-						HttpRequestUtil.getExecMQL(dataRagConfig, mql);
-					}
-				}
-			}
-			
 			writeJSONRule(jsonRule, user.getDomainId());
 			
 			AuditLog auditLog = new AuditLog();
@@ -448,43 +416,7 @@ public class AdminServiceImpl implements AdminService {
 				if (attrName.indexOf(" ") >= 0) {
 					throw new Exception(langService.get(lang, "Admin.attr.formatError"));
 				}
-				// Adding a field never changes the primary key; a rule already breaking it is refused before the DDL.
-				validatePrimaryKey(jsonRule);
 				BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-				DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-				if (adapter.useM3()) {
-					JSONArray fieldsRet = HttpRequestUtil.getExecMQL(dataRagConfig, "select fields from /system/class where name='" + className + "'");
-					if (fieldsRet.size() > 0) {
-						JSONArray fields = fieldsRet.getJSONObject(0).getJSONArray("fields");
-						boolean attrExist = false;
-						for (int i = 0; i < fields.size(); i++) {
-							if (attrName.equals(fields.getString(i))) {
-								attrExist = true;
-								break;
-							}
-						}
-						if (!attrExist) {
-							String mql = "alter class " + className + " add column " + attrName + " ";
-							if ("varchar".equals(type) || "text".equals(type) || "int".equals(type) || "long".equals(type) || "double".equals(type) || "date".equals(type) || "timestamp".equals(type)) {
-								mql += type + " ;";
-							} else if ("bucket".equals(type)) {
-								mql += "bucket {\n"
-										+ "        \"collect\": 10,\n"
-										+ "        \"dict\": true,\n"
-										+ "        \"slot\": 5,\n"
-										+ "        \"ttl\": 0,\n"
-										+ "        \"type\": \"promdb\",\n"
-										+ "        \"version\": 1\n"
-										+ "	} ;";
-							} else if ("vector".equals(type)) {
-								mql += "list<varchar> ;";
-							} else {
-								throw new Exception(langService.get(lang, "Admin.attr.typeError"));
-							}
-							HttpRequestUtil.getExecMQL(dataRagConfig, mql);
-						}
-					}
-				}
 				
 				Map<String, Object> attrDef = new HashMap<String, Object>();
 				attrDef.put("name", attrName.trim());
@@ -548,30 +480,7 @@ public class AdminServiceImpl implements AdminService {
 					throw new Exception(langService.get(lang, "Admin.attr.primaryKeyLocked"));
 				}
 				attrs.remove(removeIndex);
-				validatePrimaryKey(jsonRule);
 				BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-				DataAdapter adapter = dataAdapterRegistry.create(businessConfig, null);
-				if (adapter.useM3()) {
-					JSONArray fieldsRet = HttpRequestUtil.getExecMQL(dataRagConfig, "select fields from /system/class where name='" + className + "'");
-					if (fieldsRet.size() > 0) {
-						JSONArray fields = fieldsRet.getJSONObject(0).getJSONArray("fields");
-						boolean attrExist = false;
-						for (int i = 0; i < fields.size(); i++) {
-							if (attrName.equals(fields.getString(i))) {
-								attrExist = true;
-								break;
-							}
-						}
-						if (attrExist) {
-							JSONArray objCountRet = HttpRequestUtil.getExecMQL(dataRagConfig, "select count(id) as c from " + className + "");
-							Integer objCount = objCountRet.getJSONObject(0).getInteger("c");
-							if (objCount == 0) {
-								String mql = "alter class " + className + " drop column " + attrName + " ;";
-								HttpRequestUtil.getExecMQL(dataRagConfig, mql);
-							}
-						}
-					}
-				}
 				
 				writeJSONRule(jsonRule, user.getDomainId());
 				
@@ -758,10 +667,7 @@ public class AdminServiceImpl implements AdminService {
 				if (target == null || !"varchar".equals(target.get("type")) || Boolean.FALSE.equals(target.get("enable"))) {
 					throw new Exception(langService.get(lang, "Admin.attr.primaryKeyInvalid"));
 				}
-				// M3 objects are keyed by id (key=manu, insert and query by id); the model key must stay id there.
-				if (!"id".equals(attr) && dataAdapterRegistry.create(businessConfigService.get(user.getDomainId()), null).useM3()) {
-					throw new Exception(langService.get(lang, "Admin.class.m3PrimaryKeyId"));
-				}
+				dataAdapterRegistry.create(businessConfigService.get(user.getDomainId()), null).validatePrimaryKeyName(attr);
 				for (Map<String, Object> attrDef : attrs) {
 					attrDef.put("primaryKey", attrDef == target);
 				}
@@ -1121,7 +1027,7 @@ public class AdminServiceImpl implements AdminService {
 			        
 			        List<String> values = new ArrayList<String>();
 			        BusinessConfig businessConfig = businessConfigService.get(domainId);
-			        DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			        DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, false, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 			        Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
 			        if (rowPermissionDataMap.get("data") != null 
 			        		&& ((List)rowPermissionDataMap.get("data")).size() > 0 
@@ -1188,9 +1094,8 @@ public class AdminServiceImpl implements AdminService {
 
 	/**
 	 * Enforce the primary-key invariant that lets vector/row-permission DSL rewriting use a single
-	 * primary-key field name across M3 and relational adapters:
+	 * primary-key field name across adapters:
 	 * every class has exactly one enabled {@code primaryKey=true} attribute, and its type is {@code varchar}.
-	 * Operations with external DDL also call this on the changed rule before the DDL.
 	 */
 	private void validatePrimaryKey(Map<String, Object> jsonRule) {
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");

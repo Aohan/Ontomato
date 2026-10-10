@@ -1,63 +1,65 @@
 const LIGHT_THEME = {
-  // bgColor: "#ffffff",
+  bgColor: "#ffffff",
 
-  textColor: "#1F2329",
-  textColorRegular: "#4E5969",
+  textColor: "#25321f",
+  textColorRegular: "#415035",
 
-  borderColor: "#E5E6EB",
-  splitLineColor: "#F0F2F5",
+  borderColor: "#e1ead9",
+  splitLineColor: "#edf3e7",
 
-  tooltipBg: "rgba(17, 24, 39, 0.92)",
-  tooltipBorder: "#5B3FFF",
-  tooltipText: "#ffffff",
+  tooltipBg: "#ffffff",
+  tooltipBorder: "#e1ead9",
+  tooltipText: "#25321f",
 
-  primaryColor: "#5B3FFF",
+  primaryColor: "#639c2d",
 
   colors: [
-    "#5B3FFF", // primary purple
+    "#639c2d", // primary green
     "#36CFC9", // cyan
-    "#FF9F43", // orange
+    "#b17a32", // warning
     "#06B6D4", // blue-cyan
-    "#F56C6C", // red
-    "#7C66FF", // light purple
+    "#bc4b39", // danger
+    "#92ba6c", // light green
     "#00B894", // green
     "#FFD93D", // yellow
-    "#6C5CE7", // blue-purple
+    "#697267", // info
     "#FD79A8", // pink
   ],
 
-  visualMapColor: ["#E8F5FF", "#7FD3FF", "#36CFC9", "#5B3FFF", "#7C66FF", "#4328D9"],
+  visualMapColor: ["#eff5ea", "#d0e1c0", "#b1ce96", "#92ba6c", "#639c2d", "#4f7d24"],
+  shadowColor: "rgba(99,156,45,0.25)",
 };
 
 const DARK_THEME = {
-  // bgColor: "#0F1117",
+  bgColor: "#1a2616",
 
-  textColor: "#F5F7FA",
-  textColorRegular: "#C9CDD4",
+  textColor: "#f2f8ee",
+  textColorRegular: "#d8e6d0",
 
-  borderColor: "#2B2F36",
-  splitLineColor: "#23262F",
+  borderColor: "#3b5632",
+  splitLineColor: "#30472a",
 
-  tooltipBg: "rgba(255,255,255,0.96)",
-  tooltipBorder: "#5B3FFF",
-  tooltipText: "#1F2329",
+  tooltipBg: "#21331c",
+  tooltipBorder: "#3b5632",
+  tooltipText: "#f2f8ee",
 
-  primaryColor: "#7C66FF",
+  primaryColor: "#8fd04d",
 
   colors: [
-    "#7C66FF", // light purple
+    "#8fd04d", // primary green
     "#36CFC9", // cyan
-    "#FFB65C", // orange
+    "#d4a75c", // warning
     "#22D3EE", // blue-cyan
-    "#FF7875", // red
-    "#A48CFF", // lighter purple
+    "#e07865", // danger
+    "#a9db75", // light green
     "#00D9B3", // green
     "#FFE168", // yellow
-    "#897FFC", // blue-purple
+    "#98a595", // info
     "#FF99C8", // pink
   ],
 
-  visualMapColor: ["#1A2D3D", "#2D6B8C", "#36CFC9", "#7C66FF", "#A48CFF", "#D9D0FF"],
+  visualMapColor: ["#2a421d", "#43652d", "#75bd35", "#8fd04d", "#a9db75", "#e2f3d5"],
+  shadowColor: "rgba(143,208,77,0.45)",
 };
 
 function wrapLabel(text, maxCharsPerLine = 6, maxLines = 2) {
@@ -129,18 +131,15 @@ function isNumericYField(data, yField) {
 
 function createAreaGradient(primaryColor, isDark = false) {
   const map = {
-    "#5B3FFF": ["rgba(91,63,255,0.42)", "rgba(91,63,255,0.12)", "rgba(91,63,255,0.02)"],
+    "#639c2d": ["rgba(99,156,45,0.42)", "rgba(99,156,45,0.12)", "rgba(99,156,45,0.02)"],
 
-    "#7C66FF": ["rgba(124,102,255,0.46)", "rgba(124,102,255,0.14)", "rgba(124,102,255,0.02)"],
+    "#8fd04d": ["rgba(143,208,77,0.46)", "rgba(143,208,77,0.14)", "rgba(143,208,77,0.02)"],
 
     "#36CFC9": ["rgba(54,207,201,0.40)", "rgba(54,207,201,0.10)", "rgba(54,207,201,0.02)"],
   };
 
-  const colors = map[primaryColor] || [
-    "rgba(91,63,255,0.42)",
-    "rgba(91,63,255,0.12)",
-    "rgba(91,63,255,0.02)",
-  ];
+  const rgb = [1, 3, 5].map((offset) => parseInt(primaryColor.slice(offset, offset + 2), 16));
+  const colors = map[primaryColor] || [0.42, 0.12, 0.02].map((alpha) => `rgba(${rgb.join(",")},${alpha})`);
 
   return {
     type: "linear",
@@ -169,11 +168,13 @@ function createAreaGradient(primaryColor, isDark = false) {
 
 function createBarGradient(color, isDark = false) {
   const presets = {
-    "#5B3FFF": ["#a79cf7", "#5B3FFF"],
-    "#7C66FF": ["#A48CFF", "#7C66FF"],
+    "#639c2d": ["#b1ce96", "#639c2d"],
+    "#8fd04d": ["#c6e8a6", "#8fd04d"],
     "#36CFC9": ["#8aeae4", "#36CFC9"],
-    "#FF9F43": ["#ffd294", "#FF9F43"],
-    "#F56C6C": ["#FF9C9C", "#F56C6C"],
+    "#b17a32": ["#e3c38d", "#b17a32"],
+    "#d4a75c": ["#e3c38d", "#d4a75c"],
+    "#bc4b39": ["#e2aaa0", "#bc4b39"],
+    "#e07865": ["#e2aaa0", "#e07865"],
   };
 
   const pair = presets[color] || [color, color];
@@ -372,8 +373,7 @@ function generateBasicChartOption(chartType, title, xField, yField, seriesField,
             width: 4,
             color: theme.primaryColor,
             shadowBlur: 12,
-            shadowColor:
-              theme.bgColor === "#ffffff" ? "rgba(91,63,255,0.25)" : "rgba(91,63,255,0.5)",
+            shadowColor: theme.shadowColor,
           },
           areaStyle: {
             color: createAreaGradient(theme.primaryColor),
@@ -504,7 +504,7 @@ function generateBasicChartOption(chartType, title, xField, yField, seriesField,
         emphasis: {
           itemStyle: {
             shadowBlur: 12,
-            shadowColor: "rgba(91,63,255,0.35)",
+            shadowColor: theme.shadowColor,
           },
         },
 
@@ -523,8 +523,7 @@ function generateBasicChartOption(chartType, title, xField, yField, seriesField,
 
                 shadowBlur: 12,
 
-                shadowColor:
-                  theme.bgColor === "#ffffff" ? "rgba(91,63,255,0.25)" : "rgba(91,63,255,0.45)",
+                shadowColor: theme.shadowColor,
               }
             : undefined,
       },
@@ -1198,9 +1197,8 @@ function generateHTML(lightOption, darkOption) {
   <script src="/api/echart/echarts.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    :root { --bg-color: color-mix(in srgb, #FFFFFF 30%, #F4F7FE 70%); --text-color: #303133; --border-color: #DCDFE6; }
-    @media (prefers-color-scheme: dark) { :root { --bg-color: color-mix(in srgb, #111322 30%, #0A0B16 70%);--text-color: #E5EAF3; --border-color: #4C4D4F; } }
-    html.dark { --bg-color: color-mix(in srgb, #111322 30%, #0A0B16 70%); --text-color: #E5EAF3; --border-color: #4C4D4F; }
+    :root { --bg-color: #fbfdf8; --text-color: #25321f; --border-color: #e1ead9; }
+    html.dark { --bg-color: #121b10; --text-color: #f2f8ee; --border-color: #3b5632; }
     body {
   font-family:
     Inter,
@@ -1226,10 +1224,7 @@ function generateHTML(lightOption, darkOption) {
   height: 100vh;
   max-width: 1000px;
 
-  background:
-    radial-gradient(circle at top left, rgba(91,63,255,0.08), transparent 30%),
-    radial-gradient(circle at top right, rgba(54,207,201,0.06), transparent 28%),
-    var(--card-bg);
+  background: var(--bg-color);
 
   display: flex;
   align-items: center;
@@ -1247,19 +1242,25 @@ function generateHTML(lightOption, darkOption) {
   useDirtyRect: true,
 });
     function getIsDark() {
-      try { if (parent && parent.document && parent.document.documentElement) return parent.document.documentElement.classList.contains('dark'); } catch (e) {}
+      try { if (parent && parent !== window && parent.document && parent.document.documentElement) return parent.document.documentElement.classList.contains('dark'); } catch (e) {}
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     const lightOption = ${lightOptionJson};
     const darkOption = ${darkOptionJson};
+    document.documentElement.classList.toggle('dark', getIsDark());
     chart.setOption(getIsDark() ? darkOption : lightOption);
     chart.resize({
   animation: {
     duration: 300,
   },
 });
-    try { if (parent && parent.document) { new MutationObserver(() => chart.setOption(getIsDark() ? darkOption : lightOption, true)).observe(parent.document.documentElement, { attributes: true, attributeFilter: ['class'] }); } } catch (e) {}
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => { if (!parent || !parent.document) chart.setOption(e.matches ? darkOption : lightOption, true); });
+    function updateTheme() {
+      const isDark = getIsDark();
+      document.documentElement.classList.toggle('dark', isDark);
+      chart.setOption(isDark ? darkOption : lightOption, true);
+    }
+    try { if (parent && parent.document && parent !== window) { new MutationObserver(updateTheme).observe(parent.document.documentElement, { attributes: true, attributeFilter: ['class'] }); } } catch (e) {}
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateTheme);
     window.addEventListener('resize', () => chart.resize());
   </script>
 </body>

@@ -21,11 +21,11 @@ public class LogHelper {
         log.info(msg);
     }
 
-    public static void m3ReturnData(String msg) {
-        StringBuilder sbb = new StringBuilder("M3 return data>>>:\n" + msg);
+    public static void dataSourceReturnData(String msg) {
+        StringBuilder sbb = new StringBuilder("Data source return data>>>:\n" + msg);
         try {
-            JSONArray m3 = JSON.parseArray(msg);
-            JSONObject obj = (JSONObject) m3.get(0);
+            JSONArray answers = JSON.parseArray(msg);
+            JSONObject obj = (JSONObject) answers.get(0);
             if (obj.containsKey("mqls")) {
                 JSONArray jsonArray = obj.getJSONArray("mqls");
                 for (Object object : jsonArray) {

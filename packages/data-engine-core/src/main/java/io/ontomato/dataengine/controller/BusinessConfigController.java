@@ -490,11 +490,7 @@ public class BusinessConfigController {
     		User user = SystemUtils.getCurUser();
     		DataAdapterProvider provider = dataAdapterRegistry.provider(input.getString("type"));
     		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-    		List<String> fields = provider.connectionFields();
-    		// An adapter without connection fields (M3) keeps no saved connection.
-    		if (!fields.isEmpty()) {
-    			businessConfig.getDataAdapterConnections().put(provider.type(), connectionOf(provider, input));
-    		}
+    		businessConfig.getDataAdapterConnections().put(provider.type(), connectionOf(provider, input));
     		businessConfig.setDataAdapter(provider.type());
     		businessConfigService.set(businessConfig, user.getDomainId());
     		ret.put("success", true);
@@ -512,9 +508,6 @@ public class BusinessConfigController {
     	JSONObject ret = new JSONObject();
     	try {
     		DataAdapterProvider provider = dataAdapterRegistry.provider(input.getString("type"));
-    		if (provider.connectionFields().isEmpty()) {
-    			throw new IllegalStateException(provider.type() + " has no connection to test");
-    		}
     		// The candidate values are tested as given; nothing saved is read or written.
     		DataAdapter adapter = dataAdapterRegistry.createForTest(provider.type(), connectionOf(provider, input));
     		ret.put("data", adapter.testConnection());
@@ -533,6 +526,9 @@ public class BusinessConfigController {
 		DataAdapterConnection connection = new DataAdapterConnection();
 		if (fields.contains("url")) {
 			connection.setUrl(input.getString("url"));
+		}
+		if (fields.contains("company")) {
+			connection.setCompany(input.getString("company"));
 		}
 		if (fields.contains("user")) {
 			connection.setUser(input.getString("user"));

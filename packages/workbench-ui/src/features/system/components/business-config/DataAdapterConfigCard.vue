@@ -68,9 +68,21 @@ function connection(type: string): DataAdapterConnection {
             </el-col>
           </el-row>
           <el-row
-            v-if="selected.fields.includes('user') || selected.fields.includes('password')"
+            v-if="
+              selected.fields.includes('company') ||
+              selected.fields.includes('user') ||
+              selected.fields.includes('password')
+            "
             :gutter="24"
           >
+            <el-col v-if="selected.fields.includes('company')" :span="adapterDisplay.credentialSpan">
+              <el-form-item :label="t('admin.company')">
+                <el-input
+                  v-model="connection(selected.type).company"
+                  :placeholder="selected.examples.company"
+                />
+              </el-form-item>
+            </el-col>
             <el-col v-if="selected.fields.includes('user')" :span="adapterDisplay.credentialSpan">
               <el-form-item :label="t('common.username')">
                 <el-input
@@ -96,9 +108,8 @@ function connection(type: string): DataAdapterConnection {
         </template>
 
         <el-form-item class="form-actions">
-          <!-- Types without connection fields (such as M3) have nothing to test. -->
           <el-button
-            v-if="selected && selected.fields.length > 0"
+            v-if="selected"
             :loading="testing"
             :disabled="disabled"
             @click="emit('test')"
@@ -151,7 +162,7 @@ function connection(type: string): DataAdapterConnection {
               <span class="adapter-table-type">{{ table.type }}</span>
             </li>
           </ul>
-          <p v-else class="adapter-table-empty">{{ t("admin.dataAdapterNoTables") }}</p>
+          <p v-else class="card-empty">{{ t("admin.dataAdapterNoTables") }}</p>
         </template>
         <el-alert
           v-else

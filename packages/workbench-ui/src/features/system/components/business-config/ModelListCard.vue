@@ -156,27 +156,25 @@ function keyStatus(entry: ModelEntry): string {
       </el-button>
     </div>
     <div class="card-body">
-      <el-empty v-if="props.models.length === 0" :description="t('admin.modelListEmpty')">
-        <el-button type="primary" :disabled="props.saving" @click="openAddDialog">
-          {{ t("admin.addModel") }}
-        </el-button>
-      </el-empty>
+      <p v-if="props.models.length === 0" class="card-empty">{{ t("admin.modelListEmpty") }}</p>
       <ul v-else class="model-list">
         <li v-for="(entry, index) in props.models" :key="entry.name" class="model-item">
           <div class="model-info">
             <span class="model-name">{{ entry.displayName }}</span>
-            <code
-              v-if="entry.displayName !== entry.name"
-              class="model-id"
-              :title="t('admin.configId')"
-            >
-              {{ entry.name }}
-            </code>
-            <code class="model-id">{{ entry.modelName }}</code>
-            <el-tooltip :content="entry.baseUrl" placement="top" :disabled="!entry.baseUrl">
-              <span class="model-url">{{ entry.baseUrl }}</span>
-            </el-tooltip>
-            <span class="model-keys">{{ keyStatus(entry) }}</span>
+            <div class="model-meta">
+              <code
+                v-if="entry.displayName !== entry.name"
+                class="model-id"
+                :title="t('admin.configId')"
+              >
+                {{ entry.name }}
+              </code>
+              <code class="model-id">{{ entry.modelName }}</code>
+              <el-tooltip :content="entry.baseUrl" placement="top" :disabled="!entry.baseUrl">
+                <span class="model-url">{{ entry.baseUrl }}</span>
+              </el-tooltip>
+              <span class="model-keys">{{ keyStatus(entry) }}</span>
+            </div>
           </div>
           <div class="model-actions">
             <el-button link type="primary" :disabled="props.saving" @click="emit('test', entry)">
