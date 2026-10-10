@@ -95,7 +95,8 @@ test("revision is the single concrete public POM property", () => {
   const live = readRevision(
     readFileSync(fileURLToPath(new URL("../../pom.xml", import.meta.url)), "utf8"),
   );
-  assert.equal(live, "4.0.0-beta.1");
+  // The live POM carries one concrete release version; its value changes with each release.
+  assert.match(live, /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/);
 });
 test("pack-app rejects a missing lock before any export or build", () =>
   temporary((dir) => {
