@@ -29,6 +29,8 @@ export const adminApi = {
   testDataAdapter: (payload: { type: string } & DataAdapterConnection) =>
     apiPost("/businessConfig/testDataAdapter", payload),
   testEmbeddingModel: (payload: unknown) => apiPost("/businessConfig/testEmbeddingModel", payload),
+  getVectorRebuildStatus: () => apiGet("/businessConfig/vectorRebuildStatus"),
+  rebuildVectors: () => apiPost("/businessConfig/rebuildVectors"),
   getSystemModelConfig: () => nodeApiGet("/system-model-config"),
   saveSystemModelConfig: (payload: SystemModelConfig) =>
     nodeApiPost("/system-model-config/save", payload),

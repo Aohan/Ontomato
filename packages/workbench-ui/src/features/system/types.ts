@@ -34,7 +34,19 @@ export interface EmbeddingModelConfig {
   apiKey: string;
   modelName: string;
   timeout: string;
+  /** Vector dimensions of this domain: sent with every embedding request, a positive integer. */
+  dimensions: number;
   customHeaders?: Record<string, string> | null;
+}
+
+/** GET /businessConfig/vectorRebuildStatus: whether this domain's vectors need rebuilding and the current or last rebuild. */
+export interface VectorRebuildStatus {
+  needed: boolean;
+  running: boolean;
+  total: number;
+  done: number;
+  /** Reason of the last failed rebuild; null after a success or when none has run. */
+  error: string | null;
 }
 
 /** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
