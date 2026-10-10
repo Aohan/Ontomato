@@ -61,7 +61,8 @@ describe("open-source standalone shell", () => {
   it("without parameters: explicit anonymous, fixed en with English messages and open-source data defaults, apiBase from config.js", () => {
     start("/?view=assets");
     expect(host.props).toMatchObject({
-      apiBase: "/custom-base/api",
+      // A relative or root-relative API_BASE resolves against the page URL, so one image serves any gateway prefix.
+      apiBase: new URL("/custom-base/api", window.location.href).href,
       credential: { type: "anonymous" },
       locale: "en",
       messages: englishMessages,
