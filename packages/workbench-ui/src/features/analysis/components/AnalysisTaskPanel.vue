@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AnalysisTaskDetail as AnalysisTask } from "@ontomato/contracts/analysis-task";
+import type { AnalysisTask } from "@ontomato/contracts/analysis-task";
 
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
 

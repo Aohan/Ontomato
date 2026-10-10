@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -123,6 +124,20 @@ describe("open-source workbench assembly", () => {
       path.join(sharedResources, "data", "knowledge"),
       path.join(sharedResources, "data", "skills"),
     ]);
+  });
+
+  it("resolves the shared runtime API from the config script URL at root and nested mounts", async () => {
+    const response = await realFetch(`${base}/config.js`);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    const script = await response.text();
+    for (const mount of ["/", "/workbench/", "/nested/workbench/"]) {
+      const src = new URL("config.js", `https://gateway.example${mount}`).href;
+      const context = { window: {} as { __APP_CONFIG__?: { API_BASE: string } }, document: { currentScript: { src } }, URL };
+      runInNewContext(script, context);
+      expect(context.window.__APP_CONFIG__?.API_BASE).toBe(`${mount}api`);
+      // The iframe loads ../config.js, so it receives the same API even from its own directory.
+      expect(new URL("../config.js", `https://gateway.example${mount}legacy-graph/index.html`).href).toBe(src);
+    }
   });
 
   it("serves public routes without enterprise-only routes", async () => {

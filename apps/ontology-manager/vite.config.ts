@@ -21,6 +21,8 @@ export default defineConfig(({ command, mode }) => {
     );
   }
   return {
+    // Relative asset URLs: the same image serves at the root or under any prefix a gateway strips.
+    base: "./",
     plugins: [vue()],
     build: { outDir: "dist", emptyOutDir: true },
     server: {

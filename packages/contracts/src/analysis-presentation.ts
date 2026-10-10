@@ -19,6 +19,11 @@ export interface AnalysisEvidenceQuestion {
   dataCount?: number;
   error?: string;
   execution?: QueryExecutionDisplayFact;
+  /**
+   * The execution omits the result copies persisted with its query run (rows, datasets, previews,
+   * full content, table); the full facts are read per question through the task's question execution API.
+   */
+  executionDeferred?: true;
 }
 
 export interface AnalysisActivity {

@@ -52,8 +52,10 @@ vi.mock("../../../../infrastructure/postgres", () => ({
         if (/^\s*(BEGIN|COMMIT|ROLLBACK)/i.test(sql)) return { rows: [], rowCount: 0 };
         if (/FOR UPDATE/i.test(sql)) {
           const row = double.rows.get(String(params[0]));
+          // The attribution read sees run identity and status only, never stored snapshots.
+          const meta = row?.history.map(({ id, requestSeq, status }) => ({ id, requestSeq, status }));
           return row
-            ? { rows: [{ status: row.status, run_history: row.history }], rowCount: 1 }
+            ? { rows: [{ status: row.status, run_history: meta }], rowCount: 1 }
             : { rows: [], rowCount: 0 };
         }
         if (/^\s*UPDATE/i.test(sql)) {
@@ -71,7 +73,15 @@ vi.mock("../../../../infrastructure/postgres", () => ({
           }
           if (incoming) row.payload = incoming;
           if (assigned.status) row.status = assigned.status as string;
-          if (assigned.run_history) row.history = JSON.parse(assigned.run_history as string);
+          // run_history = jsonb_set(run_history, ARRAY[$i::text], (run_history -> $i::int) || $patch::jsonb)
+          const runPatch = sql.match(/run_history -> \$(\d+)::int\) \|\| \$(\d+)::jsonb/);
+          if (runPatch) {
+            const index = Number(params[Number(runPatch[1]) - 1]);
+            row.history[index] = {
+              ...row.history[index],
+              ...JSON.parse(params[Number(runPatch[2]) - 1] as string),
+            };
+          }
           row.updates += 1;
           if (double.gate) await double.gate;
           return /RETURNING\s+\*/i.test(sql)

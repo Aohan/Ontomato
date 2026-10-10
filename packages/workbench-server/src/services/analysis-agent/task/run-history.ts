@@ -47,7 +47,9 @@ export function readAnalysisRunHistory(value: unknown): AnalysisTaskRun[] {
   return value as AnalysisTaskRun[];
 }
 
-function findRunIndex(history: readonly AnalysisTaskRun[], identity: AnalysisRunIdentity): number {
+function findRunIndex(
+  history: readonly Pick<AnalysisTaskRun, "id" | "requestSeq">[],
+  identity: AnalysisRunIdentity): number {
   if (identity.runId !== undefined) {
     return history.findIndex((run) => run.id === identity.runId);
   }
@@ -59,7 +61,7 @@ function findRunIndex(history: readonly AnalysisTaskRun[], identity: AnalysisRun
 
 /** Whether the identity points at the most recently accepted run; only that run may still rewrite the task's current state and artifacts. */
 export function isCurrentAnalysisRun(
-  history: readonly AnalysisTaskRun[],
+  history: readonly Pick<AnalysisTaskRun, "id" | "requestSeq">[],
   identity: AnalysisRunIdentity
 ): boolean {
   const last = history[history.length - 1];
@@ -70,26 +72,24 @@ export function isCurrentAnalysisRun(
 }
 
 /**
- * Terminal-state/artifact updates rewrite in place only the history record whose identity matches.
+ * Terminal-state/artifact updates rewrite in place only the history record whose identity matches;
+ * this plans that rewrite from run metadata (id, sequence, status) so callers never load replay snapshots.
  *
  * When the identity is absent or matches nothing it returns undefined (leave as-is): it never rewrites another run and never fabricates a run.
  * Appending run records happens only at start acceptance (tryStartTask / claimConversationTurn).
  * Duplicate writes of the same terminal state therefore never stack; a late write stays on its own run record and cannot reach the new run.
  * Terminal states are monotonic: once a record is terminal it only accepts completion of the same terminal state (summary/body), never a state regression or a different terminal state.
  */
-export function applyAnalysisRunUpdate(
-  history: readonly AnalysisTaskRun[],
+export function planAnalysisRunUpdate(
+  history: readonly Pick<AnalysisTaskRun, "id" | "requestSeq" | "status">[],
   identity: AnalysisRunIdentity,
   patch: Partial<AnalysisTaskRun>
-): AnalysisTaskRun[] | undefined {
+): { index: number; patch: Partial<AnalysisTaskRun> } | undefined {
   const index = findRunIndex(history, identity);
   if (index < 0) return undefined;
   const record = history[index];
   const terminal = isAnalysisTaskTerminalStatus(record.status);
   if (terminal && patch.status !== undefined && patch.status !== record.status) return undefined;
-  const merged: AnalysisTaskRun = { ...record, ...patch };
-  if (terminal) merged.status = record.status;
-  const next = history.slice();
-  next[index] = merged;
-  return next;
+  // The patch is merged onto the stored record in place; a terminal record keeps its own status.
+  return { index, patch: terminal ? { ...patch, status: record.status } : patch };
 }

@@ -62,6 +62,8 @@ export interface DeepAnalysisQuestion {
   statusText?: string;
   /** Execution facts for this query question; both entry points render the same execution display view from it */
   execution?: QueryExecutionFacts;
+  /** The execution omits persisted query results, which are read on expansion. */
+  executionDeferred?: true;
 }
 
 export interface DeepAnalysisDimension {
@@ -95,6 +97,8 @@ export interface ResponseSnapshot {
   threadId?: string;
   turnKey?: string;
   runId?: string;
+  /** Analysis task of a deep-analysis snapshot; scopes on-demand reads of its question facts. */
+  taskId?: string;
   lastEventSeq?: number;
   requestSeq?: number;
   primaryText: string;

@@ -33,8 +33,6 @@ export interface AnalysisTask {
   nextRunAt?: number;
   createdAt: number;
   updatedAt: number;
-  /** Status and result of each past run; the current report still treats analysis artifacts as the only authority. */
-  runHistory?: AnalysisTaskRun[];
 }
 
 export interface AnalysisTaskRun {
@@ -46,6 +44,7 @@ export interface AnalysisTaskRun {
   resultSummary?: string;
   /** Report body at the end of that run; only for historical run review, never part of the current report decision. */
   resultReport?: string;
+  /** That run's replay snapshot; run lists omit it and `GET /:id/runs/:runId` returns it. */
   snapshot?: unknown;
   followUpMessages?: Array<{
     role: "user" | "assistant";
@@ -57,10 +56,8 @@ export interface AnalysisTaskRun {
   completedAt?: number;
 }
 
-export interface AnalysisTaskDetail extends AnalysisTask, Partial<DeepAnalysisTaskPayload> {}
-
 export interface AnalysisTaskPage {
-  tasks: AnalysisTaskDetail[];
+  tasks: AnalysisTask[];
   total: number;
   limit: number;
   offset: number;

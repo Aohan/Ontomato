@@ -159,12 +159,12 @@ export function createWorkbenchApp(mounts: WorkbenchMounts = {}): Express {
 
   app.get("/config.js", (_req: Request, res: Response) => {
     res.type("application/javascript");
+    res.set("Cache-Control", "no-store");
     res.send(
       `window.__APP_CONFIG__ = ${JSON.stringify({
-        API_BASE: config.apiBase,
         DEFAULT_LOCALE: getDefaultLocale(),
         ONTOLOGY_MANAGER_URL: config.ontologyManagerUrl,
-      })};`
+      })};\nwindow.__APP_CONFIG__.API_BASE = new URL("./api", document.currentScript.src).pathname;`
     );
   });
 

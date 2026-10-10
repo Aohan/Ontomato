@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
 import { presentation } from "@ontomato/contracts/__tests__/presentation-fixtures";
 import { buildTaskProgressMap } from "../taskProgress";
-import type { AnalysisTaskDetail } from "@ontomato/contracts/analysis-task";
+import type { AnalysisTask } from "@ontomato/contracts/analysis-task";
 
-const task = { id: "t", status: "running" } as AnalysisTaskDetail;
+const task = { id: "t", status: "running" } as AnalysisTask;
 const t = (key: string, params?: Record<string, unknown>) =>
   `${key}:${JSON.stringify(params || {})}`;
 it("reads the backend percentage even when the task has no client activity counters", () => {

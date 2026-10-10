@@ -149,6 +149,24 @@ export function toDisplayFact(
   return display;
 }
 
+/**
+ * Result copies that query_runs already persists for a saved query. Analysis activities drop them
+ * once the run is saved and read them back per question; the remaining display facts stay inline.
+ */
+export const PERSISTED_RESULT_KEYS = [
+  "data",
+  "datasets",
+  "datasetPreviews",
+  "fullContent",
+  "markdownTable",
+] as const satisfies readonly (keyof QueryExecutionDisplayFact)[];
+
+export function withoutPersistedResult(fact: QueryExecutionDisplayFact): QueryExecutionDisplayFact {
+  const display: Record<string, unknown> = { ...fact };
+  for (const key of PERSISTED_RESULT_KEYS) delete display[key];
+  return display;
+}
+
 /** Stable identity of a query run. */
 export interface QueryRunIdentity {
   threadId: string;
