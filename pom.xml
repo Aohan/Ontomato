@@ -37,6 +37,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <langchain4j.version>1.13.0</langchain4j.version>
         <langchain4j-beta.version>1.13.0-beta23</langchain4j-beta.version>
+        <!-- Overrides the Spring Boot BOM (1.21.0), whose Docker API default is rejected by Docker Engine 29. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
         <!-- Host dev Python for the spring-boot:run configuration below: the MCP/skills venv of the
              inheriting app, relative to it. This property is its only source; the Windows profile at
              the end of this file swaps in the Scripts/python.exe layout. -->
