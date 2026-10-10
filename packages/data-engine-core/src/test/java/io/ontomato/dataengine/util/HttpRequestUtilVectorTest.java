@@ -26,12 +26,12 @@ import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.bean.VectorResource;
 import io.ontomato.dataengine.config.DataRagConfig;
-import io.ontomato.dataengine.config.EmbeddingModelProperties;
 import io.ontomato.dataengine.core.exception.ServiceException;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 
 /**
@@ -105,11 +105,9 @@ class HttpRequestUtilVectorTest {
 		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 		EmbeddingService embeddingService = mock(EmbeddingService.class);
 		when(embeddingService.embedding(anyString(), anyString())).thenThrow(new RuntimeException(errorMessage));
-		EmbeddingModelProperties embeddingModelProperties = new EmbeddingModelProperties();
-		embeddingModelProperties.setDimensions(1024);
 		ReflectionTestUtils.setField(vectorResourceDao, "jdbcTemplate", jdbcTemplate);
 		ReflectionTestUtils.setField(vectorResourceDao, "embeddingService", embeddingService);
-		ReflectionTestUtils.setField(vectorResourceDao, "embeddingModelProperties", embeddingModelProperties);
+		ReflectionTestUtils.setField(vectorResourceDao, "retrievalGate", mock(VectorRetrievalGate.class));
 		return vectorResourceDao;
 	}
 

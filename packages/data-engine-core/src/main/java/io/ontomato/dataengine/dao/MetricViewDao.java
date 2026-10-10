@@ -1,6 +1,7 @@
 package io.ontomato.dataengine.dao;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,6 +21,7 @@ import io.ontomato.dataengine.bean.function.Parameter;
 import io.ontomato.dataengine.bean.metricView.MetricView;
 import io.ontomato.dataengine.bean.metricView.OriginCheckResult;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 import io.ontomato.dataengine.util.AutoKMeansClusteringUtil;
 
 import dev.langchain4j.data.embedding.Embedding;
@@ -39,6 +41,9 @@ public class MetricViewDao extends BaseDao {
 
 	@Autowired
 	private EmbeddingService embeddingService;
+
+	@Autowired
+	private VectorRetrievalGate retrievalGate;
 
 	private static final String TABLE_NAME = "metric_view";
 
@@ -68,7 +73,7 @@ public class MetricViewDao extends BaseDao {
 						+ "origin_check_result TEXT, "
 						+ "origin_question TEXT, "
 						+ "brief TEXT, "
-						+ "brief_vector vector(" + embeddingModelProperties.getDimensions() + ")"
+						+ "brief_vector vector"
 						+ ")");
 		jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_domain_id ON " + TABLE_NAME + "(domain_id)");
 	}
@@ -86,7 +91,7 @@ public class MetricViewDao extends BaseDao {
 		String domainId = function.getDomainId();
 
 		String classNamesStr = buildClassNamesStr(function);
-		String brief = buildBrief(metricView);
+		String brief = buildBrief(metricView.getName(), metricView.getDescription(), metricView.getMatchQuestions());
 
 		Response<Embedding> embeddingResponse = embeddingService.embedding(brief, function.getDomainId());
 		float[] embededVector = embeddingResponse.content().vector();
@@ -131,14 +136,15 @@ public class MetricViewDao extends BaseDao {
 		return sb.toString();
 	}
 
-	private String buildBrief(MetricView metricView) {
+	/** The single source of the embedded text, shared by the write path and the vector rebuild. */
+	private static String buildBrief(String name, String description, Collection<String> matchQuestions) {
 		StringBuilder brief = new StringBuilder();
-		brief.append(metricView.getName()).append("\n");
-		if (metricView.getDescription() != null) {
-			brief.append(metricView.getDescription()).append("\n");
+		brief.append(name).append("\n");
+		if (description != null) {
+			brief.append(description).append("\n");
 		}
-		if (metricView.getMatchQuestions() != null) {
-			for (String q : metricView.getMatchQuestions()) {
+		if (matchQuestions != null) {
+			for (String q : matchQuestions) {
 				brief.append(q).append("\n");
 			}
 		}
@@ -147,6 +153,37 @@ public class MetricViewDao extends BaseDao {
 
 	public void delete(String id) {
 		jdbcTemplate.update("DELETE FROM " + TABLE_NAME + " WHERE id = ?", id);
+	}
+
+	public int countDomainRows(String domainId) {
+		return jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
+	}
+
+	public List<VectorRebuildItem> listDomainVectors(String domainId) {
+		return jdbcTemplate.query(
+				"SELECT id, name, description, match_questions FROM " + TABLE_NAME + " WHERE domain_id = ?",
+				(rs, rowNum) -> new VectorRebuildItem(rs.getString("id"),
+						buildBrief(rs.getString("name"), rs.getString("description"),
+								parseMatchQuestions(rs.getString("match_questions")))),
+				domainId);
+	}
+
+	public void clearDomainVectors(String domainId) {
+		jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET brief_vector = NULL WHERE domain_id = ?", domainId);
+	}
+
+	public void updateDomainVector(String id, String brief, float[] vector) {
+		jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET brief = ?, brief_vector = ?::vector WHERE id = ?",
+				brief, new PGvector(vector), id);
+	}
+
+	private static List<String> parseMatchQuestions(String matchQuestionsJson) {
+		if (matchQuestionsJson == null) {
+			return new ArrayList<>();
+		}
+		List<String> matchQuestions = JSONArray.parseArray(matchQuestionsJson, String.class);
+		return matchQuestions == null ? new ArrayList<>() : matchQuestions;
 	}
 
 	public Object[] queryById(String id) {
@@ -214,6 +251,7 @@ public class MetricViewDao extends BaseDao {
 
 	public List<Object[]> find(String question, String type, String className, int maxResult, double minScore, String domainId) {
 		List<Object[]> oList = new ArrayList<Object[]>();
+		retrievalGate.requireRetrievable(domainId);
 		try {
 			Response<Embedding> embeddingResponse = embeddingService.embedding(question, domainId);
 			float[] findVector = embeddingResponse.content().vector();
@@ -236,7 +274,7 @@ public class MetricViewDao extends BaseDao {
 			}
 
 			String sql = "SELECT " + COLUMNS + ", brief_vector <-> ?::vector AS distance FROM " + TABLE_NAME
-					+ " WHERE " + whereSql + " ORDER BY distance LIMIT ?";
+					+ " WHERE " + whereSql + " AND brief_vector IS NOT NULL ORDER BY distance LIMIT ?";
 			List<Object> queryParams = new ArrayList<>(params);
 			queryParams.add(pgVector);
 			queryParams.add(maxResult);

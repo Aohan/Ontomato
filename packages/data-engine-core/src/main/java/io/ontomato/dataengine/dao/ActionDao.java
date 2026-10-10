@@ -20,6 +20,7 @@ import io.ontomato.dataengine.bean.action.BusinessMeaning;
 import io.ontomato.dataengine.bean.function.Function;
 import io.ontomato.dataengine.bean.function.Parameter;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 import io.ontomato.dataengine.util.AutoKMeansClusteringUtil;
 
 import dev.langchain4j.data.embedding.Embedding;
@@ -39,6 +40,9 @@ public class ActionDao extends BaseDao {
 
 	@Autowired
 	private EmbeddingService embeddingService;
+
+	@Autowired
+	private VectorRetrievalGate retrievalGate;
 
 	private static final String TABLE_NAME = "action";
 
@@ -66,7 +70,7 @@ public class ActionDao extends BaseDao {
 						+ "create_timestamp BIGINT, "
 						+ "modify_timestamp BIGINT, "
 						+ "brief TEXT, "
-						+ "brief_vector vector(" + embeddingModelProperties.getDimensions() + ")"
+						+ "brief_vector vector"
 						+ ")");
 		jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_domain_id ON " + TABLE_NAME + "(domain_id)");
 	}
@@ -84,7 +88,7 @@ public class ActionDao extends BaseDao {
 		String domainId = function.getDomainId();
 
 		String classNamesStr = buildClassNamesStr(function);
-		String brief = buildBrief(action);
+		String brief = buildBrief(action.getName(), action.getDescription());
 
 		Response<Embedding> embeddingResponse = embeddingService.embedding(brief, function.getDomainId());
 		float[] embededVector = embeddingResponse.content().vector();
@@ -126,17 +130,40 @@ public class ActionDao extends BaseDao {
 		return sb.toString();
 	}
 
-	private String buildBrief(Action action) {
+	/** The single source of the embedded text, shared by the write path and the vector rebuild. */
+	private static String buildBrief(String name, String description) {
 		StringBuilder brief = new StringBuilder();
-		brief.append(action.getName()).append("\n");
-		if (action.getDescription() != null) {
-			brief.append(action.getDescription()).append("\n");
+		brief.append(name).append("\n");
+		if (description != null) {
+			brief.append(description).append("\n");
 		}
 		return brief.toString();
 	}
 
 	public void delete(String id) {
 		jdbcTemplate.update("DELETE FROM " + TABLE_NAME + " WHERE id = ?", id);
+	}
+
+	public int countDomainRows(String domainId) {
+		return jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
+	}
+
+	public List<VectorRebuildItem> listDomainVectors(String domainId) {
+		return jdbcTemplate.query(
+				"SELECT id, name, description FROM " + TABLE_NAME + " WHERE domain_id = ?",
+				(rs, rowNum) -> new VectorRebuildItem(rs.getString("id"),
+						buildBrief(rs.getString("name"), rs.getString("description"))),
+				domainId);
+	}
+
+	public void clearDomainVectors(String domainId) {
+		jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET brief_vector = NULL WHERE domain_id = ?", domainId);
+	}
+
+	public void updateDomainVector(String id, String brief, float[] vector) {
+		jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET brief = ?, brief_vector = ?::vector WHERE id = ?",
+				brief, new PGvector(vector), id);
 	}
 
 	public Object[] queryById(String id) {
@@ -200,6 +227,7 @@ public class ActionDao extends BaseDao {
 
 	public List<Object[]> find(String question, String className, int maxResult, double minScore, String domainId) {
 		List<Object[]> oList = new ArrayList<Object[]>();
+		retrievalGate.requireRetrievable(domainId);
 		try {
 			Response<Embedding> embeddingResponse = embeddingService.embedding(question, domainId);
 			float[] findVector = embeddingResponse.content().vector();
@@ -218,7 +246,7 @@ public class ActionDao extends BaseDao {
 			}
 
 			String sql = "SELECT " + COLUMNS + ", brief_vector <-> ?::vector AS distance FROM " + TABLE_NAME
-					+ " WHERE " + whereSql + " ORDER BY distance LIMIT ?";
+					+ " WHERE " + whereSql + " AND brief_vector IS NOT NULL ORDER BY distance LIMIT ?";
 			List<Object> queryParams = new ArrayList<>(params);
 			queryParams.add(pgVector);
 			queryParams.add(maxResult);

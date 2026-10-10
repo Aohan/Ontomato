@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,6 +22,7 @@ import io.ontomato.dataengine.config.AgentConfig;
 import io.ontomato.dataengine.config.AgentRole;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.BusinessConfig.EmbeddingModelProperties;
+import io.ontomato.dataengine.config.ControllerConst;
 import io.ontomato.dataengine.config.ModelConfig;
 import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.core.bean.User;
@@ -31,8 +33,11 @@ import io.ontomato.dataengine.dataAdapter.DataAdapterConnectionTester;
 import io.ontomato.dataengine.dataAdapter.DataAdapterProvider;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.BusinessConfigService;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
+import io.ontomato.dataengine.service.vector.VectorRebuildService;
+import io.ontomato.dataengine.service.vector.VectorRebuildStatus;
 import io.ontomato.dataengine.util.SystemUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +54,12 @@ public class BusinessConfigController {
 	
 	@Autowired
 	private EmbeddingService embeddingService;
+
+	@Autowired
+	private LangService langService;
+
+	@Autowired
+	private VectorRebuildService vectorRebuildService;
 	
 	@Autowired
 	private DataAdapterRegistry dataAdapterRegistry;
@@ -207,6 +218,10 @@ public class BusinessConfigController {
     	JSONObject ret = new JSONObject();
     	try {
     		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input.getJSONObject("modelConfig")), EmbeddingModelProperties.class);
+    		if (embeddingModelProperties == null || embeddingModelProperties.getDimensions() == null
+    				|| embeddingModelProperties.getDimensions() <= 0) {
+    			throw new IllegalArgumentException("modelConfig.dimensions must be a positive integer");
+    		}
     		embeddingModelProperties.setLogRequests(true);
     		embeddingModelProperties.setLogResponses(true);
     		String userContent = input.getString("userContent");
@@ -226,12 +241,20 @@ public class BusinessConfigController {
 	
 	@PostMapping("/businessConfig/saveEmbeddingModel")
     @ResponseBody
-    public JSONObject saveEmbeddingModel(@RequestBody JSONObject input) {
+    public JSONObject saveEmbeddingModel(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject input) {
     	JSONObject ret = new JSONObject();
     	try {
     		User user = SystemUtils.getCurUser();
-    		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input), EmbeddingModelProperties.class);
     		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
+    		if (vectorRebuildService.isRunning(user.getDomainId())) {
+    			throw new IllegalStateException(
+    					langService.get(lang, "Vector.saveRefusedWhileRebuilding"));
+    		}
+    		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input), EmbeddingModelProperties.class);
+    		if (embeddingModelProperties == null || embeddingModelProperties.getDimensions() == null
+    				|| embeddingModelProperties.getDimensions() <= 0) {
+    			throw new IllegalArgumentException("dimensions must be a positive integer");
+    		}
     		EmbeddingModelProperties oldEmbeddingModelProperties = businessConfig.getEmbeddingModelProperties();
 			// In getConfig, embeddingModelProperties:null means not configured; in that case create the existing object before writing.
 			if (oldEmbeddingModelProperties == null) {
@@ -241,9 +264,43 @@ public class BusinessConfigController {
     		oldEmbeddingModelProperties.setBaseUrl(embeddingModelProperties.getBaseUrl());
     		oldEmbeddingModelProperties.setApiKey(embeddingModelProperties.getApiKey());
     		oldEmbeddingModelProperties.setModelName(embeddingModelProperties.getModelName());
+    		oldEmbeddingModelProperties.setDimensions(embeddingModelProperties.getDimensions());
     		oldEmbeddingModelProperties.setTimeout(embeddingModelProperties.getTimeout());
     		oldEmbeddingModelProperties.setCustomHeaders(embeddingModelProperties.getCustomHeaders());
     		businessConfigService.set(businessConfig, user.getDomainId());
+    		ret.put("success", true);
+    	} catch (Exception e) {
+    		log.error(e.getMessage(), e);
+    		ret.put("success", false);
+    		ret.put("message", e.getMessage());
+    	}
+		return ret;
+	}
+
+	@GetMapping("/businessConfig/vectorRebuildStatus")
+    @ResponseBody
+    public JSONObject vectorRebuildStatus() {
+    	JSONObject ret = new JSONObject();
+    	try {
+    		User user = SystemUtils.getCurUser();
+    		VectorRebuildStatus status = vectorRebuildService.status(user.getDomainId());
+    		ret.put("data", status);
+    		ret.put("success", true);
+    	} catch (Exception e) {
+    		log.error(e.getMessage(), e);
+    		ret.put("success", false);
+    		ret.put("message", e.getMessage());
+    	}
+		return ret;
+	}
+
+	@PostMapping("/businessConfig/rebuildVectors")
+    @ResponseBody
+    public JSONObject rebuildVectors(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang) {
+    	JSONObject ret = new JSONObject();
+    	try {
+    		User user = SystemUtils.getCurUser();
+    		vectorRebuildService.start(user.getDomainId(), lang);
     		ret.put("success", true);
     	} catch (Exception e) {
     		log.error(e.getMessage(), e);

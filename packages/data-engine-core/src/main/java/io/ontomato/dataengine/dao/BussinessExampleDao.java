@@ -2,6 +2,7 @@ package io.ontomato.dataengine.dao;
 
 import com.pgvector.PGvector;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.output.Response;
 import jakarta.annotation.PostConstruct;
@@ -22,6 +23,9 @@ public class BussinessExampleDao extends BaseDao {
 
     @Autowired
     private EmbeddingService embeddingService;
+
+    @Autowired
+    private VectorRetrievalGate retrievalGate;
 
     private static final String TABLE_NAME = "bussinessexampleindex";
 
@@ -45,7 +49,7 @@ public class BussinessExampleDao extends BaseDao {
                         + "status INTEGER DEFAULT 0, "
                         + "modify_time TIMESTAMP, "
                         + "domain_id VARCHAR(64), "
-                        + "example_vector vector(" + embeddingModelProperties.getDimensions() + ")"
+                        + "example_vector vector"
                         + ")");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_domain_id ON " + TABLE_NAME + "(domain_id)");
     }
@@ -54,12 +58,13 @@ public class BussinessExampleDao extends BaseDao {
         List<BussinessExampleEntity> bussinessExampleEntities = new ArrayList<>();
         float[] findVector = null;
         String queryString = "";
+        retrievalGate.requireRetrievable(domainId);
         try {
             Response<Embedding> embeddingResponse = embeddingService.embedding(question, domainId);
             findVector = embeddingResponse.content().vector();
 
             queryString = "SELECT " + COLUMNS + " FROM " + TABLE_NAME
-                    + " WHERE status = 1 AND domain_id = ? ORDER BY example_vector <-> ?::vector LIMIT ?";
+                    + " WHERE status = 1 AND domain_id = ? AND example_vector IS NOT NULL ORDER BY example_vector <-> ?::vector LIMIT ?";
             PGvector pgVector = new PGvector(findVector);
 
             bussinessExampleEntities = jdbcTemplate.query(queryString,
@@ -88,14 +93,11 @@ public class BussinessExampleDao extends BaseDao {
 
     public void insertBussinessExample(BussinessExampleEntity bussinessExampleEntity, String domainId) {
         String exampleID = bussinessExampleEntity.getExampleID();
-        StringBuilder sbBussinessExampleText = new StringBuilder();
-        sbBussinessExampleText.append("Question:").append(bussinessExampleEntity.getExampleQuestion()).append("\n");
-        sbBussinessExampleText.append("StepA:").append(bussinessExampleEntity.getExampleA()).append("\n");
-        sbBussinessExampleText.append("StepB:").append(bussinessExampleEntity.getExampleB()).append("\n");
-        sbBussinessExampleText.append("StepC:").append(bussinessExampleEntity.getExampleC()).append("\n");
-        sbBussinessExampleText.append("Key points:").append(bussinessExampleEntity.getExampleImportant()).append("\n");
+        String embeddedText = embeddingText(bussinessExampleEntity.getExampleQuestion(),
+                bussinessExampleEntity.getExampleA(), bussinessExampleEntity.getExampleB(),
+                bussinessExampleEntity.getExampleC(), bussinessExampleEntity.getExampleImportant());
 
-        Response<Embedding> embeddingResponse = embeddingService.embedding(sbBussinessExampleText.toString(), domainId);
+        Response<Embedding> embeddingResponse = embeddingService.embedding(embeddedText, domainId);
         float[] embededVector = embeddingResponse.content().vector();
         PGvector pgVector = new PGvector(embededVector);
 
@@ -118,6 +120,41 @@ public class BussinessExampleDao extends BaseDao {
 
     public void deleteKnowledge(String exampleID) {
         jdbcTemplate.update("DELETE FROM " + TABLE_NAME + " WHERE example_id = ?", exampleID);
+    }
+
+    /** The single source of the embedded text, shared by the write path and the vector rebuild. */
+    private static String embeddingText(String question, String stepA, String stepB, String stepC, String important) {
+        StringBuilder sbBussinessExampleText = new StringBuilder();
+        sbBussinessExampleText.append("Question:").append(question).append("\n");
+        sbBussinessExampleText.append("StepA:").append(stepA).append("\n");
+        sbBussinessExampleText.append("StepB:").append(stepB).append("\n");
+        sbBussinessExampleText.append("StepC:").append(stepC).append("\n");
+        sbBussinessExampleText.append("Key points:").append(important).append("\n");
+        return sbBussinessExampleText.toString();
+    }
+
+    public int countDomainRows(String domainId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
+    }
+
+    public List<VectorRebuildItem> listDomainVectors(String domainId) {
+        return jdbcTemplate.query(
+                "SELECT example_id, example_question, example_a, example_b, example_c, example_important FROM " + TABLE_NAME + " WHERE domain_id = ?",
+                (rs, rowNum) -> new VectorRebuildItem(rs.getString("example_id"),
+                        embeddingText(rs.getString("example_question"), rs.getString("example_a"),
+                                rs.getString("example_b"), rs.getString("example_c"),
+                                rs.getString("example_important"))),
+                domainId);
+    }
+
+    public void clearDomainVectors(String domainId) {
+        jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET example_vector = NULL WHERE domain_id = ?", domainId);
+    }
+
+    public void updateDomainVector(String exampleId, float[] vector) {
+        jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET example_vector = ?::vector WHERE example_id = ?",
+                new PGvector(vector), exampleId);
     }
 
     private BussinessExampleEntity mapRow(java.sql.ResultSet rs) throws java.sql.SQLException {
