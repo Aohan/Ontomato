@@ -3,11 +3,16 @@ package io.ontomato.dataengine.service.impl;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import java.sql.*;
+
 import java.util.ArrayList;
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
+
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
@@ -15,12 +20,11 @@ import io.ontomato.dataengine.service.AdminService;
 import io.ontomato.dataengine.service.BusinessConfigService;
 
 class LiveInstanceGraphTest {
-    @Test void overviewUsesBoundedQueriesWithoutCountsOrFullGraphScans() throws Exception {
+    @Test void overviewUsesBoundedDslWithoutCountsOrFullGraphScans() throws Exception {
         var admin = mock(AdminService.class);
         var configs = mock(BusinessConfigService.class);
         var adapters = mock(DataAdapterRegistry.class);
         var adapter = mock(DataAdapter.class);
-        var connection = mock(Connection.class);
         var config = new BusinessConfig(); config.setDataAdapter("postgresql");
         when(configs.get("test")).thenReturn(config);
         when(admin.getJSONRule("test")).thenReturn(JSONObject.parseObject("""
@@ -29,33 +33,45 @@ class LiveInstanceGraphTest {
              "relationship_rule":{"parent":{"fromclass":"entity","toclass":"entity","fromField":"parent_id","toField":"id"}}}
             """));
         when(adapters.create(any(), any())).thenReturn(adapter);
-        when(adapter.openConnection()).thenReturn(connection);
-        when(connection.createStatement()).thenReturn(mock(Statement.class));
-        List<String> queries = new ArrayList<>();
-        when(connection.prepareStatement(anyString())).thenAnswer(call -> {
-            String sql = call.getArgument(0); queries.add(sql);
-            var statement = mock(PreparedStatement.class);
-            var result = mock(ResultSet.class); var metadata = mock(ResultSetMetaData.class);
-            when(statement.executeQuery()).thenReturn(result); when(result.getMetaData()).thenReturn(metadata);
-            when(metadata.getColumnCount()).thenReturn(2);
-            boolean edge = sql.contains(" JOIN ");
-            when(metadata.getColumnLabel(1)).thenReturn(edge ? "source" : "pk");
-            when(metadata.getColumnLabel(2)).thenReturn(edge ? "target" : "name");
-            when(result.next()).thenReturn(true, false);
-            when(result.getObject(1)).thenReturn("1"); when(result.getObject(2)).thenReturn(edge ? "1" : "Entity");
-            return statement;
+        List<String> dsls = new ArrayList<>();
+        when(adapter.executeDsl(anyString(), anyString(), any(), anyList())).thenAnswer(call -> {
+            String dslJson = call.getArgument(0);
+            dsls.add(dslJson);
+            JSONObject dsl = JSON.parseArray(dslJson).getJSONObject(0);
+            JSONObject step = dsl.getJSONObject("answer").getJSONArray("steps").getJSONObject(0);
+            boolean edge = step.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0).containsKey("relationship");
+            JSONArray answer = new JSONArray();
+            JSONObject row = new JSONObject();
+            if (edge) { row.put("source", "1"); row.put("target", "1"); }
+            else { row.put("pk", "1"); row.put("name", "Entity"); }
+            answer.add(row);
+            JSONObject envelope = new JSONObject();
+            envelope.put("answer", answer);
+            return JSONArray.of(envelope).toJSONString();
         });
         var service = new LiveInstanceGraph(admin, configs, adapters);
         var response = service.query("summary", new JSONObject(), "test");
         assertTrue(response.getBooleanValue("success"));
         assertEquals(1, response.getJSONObject("data").getJSONArray("overviewNodes").size());
         assertEquals(1, response.getJSONObject("data").getJSONArray("overviewEdges").size());
-        assertTrue(queries.get(0).endsWith("LIMIT 50"));
-        assertTrue(queries.get(1).contains(" IN (?)"));
-        assertTrue(queries.get(1).endsWith("LIMIT 2001"));
-        assertTrue(queries.stream().noneMatch(sql -> sql.contains("count(*)")));
-        verify(connection).setReadOnly(true);
-        verify(connection).rollback();
+        // node scan bounded at 50, edge scan bounded at 2001
+        JSONObject nodeStep = JSON.parseArray(dsls.get(0)).getJSONObject(0).getJSONObject("answer").getJSONArray("steps").getJSONObject(0);
+        assertEquals(50, nodeStep.getJSONObject("output").getJSONObject("limit").getIntValue("count"));
+        JSONObject edgeStep = JSON.parseArray(dsls.get(1)).getJSONObject(0).getJSONObject("answer").getJSONArray("steps").getJSONObject(0);
+        assertEquals(2001, edgeStep.getJSONObject("output").getJSONObject("limit").getIntValue("count"));
+        assertTrue(edgeStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0).containsKey("relationship"));
+        // overview never computes aggregate counts
+        for (String dslJson : dsls) {
+            JSONObject dsl = JSON.parseArray(dslJson).getJSONObject(0);
+            for (Object stepObj : dsl.getJSONObject("answer").getJSONArray("steps")) {
+                JSONObject output = ((JSONObject) stepObj).getJSONObject("output");
+                for (Object fieldObj : output.getJSONArray("fields")) {
+                    assertFalse(((JSONObject) fieldObj).containsKey("function"));
+                }
+            }
+        }
+        // queries go through the generic DSL adapter, never raw JDBC
+        verify(adapter, never()).openConnection();
         assertThrows(IllegalArgumentException.class, () -> LiveInstanceGraph.identifier("entity; drop table entity"));
     }
 }
