@@ -717,16 +717,16 @@ function openObserve() {
   flex-wrap: wrap;
   align-items: baseline;
   column-gap: var(--spacing-md);
-  padding: var(--spacing-md) var(--spacing-xl) 0;
+  padding: var(--spacing-xl) var(--spacing-xl) 0;
 }
 
 .admin-page-heading + .admin-main {
-  padding-top: var(--spacing-md);
+  padding-top: var(--spacing-lg);
 }
 
 .admin-page-heading h1 {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   line-height: 1.4;
   font-weight: var(--font-semibold);
   color: var(--el-text-color-primary);
