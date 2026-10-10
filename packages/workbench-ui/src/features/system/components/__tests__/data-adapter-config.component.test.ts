@@ -333,7 +333,7 @@ describe("testing the data adapter connection", () => {
     await runTest(card);
 
     expect(card.find(".adapter-table-list").exists()).toBe(false);
-    expect(card.find(".adapter-table-empty").text()).toBe(t("admin.dataAdapterNoTables"));
+    expect(card.find(".card-empty").text()).toBe(t("admin.dataAdapterNoTables"));
   });
 
   it("a failed test shows the backend message verbatim, line breaks included", async () => {

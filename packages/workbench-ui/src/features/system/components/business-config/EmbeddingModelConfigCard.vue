@@ -99,25 +99,28 @@ async function saveDialog() {
         <el-button size="small" @click="emit('retry')">{{ t("common.retry") }}</el-button>
       </div>
       <template v-else>
-        <el-empty v-if="!props.model" :description="t('admin.modelListEmpty')">
-          <el-button type="primary" @click="openEditDialog">{{ t("admin.addModel") }}</el-button>
-        </el-empty>
+        <div v-if="!props.model" class="card-empty-row">
+          <p class="card-empty">{{ t("admin.modelListEmpty") }}</p>
+          <el-button type="primary" size="small" @click="openEditDialog">{{ t("admin.addModel") }}</el-button>
+        </div>
         <ul v-else class="model-list">
           <li class="model-item">
             <div class="model-info">
               <span class="model-name">{{ props.model.modelName }}</span>
-              <el-tooltip :content="props.model.baseUrl" placement="top" :disabled="!props.model.baseUrl">
-                <span class="model-url">{{ props.model.baseUrl }}</span>
-              </el-tooltip>
-              <span class="model-keys">
-                {{ props.model.apiKey ? t("admin.keyCountConfigured", { n: 1 }) : t("admin.keyMissing") }}
-              </span>
-              <span class="model-keys">
-                {{ t("common.timeoutSec") }}{{ businessConfigSeparator }}{{ parseIsoDurationSeconds(props.model.timeout) }}
-              </span>
-              <span class="model-keys">
-                {{ t("admin.embeddingDimensions") }}{{ businessConfigSeparator }}{{ props.model.dimensions }}
-              </span>
+              <div class="model-meta">
+                <el-tooltip :content="props.model.baseUrl" placement="top" :disabled="!props.model.baseUrl">
+                  <span class="model-url">{{ props.model.baseUrl }}</span>
+                </el-tooltip>
+                <span class="model-keys">
+                  {{ props.model.apiKey ? t("admin.keyCountConfigured", { n: 1 }) : t("admin.keyMissing") }}
+                </span>
+                <span class="model-keys">
+                  {{ t("common.timeoutSec") }}{{ businessConfigSeparator }}{{ parseIsoDurationSeconds(props.model.timeout) }}
+                </span>
+                <span class="model-keys">
+                  {{ t("admin.embeddingDimensions") }}{{ businessConfigSeparator }}{{ props.model.dimensions }}
+                </span>
+              </div>
             </div>
             <div class="model-actions">
               <el-button link type="primary" :disabled="props.saving" @click="emit('test', props.model)">

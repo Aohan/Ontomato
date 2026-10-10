@@ -151,7 +151,7 @@ function connection(type: string): DataAdapterConnection {
               <span class="adapter-table-type">{{ table.type }}</span>
             </li>
           </ul>
-          <p v-else class="adapter-table-empty">{{ t("admin.dataAdapterNoTables") }}</p>
+          <p v-else class="card-empty">{{ t("admin.dataAdapterNoTables") }}</p>
         </template>
         <el-alert
           v-else

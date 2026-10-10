@@ -73,21 +73,28 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   border: 1px solid var(--el-border-color-light);
   border-radius: var(--radius-md);
   min-width: 0;
   flex-wrap: wrap;
 }
 
-/* Name, IDs, URL and key count sit together on the left (wrapping when narrow); the row actions stay on the right. */
+/* Two lines on the left: the name above, then IDs, URL and key count (wrapping when narrow); the row actions stay on the right. */
 .model-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.model-meta {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: var(--spacing-xs) var(--spacing-md);
   min-width: 0;
-  flex: 1 1 0;
 }
 
 .model-name {
@@ -200,9 +207,11 @@
 
   .model-info {
     flex-basis: 100%;
+  }
+
+  .model-meta {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--spacing-xs);
   }
 
   .model-name,
@@ -530,10 +539,18 @@
   color: var(--el-text-color-secondary);
 }
 
-.adapter-table-empty {
+/* One-line hint shown when a card has nothing configured yet. */
+.card-empty {
   margin: 0;
   font-size: var(--text-sm);
   color: var(--el-text-color-secondary);
+}
+
+.card-empty-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
 }
 
 /* Vector rebuild status under the embedding row: progress, the need to rebuild, and the last failure. */
