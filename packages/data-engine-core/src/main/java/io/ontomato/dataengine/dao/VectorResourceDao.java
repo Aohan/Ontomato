@@ -20,6 +20,7 @@ import com.alibaba.fastjson2.JSON;
 import com.pgvector.PGvector;
 import io.ontomato.dataengine.bean.VectorResource;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 import io.ontomato.dataengine.util.AutoKMeansClusteringUtil;
 
 import dev.langchain4j.data.embedding.Embedding;
@@ -35,6 +36,9 @@ public class VectorResourceDao extends BaseDao {
 
 	@Autowired
 	private EmbeddingService embeddingService;
+
+	@Autowired
+	private VectorRetrievalGate retrievalGate;
 
 	private String dirName = "vectorResource";
 
@@ -81,7 +85,7 @@ public class VectorResourceDao extends BaseDao {
 						+ "class_name VARCHAR(256), "
 						+ "attr_name VARCHAR(256), "
 						+ "object_id VARCHAR(256), "
-						+ "brief_vector vector(" + embeddingModelProperties.getDimensions() + ")"
+						+ "brief_vector vector"
 						+ ")");
 	}
 
@@ -171,6 +175,7 @@ public class VectorResourceDao extends BaseDao {
 		List<VectorResource> vectorResources = new ArrayList<VectorResource>();
 		float[] findVector = null;
 		String queryString = "";
+		retrievalGate.requireRetrievable(domainId);
 		try {
 			ensureTable(indexName);
 
@@ -179,7 +184,7 @@ public class VectorResourceDao extends BaseDao {
 			findVector = embeddingResponse.content().vector();
 
 			queryString = "SELECT id, brief, path, class_name, attr_name, object_id, brief_vector <-> ?::vector AS distance FROM " + tableName
-					+ " ORDER BY distance LIMIT ?";
+					+ " WHERE brief_vector IS NOT NULL ORDER BY distance LIMIT ?";
 			PGvector pgVector = new PGvector(findVector);
 
 			List<Object[]> rows = jdbcTemplate.query(queryString,
@@ -351,7 +356,6 @@ public class VectorResourceDao extends BaseDao {
 
 		log.info(">>>rebuild " + indexName);
 
-		int dims = embeddingModelProperties.getDimensions();
 		jdbcTemplate.execute("DROP TABLE IF EXISTS " + tableName);
 		jdbcTemplate.execute("CREATE TABLE " + tableName + " ("
 				+ "id VARCHAR(64) PRIMARY KEY, "
@@ -360,19 +364,59 @@ public class VectorResourceDao extends BaseDao {
 				+ "class_name VARCHAR(256), "
 				+ "attr_name VARCHAR(256), "
 				+ "object_id VARCHAR(256), "
-				+ "brief_vector vector(" + dims + ")"
+				+ "brief_vector vector"
 				+ ")");
 		deleteFilesInDirectory(indexName);
 		new File("conf/" + dirName + "/" + indexName).mkdirs();
-		log.info("<<<rebuild " + indexName + " vector dimension: " + dims);
+		log.info("<<<rebuild " + indexName);
 	}
 	
+	/** Every vector table of this domain in the current schema: the rebuild scope for resource vectors. */
+	public List<String> listDomainTables(String domainId) {
+		String sql = "SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'";
+		List<String> all = jdbcTemplate.queryForList(sql, String.class);
+		List<String> matched = new ArrayList<>();
+		for (String tableName : all) {
+			if (tableName.startsWith("vector-") && tableName.endsWith("-" + domainId)) {
+				matched.add(tableName);
+			}
+		}
+		return matched;
+	}
+
+	public int countTableRows(String indexName) {
+		Integer count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + quotedTable(indexName), Integer.class);
+		return count == null ? 0 : count;
+	}
+
+	/**
+	 * The stored brief is the exact text the write path embedded, so the rebuild re-embeds it as is.
+	 */
+	public List<VectorRebuildItem> listTableVectors(String indexName) {
+		return jdbcTemplate.query("SELECT id, brief FROM " + quotedTable(indexName),
+				(rs, rowNum) -> new VectorRebuildItem(rs.getString("id"), rs.getString("brief")));
+	}
+
+	public void clearTableVectors(String indexName) {
+		jdbcTemplate.execute("UPDATE " + quotedTable(indexName) + " SET brief_vector = NULL");
+	}
+
+	public void updateTableVector(String indexName, String id, float[] vector) {
+		jdbcTemplate.update("UPDATE " + quotedTable(indexName) + " SET brief_vector = ?::vector WHERE id = ?",
+				new PGvector(vector), id);
+	}
+
+	public void clearDomainVectors(String domainId) {
+		for (String indexName : listDomainTables(domainId)) {
+			clearTableVectors(indexName);
+		}
+	}
+
 	/**
 	 * Clear the data of every vector table belonging to this sandbox (prefix-matched by namespace and domain),
 	 * keeping the tables and their file directories in place.
 	 */
-	public void truncateNamespace(String tmpNamespace, String domainId) {
-		String prefix = generateIndexNamePrefix(tmpNamespace);
+	public void truncateNamespace(String tmpNamespace, String domainId) {		String prefix = generateIndexNamePrefix(tmpNamespace);
 		for (String tableName : listVectorTables(prefix, domainId)) {
 			jdbcTemplate.execute("DELETE FROM " + quotedTable(tableName));
 			deleteFilesInDirectory(tableName);

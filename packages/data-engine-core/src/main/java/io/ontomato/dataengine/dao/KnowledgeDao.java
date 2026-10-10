@@ -3,6 +3,7 @@ package io.ontomato.dataengine.dao;
 import com.alibaba.fastjson2.JSON;
 import com.pgvector.PGvector;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.output.Response;
 import jakarta.annotation.PostConstruct;
@@ -24,6 +25,9 @@ public class KnowledgeDao extends BaseDao {
     @Autowired
     private EmbeddingService embeddingService;
 
+    @Autowired
+    private VectorRetrievalGate retrievalGate;
+
     private static final String TABLE_NAME = "knowledgeindex";
 
     private static final String COLUMNS = "knowledge_id, knowledge_title, knowledge_text, knowledge_tags, creator_type, status, modify_time, domain_id";
@@ -44,9 +48,9 @@ public class KnowledgeDao extends BaseDao {
                         + "creator_type INTEGER DEFAULT 0, "
                         + "status INTEGER DEFAULT 0, "
                         + "modify_time TIMESTAMP, "
-                        + "domain_id VARCHAR(64), "
-                        + "knowledge_vector vector(" + embeddingModelProperties.getDimensions() + ")"
-                        + ")");
+                         + "domain_id VARCHAR(64), "
+                         + "knowledge_vector vector"
+                         + ")");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_domain_id ON " + TABLE_NAME + "(domain_id)");
         jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_status ON " + TABLE_NAME + "(status)");
     }
@@ -55,12 +59,13 @@ public class KnowledgeDao extends BaseDao {
         List<KnowledgeEntity> knowledgeEntities = new ArrayList<>();
         float[] findVector = null;
         String queryString = "";
+        retrievalGate.requireRetrievable(domainId);
         try {
             Response<Embedding> embeddingResponse = embeddingService.embedding(question, domainId);
             findVector = embeddingResponse.content().vector();
 
             queryString = "SELECT " + COLUMNS + " FROM " + TABLE_NAME
-                    + " WHERE status = 1 AND domain_id = ? ORDER BY knowledge_vector <-> ?::vector LIMIT ?";
+                    + " WHERE status = 1 AND domain_id = ? AND knowledge_vector IS NOT NULL ORDER BY knowledge_vector <-> ?::vector LIMIT ?";
             PGvector pgVector = new PGvector(findVector);
 
             knowledgeEntities = jdbcTemplate.query(queryString,
@@ -119,6 +124,28 @@ public class KnowledgeDao extends BaseDao {
 
     public void deleteKnowledge(String knowledgeid) {
         jdbcTemplate.update("DELETE FROM " + TABLE_NAME + " WHERE knowledge_id = ?", knowledgeid);
+    }
+
+    public int countDomainRows(String domainId) {
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
+        return count == null ? 0 : count;
+    }
+
+    public List<VectorRebuildItem> listDomainVectors(String domainId) {
+        return jdbcTemplate.query(
+                "SELECT knowledge_id, knowledge_text FROM " + TABLE_NAME + " WHERE domain_id = ?",
+                (rs, rowNum) -> new VectorRebuildItem(rs.getString("knowledge_id"), rs.getString("knowledge_text")),
+                domainId);
+    }
+
+    public void clearDomainVectors(String domainId) {
+        jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET knowledge_vector = NULL WHERE domain_id = ?", domainId);
+    }
+
+    public void updateDomainVector(String knowledgeId, float[] vector) {
+        jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET knowledge_vector = ?::vector WHERE knowledge_id = ?",
+                new PGvector(vector), knowledgeId);
     }
 
     private KnowledgeEntity mapRow(java.sql.ResultSet rs) throws java.sql.SQLException {

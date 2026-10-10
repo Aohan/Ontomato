@@ -348,9 +348,13 @@
     "value": "Vector attribute cannot be written through this interface"
   },
   {
+    "key": "Vector.rebuildRequired",
+    "value": "The vectors of this domain need rebuilding: the embedding configuration changed. Rebuild the vectors before searching."
+  },
+  {
     "key": "AgentRole.notConfigured",
     "value": "No model is configured for role \"{0}\". Choose one in Model Configuration."
-  },
+  },,
   {
     "key": "AgentRole.query",
     "value": "Query"
