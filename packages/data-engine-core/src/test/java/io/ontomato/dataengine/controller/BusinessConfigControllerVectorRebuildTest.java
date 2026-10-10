@@ -88,7 +88,7 @@ class BusinessConfigControllerVectorRebuildTest {
 
     @Test
     void saveEmbeddingModelPersistsDimensions() {
-        JSONObject response = controller.saveEmbeddingModel(embeddingInput(2048));
+        JSONObject response = controller.saveEmbeddingModel("zh-CN", embeddingInput(2048));
 
         assertTrue(response.getBooleanValue("success"), response.toJSONString());
         ArgumentCaptor<BusinessConfig> captor = ArgumentCaptor.forClass(BusinessConfig.class);
@@ -99,7 +99,7 @@ class BusinessConfigControllerVectorRebuildTest {
     @Test
     void saveEmbeddingModelRejectsMissingOrNonPositiveDimensions() {
         for (JSONObject input : List.of(embeddingInput(null), embeddingInput(0), embeddingInput(-4))) {
-            JSONObject response = controller.saveEmbeddingModel(input);
+            JSONObject response = controller.saveEmbeddingModel("zh-CN", input);
             assertFalse(response.getBooleanValue("success"), input.toJSONString());
             assertTrue(response.getString("message").contains("dimensions"), response.toJSONString());
         }
@@ -109,10 +109,11 @@ class BusinessConfigControllerVectorRebuildTest {
     void saveEmbeddingModelRefusesWhileARebuildRuns() {
         when(vectorRebuildService.isRunning("d1")).thenReturn(true);
 
-        JSONObject response = controller.saveEmbeddingModel(embeddingInput(2048));
+        JSONObject response = controller.saveEmbeddingModel("zh-CN", embeddingInput(2048));
 
         assertFalse(response.getBooleanValue("success"));
         assertTrue(response.getString("message").contains("Vector.saveRefusedWhileRebuilding"), response.toJSONString());
+        verify(langService).get(eq("zh-CN"), eq("Vector.saveRefusedWhileRebuilding"));
         verify(businessConfigService, org.mockito.Mockito.never()).set(any(), anyString());
     }
 
@@ -166,9 +167,9 @@ class BusinessConfigControllerVectorRebuildTest {
     @Test
     void rebuildVectorsRefusesWhenNotNeeded() {
         org.mockito.Mockito.doThrow(new IllegalStateException("Vector.rebuildNotNeeded"))
-                .when(vectorRebuildService).start("d1");
+                .when(vectorRebuildService).start(eq("d1"), anyString());
 
-        JSONObject response = controller.rebuildVectors();
+        JSONObject response = controller.rebuildVectors("zh-CN");
 
         assertFalse(response.getBooleanValue("success"));
         assertTrue(response.getString("message").contains("Vector.rebuildNotNeeded"), response.toJSONString());
@@ -176,10 +177,10 @@ class BusinessConfigControllerVectorRebuildTest {
 
     @Test
     void rebuildVectorsStartsAndReturnsAtOnce() {
-        JSONObject response = controller.rebuildVectors();
+        JSONObject response = controller.rebuildVectors("zh-CN");
 
         assertTrue(response.getBooleanValue("success"));
-        verify(vectorRebuildService).start("d1");
+        verify(vectorRebuildService).start("d1", "zh-CN");
     }
 
 }

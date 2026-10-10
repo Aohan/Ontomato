@@ -10,7 +10,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,8 +77,9 @@ class VectorRebuildServiceTest {
     void startRefusesWhenNoRebuildIsNeeded() {
         when(businessConfigService.get("d1")).thenReturn(config(2048, 2048));
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.start("d1"));
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.start("d1", "zh-CN"));
         assertTrue(error.getMessage().contains("Vector.rebuildNotNeeded"), error.getMessage());
+        verify(langService).get(eq("zh-CN"), eq("Vector.rebuildNotNeeded"));
         assertFalse(service.isRunning("d1"));
     }
 
@@ -88,19 +88,21 @@ class VectorRebuildServiceTest {
         when(businessConfigService.get("d1")).thenReturn(config(1024, 2048));
         rebuildTracker.tryStart("d1");
 
-        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.start("d1"));
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.start("d1", "zh-CN"));
         assertTrue(error.getMessage().contains("Vector.rebuildAlreadyRunning"), error.getMessage());
+        verify(langService).get(eq("zh-CN"), eq("Vector.rebuildAlreadyRunning"));
     }
 
     @Test
     void runSuccessPublishesTheStartTimeConfiguration() {
-        BusinessConfig businessConfig = config(1024, 2048);
-        when(businessConfigService.get("d1")).thenReturn(businessConfig);
+        // A fresh instance per read, like the deserialized database record.
+        BusinessConfig firstRead = config(1024, 2048);
+        when(businessConfigService.get("d1")).thenReturn(firstRead, config(1024, 2048));
         when(knowledgeDao.countDomainRows("d1")).thenReturn(1);
         when(knowledgeDao.listDomainVectors("d1"))
                 .thenReturn(List.of(new VectorRebuildItem("k1", "hello")));
 
-        service.run("d1", businessConfig.getEmbeddingModelProperties());
+        service.run("d1", firstRead.getEmbeddingModelProperties());
 
         ArgumentCaptor<float[]> vector = ArgumentCaptor.forClass(float[].class);
         verify(knowledgeDao).updateDomainVector(eq("k1"), vector.capture());
@@ -109,10 +111,16 @@ class VectorRebuildServiceTest {
         verify(resourceDao).clearDomainVectors("d1");
 
         ArgumentCaptor<BusinessConfig> saved = ArgumentCaptor.forClass(BusinessConfig.class);
-        verify(businessConfigService).set(saved.capture(), eq("d1"));
-        assertEquals("http://emb/v1", saved.getValue().getEmbeddingVectorSource().getBaseUrl());
-        assertEquals("m1", saved.getValue().getEmbeddingVectorSource().getModelName());
-        assertEquals(2048, saved.getValue().getEmbeddingVectorSource().getDimensions());
+        verify(businessConfigService, org.mockito.Mockito.times(2)).set(saved.capture(), eq("d1"));
+        assertEquals(2, saved.getAllValues().size());
+        BusinessConfig.EmbeddingVectorSource invalidated = saved.getAllValues().get(0).getEmbeddingVectorSource();
+        assertNull(invalidated.getBaseUrl());
+        assertNull(invalidated.getModelName());
+        assertNull(invalidated.getDimensions());
+        BusinessConfig.EmbeddingVectorSource published = saved.getAllValues().get(1).getEmbeddingVectorSource();
+        assertEquals("http://emb/v1", published.getBaseUrl());
+        assertEquals("m1", published.getModelName());
+        assertEquals(2048, published.getDimensions());
 
         VectorRebuildTracker.Progress progress = rebuildTracker.progressOf("d1");
         assertFalse(progress.isRunning());
@@ -135,7 +143,17 @@ class VectorRebuildServiceTest {
 
         service.run("d1", businessConfig.getEmbeddingModelProperties());
 
-        verify(businessConfigService, never()).set(any(), anyString());
+        // Only the invalidation write happens: the start-time configuration is never published.
+        ArgumentCaptor<BusinessConfig> saved = ArgumentCaptor.forClass(BusinessConfig.class);
+        verify(businessConfigService, org.mockito.Mockito.times(1)).set(saved.capture(), eq("d1"));
+        BusinessConfig.EmbeddingVectorSource invalidated = saved.getValue().getEmbeddingVectorSource();
+        assertNull(invalidated.getBaseUrl());
+        assertNull(invalidated.getModelName());
+        assertNull(invalidated.getDimensions());
+        // With the configuration reverted to the original values, the invalidated source still needs a rebuild.
+        BusinessConfig reverted = config(1024, 2048);
+        reverted.setEmbeddingVectorSource(invalidated);
+        assertTrue(VectorRetrievalGate.isRebuildNeeded(reverted));
         VectorRebuildTracker.Progress progress = rebuildTracker.progressOf("d1");
         assertFalse(progress.isRunning());
         assertTrue(progress.getError().contains("embedding model down"), progress.getError());

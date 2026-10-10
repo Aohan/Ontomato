@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,6 +22,7 @@ import io.ontomato.dataengine.config.AgentConfig;
 import io.ontomato.dataengine.config.AgentRole;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.BusinessConfig.EmbeddingModelProperties;
+import io.ontomato.dataengine.config.ControllerConst;
 import io.ontomato.dataengine.config.ModelConfig;
 import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.core.bean.User;
@@ -239,14 +241,14 @@ public class BusinessConfigController {
 	
 	@PostMapping("/businessConfig/saveEmbeddingModel")
     @ResponseBody
-    public JSONObject saveEmbeddingModel(@RequestBody JSONObject input) {
+    public JSONObject saveEmbeddingModel(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject input) {
     	JSONObject ret = new JSONObject();
     	try {
     		User user = SystemUtils.getCurUser();
     		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
     		if (vectorRebuildService.isRunning(user.getDomainId())) {
     			throw new IllegalStateException(
-    					langService.get(businessConfig.getLang(), "Vector.saveRefusedWhileRebuilding"));
+    					langService.get(lang, "Vector.saveRefusedWhileRebuilding"));
     		}
     		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input), EmbeddingModelProperties.class);
     		if (embeddingModelProperties == null || embeddingModelProperties.getDimensions() == null
@@ -294,11 +296,11 @@ public class BusinessConfigController {
 
 	@PostMapping("/businessConfig/rebuildVectors")
     @ResponseBody
-    public JSONObject rebuildVectors() {
+    public JSONObject rebuildVectors(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang) {
     	JSONObject ret = new JSONObject();
     	try {
     		User user = SystemUtils.getCurUser();
-    		vectorRebuildService.start(user.getDomainId());
+    		vectorRebuildService.start(user.getDomainId(), lang);
     		ret.put("success", true);
     	} catch (Exception e) {
     		log.error(e.getMessage(), e);

@@ -76,9 +76,8 @@ public class VectorRebuildService {
     }
 
     /** Start the background rebuild of this domain and return at once. */
-    public void start(String domainId) {
+    public void start(String domainId, String lang) {
         BusinessConfig businessConfig = businessConfigService.get(domainId);
-        String lang = businessConfig.getLang();
         if (!VectorRetrievalGate.isRebuildNeeded(businessConfig)) {
             throw new IllegalStateException(langService.get(lang, "Vector.rebuildNotNeeded"));
         }
@@ -107,6 +106,13 @@ public class VectorRebuildService {
             for (String table : resourceTables) {
                 rebuildTracker.addTotal(domainId, vectorResourceDao.countTableRows(table));
             }
+
+            // Invalidate the recorded source before clearing: a failure or a restart must keep
+            // the rebuild marked as needed no matter how the configuration changes afterwards.
+            // A fresh read, so a configuration saved for another reason is not overwritten.
+            BusinessConfig invalidated = businessConfigService.get(domainId);
+            invalidated.setEmbeddingVectorSource(new BusinessConfig.EmbeddingVectorSource());
+            businessConfigService.set(invalidated, domainId);
 
             knowledgeDao.clearDomainVectors(domainId);
             bussinessExampleDao.clearDomainVectors(domainId);
