@@ -96,9 +96,7 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | --- | --- |
 | mysql | Accepts URL parameters such as `useUnicode=true&characterEncoding=utf8&useSSL=false`, e.g. `jdbc:mysql://db.example:3306/my_database?useUnicode=true&characterEncoding=utf8&useSSL=false`. |
 | postgresql | Select the schema in the URL with `currentSchema`, e.g. `jdbc:postgresql://db.example:5432/my_database?currentSchema=public`. |
-| oracle | Thin style, e.g. `jdbc:oracle:thin:@db.example:1521:orcl`. |
 | sqlserver | Select the database in the URL with `databaseName`, e.g. `jdbc:sqlserver://db.example:1433;databaseName=my_database`. |
-| db2 | e.g. `jdbc:db2://db.example:50000/my_database`. |
 | gaussdb | Scheme `jdbc:opengauss://`, e.g. `jdbc:opengauss://db.example:5432/my_database`. |
 | duckdb | The URL is a file path the backend can access, e.g. `jdbc:duckdb:/data/warehouse.duckdb`; `fields` is `url` only. |
 
@@ -119,7 +117,7 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | attr `name` | SQL column name. Adapters paste it unchanged and unquoted (`alias.column`). Same exact-match rule as the class name. |
 | attr `showName` | Saved on the ontomap and returned by `get-ontomap`. The schema text and SQL use `name` and `desc`. |
 | attr `desc` | Field description the model reads. `getSchemaByClassName` and the question-splitter schema put it in the "field description" column. Write the business meaning, units, and enumeration values. |
-| `type` | One of `varchar`, `text`, `int`, `long`, `double`, `date`, `timestamp`, `vector`. Adapters pick the SQL type and the comparison form from this value. When set to `vector`, it corresponds to a text column in the underlying database storing a JSON array `[{"path":"...","text":"..."}]`, which is maintained by the vector upload interface and should not be hand-written; vector writes are supported only on PostgreSQL and DuckDB (plus M3 on enterprise), while other data sources (MySQL, Oracle, SQL Server, Db2, GaussDB, Dameng) explicitly fail with unsupported; vector attributes cannot be used for equality or range comparisons and can only be semantically queried via DSL vector conditions. |
+| `type` | One of `varchar`, `text`, `int`, `long`, `double`, `date`, `timestamp`, `vector`. Adapters pick the SQL type and the comparison form from this value. When set to `vector`, it corresponds to a text column in the underlying database storing a JSON array `[{"path":"...","text":"..."}]`, which is maintained by the vector upload interface and should not be hand-written; vector writes are supported only on PostgreSQL and DuckDB, while other data sources (MySQL, SQL Server, GaussDB) explicitly fail with unsupported; vector attributes cannot be used for equality or range comparisons and can only be semantically queried via DSL vector conditions. |
 | `bizzKey` | On the DSL question path, `true` adds this column to the result when the query left it out. The SQL built for `ask` does not read this flag. Use `true` for columns that path should keep, and `false` otherwise. |
 | `enable` | `true` includes the column in the schema text and in SQL. `false` omits it. A missing value counts as enabled. Use `true`. |
 | `primaryKey` | Exactly one `true` on each class. The schema text marks it, and insert and object lookup use it as the id column. |

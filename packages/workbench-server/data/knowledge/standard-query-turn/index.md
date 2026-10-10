@@ -64,7 +64,7 @@ Standard ABC sub-queries, Harness inline DSL calls, and direct DSL execution sha
 
 1. **DSL validation and class name normalization**.
 2. **Vector condition rewriting + row permission injection** (`HttpRequestUtil.addVectorAndRowPermission`): all query entries must pass it, located **before** adapter routing; after injecting row permissions, the same query forms "no-permission + row-permission" dual DSL, each executed once.
-3. **Data adapter routing** (`DataAdapterFactory`): precisely matches mysql / postgresql / oracle and other relational adapters by the `dataAdapter` configuration string; **unmatched values silently fall back to the default adapter** — a wrong adapter configuration manifests as "thinking it is querying a relational database, but actually hitting the database", without error.
+3. **Data adapter routing** (`DataAdapterRegistry`): matches installed adapters (such as postgresql / mysql) by the `dataAdapter` configuration string; **uninstalled adapter types fail explicitly with an error and never fall back** — querying with an uninstalled or missing adapter type throws `IllegalArgumentException: Data adapter not installed in this edition`.
 4. **Execution**: the database directly executes the DSL, or the relational adapter first does DSL→SQL conversion then executes. In relational mode both the DSL and the converted SQL are logged at INFO level (`DSL for querying PostgreSQL:` / `converted SQL for PostgreSQL:`); on query failure the generated SQL is still kept in the failed result's query logic.
 5. **Result column permission masking** (after return), mechanism see [Permissions](../infrastructure-and-runtime-prerequisites/permissions.md).
 

@@ -6,12 +6,12 @@ import java.util.Set;
 /**
  * The operations a {@code DataAdapter} implementation actually supports.
  *
- * <p>Adapters are not uniform: PostgreSQL/DuckDB/M3 implement the full object-graph
- * write path, while the read-only relational adapters (MySQL, Oracle, GaussDB,
- * SQLServer, DB2, DM) only translate DSL to SQL against existing tables and throw
- * {@code UnsupportedDataAdapterOperationException} for the rest. A concrete test
- * declares the capabilities its adapter supports; the shared suite skips every
- * test gated on a capability the adapter does not have.</p>
+ * <p>Adapters are not uniform: object-graph adapters such as PostgreSQL and DuckDB
+ * implement the full object-graph write path, while read-only relational adapters
+ * such as MySQL, GaussDB, and SQLServer only translate DSL to SQL against existing
+ * tables and throw {@code UnsupportedDataAdapterOperationException} for the rest.
+ * A concrete test declares the capabilities its adapter supports; the shared suite
+ * skips every test gated on a capability the adapter does not have.</p>
  */
 public enum DataAdapterCapability {
 
@@ -42,7 +42,7 @@ public enum DataAdapterCapability {
 	/** {@code queryVectorAttr()} reads a vector attribute's current value. */
 	VECTOR_ATTR;
 
-	/** The full write path — what the "object-graph" adapters (PostgreSQL/DuckDB/M3) support. */
+	/** The full write path — what object-graph adapters such as PostgreSQL/DuckDB support. */
 	public static final Set<DataAdapterCapability> FULL = EnumSet.allOf(DataAdapterCapability.class);
 
 	/** The read-only relational path — what the query-only SQL adapters support. */

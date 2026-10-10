@@ -20,7 +20,7 @@ public interface DataAdapter {
 
 	/**
 	 * Test this adapter's connection without touching any saved configuration.
-	 * DuckDB overrides it to reject a missing database file before connecting; M3, which is not JDBC, runs one MQL instead.
+	 * DuckDB overrides it to reject a missing database file before connecting; non-JDBC adapters run their own probe instead.
 	 */
 	default JSONObject testConnection() throws Exception {
 		return new DataAdapterConnectionTester().test(this);

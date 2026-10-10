@@ -21,9 +21,7 @@
         <module>packages/data-adapter-test-support</module>
         <module>packages/data-adapters/postgresql</module>
         <module>packages/data-adapters/mysql</module>
-        <module>packages/data-adapters/oracle</module>
         <module>packages/data-adapters/sqlserver</module>
-        <module>packages/data-adapters/db2</module>
         <module>packages/data-adapters/gaussdb</module>
         <module>packages/data-adapters/duckdb</module>
         <module>apps/data-engine</module>
@@ -88,11 +86,6 @@
                 <version>2.2.40</version>
             </dependency>
             <dependency>
-                <groupId>mysql</groupId>
-                <artifactId>mysql-connector-java</artifactId>
-                <version>8.0.28</version>
-            </dependency>
-            <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>42.7.3</version>
@@ -103,20 +96,9 @@
                 <version>0.1.6</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.database.jdbc</groupId>
-                <artifactId>ojdbc8</artifactId>
-                <version>21.15.0.0</version>
-            </dependency>
-            <dependency>
                 <groupId>com.microsoft.sqlserver</groupId>
                 <artifactId>mssql-jdbc</artifactId>
                 <version>12.8.1.jre11</version>
-            </dependency>
-            <!-- Overrides the Spring Boot BOM (12.1.0.0) for the db2 adapter and every app that installs it. -->
-            <dependency>
-                <groupId>com.ibm.db2</groupId>
-                <artifactId>jcc</artifactId>
-                <version>11.5.9.0</version>
             </dependency>
             <dependency>
                 <groupId>org.opengauss</groupId>
