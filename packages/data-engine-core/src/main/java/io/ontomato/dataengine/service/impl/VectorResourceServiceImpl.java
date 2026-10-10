@@ -146,7 +146,7 @@ public class VectorResourceServiceImpl implements VectorResourceService {
 
 	private void writeObjectVectorAttr(DataAdapter adapter, Map<String, Object> classDef, String attrName,
 			String objectId, JSONArray updated) throws Exception {
-		String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
+		String pkField = DslUtil.getPrimaryKey(classDef);
 		JSONObject setValues = new JSONObject();
 		setValues.put(attrName, updated);
 		JSONObject where = new JSONObject();

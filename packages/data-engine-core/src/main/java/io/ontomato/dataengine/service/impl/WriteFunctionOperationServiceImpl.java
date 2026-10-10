@@ -270,7 +270,7 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	
 	/** Write the object's vector attribute back through the plain class def + plain object id; the adapter re-applies the sandbox prefix. */
 	private void writeVectorAttr(DataAdapter adapter, Map<String, Object> classDef, String attrName, String objectId, String sandboxId, JSONArray vectorAttr) throws Exception {
-		String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
+		String pkField = DslUtil.getPrimaryKey(classDef);
 		JSONObject setValues = new JSONObject();
 		setValues.put(attrName, vectorAttr);
 		JSONObject where = new JSONObject();

@@ -77,7 +77,7 @@ function withSecrets() {
   });
   openAi.agents.query.extra = "SECRET-ROLE";
   config.ontomato.sso = { clientSecret: "SECRET-SSO" };
-  config.ontomato["data-engine"].m3auth = "SECRET-M3";
+  config.ontomato["data-engine"].productionEnvPwd = "SECRET-PROD";
   config.newSection = { anything: "SECRET-NEW" };
   return config;
 }

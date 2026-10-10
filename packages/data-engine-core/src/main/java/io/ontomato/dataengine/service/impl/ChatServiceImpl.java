@@ -1,5 +1,6 @@
 package io.ontomato.dataengine.service.impl;
 
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -978,14 +979,6 @@ public class ChatServiceImpl implements ChatService {
     }
     
     @Override
-    public Map<String,Object> getM3Data(String queryJson, UserDataPermission permission, String domainId) {
-    	Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
-    	BusinessConfig businessConfig = businessConfigService.get(domainId);
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), queryJson, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
-		return results[1].rawResponse();
-    }
-    
-    @Override
     public JSONArray getMidSet(JSONObject dsl, UserDataPermission permission, String domainId) {
     	try {
     		JSONArray steps = dsl.getJSONObject("answer").getJSONArray("steps");
@@ -1055,7 +1048,7 @@ public class ChatServiceImpl implements ChatService {
     		JSONArray dsls = new JSONArray();
     		dsls.add(dsl);
     		BusinessConfig businessConfig = businessConfigService.get(domainId);
-			DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+			DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), JSON.toJSONString(dsls, Feature.WriteMapNullValue), null, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 			Map<String, Object> rowPermissionDataMap = results[1].rawResponse();
     		JSONObject rowPermissionDataMapJson = JSONObject.parseObject(JSON.toJSONString(rowPermissionDataMap, Feature.WriteMapNullValue));
     		JSONObject rowColPermissionDataMap = DslPermissionUtil.dealDslAnswerWithPermission(rowPermissionDataMapJson, permission, classDefs);

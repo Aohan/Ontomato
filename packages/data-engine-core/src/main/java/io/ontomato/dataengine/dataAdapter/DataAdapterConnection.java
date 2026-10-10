@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 public class DataAdapterConnection {
 	private String url;
+	private String company;
 	private String user;
 	private String password;
 }

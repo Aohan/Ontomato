@@ -1,5 +1,5 @@
 /** Fields a data adapter connection can have; which ones each adapter needs comes from its fields. */
-export type DataAdapterField = "url" | "user" | "password";
+export type DataAdapterField = "url" | "company" | "user" | "password";
 
 /** A data adapter installed in this edition. */
 export interface DataAdapterInfo {

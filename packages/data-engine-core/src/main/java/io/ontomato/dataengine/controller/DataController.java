@@ -66,13 +66,6 @@ public class DataController {
 		return dataService.queryInstanceGraph("neighborhood", param, SystemUtils.getCurUser().getDomainId());
 	}
 	
-	@PostMapping("/data/queryNextByNode")
-    @ResponseBody
-    public JSONObject queryNextByNode(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
-		User user = SystemUtils.getCurUser();
-		return dataService.queryNextByNode(param, lang, user.getDomainId());
-	}
-	
 	@PostMapping("/data/queryInfoByNode")
     @ResponseBody
     public JSONObject queryInfoByNode(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {

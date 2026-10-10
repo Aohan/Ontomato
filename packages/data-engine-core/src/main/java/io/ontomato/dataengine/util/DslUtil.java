@@ -308,22 +308,6 @@ public class DslUtil {
     	}
     }
     
-    public static void setRefName(JSONObject dsl) {
-    	JSONObject answer = dsl.getJSONObject("answer");
-    	if (answer != null) {
-    		JSONArray steps = answer.getJSONArray("steps");
-    		if (steps != null && steps.size() == 2) {
-    			JSONObject firstStep = steps.getJSONObject(0);
-    			JSONObject lastStep = steps.getJSONObject(1);
-    			String refName = "t" + UUID.randomUUID().toString();
-    			firstStep.getJSONObject("output").remove("save_table");
-    			firstStep.put("ref_name", refName);
-    			firstStep.put("direct_mql", true);
-    			lastStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0).getJSONArray("objects").getJSONObject(0).put("class", "$" + refName);
-    		}
-    	}
-    }
-    
     public static String fromQuestionDslToNodeDsl(String dslStr) {
 		List<Map> dsl = JSONArray.parseArray(dslStr, Map.class);
     	for (Map question : dsl) {
@@ -938,7 +922,7 @@ public class DslUtil {
 		return JSONArray.toJSONString(dsls, Feature.WriteMapNullValue);
 	}
 	
-	public static Object[] splitToVector(String dslStr, List<Map<String, Object>> classDefs, VectorResourceDao vectorResourceDao, String domainId, boolean useM3) throws Exception {
+	public static Object[] splitToVector(String dslStr, List<Map<String, Object>> classDefs, VectorResourceDao vectorResourceDao, String domainId) throws Exception {
 		JSONArray dsls = JSON.parseArray(dslStr);
 		Map<String, Map<String, Object>> classDefMap = new HashMap<String, Map<String, Object>>();
 		for (Map<String, Object> classDef : classDefs) {
@@ -1085,7 +1069,7 @@ public class DslUtil {
 						objIds.add("not found");
 					}
 					JSONObject idInArray = new JSONObject();
-					idInArray.put("field", useM3 ? "id" : getPrimaryKey(classDefMap.get(className)));
+					idInArray.put("field", getPrimaryKey(classDefMap.get(className)));
 					idInArray.put("operator", "in");
 					idInArray.put("value", objIds);
 					
@@ -1121,9 +1105,9 @@ public class DslUtil {
 	/**
 	 * Resolve the primary-key field name of a class definition.
 	 *
-	 * <p>M3 objects always use the implicit {@code id} field; relational adapters use the attribute marked
-	 * {@code primaryKey=true}. When no attribute is marked, this falls back to {@code "id"} so that the result
-	 * stays identical to the historical hard-coded {@code "id"} for classes without an explicit primary key.</p>
+	 * <p>The attribute marked {@code primaryKey=true}. When no attribute is marked, this falls back to {@code "id"}
+	 * so that the result stays identical to the historical hard-coded {@code "id"} for classes without an explicit
+	 * primary key.</p>
 	 */
 	public static String getPrimaryKey(Map<String, Object> classDef) {
 		String pk = "id";
@@ -1168,19 +1152,6 @@ public class DslUtil {
 			}
 		}
 		return result;
-	}
-
-	public static boolean isSupportM3ModeV1(JSONObject dsl, List<Map<String, Object>> classDefs) {
-		boolean fourBasic = false;
-		Map<String, DslConsanguinity> consanguinityMap = findConsanguinityFromDsl(dsl, classDefs);
-		for (String key : consanguinityMap.keySet()) {
-			DslConsanguinity consanguinity = consanguinityMap.get(key);
-			if (consanguinity.getAttrName() == null || "".equals(consanguinity.getAttrName().trim())) {
-				fourBasic = true;
-				break;
-			}
-		}
-		return !fourBasic;
 	}
 	
 }
