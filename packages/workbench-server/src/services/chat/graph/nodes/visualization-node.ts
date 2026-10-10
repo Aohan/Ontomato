@@ -313,9 +313,7 @@ export async function visualizationNode(state: GraphState, config?: any): Promis
     });
     const chart = generation.charts[0];
     if (!chart) {
-      const errorMsg =
-        generation.diagnostics.map((d) => d.message).join("\n") ||
-        t("viz.chartGenerationFailed");
+      const errorMsg = generation.diagnostics.map((d) => d.message).join("\n");
       const reason = generation.diagnostics[0]?.reason;
       visThinking = failVisStep(
         visThinking,

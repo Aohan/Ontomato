@@ -242,9 +242,9 @@ The user asks to continue analyzing the previous round's result; the task is cle
 }
 ```
 
-User (previous round was order details): "Count by service type and make a chart."
+User (previous round listed after-sales order details for January): "Count by type and make a chart."
 
-The historical result only contains detail rows and lacks aggregated count metrics by type; new grouping and counting are required, so generate a new query with visualization instead of reusing historicalQueryRunId.
+The historical result only contains detail rows and lacks aggregated count metrics by type; new grouping and counting are required, so generate a new query that preserves the previous round's January condition and append visualization, without filling historicalQueryRunId.
 
 ```json
 {
@@ -252,11 +252,11 @@ The historical result only contains detail rows and lacks aggregated count metri
   "steps": [
     {
       "type": "query",
-      "question": "Count the number of after-sales orders by service type."
+      "question": "Count the number of after-sales orders in January by service type."
     },
     {
       "type": "visualization",
-      "instruction": "Display a chart of after-sales orders count by service type."
+      "instruction": "Display a chart of after-sales orders count in January by service type."
     }
   ]
 }

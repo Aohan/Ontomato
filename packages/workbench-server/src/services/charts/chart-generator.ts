@@ -47,7 +47,7 @@ function isNumeric(value: unknown): boolean {
   );
 }
 
-function hasValidFields(plan: ChartPlan, data: ChartDatasetCandidate["data"]): string | undefined {
+function fieldValidationError(plan: ChartPlan, data: ChartDatasetCandidate["data"]): string | undefined {
   const fields = new Set(data.flatMap((row) => Object.keys(row)));
   const boundFields: Array<{ param: "xField" | "yField" | "seriesField"; value: string | undefined }> = [
     { param: "xField", value: plan.xField },
@@ -75,12 +75,7 @@ function hasValidFields(plan: ChartPlan, data: ChartDatasetCandidate["data"]): s
     "sunburst",
   ].includes(plan.chartType);
   if (requiresAxes && (!plan.xField || !plan.yField)) {
-    const missingField =
-      !plan.xField && !plan.yField
-        ? "xField, yField"
-        : !plan.xField
-          ? "xField"
-          : "yField";
+    const missingField = ([!plan.xField && "xField", !plan.yField && "yField"].filter(Boolean) as string[]).join(", ");
     return tApp("queryFixed.274", { chartType: plan.chartType, missingField });
   }
   if (
@@ -213,7 +208,7 @@ export async function generateChartsFromCandidates(params: {
           diagnose("invalid_plan", tApp("queryFixed.278", { skillId: plan.skillId }));
           continue;
         }
-        const fieldError = hasValidFields(plan, source.data);
+        const fieldError = fieldValidationError(plan, source.data);
         if (fieldError) {
           diagnose("invalid_plan", fieldError);
           continue;
