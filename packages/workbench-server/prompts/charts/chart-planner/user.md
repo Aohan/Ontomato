@@ -14,6 +14,7 @@ Return a JSON array of 0 to {{maxCharts}} charts; return [] when there is no sui
 - sourceSubQuestion must exactly equal a candidate identity; skillId must come from the available skills, and chartType is selected by you based on that skill's description.
 - Field bindings and common parameters are written at the top level: xField, yField, seriesField, sortBy, sortOrder, topN, excludeCategoryValues; only fill the fields the selected skill needs.
 - Field names must genuinely exist in the corresponding data source. excludeCategoryValues keeps the string or number type of the category's original value, and each value must appear in the data evidence; use [] when there are no exclusions.
+- Charts are drawn directly from existing rows and fields in candidate data; the pipeline does not perform grouping, counting, summing, or other calculations. If dimensions or metrics required by the task do not exist in candidate fields, do not fabricate fields; return [].
 - sortBy can only be xField, yField, none; sortOrder can only be asc, desc.
 - config only holds the skill's other dedicated parameters, does not repeat top-level parameters, and does not replace the candidate original data.
 - title, reason use {{language}}.

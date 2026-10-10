@@ -131,7 +131,6 @@ export async function runSummaryStage(
           data: item.data,
         })),
         maxCharts: Math.min(4, Math.max(2, evidence.length)),
-        failurePolicy: "diagnostic",
         signal: ctx.signal,
         enabledVisualizationSkillIds: visualizationSkillIds,
       });

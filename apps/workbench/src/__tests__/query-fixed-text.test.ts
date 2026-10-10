@@ -94,25 +94,12 @@ describe("oss query fixed text", () => {
       scopeId: "scope-1",
       candidates: [candidate],
       maxCharts: 1,
-      failurePolicy: "diagnostic",
     });
-    expect(diagnostic.error).toBeUndefined();
     expect(diagnostic.diagnostics[0]).toMatchObject({
       scopeId: "scope-1",
       reason: "no_viable_plan",
-      message: "The chart planning stage produced no executable chart plan",
+      message: "The chart planning stage produced no executable chart plan (candidate fields: q1: [x, y])",
     });
-    const failed = await generateChartsFromCandidates({
-      domainId: "domain-1",
-      userQuestion: "q",
-      scopeId: "scope-1",
-      candidates: [candidate],
-      maxCharts: 1,
-      failurePolicy: "error",
-    });
-    expect(failed.error).toBe("LLM did not return valid config JSON");
-    expect(failed.diagnostics[0]?.message).toBe("The chart planning stage produced no executable chart plan");
-    expect(failed.diagnostics[0]?.reason).toBe("no_viable_plan");
 
     const label = t("query.branch.static");
     expect(label).toBe("Fixed Metrics Hot Data");

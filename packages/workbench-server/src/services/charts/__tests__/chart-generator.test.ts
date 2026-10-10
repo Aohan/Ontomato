@@ -91,14 +91,39 @@ describe("generateChartsFromCandidates", () => {
         },
       ],
       maxCharts: 1,
-      failurePolicy: "error",
     });
 
-    expect(result.error).toBeUndefined();
     expect(result.charts).toHaveLength(1);
     expect(result.charts[0].skillId).toBe("custom-bar-skill");
     expect(result.charts[0].chartType).toBe("bar");
     expect(result.charts[0].html).toBe("<div id='chart'>rendered chart</div>");
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("diagnoses invalid_plan with missing field and existing fields when yField does not exist in data", async () => {
+    const result = await generateChartsFromCandidates({
+      domainId: "domain-1",
+      userQuestion: "Sales by department",
+      scopeId: "scope-2",
+      candidates: [
+        {
+          sourceSubQuestion: "q1",
+          data: [
+            { dept: "Engineering", count: 10 },
+            { dept: "Sales", count: 20 },
+          ],
+        },
+      ],
+      maxCharts: 1,
+    });
+
+    expect(result.charts).toHaveLength(0);
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]).toMatchObject({
+      scopeId: "scope-2",
+      reason: "invalid_plan",
+    });
+    expect(result.diagnostics[0].message).toContain("sales");
+    expect(result.diagnostics[0].message).toContain("dept, count");
   });
 });

@@ -295,7 +295,6 @@ export const en = {
     `Visualization generation failed: ${params?.error ?? ""}`,
   "viz.noHtmlGenerated": "No HTML generated",
   "viz.chartGenerationFailed": "Chart generation failed",
-  "viz.generationFailedNoHtml": "Visualization generation failed: no HTML generated",
 
   // Response node
   "response.generationComplete": "✓ Reply generation complete",
@@ -334,9 +333,6 @@ export const en = {
   "api.noReportToExport": "No analysis report to export",
 
   // Visualization messages
-  "viz.noValidConfigJson": "LLM did not return valid config JSON",
-  "viz.missingChartConfig": "LLM config missing required fields (chartType, title)",
-  "viz.missingAxisConfig": "LLM config missing required fields (xField, yField)",
   "viz.pieDataTooLarge": (params?: Record<string, any>) =>
     `Pie/rose charts not suitable for more than 10 data points (current: ${params?.count ?? 0}), please choose another chart type`,
   "viz.generating": (params?: Record<string, any>) => `Generating ${params?.type ?? ""}...`,
