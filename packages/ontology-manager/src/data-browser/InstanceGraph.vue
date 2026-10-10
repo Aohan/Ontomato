@@ -4,32 +4,39 @@ import {
   Box,
   DatabaseZap,
   Download,
-  Focus,
-  Maximize2,
+  Crosshair,
+  Scan,
+  Network,
   MousePointerClick,
   RefreshCw,
   Search,
   Unplug,
   ZoomIn,
   ZoomOut,
+  GitFork,
+  CircleMinus,
+  SlidersHorizontal,
+  X,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
-import { ElButton, ElSelectV2, vLoading } from "element-plus";
+import { ElButton, ElSelect, ElOption, ElCheckbox, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
-import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult } from "../api";
+import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult, InstanceGraphSummary } from "../api";
 import { useManagerClient, useManagerContext, useOntologyText, useSharedText } from "../context";
 import {
   drawInstanceGraphBatches,
   GRAPH_BATCH_SIZE,
   instanceNodePosition,
   isLargeInstanceGraph,
+  neighborNodePosition,
+  instanceEdgeGeometry,
 } from "./instance-graph-rendering";
 
 const context = useManagerContext();
 const { message, confirm } = useManagerFeedback();
 const { ot } = useOntologyText();
 const { t } = useSharedText();
-const { loadInstanceGraph, refreshStarChartData, queryInstanceInfo, loadOntology } =
+const { loadInstanceGraphSummary, searchInstanceGraph, loadInstanceNeighborhood, refreshStarChartData, queryInstanceInfo, loadOntology } =
   useManagerClient();
 
 const graphRef = ref<HTMLDivElement | null>(null);
@@ -42,20 +49,70 @@ const edges = shallowRef<InstanceGraphEdge[]>([]);
 const selectedNode = ref<InstanceGraphNode | null>(null);
 const selectedClassLabel = ref("");
 const selectedAttributes = ref<Array<{ name: string; showName: string; value: unknown }>>([]);
+const detailsLoading = ref(false);
+const detailsError = ref("");
+const nodeActionPosition = ref<{ x: number; y: number } | null>(null);
+const neighborClass = ref("");
+const relationType = ref("");
+const direction = ref("both");
+const fitAfterExpand = ref(false);
+const appliedNeighborFilters = shallowRef<{ neighborClass?: string; relationType?: string; direction?: string }>({});
+const filtersDirty = computed(() => (appliedNeighborFilters.value.neighborClass || "") !== neighborClass.value
+  || (appliedNeighborFilters.value.relationType || "") !== relationType.value
+  || (appliedNeighborFilters.value.direction || "both") !== direction.value);
+const versionChanged = ref(false);
+const relationLabels = ref<Record<string, string>>({});
 const classLabels = ref<Record<string, string>>({});
 const layouting = ref(false);
 const rendering = ref(false);
 const renderedElements = ref(0);
 const largeGraph = computed(() => isLargeInstanceGraph(nodes.value.length, edges.value.length));
+const summary = shallowRef<InstanceGraphSummary | null>(null);
+const overview = ref(true);
+const selectedClass = ref("");
+const searchNodes = shallowRef<InstanceGraphNode[]>([]);
+const searching = ref(false);
+const searchMore = ref(false);
+const expanding = ref(false);
+const neighborPages = shallowRef<Record<string, { nextOffset: number | null; total: number; loaded: number }>>({});
+const currentPage = computed(() => selectedNode.value ? neighborPages.value[selectedNode.value.id] : undefined);
+let searchRequest = 0;
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 
 let graph: Graph | null = null;
 let selectedId = "";
 let nodeInfoRequest = 0;
 let graphRequest = 0;
 let resizeObserver: ResizeObserver | null = null;
+let generationTimer: ReturnType<typeof setTimeout> | undefined;
+
+function saveOverviewLayout() {
+  if (!overview.value || !graph || !summary.value || rendering.value) return;
+  const positions = Object.fromEntries(graph.getNodeData().map((node) => [node.id, {
+    x: Number(node.style?.x), y: Number(node.style?.y),
+  }]).filter(([, position]) => {
+    const point = position as { x: number; y: number };
+    return Number.isFinite(point.x) && Number.isFinite(point.y);
+  }));
+  try {
+    localStorage.setItem(`ontology-instance-overview:${context.apiBase}`, JSON.stringify({ version: summary.value.version, positions }));
+  } catch { /* Storage may be unavailable in embedded browsers. */ }
+}
+
+function readOverviewLayout(): Record<string, { x: number; y: number }> | null {
+  if (!overview.value || !summary.value) return null;
+  try {
+    const saved = JSON.parse(localStorage.getItem(`ontology-instance-overview:${context.apiBase}`) || "null");
+    if (!saved?.positions) return null;
+    const valid = Object.fromEntries(nodes.value.filter((node) => Number.isFinite(saved.positions[node.id]?.x)
+      && Number.isFinite(saved.positions[node.id]?.y)).map((node) => [node.id, saved.positions[node.id]]));
+    return Object.keys(valid).length ? valid : null;
+  } catch { return null; }
+}
+
 
 const searchOptions = computed(() =>
-  nodes.value.map((node) => ({
+  searchNodes.value.map((node) => ({
     value: node.id,
     label: `${node.name || node.id} · ${node.id} · ${classLabels.value[node.class] || node.class} · ${node.class}`,
     name: node.name || node.id,
@@ -113,13 +170,17 @@ function nodeOptions(colors: ReturnType<typeof graphColors>) {
   return {
     type: "circle" as const,
     style: {
-      size: 46,
+      size: (datum: any) => {
+        if (!overview.value) return 32;
+        const count = summary.value?.classes.find((item) => item.class === datum.id)?.instanceCount ?? 1;
+        return Math.min(100, 40 + Math.log2(count + 1) * 4);
+      },
       fill: (datum: any) => datum.data.color,
       stroke: colors.nodeStroke,
       lineWidth: 4,
       shadowColor: colors.shadow,
       shadowBlur: largeGraph.value ? 0 : 10,
-      labelText: (datum: any) => datum.data.node.name || datum.id,
+      labelText: (datum: any) => largeGraph.value ? "" : datum.data.node.name || datum.id,
       labelFill: colors.text,
       labelFontSize: 12,
       labelFontWeight: 600,
@@ -139,7 +200,13 @@ function edgeOptions(colors: ReturnType<typeof graphColors>) {
     style: {
       stroke: colors.edge,
       lineWidth: 1.5,
-      endArrow: true,
+      endArrow: !largeGraph.value,
+      labelText: (datum: any) => {
+        if (!overview.value) return relationLabels.value[datum.data?.type] || datum.data?.type || "";
+        const types = Array.isArray(datum.data?.types) ? datum.data.types : datum.data?.type ? [datum.data.type] : [];
+        return types.map((type: string) => relationLabels.value[type] || type).join(" / ");
+      },
+      labelFill: colors.muted,
     },
   };
 }
@@ -185,9 +252,21 @@ async function renderGraph(request: number) {
   });
   graph = target;
   target.on("node:click", (event: any) => {
-    if (!rendering.value) void selectNode(event.target.id);
+    if (!rendering.value && !expanding.value) {
+      if (overview.value) void chooseClass(event.target.id);
+      else void selectNode(event.target.id);
+    }
   });
   target.on("canvas:click", clearSelection);
+  target.on("aftertransform", updateNodeActionPosition);
+  target.on("afterdraw", updateNodeActionPosition);
+  target.on("node:dragend", updateNodeActionPosition);
+  target.on("node:dragend", saveOverviewLayout);
+  target.on("node:dblclick", (event: any) => {
+    if (!overview.value && !rendering.value && !expanding.value) {
+      void selectNode(event.target.id).then(expandNeighbors);
+    }
+  });
   const isCurrent = () => request === graphRequest && graph === target;
   rendering.value = true;
   renderedElements.value = 0;
@@ -200,7 +279,17 @@ async function renderGraph(request: number) {
       onProgress: (completed) => { renderedElements.value = completed; },
     });
     if (!complete) return;
-    if (!largeGraph.value && nodes.value.length) await target.layout(graphLayout());
+    if (overview.value && summary.value) {
+      target.updateEdgeData(summary.value.relationships.map((edge, index) => ({
+        id: `edge:${index}:${edge.source}:${edge.target}`, data: { count: edge.count, type: edge.type, types: edge.types },
+      })));
+      await target.draw();
+    }
+    const savedLayout = readOverviewLayout();
+    if (savedLayout) {
+      target.updateNodeData(nodes.value.map((node, index) => ({ id: node.id, style: savedLayout[node.id] || instanceNodePosition(index, nodes.value.length) })));
+      await target.draw();
+    } else if (!largeGraph.value && nodes.value.length) await target.layout(graphLayout());
     if (isCurrent()) await fitGraph(target);
   } finally {
     if (isCurrent()) rendering.value = false;
@@ -208,7 +297,7 @@ async function renderGraph(request: number) {
 }
 
 async function relayoutGraph() {
-  if (!graph || layouting.value || loading.value || rendering.value) return;
+  if (!graph || layouting.value || loading.value || rendering.value || expanding.value) return;
   const target = graph;
   const request = graphRequest;
   const isCurrent = () => request === graphRequest && graph === target;
@@ -228,6 +317,7 @@ async function relayoutGraph() {
       await target.layout(graphLayout());
     }
     if (isCurrent()) await fitGraph(target);
+    if (isCurrent()) saveOverviewLayout();
   } finally {
     if (isCurrent()) layouting.value = false;
   }
@@ -243,6 +333,7 @@ function applySelection(id: string) {
 }
 
 function clearSelection() {
+  nodeActionPosition.value = null;
   nodeInfoRequest += 1;
   if (graph && selectedId) {
     void graph.setElementState({ [selectedId]: [] }, false);
@@ -251,12 +342,16 @@ function clearSelection() {
   selectedNode.value = null;
   selectedClassLabel.value = "";
   selectedAttributes.value = [];
+  detailsLoading.value = false;
+  detailsError.value = "";
 }
 
 async function loadNodeInfo(node: InstanceGraphNode) {
   const request = ++nodeInfoRequest;
   selectedClassLabel.value = classLabels.value[node.class] || node.class;
   selectedAttributes.value = [];
+  detailsLoading.value = true;
+  detailsError.value = "";
   try {
     const info = await queryInstanceInfo(node.id, node.class);
     if (request !== nodeInfoRequest) return;
@@ -275,7 +370,10 @@ async function loadNodeInfo(node: InstanceGraphNode) {
   } catch (reason) {
     if (request !== nodeInfoRequest) return;
     selectedAttributes.value = [];
+    detailsError.value = reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed");
     message.error(reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed"));
+  } finally {
+    if (request === nodeInfoRequest) detailsLoading.value = false;
   }
 }
 
@@ -284,15 +382,185 @@ async function selectNode(id: string) {
   if (!node) return;
   selectedNode.value = node;
   applySelection(id);
+  updateNodeActionPosition();
   void loadNodeInfo(node);
+}
+
+function updateNodeActionPosition() {
+  if (!graph || !graphRef.value || !selectedNode.value || overview.value) {
+    nodeActionPosition.value = null;
+    return;
+  }
+  const style = graph.getNodeData().find((node) => node.id === selectedNode.value?.id)?.style;
+  if (!style) return;
+  const point = graph.getViewportByCanvas([Number(style.x || 0), Number(style.y || 0)]);
+  const { width, height } = graphRef.value.getBoundingClientRect();
+  nodeActionPosition.value = {
+    x: Math.max(90, Math.min(width - 90, point[0])),
+    y: Math.max(100, Math.min(height - 60, point[1] + 42)),
+  };
+}
+
+async function centerOnSelection() {
+  if (!selectedNode.value || rendering.value || expanding.value) return;
+  const node = selectedNode.value;
+  nodes.value = [node];
+  edges.value = [];
+  neighborPages.value = {};
+  await renderGraph(++graphRequest);
+  await selectNode(node.id);
+}
+
+async function focusSelection() {
+  if (!graph || !selectedNode.value || rendering.value || expanding.value) return;
+  await graph.focusElement(selectedNode.value.id, false);
+  updateNodeActionPosition();
 }
 
 async function focusNode(id: string | undefined) {
   const target = graph;
-  if (!id || !target || loading.value || rendering.value || layouting.value) return;
+  if (!id || !target || loading.value || rendering.value || layouting.value || expanding.value) return;
+  const match = searchNodes.value.find((node) => node.id === id);
+  if (!match) return;
+  overview.value = false;
+  clearSelection();
+  nodes.value = [match];
+  edges.value = [];
+  neighborPages.value = {};
+  await renderGraph(++graphRequest);
   await selectNode(id);
-  await target.zoomTo(Math.max(1, target.getZoom()), false);
-  await target.focusElement(id, false);
+  if (graph) {
+    await graph.zoomTo(Math.max(1, graph.getZoom()), false);
+    await graph.focusElement(id, false);
+  }
+}
+
+function scheduleSearch(term: string) {
+  clearTimeout(searchTimer);
+  const request = ++searchRequest;
+  searchNodes.value = [];
+  searchMore.value = false;
+  searching.value = false;
+  if (!term.trim() && !selectedClass.value) return;
+  searching.value = true;
+  searchTimer = setTimeout(() => { void runSearch(term, request); }, 250);
+}
+
+async function runSearch(term: string, request: number) {
+  const version = summary.value?.version;
+  if (!version) { searching.value = false; return; }
+  try {
+    const result = await searchInstanceGraph(term, version, selectedClass.value || undefined);
+    if (request !== searchRequest) return;
+    searchNodes.value = result.nodes;
+    searchMore.value = result.hasMore;
+  } catch (reason) {
+    if (request === searchRequest) reportGraphError(reason);
+  } finally {
+    if (request === searchRequest) searching.value = false;
+  }
+}
+
+function reportGraphError(reason: unknown) {
+  if ((reason as { code?: string })?.code === "GRAPH_VERSION_CHANGED") versionChanged.value = true;
+  else message.error(reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed"));
+}
+
+async function chooseClass(id: string) {
+  clearSelection();
+  selectedClass.value = id;
+  clearTimeout(searchTimer);
+  searching.value = true;
+  await runSearch("", ++searchRequest);
+}
+
+async function showOverview(request = ++graphRequest) {
+  if (!summary.value) return;
+  clearSelection();
+  clearTimeout(searchTimer);
+  searchRequest++;
+  searching.value = false;
+  searchNodes.value = [];
+  searchMore.value = false;
+  selectedClass.value = "";
+  neighborPages.value = {};
+  neighborClass.value = "";
+  relationType.value = "";
+  direction.value = "both";
+  appliedNeighborFilters.value = {};
+  overview.value = true;
+  nodes.value = summary.value.classes.map((item) => ({
+    id: item.class, class: item.class,
+    name: `${classLabels.value[item.class] || item.class} (${item.instanceCount.toLocaleString()})`,
+  }));
+  edges.value = summary.value.relationships;
+  await renderGraph(request);
+}
+
+async function expandNeighbors() {
+  const node = selectedNode.value;
+  const version = summary.value?.version;
+  const target = graph;
+  if (!node || !version || !target || expanding.value || rendering.value || filtersDirty.value || versionChanged.value) return;
+  const page = neighborPages.value[node.id];
+  if (page?.nextOffset === null) return;
+  if (nodes.value.length >= 1000 || edges.value.length >= 2000) {
+    message.info(ot("instanceGraphBudget"));
+    return;
+  }
+  const request = graphRequest;
+  expanding.value = true;
+  try {
+    const result = await loadInstanceNeighborhood(node.id, version, page?.nextOffset ?? 0, appliedNeighborFilters.value);
+    if (request !== graphRequest || graph !== target) return;
+    const knownNodes = new Set(nodes.value.map((item) => item.id));
+    const knownEdges = new Set(edges.value.map((item) => JSON.stringify([item.source, item.target, item.type])));
+    const addedNodes = result.nodes.filter((item) => !knownNodes.has(item.id));
+    const addedEdges = result.edges.filter((item) => !knownEdges.has(JSON.stringify([item.source, item.target, item.type])));
+    if (nodes.value.length + addedNodes.length > 1000 || edges.value.length + addedEdges.length > 2000) {
+      message.info(ot("instanceGraphBudget"));
+      return;
+    }
+    const center = target.getNodeData(node.id).style ?? { x: 0, y: 0 };
+    nodes.value = [...nodes.value, ...addedNodes];
+    edges.value = [...edges.value, ...addedEdges];
+    target.addData({
+      nodes: addedNodes.map((item, index) => ({ id: item.id, data: { node: item, color: colorForClass(item.class) },
+        style: neighborNodePosition((page?.loaded ?? 0) + index, { x: Number(center.x || 0), y: Number(center.y || 0) }),
+      })),
+      edges: addedEdges.map((item) => ({ ...item, id: `connection:${JSON.stringify([item.source, item.target, item.type])}`,
+        data: { type: item.type, label: item.label } })),
+    });
+    const geometry = instanceEdgeGeometry(edges.value);
+    target.updateEdgeData(edges.value.map((item, index) => ({ id: `connection:${JSON.stringify([item.source, item.target, item.type])}`, ...geometry[index] })));
+    await target.draw();
+    if (request !== graphRequest) return;
+    neighborPages.value = { ...neighborPages.value, [node.id]: {
+      nextOffset: result.nextOffset, total: result.total,
+      loaded: (page?.loaded ?? 0) + result.edges.length,
+    } };
+    if (fitAfterExpand.value) await fitGraph(target);
+  } catch (reason) {
+    if (request === graphRequest) reportGraphError(reason);
+  } finally {
+    expanding.value = false;
+  }
+}
+
+async function applyNeighborhoodFilters() {
+  if (!selectedNode.value || expanding.value || rendering.value) return;
+  const node = selectedNode.value;
+  appliedNeighborFilters.value = {
+    ...(neighborClass.value ? { neighborClass: neighborClass.value } : {}),
+    ...(relationType.value ? { relationType: relationType.value } : {}),
+    ...(direction.value !== 'both' ? { direction: direction.value } : {}),
+  };
+  nodes.value = [node];
+  edges.value = [];
+  neighborPages.value = {};
+  await renderGraph(++graphRequest);
+  await selectNode(node.id);
+  await expandNeighbors();
 }
 
 function zoomIn() {
@@ -339,7 +607,16 @@ function downloadGraph() {
 }
 
 async function refresh() {
+  clearTimeout(generationTimer);
+  versionChanged.value = false;
   const request = ++graphRequest;
+  clearTimeout(searchTimer);
+  searchRequest++;
+  summary.value = null;
+  selectedClass.value = "";
+  searchMore.value = false;
+  searching.value = false;
+  searchNodes.value = [];
   clearSelection();
   graph?.destroy();
   graph = null;
@@ -350,16 +627,19 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    const [result, ontology] = await Promise.all([loadInstanceGraph(), loadOntology()]);
+    const [result, ontology] = await Promise.all([loadInstanceGraphSummary(), loadOntology()]);
     if (request !== graphRequest) return;
     classLabels.value = Object.fromEntries(
       ontology.objects.map((object) => [object.className, object.showName])
     );
+    relationLabels.value = Object.fromEntries(ontology.relations.map((relation) => [relation.relationship, relation.showName || relation.relationship]));
     status.value = result.status;
-    nodes.value = result.status === "READY" ? result.graph.nodes : [];
-    edges.value = result.status === "READY" ? result.graph.edges : [];
-    clearSelection();
-    await renderGraph(request);
+    if (result.status === "READY") {
+      summary.value = result.summary;
+      await showOverview(request);
+    } else if (result.status === "GENERATING") {
+      generationTimer = setTimeout(() => { void refresh(); }, 2000);
+    }
   } catch (reason) {
     if (request !== graphRequest) return;
     error.value = reason instanceof Error ? reason.message : ot("loadInstanceGraphFailed");
@@ -382,6 +662,7 @@ async function regenerate() {
       await refresh();
     } else {
       message.info(ot("instanceGraphGenerating"));
+      generationTimer = setTimeout(() => { void refresh(); }, 2000);
     }
   } catch (reason) {
     message.error((reason as Error).message);
@@ -403,6 +684,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(generationTimer);
+  clearTimeout(searchTimer);
+  searchRequest++;
   graphRequest += 1;
   nodeInfoRequest += 1;
   resizeObserver?.disconnect();
@@ -418,6 +702,17 @@ onBeforeUnmount(() => {
     class="instance-graph"
   >
     <div ref="graphRef" class="graph-canvas" />
+    <div v-if="selectedNode && nodeActionPosition && !overview" class="node-actions"
+      :style="{ left: `${nodeActionPosition.x}px`, top: `${nodeActionPosition.y}px` }"
+      role="toolbar" :aria-label="selectedNode.name || selectedNode.id">
+      <button :title="ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand')"
+        :aria-label="ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand')"
+        :disabled="expanding || rendering || filtersDirty || versionChanged || currentPage?.nextOffset === null" @click="expandNeighbors"><GitFork :size="17" /></button>
+      <button :title="ot('instanceGraphCenter')" :aria-label="ot('instanceGraphCenter')"
+        :disabled="expanding || rendering" @click="focusSelection"><Crosshair :size="17" /></button>
+      <button :title="ot('instanceGraphCollapse')" :aria-label="ot('instanceGraphCollapse')"
+        :disabled="expanding || rendering || nodes.length <= 1" @click="centerOnSelection"><CircleMinus :size="17" /></button>
+    </div>
     <div v-if="error" class="graph-empty" role="alert"><strong>{{ error }}</strong></div>
 
     <div v-if="isEmpty" class="graph-empty">
@@ -435,16 +730,17 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <div class="graph-toolbar">
-      <button :title="ot('zoomIn')" @click="zoomIn"><ZoomIn :size="17" /></button>
-      <button :title="ot('zoomOut')" @click="zoomOut"><ZoomOut :size="17" /></button>
-      <button :title="ot('fitCanvas')" @click="fitGraphView"><Maximize2 :size="17" /></button>
-      <button :title="ot('relayout')" :disabled="loading || rendering || layouting" @click="relayoutGraph">
-        <Focus :size="17" />
+    <div class="graph-toolbar" role="toolbar" :aria-label="ot('instanceGraphTitle')">
+      <button :title="ot('zoomIn')" :aria-label="ot('zoomIn')" @click="zoomIn"><ZoomIn :size="17" /></button>
+      <button :title="ot('zoomOut')" :aria-label="ot('zoomOut')" @click="zoomOut"><ZoomOut :size="17" /></button>
+      <button :title="ot('fitCanvas')" :aria-label="ot('fitCanvas')" @click="fitGraphView"><Scan :size="17" /></button>
+      <button :title="ot('relayout')" :aria-label="ot('relayout')" :disabled="loading || rendering || layouting || expanding" @click="relayoutGraph">
+        <Network :size="17" />
       </button>
-      <button :title="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
-      <button :title="t('common.refresh')" @click="refresh"><RefreshCw :size="17" /></button>
-      <button :title="ot('regenerateInstanceGraph')" :disabled="regenerating" @click="regenerate">
+      <span class="toolbar-separator" aria-hidden="true" />
+      <button :title="ot('downloadPng')" :aria-label="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
+      <button :title="t('common.refresh')" :aria-label="t('common.refresh')" :disabled="expanding" @click="refresh"><RefreshCw :size="17" /></button>
+      <button :title="ot('regenerateInstanceGraph')" :aria-label="ot('regenerateInstanceGraph')" :disabled="regenerating" @click="regenerate">
         <DatabaseZap :size="17" />
       </button>
     </div>
@@ -452,6 +748,16 @@ onBeforeUnmount(() => {
     <div class="graph-hint">
       <span />
       {{ ot("instanceGraphHint") }}
+    </div>
+
+    <div v-if="summary" class="graph-summary">
+      <strong>{{ overview ? ot('instanceGraphTypes') : selectedNode?.name }}</strong>
+      <strong>{{ ot('instanceGraphSummary', { nodes: summary.nodeCount, edges: summary.edgeCount, components: summary.componentCount }) }}</strong>
+      <small>{{ ot('instanceGraphStructure', { isolated: summary.isolatedNodeCount, largest: summary.largestComponentSize, time: new Date(summary.generatedAt).toLocaleString(context.locale) }) }}</small>
+      <small v-if="!overview">{{ ot('instanceGraphVisible', { nodes: nodes.length, edges: edges.length }) }}</small>
+      <small v-if="summary.complete === false" role="alert" class="graph-warning">{{ ot('instanceGraphPartial', { failures: (summary.failures || []).join(', ') }) }}</small>
+      <el-button v-if="versionChanged" size="small" :icon="RefreshCw" @click="refresh">{{ ot('instanceGraphVersionChanged') }}</el-button>
+      <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
     </div>
 
     <aside class="inspector-panel">
@@ -462,7 +768,11 @@ onBeforeUnmount(() => {
           :placeholder="ot('searchInstanceNodes')"
           :aria-label="ot('searchInstanceNodes')"
           :no-match-text="ot('noMatchingResources')"
-          :disabled="loading || regenerating || layouting || !nodes.length"
+          :disabled="loading || regenerating || layouting || rendering || expanding || !summary"
+          :loading="searching"
+          remote
+          :debounce="0"
+          :remote-method="scheduleSearch"
           :item-height="52"
           filterable
           clearable
@@ -471,7 +781,7 @@ onBeforeUnmount(() => {
         >
           <template #prefix><Search :size="15" /></template>
           <template #label="{ value }">
-            {{ nodes.find((node) => node.id === value)?.name || value }}
+            {{ selectedNode?.name || value }}
           </template>
           <template #default="{ item }">
             <div class="node-search-option">
@@ -480,6 +790,20 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </el-select-v2>
+        <div v-if="selectedClass" class="search-scope">
+          <Box :size="13" aria-hidden="true" />
+          <span :title="classLabels[selectedClass] || selectedClass">{{ classLabels[selectedClass] || selectedClass }}</span>
+          <button :title="ot('instanceGraphClearScope')" :aria-label="ot('instanceGraphClearScope')" @click="selectedClass = ''; scheduleSearch('')"><X :size="13" /></button>
+        </div>
+        <p v-if="searchMore" class="search-status" role="status">{{ ot('instanceGraphSearchMore') }}</p>
+        <div v-if="overview && searchNodes.length" class="instance-candidates">
+          <button v-for="node in searchNodes" :key="node.id" :disabled="rendering || expanding" @click="focusNode(node.id)">
+            <span class="candidate-copy">
+              <span class="candidate-name" :title="node.name || node.id">{{ node.name || node.id }}</span>
+              <span class="candidate-meta" :title="`${classLabels[node.class] || node.class} · ${node.id}`">{{ classLabels[node.class] || node.class }} · {{ node.id }}</span>
+            </span>
+          </button>
+        </div>
       </div>
       <div class="panel-heading">
         <div>
@@ -488,6 +812,35 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <div v-if="selectedNode" class="detail-content">
+        <div class="neighbor-filters">
+          <div class="neighbor-field neighbor-field-wide">
+          <span class="neighbor-label">{{ ot('instanceGraphNeighbor') }}</span>
+          <el-select v-model="neighborClass" clearable :placeholder="ot('allObjectTypes')" :aria-label="ot('instanceGraphNeighbor')" :disabled="expanding || rendering">
+            <el-option v-for="item in summary?.classes" :key="item.class" :value="item.class" :label="classLabels[item.class] || item.class" />
+          </el-select>
+          </div>
+          <div class="neighbor-field neighbor-field-wide">
+          <span class="neighbor-label">{{ ot('instanceGraphRelation') }}</span>
+          <el-select v-model="relationType" clearable :placeholder="ot('instanceGraphAllRelations')" :aria-label="ot('instanceGraphRelation')" :disabled="expanding || rendering">
+            <el-option v-for="type in summary?.relationTypes" :key="type" :value="type" :label="relationLabels[type] || type" />
+          </el-select>
+          </div>
+          <div class="neighbor-field neighbor-field-wide">
+          <span class="neighbor-label">{{ ot('instanceGraphDirection') }}</span>
+          <el-select v-model="direction" :aria-label="ot('instanceGraphDirection')" :disabled="expanding || rendering">
+            <el-option value="both" :label="ot('instanceGraphBoth')" />
+            <el-option value="incoming" :label="ot('instanceGraphIncoming')" />
+            <el-option value="outgoing" :label="ot('instanceGraphOutgoing')" />
+          </el-select>
+          </div>
+          <div class="neighbor-filter-actions">
+            <p v-if="filtersDirty" class="neighbor-progress" role="status">{{ ot('instanceGraphFiltersPending') }}</p>
+            <el-checkbox v-model="fitAfterExpand">{{ ot('instanceGraphKeepView') }}</el-checkbox>
+            <el-button :icon="SlidersHorizontal" type="primary" :loading="expanding" :disabled="expanding || rendering" @click="applyNeighborhoodFilters">{{ ot('instanceGraphApply') }}</el-button>
+            <el-button :icon="GitFork" :loading="expanding" :disabled="rendering || filtersDirty || versionChanged || currentPage?.nextOffset === null" @click="expandNeighbors">{{ ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand') }}</el-button>
+            <p v-if="currentPage" class="neighbor-progress" role="status">{{ ot('instanceGraphConnections', { loaded: currentPage.loaded, total: currentPage.total }) }}</p>
+          </div>
+        </div>
         <div class="detail-title">
           <span class="resource-icon"><Box :size="16" /></span>
           <div class="detail-title-copy">
@@ -516,13 +869,13 @@ onBeforeUnmount(() => {
               <code>{{ attribute.value == null ? "-" : String(attribute.value) }}</code>
             </div>
           </div>
-          <p v-else class="empty-hint">{{ ot("noAttributes") }}</p>
+          <p v-else class="empty-hint" :role="detailsError ? 'alert' : 'status'">{{ detailsLoading ? ot('instanceGraphDetailsLoading') : detailsError || ot("noAttributes") }}</p>
         </div>
       </div>
       <div v-else class="inspector-empty">
         <div class="empty-mark"><MousePointerClick :size="24" /></div>
         <strong>{{ ot("selectGraphElement") }}</strong>
-        <span>{{ ot("inspectorEmptyDesc") }}</span>
+        <span>{{ ot("instanceGraphChoose") }}</span>
       </div>
     </aside>
   </section>
@@ -530,6 +883,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .instance-graph {
+  --inspector-width: 320px;
   --el-font-size-base: var(--text-sm);
   position: relative;
   display: flex;
@@ -549,18 +903,55 @@ onBeforeUnmount(() => {
 .graph-canvas {
   position: absolute;
   inset: 0;
-  right: 280px;
+  right: var(--inspector-width);
+  min-width: 0;
+  overflow: hidden;
 }
+.neighbor-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--spacing-md) var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--el-border-color-light);
+  font-size: var(--text-sm);
+}
+.neighbor-field { display: grid; min-width: 0; gap: var(--spacing-xs); }
+.neighbor-field-wide { grid-column: 1 / -1; }
+.neighbor-label { color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 16px; font-weight: var(--font-medium); }
+.neighbor-filters :deep(.el-select) { min-width: 0; width: 100%; }
+.neighbor-filters :deep(.el-select__wrapper) { min-height: 32px; padding: 4px var(--spacing-sm); }
+.neighbor-filters :deep(.el-select__placeholder),
+.neighbor-filters :deep(.el-select__selected-item),
+.neighbor-filters :deep(.el-select__input),
+.neighbor-filters :deep(.el-button) { font-size: var(--text-sm); line-height: 20px; }
+.neighbor-filter-actions { display: grid; grid-column: 1 / -1; gap: var(--spacing-sm); padding-top: var(--spacing-xs); }
+.neighbor-filter-actions .el-checkbox { height: 24px; margin: 0; }
+.neighbor-filter-actions :deep(.el-checkbox__label) { padding-left: var(--spacing-sm); font-size: var(--text-xs); line-height: 16px; }
+.neighbor-filter-actions .el-button { width: 100%; min-height: 32px; margin: 0; padding: 6px var(--spacing-md); }
+.neighbor-filter-actions :deep(.el-button .el-icon) { font-size: 15px; }
+.neighbor-progress { margin: 0; font-size: var(--text-xs); line-height: var(--leading-relaxed); color: var(--el-text-color-secondary); }
+.node-actions { position: absolute; z-index: 3; display: flex; transform: translateX(-50%); padding: 4px; gap: 2px; border: 1px solid var(--el-border-color); border-radius: 6px; background: var(--el-bg-color); box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12); }
+.node-actions button { display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 4px; background: transparent; color: var(--el-text-color-regular); cursor: pointer; }
+.node-actions button:hover { background: var(--el-fill-color-light); color: var(--el-color-primary); }
+.node-actions button:disabled { opacity: 0.4; cursor: default; }
+.node-actions button:focus-visible { outline: 2px solid var(--el-color-primary); }
+.graph-warning { color: var(--el-color-warning); }
+.graph-toolbar button:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
+.graph-toolbar button:disabled { opacity: 0.45; cursor: default; }
 .graph-toolbar {
   position: absolute;
   bottom: 18px;
   left: 18px;
   display: flex;
+  align-items: center;
   padding: 4px;
   border: 1px solid var(--el-border-color);
   border-radius: var(--radius-sm);
   background: var(--el-bg-color);
 }
+.toolbar-separator { width: 1px; height: 18px; margin: 0 4px; background: var(--el-border-color-light); }
+.graph-toolbar button[aria-expanded="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
 .graph-toolbar button {
   display: grid;
   width: 34px;
@@ -577,7 +968,7 @@ onBeforeUnmount(() => {
 }
 .graph-hint {
   position: absolute;
-  right: 298px;
+  right: calc(var(--inspector-width) + 18px);
   bottom: 20px;
   display: flex;
   align-items: center;
@@ -594,7 +985,7 @@ onBeforeUnmount(() => {
 .graph-empty {
   position: absolute;
   inset: 0;
-  right: 280px;
+  right: var(--inspector-width);
   display: grid;
   place-content: center;
   justify-items: center;
@@ -617,8 +1008,8 @@ onBeforeUnmount(() => {
   z-index: 1;
   display: flex;
   min-height: 0;
-  width: 280px;
-  flex: 0 0 280px;
+  width: var(--inspector-width);
+  flex: 0 0 var(--inspector-width);
   flex-direction: column;
   margin-left: auto;
   border-left: 1px solid var(--el-border-color);
@@ -635,12 +1026,103 @@ onBeforeUnmount(() => {
   color: var(--el-text-color-secondary);
 }
 .node-search {
+  display: grid;
+  min-width: 0;
+  gap: var(--spacing-sm);
   padding: var(--spacing-md);
   border-bottom: 1px solid var(--el-border-color-light);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
 }
 .node-search :deep(.el-select-v2) {
   width: 100%;
+  min-width: 0;
+  --el-font-size-base: var(--text-sm);
 }
+.node-search :deep(.el-select__wrapper) {
+  min-height: 32px;
+  padding: 4px var(--spacing-md);
+  gap: var(--spacing-sm);
+}
+.node-search :deep(.el-select__input),
+.node-search :deep(.el-select__placeholder),
+.node-search :deep(.el-select__selected-item) {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 20px;
+}
+.node-search :deep(.el-select__prefix) {
+  color: var(--el-text-color-secondary);
+}
+.search-scope {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px var(--spacing-sm);
+  border-radius: 4px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-xs);
+}
+.search-scope > span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-scope > svg { flex-shrink: 0; }
+.search-scope button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+}
+.search-scope button:hover { color: var(--el-color-primary); background: var(--el-fill-color); }
+.search-status {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+.graph-summary {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: calc(var(--inspector-width) + 18px);
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  color: var(--el-text-color-secondary);
+  font-size: var(--text-xs);
+}
+.graph-summary .el-button { pointer-events: auto; }
+.instance-candidates { display: grid; gap: 2px; min-width: 0; max-height: 260px; overflow: auto; }
+.instance-candidates button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-width: 0;
+  min-height: 46px;
+  padding: 6px var(--spacing-sm);
+  text-align: left;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--el-text-color-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 18px;
+}
+.instance-candidates button:hover { background: var(--el-fill-color-light); }
+.instance-candidates button:disabled { opacity: 0.5; }
+.candidate-copy { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.candidate-name, .candidate-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.candidate-name { font-size: var(--text-sm); font-weight: var(--font-medium); }
+.candidate-meta { color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 16px; }
 .node-search-option {
   display: flex;
   min-width: 0;
@@ -657,6 +1139,7 @@ onBeforeUnmount(() => {
 }
 .node-search-option strong {
   font-size: var(--text-sm);
+  font-weight: var(--font-medium);
 }
 .node-search-option small {
   color: var(--el-text-color-secondary);
@@ -706,7 +1189,8 @@ onBeforeUnmount(() => {
   line-height: 20px;
   letter-spacing: 0;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 code {
   display: block;
@@ -758,6 +1242,9 @@ code {
   max-width: 60%;
   color: var(--el-text-color-secondary);
   text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 .empty-hint {
   margin: 8px 0 0;
@@ -794,19 +1281,26 @@ code {
   background: var(--el-color-primary-light-9);
 }
 @container ontology-manager (max-width: 768px) {
+  .instance-graph { flex-direction: column; overflow: auto; }
   .graph-canvas,
   .graph-empty {
     right: 0;
+    bottom: auto;
+    height: 320px;
   }
   .inspector-panel {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 240px;
+    position: relative;
+    width: 100%;
+    flex: 0 0 auto;
+    margin-top: 320px;
+    border-left: 0;
+    border-top: 1px solid var(--el-border-color);
+    overflow: visible;
   }
   .graph-hint {
     display: none;
   }
+  .graph-summary { right: 18px; }
+  .graph-toolbar { z-index: 2; top: 268px; bottom: auto; left: 10px; }
 }
 </style>

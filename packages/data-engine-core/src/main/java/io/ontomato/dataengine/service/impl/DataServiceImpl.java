@@ -79,6 +79,7 @@ public class DataServiceImpl implements DataService {
 	// Domains with a generation in progress; guarantees at most one generation per domain at a time.
 	// Package-visible so focused unit tests can drive the read states without a database.
 	final Set<String> generatingDomains = ConcurrentHashMap.newKeySet();
+	private final Map<String, InstanceGraphIndex> instanceGraphIndexes = new ConcurrentHashMap<>();
 	
 	@PostConstruct
 	public void initService() {
@@ -180,7 +181,41 @@ public class DataServiceImpl implements DataService {
 		starChartDao.writeWholeData(wholeData, MODE_0, newSuffix, domainId);
 		starChartDao.writeWholeData(fromMode0ToMode1(wholeData, domainId), MODE_1, newSuffix, domainId);
 		log.info("generate star chart data writeWholeData end...");
+		InstanceGraphIndex index = new InstanceGraphIndex(wholeData);
 		currentSuffix.put(domainId, newSuffix);
+		instanceGraphIndexes.put(domainId, index);
+	}
+
+	@Override
+	public JSONObject queryInstanceGraph(String operation, JSONObject request, String domainId) {
+		JSONObject ret = new JSONObject();
+		ret.put("success", true);
+		InstanceGraphIndex index = instanceGraphIndexes.get(domainId);
+		if (index == null) {
+			ret.put("status", generatingDomains.contains(domainId) ? STATUS_GENERATING : STATUS_NOT_GENERATED);
+			return ret;
+		}
+		String version = request.getString("version");
+		if (!"summary".equals(operation) && (version == null || !version.equals(index.version))) {
+			ret.put("success", false);
+			ret.put("code", "GRAPH_VERSION_CHANGED");
+			ret.put("message", "Graph version changed. Refresh the overview before exploring.");
+			return ret;
+		}
+		try {
+			JSONObject data = switch (operation) {
+				case "summary" -> index.summary();
+				case "search" -> index.search(request);
+				case "neighborhood" -> index.neighborhood(request);
+				default -> throw new IllegalArgumentException("Unknown graph operation");
+			};
+			ret.put("status", STATUS_READY);
+			ret.put("data", data);
+		} catch (IllegalArgumentException e) {
+			ret.put("success", false);
+			ret.put("message", e.getMessage());
+		}
+		return ret;
 	}
 	
 	// Package-visible so focused unit tests can stub the data build without a database or remote query.
@@ -189,7 +224,7 @@ public class DataServiceImpl implements DataService {
 		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		Map relationship_rule = (Map)jsonRule.get("relationship_rule");
-		String rootClass = (String)((List)jsonRule.get("classlist")).get(0);
+		String rootClass = ((List<?>)jsonRule.get("classlist")).isEmpty() ? "" : (String)((List)jsonRule.get("classlist")).get(0);
 		
 		Map<String, JSONObject> nodeMap = new HashMap<String, JSONObject>();
 		Map<String, Set<String>> sourceTargetsMap = new HashMap<String, Set<String>>();
@@ -378,7 +413,7 @@ public class DataServiceImpl implements DataService {
 		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		Map relationship_rule = (Map)jsonRule.get("relationship_rule");
-		String rootClass = (String)((List)jsonRule.get("classlist")).get(0);
+		String rootClass = ((List<?>)jsonRule.get("classlist")).isEmpty() ? "" : (String)((List)jsonRule.get("classlist")).get(0);
 		
 		DataAdapter adapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		
@@ -391,6 +426,9 @@ public class DataServiceImpl implements DataService {
 		Map<String, Set<String>> sourceTargetsMap = new HashMap<String, Set<String>>();
 		Map<String, Set<String>> targetSourcesMap = new HashMap<String, Set<String>>();
 		Set<String> roots = new HashSet<String>();
+		JSONArray typedEdges = new JSONArray();
+		JSONArray failures = new JSONArray();
+		scanInstanceNodes(adapter, classDefs, nodeMap, roots, rootClass, failures);
 		for (Object key : relationship_rule.keySet()) {
 			try {
 				Map edgeDef = (Map)relationship_rule.get(key);
@@ -491,13 +529,15 @@ public class DataServiceImpl implements DataService {
 						sourceObj.put("id", sourceNodeId);
 						sourceObj.put("name", sourceName);
 						sourceObj.put("class", fromClass);
-						nodeMap.put(sourceNodeId, sourceObj);
+						nodeMap.putIfAbsent(sourceNodeId, sourceObj);
 						
 						JSONObject targetObj = new JSONObject();
 						targetObj.put("id", targetNodeId);
 						targetObj.put("name", targetName);
 						targetObj.put("class", toClass);
-						nodeMap.put(targetNodeId, targetObj);
+						nodeMap.putIfAbsent(targetNodeId, targetObj);
+						typedEdges.add(JSONObject.of("source", sourceNodeId, "target", targetNodeId,
+								"type", key.toString(), "label", edgeDef.get("desc")));
 						
 						if (rootClass.equals(fromClass)) {
 							roots.add(sourceNodeId);
@@ -522,15 +562,63 @@ public class DataServiceImpl implements DataService {
 					}
 				}
 			} catch (Exception e) {
+				failures.add("relationship:" + key);
 				log.error(e.getMessage(), e);
 			}
 		}
 		log.info("cutWholeDataBySql end...");
 		
-		return buildStarChartData(nodeMap, sourceTargetsMap, targetSourcesMap, roots);
+		JSONObject graphData;
+		if (roots.isEmpty()) {
+			graphData = JSONObject.of("nodes", new JSONArray(nodeMap.values()), "edges", new JSONArray());
+		} else {
+			graphData = buildStarChartData(nodeMap, sourceTargetsMap, targetSourcesMap, roots);
+		}
+		graphData.put("edges", typedEdges);
+		graphData.put("complete", failures.isEmpty());
+		graphData.put("failures", failures);
+		return graphData;
 	}
 	
+	private void scanInstanceNodes(DataAdapter adapter, List<Map<String, Object>> classDefs,
+			Map<String, JSONObject> nodeMap, Set<String> roots, String rootClass, JSONArray failures) {
+		for (Map<String, Object> classDef : classDefs) {
+			if (!Boolean.TRUE.equals(classDef.get("inStarChart"))) continue;
+			String className = (String) classDef.get("className");
+			try {
+				String pk = DslUtil.getPrimaryKey(classDef);
+				JSONArray fields = JSONArray.of(JSONObject.of("variable", "n", "field", pk, "as", "pk"),
+						JSONObject.of("variable", "n", "field", getNameField(classDef), "as", "name"));
+				JSONObject step = JSONObject.of("graph", JSONObject.of("patterns", JSONArray.of(JSONObject.of("objects",
+						JSONArray.of(JSONObject.of("idx", 0, "variable", "n", "class", className)))), "pattern_logic", "and"),
+						"output", JSONObject.of("to_user", true, "fields", fields));
+				JSONObject dsl = JSONObject.of("problem", "", "answer", JSONObject.of("steps", JSONArray.of(step)));
+				String result = adapter.executeDsl(JSONArray.of(dsl).toJSONString(), UUID.randomUUID().toString(), null, new ArrayList<>());
+				for (Object raw : JSONArray.parseArray(result).getJSONObject(0).getJSONArray("answer")) {
+					JSONObject row = (JSONObject) raw;
+					String id = className + ":" + row.getString("pk");
+					String name = row.getString("name");
+					JSONObject node = JSONObject.of("id", id, "class", className, "name", name);
+					nodeMap.put(id, node);
+					if (rootClass.equals(className)) roots.add(id);
+				}
+			} catch (Exception e) {
+				failures.add("class:" + className);
+				log.error("Instance graph class scan failed: {}", className, e);
+			}
+		}
+	}
+
 	private String getNameField(Map<String, Object> classDef) {
+		String primaryKey = DslUtil.getPrimaryKey(classDef);
+		if (classDef.get("attrs") instanceof List<?> attrs) {
+			for (Object raw : attrs) {
+				Map<?, ?> attr = (Map<?, ?>) raw;
+				String name = (String) attr.get("name");
+				if (!Boolean.FALSE.equals(attr.get("enable")) && !primaryKey.equals(name)
+						&& Boolean.TRUE.equals(attr.get("bizzkey")) && ("name".equals(name) || name.endsWith("_name"))) return name;
+			}
+		}
 		String pk = "id";
 		if (classDef.get("attrs") != null) {
 			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>)classDef.get("attrs");

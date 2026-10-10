@@ -110,11 +110,34 @@ export interface InstanceGraphNode {
 export interface InstanceGraphEdge {
   source: string;
   target: string;
+  type?: string;
+  label?: string;
 }
 
 export interface InstanceGraphData {
   nodes: InstanceGraphNode[];
   edges: InstanceGraphEdge[];
+}
+
+export interface InstanceGraphSummary {
+  classes: Array<{ class: string; instanceCount: number }>;
+  relationships: Array<{ source: string; target: string; count: number; type?: string; types?: string[] }>;
+  nodeCount: number;
+  edgeCount: number;
+  componentCount: number;
+  isolatedNodeCount: number;
+  largestComponentSize: number;
+  complete?: boolean;
+  failures?: string[];
+  relationTypes?: string[];
+  version: string;
+  generatedAt: string;
+}
+
+export interface InstanceNeighborhood extends InstanceGraphData {
+  total: number;
+  nextOffset: number | null;
+  version: string;
 }
 
 /**
@@ -223,7 +246,7 @@ export function createManagerClient(
     const json = await response.json();
     assertCurrent();
     if (json?.success === false) {
-      throw new Error(json.message || json.error || ontologyText(context.messages, "requestFailed"));
+      throw Object.assign(new Error(json.message || json.error || ontologyText(context.messages, "requestFailed")), { code: json.code });
     }
     return json;
   }
@@ -444,6 +467,27 @@ export function createManagerClient(
     return { status: "READY", graph: normalizeInstanceGraph(response.data) };
   }
 
+  async function loadInstanceGraphSummary(): Promise<
+    { status: "READY"; summary: InstanceGraphSummary } | { status: "GENERATING" | "NOT_GENERATED" }
+  > {
+    const response = await send("/data/instanceGraph/summary", { method: "GET" });
+    return response.status === "READY"
+      ? { status: "READY", summary: response.data as InstanceGraphSummary }
+      : { status: response.status };
+  }
+
+  async function searchInstanceGraph(term: string, version: string, className?: string) {
+    const response = await post("/data/instanceGraph/search", { term, version, class: className, limit: 50 });
+    if (response.status !== "READY") throw new Error(ontologyText(context.messages, "instanceGraphNotGenerated"));
+    return response.data as { nodes: InstanceGraphNode[]; hasMore: boolean; version: string };
+  }
+
+  async function loadInstanceNeighborhood(id: string, version: string, offset = 0, filters?: { relationType?: string; neighborClass?: string; direction?: string }) {
+    const response = await post("/data/instanceGraph/neighborhood", { id, version, offset, limit: 100, ...filters });
+    if (response.status !== "READY") throw new Error(ontologyText(context.messages, "instanceGraphNotGenerated"));
+    return response.data as InstanceNeighborhood;
+  }
+
   /**
    * Rebuilds the star-chart data from the current Ontology and returns once it is done; GENERATING means a build for
    * this domain was already running.
@@ -530,6 +574,9 @@ export function createManagerClient(
     loadObjectData,
     loadSmartAssets,
     loadInstanceGraph,
+    loadInstanceGraphSummary,
+    searchInstanceGraph,
+    loadInstanceNeighborhood,
     refreshStarChartData,
     queryInstanceInfo,
     listDataAdapters,

@@ -50,6 +50,21 @@ public class DataController {
 		User user = SystemUtils.getCurUser();
 		return dataService.queryWholeDataMode1(user.getDomainId());
 	}
+
+	@GetMapping("/data/instanceGraph/summary")
+	public JSONObject instanceGraphSummary() {
+		return dataService.queryInstanceGraph("summary", new JSONObject(), SystemUtils.getCurUser().getDomainId());
+	}
+
+	@PostMapping("/data/instanceGraph/search")
+	public JSONObject instanceGraphSearch(@RequestBody JSONObject param) {
+		return dataService.queryInstanceGraph("search", param, SystemUtils.getCurUser().getDomainId());
+	}
+
+	@PostMapping("/data/instanceGraph/neighborhood")
+	public JSONObject instanceGraphNeighborhood(@RequestBody JSONObject param) {
+		return dataService.queryInstanceGraph("neighborhood", param, SystemUtils.getCurUser().getDomainId());
+	}
 	
 	@PostMapping("/data/queryNextByNode")
     @ResponseBody

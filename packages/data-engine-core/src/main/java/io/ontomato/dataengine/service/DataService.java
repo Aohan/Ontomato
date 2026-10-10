@@ -10,6 +10,8 @@ public interface DataService {
 	public JSONObject refreshStarChartData(String domainId);
 
 	public JSONObject queryWholeDataMode0(String domainId);
+
+	public JSONObject queryInstanceGraph(String operation, JSONObject request, String domainId);
 	
 	public JSONObject queryWholeDataMode1(String domainId);
 	
