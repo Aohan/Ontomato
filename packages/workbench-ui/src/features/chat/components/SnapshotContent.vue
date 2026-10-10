@@ -290,6 +290,7 @@ const shouldExpandThinkingPanel = () => {
       :activities="snapshot.deepAnalysis.activities"
       :run-state="snapshot.deepAnalysis.runState"
       :archived="archived"
+      :execution-scope="snapshot.taskId ? { taskId: snapshot.taskId } : undefined"
     />
 
     <div v-if="shouldShowStandardPending" class="standard-thinking-pending">

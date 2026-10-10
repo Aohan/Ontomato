@@ -79,9 +79,14 @@
                 {{ q.statusText }}
               </span>
               <!-- Execution display view: shared with the standard Q&A conversation -->
-              <QueryExecutionView
+              <QuestionExecution
                 v-if="expandedQuestions[dimIndex + '-' + qIndex]"
-                :facts="q.execution"
+                :question="{
+                  questionId: q.id,
+                  execution: q.execution,
+                  executionDeferred: q.executionDeferred,
+                }"
+                :scope="executionScope"
               />
             </div>
           </div>
@@ -114,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { QueryExecutionView } from "../../query-view";
+import QuestionExecution, { type QuestionExecutionScope } from "./QuestionExecution.vue";
 import {
   Folder,
   CircleCheck,
@@ -140,6 +145,11 @@ const props = defineProps<{
   runState?: AnalysisRunState;
   archived?: boolean;
   compact?: boolean;
+  /**
+   * Where deferred question executions are read from. Legacy chat-history snapshots carry inline
+   * facts and no task; every producer of deferred questions has a task.
+   */
+  executionScope?: QuestionExecutionScope;
 }>();
 
 const thinkingTree = computed(() => buildDimensionTree(props.activities));
@@ -192,8 +202,11 @@ const skillsComplete = computed(
     skillActivities.value.length > 0 && skillActivities.value.every((a) => a.status !== "running")
 );
 const skillsStopped = computed(() => props.runState?.status === "cancelled");
+// A skill stage without skill entries is only a placeholder; the block reports real skills only.
 const showSkillStatus = computed(
-  () => skillsExecuting.value || skillsComplete.value || skillsStopped.value
+  () =>
+    skillActivities.value.some((a) => a.skills?.length) &&
+    (skillsExecuting.value || skillsComplete.value || skillsStopped.value)
 );
 
 // Dimension query status

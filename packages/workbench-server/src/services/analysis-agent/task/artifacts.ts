@@ -15,6 +15,7 @@ import type {
   AnalysisChartResult,
 } from "@ontomato/contracts/analysis-charts";
 import { createLogger } from "../../../logging/logger";
+import { withoutPersistedResult } from "../../data-query/query-fact";
 import { buildDeepAnalysisTaskResult } from "./task-result";
 import { getAnalysisTaskService } from "./task-service";
 import type { AnalysisRunIdentity } from "./run-history";
@@ -72,11 +73,16 @@ function mergeQuestions(
       (update.status === "running" || update.status === "pending")
     )
       continue;
+    const execution =
+      previous?.execution || update.execution
+        ? { ...previous?.execution, ...update.execution }
+        : undefined;
     questions.set(update.questionId, {
       ...previous,
       ...update,
-      ...(previous?.execution || update.execution
-        ? { execution: { ...previous?.execution, ...update.execution } }
+      // A deferred update must not inherit result copies from earlier inline facts.
+      ...(execution
+        ? { execution: update.executionDeferred ? withoutPersistedResult(execution) : execution }
         : {}),
     });
   }

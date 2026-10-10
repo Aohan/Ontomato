@@ -150,7 +150,7 @@ async function runConversationTurn(
 ): Promise<void> {
   const taskService = getAnalysisTaskService();
   const agentService = await getAnalysisAgentService();
-  const task = await taskService.getTask(taskId, domainId);
+  const task = await taskService.getTask(taskId, domainId, { payload: "none", runs: "meta" });
   if (!task) {
     logger.error(tApp("analysis.task.task-scheduler.433", { taskId: taskId }));
     return;

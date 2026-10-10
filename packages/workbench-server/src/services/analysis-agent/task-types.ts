@@ -3,6 +3,7 @@ import type { LoopSubagentTrace } from "@ontomato/contracts/analysis-task";
 import type { DeepAnalysisTaskPayload } from "@ontomato/contracts/analysis-presentation";
 import type {
   AnalysisTask as ClientAnalysisTask,
+  AnalysisTaskRun,
   AnalysisTaskTriggerSource,
 } from "@ontomato/contracts/analysis-task";
 export interface AnalysisTask extends ClientAnalysisTask {
@@ -10,6 +11,8 @@ export interface AnalysisTask extends ClientAnalysisTask {
   analysisPayload?: DeepAnalysisTaskPayload;
   requestSeq?: number;
   token?: string;
+  /** Run records as the read selected them: complete, without replay snapshots, or absent. */
+  runHistory?: AnalysisTaskRun[];
 }
 /**
  * Analysis tasks and task events.

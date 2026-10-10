@@ -12,7 +12,11 @@ import type { SubQuestionBranchResult } from "../runtime/deep-analysis-tool";
 import { v4 as uuidv4 } from "uuid";
 import type { AgentTool, AgentToolResult } from "../../../core/agent-loop/types";
 import { applyFieldDisplayPlan } from "../../data-query/adapter";
-import { buildQueryRunInput, toDisplayFact } from "../../data-query/query-fact";
+import {
+  buildQueryRunInput,
+  toDisplayFact,
+  withoutPersistedResult,
+} from "../../data-query/query-fact";
 import { upsertQueryRun } from "../../data-query/query-run-store";
 import { executeSubQuestionWithBranches } from "../runtime/deep-analysis-tool";
 import { createLogger } from "../../../logging/logger";
@@ -195,13 +199,14 @@ export function assembleLoopEvidenceCapability(params: {
           });
         }
         const questions = results.map(
-          ({ questionId, question, status, dataCount, error, execution }) => ({
+          ({ questionId, question, status, dataCount, error, execution, executionDeferred }) => ({
             questionId,
             question,
             status,
             dataCount,
             error,
             execution,
+            executionDeferred,
           })
         );
         params.trajectory.settle(
@@ -282,14 +287,17 @@ export async function collectLoopEvidence(
             : [];
 
         // Query facts are intermediate products: a persistence failure is only logged and never marks collected evidence as failed.
+        let saved = true;
         try {
           await deps.saveQueryRun({ questionId, question, result: branchResult, status });
         } catch (error: unknown) {
+          saved = false;
           logger.error(tApp("analysis.loop.evidence.256"), {
             questionId,
             error: error instanceof Error ? error.message : String(error),
           });
         }
+        const execution = toDisplayFact(branchResult);
 
         const result = {
           questionId,
@@ -298,7 +306,11 @@ export async function collectLoopEvidence(
           dataCount: branchResult.dataCount ?? getQueryResultDataCount(branchResult.data),
           error: status === "failed" ? branchResult.error : undefined,
           datasets: entries,
-          execution: toDisplayFact(branchResult),
+          // The run is saved before settling, so a deferred execution is always readable from
+          // query_runs; a failed save keeps the full facts inline.
+          ...(saved
+            ? { execution: withoutPersistedResult(execution), executionDeferred: true as const }
+            : { execution }),
           modelText: buildEvidenceModelText({
             index,
             questionId,
@@ -411,6 +423,7 @@ export function createCollectEvidenceTool(params: {
               dataCount: result.dataCount,
               error: result.error,
               execution: result.execution,
+              executionDeferred: result.executionDeferred,
             },
           ]);
         },
