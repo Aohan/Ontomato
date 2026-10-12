@@ -327,8 +327,11 @@ public class MetricViewDao extends BaseDao {
 		metricView.setDomainId(rs.getString("domain_id"));
 		String matchQuestionsStr = rs.getString("match_questions");
 		Set<String> matchQuestions = new HashSet<String>();
-		if (matchQuestionsStr != null) {
-			matchQuestions.addAll(JSONArray.parseArray(matchQuestionsStr, String.class));
+		if (matchQuestionsStr != null && !"null".equals(matchQuestionsStr)) {
+			List<String> parsed = JSONArray.parseArray(matchQuestionsStr, String.class);
+			if (parsed != null) {
+				matchQuestions.addAll(parsed);
+			}
 		}
 		metricView.setMatchQuestions(matchQuestions);
 		String originCheckResultStr = rs.getString("origin_check_result");

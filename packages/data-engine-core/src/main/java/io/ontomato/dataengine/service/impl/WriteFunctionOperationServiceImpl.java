@@ -218,7 +218,8 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	public void delete(String className, JSONObject where, String sandboxId, String domainId) throws Exception {
 		Map<String, Object> classDef = getClassDefByClassName(className, domainId);
 		if (classDef != null) {
-			DataAdapter adapter = getDataAdapter(domainId);
+			Map<String, Object> jsonRule = jsonRuleDao.query(domainId);
+			DataAdapter adapter = getDataAdapter(domainId, jsonRule);
 			cleanupVectorAttrs(adapter, classDef, className, where, sandboxId, domainId);
 			adapter.deleteObjects(sandboxId, classDef, where);
 		} else {
