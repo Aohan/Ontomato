@@ -134,7 +134,7 @@ documents every field.
 | Server | Docker Engine 26+ with the Compose plugin; 4 CPU cores, 8 GB RAM, 20 GB free disk (8 cores and 16 GB recommended) |
 | Chat model | An OpenAI-compatible endpoint at least as capable as `deepseek-v4-flash` |
 | Embedding model | An OpenAI-compatible endpoint at least as capable as `qwen3-embedding-8b` |
-| Business database | PostgreSQL, MySQL, DuckDB |
+| Business database | PostgreSQL, MySQL, SQL Server, DuckDB, Neo4j |
 
 ### 1. Deploy
 
@@ -243,8 +243,8 @@ If you are a coding agent asked to set Ontomato up:
 
 Ontomato is in beta. Current limits:
 
-- PostgreSQL, MySQL, and DuckDB are the supported business databases, and a deployment works with one
-  datasource at a time.
+- PostgreSQL, MySQL, SQL Server, DuckDB, and Neo4j are the supported business databases, and a
+  deployment works with one datasource at a time.
 - The open-source edition has no login: everyone who can reach the ports has full access.
   Run it on a trusted network.
 

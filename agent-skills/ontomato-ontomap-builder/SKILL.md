@@ -99,6 +99,7 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | sqlserver | Select the database in the URL with `databaseName`, e.g. `jdbc:sqlserver://db.example:1433;databaseName=my_database`. |
 | gaussdb | Scheme `jdbc:opengauss://`, e.g. `jdbc:opengauss://db.example:5432/my_database`. |
 | duckdb | The URL is a file path the backend can access, e.g. `jdbc:duckdb:/data/warehouse.duckdb`; `fields` is `url` only. |
+| neo4j | Bolt URI plus `user` and `password`, e.g. `bolt://db.example:7687`; queries run against the server's default database. |
 
 ## Ontomap
 

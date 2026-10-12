@@ -20,7 +20,7 @@ class DataAdapterAssemblyTest {
 			ctx.scan("io.ontomato.dataengine.dataAdapter");
 			ctx.refresh();
 			List<DataAdapterProvider> installed = ctx.getBean(DataAdapterRegistry.class).installed();
-			assertEquals(List.of("duckdb", "mysql", "neo4j", "postgresql"),
+			assertEquals(List.of("duckdb", "mysql", "neo4j", "postgresql", "sqlserver"),
 					installed.stream().map(DataAdapterProvider::type).sorted().toList());
 			assertEquals(Map.of("url", "jdbc:postgresql://host:port/db", "user", "postgres"),
 					installed.stream().filter(p -> "postgresql".equals(p.type())).findFirst().orElseThrow().connectionExamples());
