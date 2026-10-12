@@ -33,7 +33,16 @@ source, compares it with `runtime-lock.json` and, on a mismatch, tells you to re
 runtime first. `build-app` only builds images and exports no pack; a deployment machine
 updates day to day with `git pull` → `make build-app` → `docker compose up -d` in the
 deployment directory, and `pack-app` additionally exports the offline pack. The matching
-check runs only once, during deployment assembly. The Manager still ships as its own
+check runs only once, during deployment assembly.
+
+Layout interface 4 moved the product startup files into the app images (the Java
+entrypoint, sync helper and built-in MCP service; the workbench Python defaults), so
+product startup logic now ships with the small package. The enterprise edition's
+native JVM argument (`-Djna.library.path`) ships the same way, in its own thin app
+entrypoint wrapper delegating to the public lifecycle script; the runtime carries no
+edition-specific target. The first update from an older
+layout needs a fresh runtime, app and assembly together: old and new layouts refuse to
+pair. Afterwards day-to-day updates stay app-only while the fingerprint is unchanged. The Manager still ships as its own
 image; there is no manager runtime. The per-service targets (`workbench-runtime-pack`,
 `workbench-app-pack`, `pack-data-engine`, `pack-data-engine-app`,
 `pack-ontology-manager` and their architecture variants) can still be called on their
@@ -75,13 +84,24 @@ always use exact versions, never `^` or `~` ranges; the root `.npmrc` sets
 `save-exact=true`, so `pnpm add` writes exact versions.
 
 The Node service reads the product root `.env` (the process environment takes priority)
-and writes runtime data under the product root `data/`. The Ontology Manager's
-`DATARAG_ORIGIN` has no default in this repository, so startup fails when it is not
-configured and the DataRAG root address must be given in `.env` or the environment. The
+and writes runtime data under the product root `data/`. The Ontology Manager proxies to
+`DATARAG_ORIGIN` from the environment or `.env`, otherwise to `DATA_QUERY_BASE_URL`, so by
+default it reaches the same DataRAG as the Node service; with neither set, startup fails. The
 Java data engine, PostgreSQL and the Python MCP are prepared separately; this entry point
 starts only the three processes above and is not a full-stack start.
 
 ## Local development (Java data engine)
+
+Instance graph browsing queries PostgreSQL on demand. Startup does not scan business
+tables or build an in-memory instance graph. Overview reads up to 50 records per
+`inStarChart` object type and at most 2,000 connections between those records; search
+returns up to 50 matches, and neighborhood expansion returns 100 connections per page.
+Queries are read-only, have a 10-second statement timeout and share a four-request
+concurrency limit. Instance counts load separately and are cached for 60 seconds;
+full connection counts and connectivity statistics are not calculated during browsing.
+Refresh reads current data; the legacy star-chart generation endpoint remains an
+explicit operation for its existing callers. Stable ordering makes pages reproducible
+for unchanged data, but concurrent source edits can change offset-based page boundaries.
 
 `node apps/data-engine/dev.mjs [extra Maven arguments]`: runs the platform's official
 Maven wrapper (`./mvnw` on POSIX, `mvnw.cmd` on Windows) in the foreground from this

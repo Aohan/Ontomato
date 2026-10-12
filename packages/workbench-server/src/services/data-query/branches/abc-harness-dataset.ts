@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { normalizeAnswerRows, type Dataset, type FieldDisplayPlan } from "../adapter";
 import { parseQueryAnswerPayload } from "../protocol";
 import { tForLocale, tApp } from "../../../i18n";
@@ -42,6 +43,7 @@ export function buildDataset(
   const question =
     content.question || tForLocale(locale, "query.datasetFallbackTitle", { index: index + 1 });
   return {
+    id: randomUUID(),
     name: datasetName(question, index),
     description: question,
     columns: collectColumns(rows),

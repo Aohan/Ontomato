@@ -73,21 +73,28 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
   border: 1px solid var(--el-border-color-light);
   border-radius: var(--radius-md);
   min-width: 0;
   flex-wrap: wrap;
 }
 
-/* Name, IDs, URL and key count sit together on the left (wrapping when narrow); the row actions stay on the right. */
+/* Two lines on the left: the name above, then IDs, URL and key count (wrapping when narrow); the row actions stay on the right. */
 .model-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.model-meta {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: var(--spacing-xs) var(--spacing-md);
   min-width: 0;
-  flex: 1 1 0;
 }
 
 .model-name {
@@ -200,9 +207,11 @@
 
   .model-info {
     flex-basis: 100%;
+  }
+
+  .model-meta {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--spacing-xs);
   }
 
   .model-name,
@@ -461,4 +470,92 @@
     width: 100%;
     margin-left: 0 !important;
   }
+}
+
+/* Connection test result under the data adapter form. */
+.adapter-test-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.adapter-test-result :deep(.el-alert__content) {
+  min-width: 0;
+}
+
+/* The backend message is shown verbatim: keep its line breaks and let it be selected and copied. */
+.adapter-test-message {
+  margin: var(--spacing-xs) 0 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  user-select: text;
+}
+
+.adapter-test-section {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--el-text-color-primary);
+}
+
+/* A schema may hold thousands of tables: the list scrolls inside a fixed height. */
+.adapter-table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--radius-md);
+}
+
+.adapter-table-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-size: var(--text-sm);
+}
+
+.adapter-table-list li + li {
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.adapter-table-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  color: var(--el-text-color-primary);
+}
+
+.adapter-table-type {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--el-text-color-secondary);
+}
+
+/* One-line hint shown when a card has nothing configured yet. */
+.card-empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--el-text-color-secondary);
+}
+
+.card-empty-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+/* Vector rebuild status under the embedding row: progress, the need to rebuild, and the last failure. */
+.vector-rebuild-status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }

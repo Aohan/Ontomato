@@ -15,7 +15,8 @@ async function runOriginalAbcBranch(
   ctx: AbcBranchContext,
   isV0: boolean
 ): Promise<BaseQueryOutput | undefined> {
-  const { queryQuestion, token, userId, locale, pushEvent, thinking, setAbcThinking, apiKey } = ctx;
+  const { queryQuestion, token, userId, locale, pushEvent, pushContent, thinking, setAbcThinking, apiKey } =
+    ctx;
   thinking.ensureParallelStarted();
   thinking.set("running", t("query.status.decomposing"));
   thinking.log(t("query.thinking.abcDecomposing"));
@@ -30,6 +31,7 @@ async function runOriginalAbcBranch(
       classNames: ctx.classNames,
       reportFallback: ctx.reportFallback,
       reportBackendLocation: ctx.reportBackendLocation,
+      pushContent,
       progressCallback: (event: any) => {
         if (event.type === "abc_thinking") {
           setAbcThinking(event.abcState);

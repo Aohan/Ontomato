@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import com.pgvector.PGvector;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.output.Response;
@@ -24,6 +25,9 @@ public class BusinessExampleQuestionSpliterDao extends BaseDao {
 
 	@Autowired
 	private EmbeddingService embeddingService;
+
+	@Autowired
+	private VectorRetrievalGate retrievalGate;
 
 	private static final String TABLE_NAME = "business_example_question_spliter";
 
@@ -45,18 +49,16 @@ public class BusinessExampleQuestionSpliterDao extends BaseDao {
 						+ "create_timestamp BIGINT, "
 						+ "modify_timestamp BIGINT, "
 						+ "domain_id VARCHAR(64), "
-						+ "example_vector vector(" + embeddingModelProperties.getDimensions() + ")"
+						+ "example_vector vector"
 						+ ")");
 		jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_" + TABLE_NAME + "_domain_id ON " + TABLE_NAME + "(domain_id)");
 	}
 
 	public void insertBussinessExample(BusinessExampleQuestionSpliterEntity bussinessExampleEntity, String domainId) {
 		String exampleID = bussinessExampleEntity.getId();
-		StringBuilder sbBussinessExampleText = new StringBuilder();
-		sbBussinessExampleText.append("Question: ").append(bussinessExampleEntity.getQuestion()).append("\n");
-		sbBussinessExampleText.append("Business logic: ").append(bussinessExampleEntity.getContent()).append("\n");
+		String embeddedText = embeddingText(bussinessExampleEntity.getQuestion(), bussinessExampleEntity.getContent());
 
-		Response<Embedding> embeddingResponse = embeddingService.embedding(sbBussinessExampleText.toString(), domainId);
+		Response<Embedding> embeddingResponse = embeddingService.embedding(embeddedText, domainId);
 		float[] embededVector = embeddingResponse.content().vector();
 		PGvector pgVector = new PGvector(embededVector);
 
@@ -82,16 +84,47 @@ public class BusinessExampleQuestionSpliterDao extends BaseDao {
 		jdbcTemplate.update("DELETE FROM " + TABLE_NAME + " WHERE id = ?", exampleID);
 	}
 
+	/** The single source of the embedded text, shared by the write path and the vector rebuild. */
+	private static String embeddingText(String question, String content) {
+		StringBuilder sbBussinessExampleText = new StringBuilder();
+		sbBussinessExampleText.append("Question: ").append(question).append("\n");
+		sbBussinessExampleText.append("Business logic: ").append(content).append("\n");
+		return sbBussinessExampleText.toString();
+	}
+
+	public int countDomainRows(String domainId) {
+		return jdbcTemplate.queryForObject(
+				"SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE domain_id = ?", Integer.class, domainId);
+	}
+
+	public List<VectorRebuildItem> listDomainVectors(String domainId) {
+		return jdbcTemplate.query(
+				"SELECT id, question, content FROM " + TABLE_NAME + " WHERE domain_id = ?",
+				(rs, rowNum) -> new VectorRebuildItem(rs.getString("id"),
+						embeddingText(rs.getString("question"), rs.getString("content"))),
+				domainId);
+	}
+
+	public void clearDomainVectors(String domainId) {
+		jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET example_vector = NULL WHERE domain_id = ?", domainId);
+	}
+
+	public void updateDomainVector(String exampleId, float[] vector) {
+		jdbcTemplate.update("UPDATE " + TABLE_NAME + " SET example_vector = ?::vector WHERE id = ?",
+				new PGvector(vector), exampleId);
+	}
+
 	public List<BusinessExampleQuestionSpliterEntity> findBussinessExample(String question, int maxResult, String domainId) {
 		List<BusinessExampleQuestionSpliterEntity> bussinessExampleEntities = new ArrayList<>();
 		float[] findVector = null;
 		String queryString = "";
+		retrievalGate.requireRetrievable(domainId);
 		try {
 			Response<Embedding> embeddingResponse = embeddingService.embedding(question, domainId);
 			findVector = embeddingResponse.content().vector();
 
 			queryString = "SELECT " + COLUMNS + " FROM " + TABLE_NAME
-					+ " WHERE status = 1 AND domain_id = ? ORDER BY example_vector <-> ?::vector LIMIT ?";
+					+ " WHERE status = 1 AND domain_id = ? AND example_vector IS NOT NULL ORDER BY example_vector <-> ?::vector LIMIT ?";
 			PGvector pgVector = new PGvector(findVector);
 
 			bussinessExampleEntities = jdbcTemplate.query(queryString,

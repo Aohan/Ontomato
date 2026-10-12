@@ -22,6 +22,7 @@ export function buildDimensionTree(
         status: fact?.status === "cancelled" ? "stopped" : fact?.status || "pending",
         statusText: fact?.error || fact?.statusText,
         execution: fact?.execution as DeepAnalysisQuestion["execution"],
+        executionDeferred: fact?.executionDeferred,
       };
     });
     return {

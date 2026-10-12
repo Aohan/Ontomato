@@ -12,7 +12,7 @@
 
 ## On-Site Evidence
 
-- `service_health` read-only returns the current deployment's service status and server resource summary; use this return to explain online, offline, and components not involved in the current query link, and do not statically memorize health conclusions.
+- `service_health` read-only returns the current deployment's service status and server resource summary; use this return to explain which services are online or offline, and do not statically memorize health conclusions.
 - For deeper connectivity, use `data_query_execute`, `read_metadata`, or `view_app_config` per the target. Tool failures themselves must distinguish login state, proxy chain, target service, and business request errors.
 - For a single execution, prefer reading its workspace `manifest.json`, `raw-logs/`, and `diagnostics/`; when backend log collection succeeds it is the entity `raw-logs/backend.log`. A new workspace does not require a timeline or flow diagram as essential evidence.
 

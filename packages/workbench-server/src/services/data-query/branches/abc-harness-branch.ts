@@ -1,3 +1,4 @@
+import { datasetPlacement } from "@ontomato/contracts/query-execution";
 import type { AbcBranchContext, BaseQueryOutput, OutKeyRef } from "./types";
 import { getApiConfig, buildHeaders, buildUrl } from "../../../config/data-query-api";
 import {
@@ -34,7 +35,8 @@ const ABC_HARNESS_ENDPOINT = "/abcHarness";
 export async function runAbcHarnessBranch(
   ctx: AbcBranchContext
 ): Promise<BaseQueryOutput | undefined> {
-  const { queryQuestion, token, userId, locale, apiKey, pushEvent, thinking, setAbcThinking } = ctx;
+  const { queryQuestion, token, userId, locale, apiKey, pushEvent, pushContent, thinking, setAbcThinking } =
+    ctx;
   const labels = getHarnessLabels(locale);
   thinking.ensureParallelStarted();
 
@@ -197,10 +199,6 @@ export async function runAbcHarnessBranch(
           }
         );
 
-        if (tableSegment) {
-          dataMessages.push(`### ${question}\n\n${tableSegment}`);
-        }
-
         logger.info("abcHarness data event normalized", {
           sessionId,
           eventType,
@@ -218,6 +216,7 @@ export async function runAbcHarnessBranch(
           fieldDisplayPlan,
           locale
         );
+        dataMessages.push(`### ${question}\n\n${tableSegment}\n\n${datasetPlacement(dataset.id)}`);
         datasets.push(dataset);
         abcCodes.push(code);
         abcOutKeyRefs.push(Array.isArray(dataContent.outKeyRefs) ? dataContent.outKeyRefs : []);
@@ -295,7 +294,7 @@ export async function runAbcHarnessBranch(
       pushContent: (content, loading) => {
         answerContent = content;
         publishFallback();
-        pushEvent({ type: "abc_content", content, loading });
+        pushContent(content, loading);
       },
       signal: ctx.signal,
       locale,

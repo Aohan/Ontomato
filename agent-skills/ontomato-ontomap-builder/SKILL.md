@@ -31,12 +31,13 @@ When the environment variable `ONTOMATO_URL` is set, it takes precedence over `e
 
 1. Fill in `application.yml`.
 2. `node ontomato.mjs list-datasources` to see which database types this deployment supports and which connection fields each type needs.
-3. `node ontomato.mjs use-datasource <type> @payload.json`
-4. Inspect the business tables and rows with your own database tools. This skill does not query that database.
-5. Write the ontomap from that structure.
-6. `node ontomato.mjs set-ontomap @ontomap.json`
-7. `node ontomato.mjs get-ontomap` and compare it with the file you wrote.
-8. `node ontomato.mjs ask "..."` with a few simple questions that touch the main tables and relationships. If an answer is missing or wrong, go back and fill in `desc` and relationships, then set the ontomap again.
+3. `node ontomato.mjs test-datasource <type> @payload.json`. Fix the payload until it succeeds; nothing is saved yet.
+4. `node ontomato.mjs use-datasource <type> @payload.json`
+5. Inspect the business tables and rows with your own database tools. `test-datasource` only lists table and view names; this skill does not query columns or rows.
+6. Write the ontomap from that structure.
+7. `node ontomato.mjs set-ontomap @ontomap.json`
+8. `node ontomato.mjs get-ontomap` and compare it with the file you wrote.
+9. `node ontomato.mjs ask "..."` with a few simple questions that touch the main tables and relationships. If an answer is missing or wrong, go back and fill in `desc` and relationships, then set the ontomap again.
 
 ## Commands
 
@@ -44,11 +45,14 @@ Run `node ontomato.mjs <command>` from this directory, or pass the script path. 
 
 ```
 node ontomato.mjs list-datasources
+node ontomato.mjs test-datasource <type> '<json>'
+node ontomato.mjs test-datasource <type> @payload.json
 node ontomato.mjs use-datasource <type> '<json>'
 node ontomato.mjs use-datasource <type> @payload.json
 node ontomato.mjs get-ontomap
 node ontomato.mjs set-ontomap '<json>'
 node ontomato.mjs set-ontomap @ontomap.json
+node ontomato.mjs upload-vector @vector.json
 node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang en "How many people are there?"
 ```
@@ -57,12 +61,30 @@ node ontomato.mjs ask --lang en "How many people are there?"
 
 `ask` sends `Accept-Language`. The default is `en`.
 
+`upload-vector` uploads one text (for example a book paragraph) as a vector value: `POST /api/data-query/vectorResource/upload`. It computes the embedding, writes it into the vector store and attaches the file to the object's vector attribute. The object must already exist in the target database, with its vector attribute imported as `[]`. The payload is:
+
+```json
+{
+  "className": "paragraph",
+  "attrName": "content",
+  "objectId": "p1",
+  "text": "The paragraph text ...",
+  "suffix": "txt"
+}
+```
+
+- `className` is the class `name`, `attrName` is the `type: vector` attribute name, `objectId` is the object's primary-key value.
+- `text` is the full paragraph text: it is the input to the embedding and is also stored as the downloadable file.
+- `suffix` is the stored file extension, default `txt`.
+- The upload is append-only: uploading again for the same object adds another vector file rather than replacing.
+
 A JSON body of `{success, message, data}` with `success: false` is printed and the process exits non-zero. A non-2xx response prints the HTTP status and the response body, then exits non-zero.
 
 ## Connect a datasource
 
-1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`. Prints the adapters installed in this deployment. Each entry has `type`, `label`, `sql`, `fields` (the connection fields the type needs) and `examples` (a sample value per field).
-2. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`. The script merges `type` into the JSON and posts it. Send the fields listed in that type's `fields`; usually `url`, `user`, `password`.
+1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`. Prints `currentType` (the adapter this domain uses now) and `adapters`, the adapters installed in this deployment. Each entry has `type`, `label`, `sql`, `fields` (the connection fields the type needs) and `examples` (a sample value per field); saved connections are not shown.
+2. `node ontomato.mjs test-datasource <type> '<json>'` — `POST /api/data-query/businessConfig/testDataAdapter`. Same arguments and body as `use-datasource`, but nothing is saved and the domain's datasource does not change. On success it prints `elapsedMs`, `databaseProduct`, `databaseVersion`, `driverName`, `driverVersion`, `catalog`, `schema` and `tables` (`name` and `type`, `TABLE` or `VIEW`, of the schema the connection landed in). Those names are what class `name` must resolve to, because adapters paste the class name unquoted and without a schema prefix. A connection that lands in no schema (for example a PostgreSQL `currentSchema` that does not exist) fails, as does a DuckDB file that does not exist; the test does not create the file. The connection test gives up after 15 seconds.
+3. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`. The script merges `type` into the JSON and posts it. Send the fields listed in that type's `fields`; usually `url`, `user`, `password`.
 
 Which types are actually available depends on the deployment. `list-datasources` is authoritative.
 
@@ -74,9 +96,7 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | --- | --- |
 | mysql | Accepts URL parameters such as `useUnicode=true&characterEncoding=utf8&useSSL=false`, e.g. `jdbc:mysql://db.example:3306/my_database?useUnicode=true&characterEncoding=utf8&useSSL=false`. |
 | postgresql | Select the schema in the URL with `currentSchema`, e.g. `jdbc:postgresql://db.example:5432/my_database?currentSchema=public`. |
-| oracle | Thin style, e.g. `jdbc:oracle:thin:@db.example:1521:orcl`. |
 | sqlserver | Select the database in the URL with `databaseName`, e.g. `jdbc:sqlserver://db.example:1433;databaseName=my_database`. |
-| db2 | e.g. `jdbc:db2://db.example:50000/my_database`. |
 | gaussdb | Scheme `jdbc:opengauss://`, e.g. `jdbc:opengauss://db.example:5432/my_database`. |
 | duckdb | The URL is a file path the backend can access, e.g. `jdbc:duckdb:/data/warehouse.duckdb`; `fields` is `url` only. |
 
@@ -97,7 +117,7 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | attr `name` | SQL column name. Adapters paste it unchanged and unquoted (`alias.column`). Same exact-match rule as the class name. |
 | attr `showName` | Saved on the ontomap and returned by `get-ontomap`. The schema text and SQL use `name` and `desc`. |
 | attr `desc` | Field description the model reads. `getSchemaByClassName` and the question-splitter schema put it in the "field description" column. Write the business meaning, units, and enumeration values. |
-| `type` | One of `varchar`, `text`, `int`, `long`, `double`, `date`, `timestamp`, `vector`. Adapters pick the SQL type and the comparison form from this value. When set to `vector`, it corresponds to a text column in the underlying database storing a JSON array `[{"path":"...","text":"..."}]`, which is maintained by the vector upload interface and should not be hand-written; vector writes are supported only on PostgreSQL and DuckDB (plus M3 on enterprise), while other data sources (MySQL, Oracle, SQL Server, Db2, GaussDB, Dameng) explicitly fail with unsupported; vector attributes cannot be used for equality or range comparisons and can only be semantically queried via DSL vector conditions. |
+| `type` | One of `varchar`, `text`, `int`, `long`, `double`, `date`, `timestamp`, `vector`. Adapters pick the SQL type and the comparison form from this value. When set to `vector`, it corresponds to a text column in the underlying database storing a JSON array `[{"path":"...","text":"..."}]`, which is maintained by the vector upload interface and should not be hand-written; vector writes are supported only on PostgreSQL and DuckDB, while other data sources (MySQL, SQL Server, GaussDB) explicitly fail with unsupported; vector attributes cannot be used for equality or range comparisons and can only be semantically queried via DSL vector conditions. |
 | `bizzKey` | On the DSL question path, `true` adds this column to the result when the query left it out. The SQL built for `ask` does not read this flag. Use `true` for columns that path should keep, and `false` otherwise. |
 | `enable` | `true` includes the column in the schema text and in SQL. `false` omits it. A missing value counts as enabled. Use `true`. |
 | `primaryKey` | Exactly one `true` on each class. The schema text marks it, and insert and object lookup use it as the id column. |

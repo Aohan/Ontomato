@@ -24,6 +24,7 @@ import io.ontomato.dataengine.service.ChatService;
 import io.ontomato.dataengine.service.CheckService;
 import io.ontomato.dataengine.service.SessionCancelledException;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -129,7 +130,7 @@ public class ABCDslSubQueryExecutor implements Runnable {
 				m3StartedPayload.put("m3Mode", "V1");
 				DiagnosticEventLogger.emit("m3.query.started", sqSessionId, m3StartedPayload);
 				m3Started = true;
-				DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), evaluation.getDslStr(), sessionId, false, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId);
+				DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), evaluation.getDslStr(), sessionId, false, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId);
 				m3Time = System.currentTimeMillis() - now;
 				dataMap = results[0].rawResponse();
 				rowPermissionDataMap = results[1].rawResponse();

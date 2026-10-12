@@ -3,6 +3,7 @@ import type {
   BackendModelConfig,
   ModelRole,
 } from "@ontomato/contracts/model-settings";
+import type { DataAdapterField, DataAdapterTestResult } from "@ontomato/contracts/data-adapters";
 
 /**
  * A model entry edited on the model configuration page: based on the entry read by getModelSettings, with fields that
@@ -33,24 +34,27 @@ export interface EmbeddingModelConfig {
   apiKey: string;
   modelName: string;
   timeout: string;
+  /** Vector dimensions of this domain: sent with every embedding request, a positive integer. */
+  dimensions: number;
   customHeaders?: Record<string, string> | null;
 }
 
-/** Fields a data adapter connection can have; which ones each adapter needs comes from fields in the backend list. */
-export type DataAdapterField = "url" | "user" | "password";
+/** GET /businessConfig/vectorRebuildStatus: whether this domain's vectors need rebuilding and the current or last rebuild. */
+export interface VectorRebuildStatus {
+  needed: boolean;
+  running: boolean;
+  total: number;
+  done: number;
+  /** Reason of the last failed rebuild; null after a success or when none has run. */
+  error: string | null;
+}
 
 /** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
 export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
 
-/** A data adapter installed in this edition (one item of GET /businessConfig/dataAdapters). */
-export interface DataAdapterInfo {
-  type: string;
-  label: string;
-  sql: boolean;
-  fields: DataAdapterField[];
-  /** Input examples (only for fields that have one), declared by the adapter module. */
-  examples: Partial<Record<DataAdapterField, string>>;
-}
+/** Outcome of the last connection test of the data adapter form: the driver's report, or the backend message verbatim. */
+export type DataAdapterTestOutcome =
+  { ok: true; result: DataAdapterTestResult } | { ok: false; message: string };
 
 /** General parameters, language and data adapter edited on the system config page. */
 export interface SystemSettings {

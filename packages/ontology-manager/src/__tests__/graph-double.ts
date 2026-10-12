@@ -26,6 +26,11 @@ export const graphRecord = {
   addedNodes: [] as any[],
   zoom: 1,
   zoomTo: [] as unknown[][],
+  focusElement: [] as unknown[][],
+  states: [] as unknown[][],
+  dataBatches: [] as any[],
+  layouts: [] as unknown[][],
+  nodeUpdates: [] as any[],
 };
 
 export class GraphDouble {
@@ -51,6 +56,19 @@ export class GraphDouble {
           if (key === "zoomTo") {
             return (...args: unknown[]) => {
               graphRecord.zoomTo.push(args);
+              return base;
+            };
+          }
+          if (key === "focusElement" || key === "setElementState") {
+            return (...args: unknown[]) => {
+              graphRecord[key === "focusElement" ? "focusElement" : "states"].push(args);
+              return base;
+            };
+          }
+          if (key === "addData" || key === "updateNodeData" || key === "layout") {
+            return (...args: unknown[]) => {
+              if (key === "layout") graphRecord.layouts.push(args);
+              else graphRecord[key === "addData" ? "dataBatches" : "nodeUpdates"].push(args[0]);
               return base;
             };
           }

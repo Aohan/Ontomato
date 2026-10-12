@@ -41,7 +41,7 @@ public class FakeDataAdapterProvider implements DataAdapterProvider {
 
 	@Override
 	public boolean sql() {
-		return !fields.isEmpty();
+		return !"m3".equals(type);
 	}
 
 	@Override

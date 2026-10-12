@@ -36,6 +36,7 @@ import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslPermissionUtil;
 import io.ontomato.dataengine.util.DslUtil;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import lombok.extern.slf4j.Slf4j;
@@ -498,7 +499,7 @@ public class DashboardServiceImpl implements DashboardService {
 		String dslsStr = JSON.toJSONString(dsls, Feature.WriteMapNullValue);
 		Map<String, Object> jsonRule = adminService.getJSONRule(domainId);
     	List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
-		DslExecutionResult result = HttpRequestUtil.getM3Data(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslsStr, null, true, jsonRule, vectorResourceDao, permission, HttpRequestUtil.M3Mode.V1, domainId)[1];
+		DslExecutionResult result = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslsStr, null, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId)[1];
 		Map<String, Object> rowPermissionDataMap = result.data();
 		if (!result.failed()) { // DSL executed successfully
 			JSONObject rowColPermissionDataMap = DslPermissionUtil.dealDslAnswerWithPermission(JSONObject.parseObject(JSON.toJSONString(rowPermissionDataMap, Feature.WriteMapNullValue)), permission, classDefs);

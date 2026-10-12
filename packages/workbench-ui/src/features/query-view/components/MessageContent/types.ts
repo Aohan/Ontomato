@@ -20,10 +20,7 @@ export type ChartType =
 
 export interface TableData {
   id: number;
-  headers: string[];
-  rows: string[][];
   chartType: ChartType;
-  title: string;
   beforeContent: string;
 }
 
@@ -49,8 +46,10 @@ export interface VisualizationHTML {
 }
 
 export interface ContentPart {
-  type: "text" | "table" | "chart" | "visualization" | "subgraph";
+  type: "text" | "table" | "chart" | "visualization" | "subgraph" | "dataset";
   content: string;
+  /** For a `dataset` part: the id of the dataset placed here. */
+  datasetId?: string;
   table?: TableData;
   chart?: ChartSpec;
   visualization?: VisualizationHTML;
@@ -58,13 +57,16 @@ export interface ContentPart {
 }
 
 /**
- * One dataset in a query result. The body table corresponds to it by sub-question or header, and
- * the name, row count, download, and DSL/code/lineage details are provided with the corresponding
- * table; `code`/`outKeyRefs` are given by the execution facts by dataset index, and datasets that
- * did not produce that detail do not carry these two fields.
+ * One dataset in a query result. The name, row count, download, and DSL/code/lineage details are
+ * provided where the answer body places the dataset's id; `code`/`outKeyRefs` are given by the
+ * execution facts by dataset index, and datasets that did not produce that detail do not carry these
+ * two fields.
  */
 export interface ResultDataset {
+  /** Rendering key within this list (by index); not the dataset's identity. */
   id: string;
+  /** The server's dataset id, which the body's placements refer to; absent on datasets saved before ids. */
+  datasetId?: string;
   title: string;
   rows: Array<Record<string, unknown>>;
   dsl?: unknown;

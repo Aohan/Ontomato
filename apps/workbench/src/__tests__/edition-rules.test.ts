@@ -14,7 +14,10 @@ import { runtimeDataDir } from "@ontomato/workbench-server/content/layout";
 import { evaluateAnswer } from "@ontomato/workbench-server/platform/diagnosis/autotest/evaluation/answer-evaluator";
 import { extractLogic } from "@ontomato/workbench-server/platform/diagnosis/observe/workspace-artifact/logic/index";
 import { createServiceHealthTool } from "@ontomato/workbench-server/platform/diagnosis/observe/agent/tools/service-health-tool";
-import { fetchBackendConfig } from "@ontomato/workbench-server/platform/diagnosis/observe/backend-config-fetcher";
+import {
+  clearBackendConfigCache,
+  fetchBackendConfig,
+} from "@ontomato/workbench-server/platform/diagnosis/observe/backend-config-fetcher";
 import { renderDataAsTable } from "@ontomato/workbench-server/services/data-query/adapter";
 import { WORKSPACE_DIRS } from "@ontomato/workbench-server/platform/diagnosis/observe/workspaces/store";
 import { setLogSourceConfig } from "@ontomato/workbench-server/platform/diagnosis/observe/config";
@@ -271,7 +274,7 @@ describe("open-source edition rules", () => {
     expect(new Set(references)).toEqual(new Set([`${"diagnostics"}/${"query_logic.md"}`]));
   });
 
-  it("C5: reports service health with this edition's groups and M3 rules", async () => {
+  it("C5: reports service health with this edition's backend group and ignores M3 and frontend entries", async () => {
     const tool = createServiceHealthTool({ domainId: "default", token: "tk" });
     mocks.upstream["/maintenance/getserviceinfo"] = {
       m3: { services: [{ name: "m3-parser", status: "stopped" }, { name: "m3-core", status: "running" }] },
@@ -283,16 +286,13 @@ describe("open-source edition rules", () => {
       [
         "# Service running status",
         "",
-        "1 service(s) are not running (2 services in total):",
+        "1 service(s) are not running (1 services in total):",
         "- [Backend] backend — Stopped",
         "",
         "## Service Details",
         "",
         "### Backend",
         "- backend: Stopped ⚠️",
-        "",
-        "### Frontend",
-        "- frontend: Running",
       ].join("\n")
     );
 
@@ -303,14 +303,12 @@ describe("open-source edition rules", () => {
     );
   });
 
-  it("C6: assumes this edition's data adapter only when the backend config omits it", async () => {
-    const configEndpoint = "/businessConfig/getConfigAndDesc";
-    const withAdapter = (dataEngine: Record<string, unknown>) => {
-      mocks.upstream[configEndpoint] = { success: true, data: { config: { ontomato: { "data-engine": dataEngine } } } };
+  it("C6: takes the domain's current adapter type, and assumes this edition's own only before one is read", async () => {
+    const withAdapter = (currentType: string) => {
+      mocks.upstream["/businessConfig/dataAdapters"] = { success: true, data: { currentType, adapters: [] } };
     };
 
-    withAdapter({});
-    expect(await fetchBackendConfig("tk")).toEqual({ dataAdapter: "sql" });
+    clearBackendConfigCache();
     expect(createDataQueryExecuteTool({ domainId: "default", token: "tk" }).description).toContain(
       "The current data adapter is sql; please submit sql dialect SQL"
     );
@@ -319,14 +317,14 @@ describe("open-source edition rules", () => {
     const reference = path.join(runtimeDataDir("skills"), "query-flow-diagnosis", "references", "mql\u67e5\u8be2\u53c2\u8003.md");
     fs.mkdirSync(path.dirname(reference), { recursive: true });
     fs.writeFileSync(reference, "reference");
-    withAdapter({ dataAdapter: "m3" });
+    withAdapter("m3");
     await fetchBackendConfig("tk");
     const m3Description = createDataQueryExecuteTool({ domainId: "default", token: "tk" }).description;
     expect(m3Description).toContain("The current data adapter is m3; please submit m3 dialect SQL");
     expect(m3Description).not.toContain("MQL");
     expect(m3Description).not.toContain(reference);
 
-    withAdapter({ dataAdapter: "mysql" });
+    withAdapter("mysql");
     expect(await fetchBackendConfig("tk")).toEqual({ dataAdapter: "mysql" });
     expect(createDataQueryExecuteTool({ domainId: "default", token: "tk" }).description).toContain(
       "The current data adapter is mysql; please submit mysql dialect SQL"

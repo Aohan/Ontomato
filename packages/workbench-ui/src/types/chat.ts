@@ -5,7 +5,10 @@ import type {
   QueryThinkingState as WireQueryThinkingState,
   QcResultState,
 } from "@ontomato/contracts/query-thinking";
-import type { QueryExecutionDisplayFact } from "@ontomato/contracts/query-execution";
+import type {
+  QueryDatasetIdentity,
+  QueryExecutionDisplayFact,
+} from "@ontomato/contracts/query-execution";
 import type { DeepAnalysisTaskPayload } from "@ontomato/contracts/analysis-presentation";
 import type { ChatClientEvent } from "@ontomato/contracts/chat";
 import type { EgressMessage } from "@ontomato/contracts/agent-egress";
@@ -35,13 +38,16 @@ export interface QueryExecutionFacts extends Omit<
 > {
   thinkingState?: QueryThinkingState;
   data?: Array<Record<string, unknown>> | Array<Array<Record<string, unknown>>>;
-  datasets?: Array<{
-    name?: string;
-    description?: string;
-    data?: Array<Record<string, unknown>>;
-    dsl?: unknown;
-    subQuestion?: string;
-  }>;
+  /** Datasets saved before dataset ids existed have no `id`. */
+  datasets?: Array<
+    Partial<QueryDatasetIdentity> & {
+      name?: string;
+      description?: string;
+      data?: Array<Record<string, unknown>>;
+      dsl?: unknown;
+      subQuestion?: string;
+    }
+  >;
   qcResult?: QcResultState;
   /** Field lineage for each dataset, in the same order as datasets; consistent with contracts/query-execution. */
   abcOutKeyRefs?: unknown[][];
@@ -56,6 +62,8 @@ export interface DeepAnalysisQuestion {
   statusText?: string;
   /** Execution facts for this query question; both entry points render the same execution display view from it */
   execution?: QueryExecutionFacts;
+  /** The execution omits persisted query results, which are read on expansion. */
+  executionDeferred?: true;
 }
 
 export interface DeepAnalysisDimension {
@@ -89,6 +97,8 @@ export interface ResponseSnapshot {
   threadId?: string;
   turnKey?: string;
   runId?: string;
+  /** Analysis task of a deep-analysis snapshot; scopes on-demand reads of its question facts. */
+  taskId?: string;
   lastEventSeq?: number;
   requestSeq?: number;
   primaryText: string;
@@ -104,6 +114,8 @@ export interface ResponseSnapshot {
   /** API/live read model: composed from query_runs for history, used for downloads and dashboard actions. */
   datasets?: Array<{
     id: string;
+    /** The server's dataset id; absent for history read models and datasets saved before ids. */
+    datasetId?: string;
     title: string;
     rows: Array<Record<string, unknown>>;
     dsl?: unknown;

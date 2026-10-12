@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, provide } from "vue";
+import { ref, computed, watch, provide, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import {
   PanelLeftClose,
@@ -53,6 +53,48 @@ function openLangMenu() {
 
 const collapsed = ref(localStorage.getItem(ADMIN_SIDEBAR_COLLAPSED_KEY) === "1");
 
+// The tabs collapse to icon-only when they no longer fit, not at a fixed breakpoint.
+const headerRef = ref<HTMLElement | null>(null);
+const tabsRef = ref<HTMLElement | null>(null);
+const compactTabs = ref(false);
+
+function measureTabs() {
+  const header = headerRef.value;
+  const tabs = tabsRef.value;
+  if (!header || !tabs) return;
+
+  const style = getComputedStyle(header);
+  const innerWidth =
+    header.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+  const left = header.querySelector<HTMLElement>(".header-left");
+  const right = header.querySelector<HTMLElement>(".header-right");
+  const available = innerWidth - (left?.offsetWidth ?? 0) - (right?.offsetWidth ?? 0) - 16;
+
+  const wasCompact = tabs.classList.contains("is-compact");
+  if (wasCompact) tabs.classList.remove("is-compact");
+  const natural = tabs.scrollWidth;
+  if (wasCompact) tabs.classList.add("is-compact");
+
+  compactTabs.value = natural > available;
+}
+
+let headerObserver: ResizeObserver | null = null;
+
+onMounted(() => {
+  measureTabs();
+  if (typeof ResizeObserver !== "undefined" && headerRef.value) {
+    headerObserver = new ResizeObserver(() => measureTabs());
+    headerObserver.observe(headerRef.value);
+  } else {
+    window.addEventListener("resize", measureTabs);
+  }
+});
+
+onBeforeUnmount(() => {
+  headerObserver?.disconnect();
+  window.removeEventListener("resize", measureTabs);
+});
+
 // A menu item is visible with any one of its permissions.
 const canSeeItem = (item: AdminMenuItem) => item.permissions.some((p) => props.access.can(p));
 
@@ -71,6 +113,11 @@ const navGroups = computed(() =>
         .map((item) => ({ path: item.path, title: t(item.titleKey), icon: item.icon }));
       return { ...group, title: t(group.titleKey), items, landing: group.homePath ?? items[0]?.path };
     })
+);
+
+watch(
+  () => [navGroups.value.length, props.actionTabs.length, currentLocale.value, props.access.ready],
+  () => nextTick(measureTabs)
 );
 
 const hasRealGroups = computed(() => navGroups.value.length > 0);
@@ -205,7 +252,7 @@ function openObserve() {
       </div>
     </template>
     <template v-else>
-      <header class="admin-header">
+      <header ref="headerRef" class="admin-header">
         <div class="header-left">
           <el-button class="back-btn" text @click="goBack">
             <el-icon><ArrowLeft /></el-icon>
@@ -214,7 +261,7 @@ function openObserve() {
           <div class="header-divider"></div>
           <div class="header-title">{{ t("nav.admin") }}</div>
         </div>
-        <nav class="header-tabs">
+        <nav ref="tabsRef" :class="['header-tabs', { 'is-compact': compactTabs }]">
           <div
             v-for="tab in actionTabs"
             :key="tab.key"
@@ -663,22 +710,32 @@ function openObserve() {
   background: var(--el-bg-color-page);
 }
 
+/* Title and description share one baseline row; the description wraps below on narrow screens. */
 .admin-page-heading {
   flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--spacing-md);
   padding: var(--spacing-xl) var(--spacing-xl) 0;
+}
+
+.admin-page-heading + .admin-main {
+  padding-top: var(--spacing-lg);
 }
 
 .admin-page-heading h1 {
   margin: 0;
   font-size: var(--text-xl);
+  line-height: 1.4;
   font-weight: var(--font-semibold);
   color: var(--el-text-color-primary);
 }
 
 .admin-page-heading p {
-  margin: var(--spacing-xs) 0 0;
+  margin: 0;
   font-size: var(--text-sm);
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--el-text-color-secondary);
 }
 
@@ -714,18 +771,16 @@ function openObserve() {
   }
 }
 
-@media (max-width: 1400px) {
-  .tab-item span {
-    display: none;
-  }
+.header-tabs.is-compact {
+  gap: 2px;
+}
 
-  .tab-item {
-    padding: var(--spacing-sm);
-  }
+.header-tabs.is-compact .tab-item {
+  padding: var(--spacing-sm);
+}
 
-  .header-tabs {
-    gap: 2px;
-  }
+.header-tabs.is-compact .tab-item span {
+  display: none;
 }
 </style>
 

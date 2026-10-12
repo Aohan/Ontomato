@@ -134,7 +134,7 @@ documents every field.
 | Server | Docker Engine 26+ with the Compose plugin; 4 CPU cores, 8 GB RAM, 20 GB free disk (8 cores and 16 GB recommended) |
 | Chat model | An OpenAI-compatible endpoint at least as capable as `deepseek-v4-flash` |
 | Embedding model | An OpenAI-compatible endpoint at least as capable as `qwen3-embedding-8b` |
-| Business database | PostgreSQL |
+| Business database | PostgreSQL, MySQL, DuckDB |
 
 ### 1. Deploy
 
@@ -144,7 +144,8 @@ The images are published to GitHub Container Registry for amd64 and arm64. On th
 git clone https://github.com/Aohan/Ontomato.git
 cd Ontomato/deploy
 cp .env.example .env    # set ARCH (amd64 or arm64), POSTGRES_PASSWORD and PUBLIC_HOST
-docker compose -f docker-compose.ghcr.yml up -d
+echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
+docker compose up -d
 ```
 
 The workbench and the data engine each come as a runtime image and an app image, which
@@ -157,9 +158,10 @@ When `docker compose ps` shows every service healthy, open `http://<host>:3000` 
 chat and embedding models under **Model Configuration** in the Admin Panel. You can also
 preset them in `.env` (`BACKEND_LLM_*`, `BACKEND_EMBEDDING_*`).
 
-`BACKEND_EMBEDDING_DIMENSIONS` (default `2048`) is sent to the embedding model and sizes
-the vector tables. Change it in `.env` before the first start if your model needs another
-value; it cannot change once data exists.
+`BACKEND_EMBEDDING_DIMENSIONS` (default `2048`) is the embedding dimension a new domain
+starts with; it is sent to the embedding model with that domain's own configuration.
+An existing domain keeps its saved dimension: change it under **Model Configuration**
+and rebuild the vectors.
 
 [deploy/README.md](deploy/README.md) describes updates, the offline bundle and the
 remaining settings.
@@ -241,7 +243,7 @@ If you are a coding agent asked to set Ontomato up:
 
 Ontomato is in beta. Current limits:
 
-- PostgreSQL is the only supported business database, and a deployment works with one
+- PostgreSQL, MySQL, and DuckDB are the supported business databases, and a deployment works with one
   datasource at a time.
 - The open-source edition has no login: everyone who can reach the ports has full access.
   Run it on a trusted network.

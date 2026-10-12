@@ -15,6 +15,7 @@ import type {
   AnalysisChartResult,
 } from "@ontomato/contracts/analysis-charts";
 import { createLogger } from "../../../logging/logger";
+import { withoutPersistedResult } from "../../data-query/query-fact";
 import { buildDeepAnalysisTaskResult } from "./task-result";
 import { getAnalysisTaskService } from "./task-service";
 import type { AnalysisRunIdentity } from "./run-history";
@@ -72,11 +73,16 @@ function mergeQuestions(
       (update.status === "running" || update.status === "pending")
     )
       continue;
+    const execution =
+      previous?.execution || update.execution
+        ? { ...previous?.execution, ...update.execution }
+        : undefined;
     questions.set(update.questionId, {
       ...previous,
       ...update,
-      ...(previous?.execution || update.execution
-        ? { execution: { ...previous?.execution, ...update.execution } }
+      // A deferred update must not inherit result copies from earlier inline facts.
+      ...(execution
+        ? { execution: update.executionDeferred ? withoutPersistedResult(execution) : execution }
         : {}),
     });
   }
@@ -111,31 +117,77 @@ export function createDeepAnalysisArtifactStore(target: {
     charts: [],
     chartDiagnostics: [],
   };
-  let writes = Promise.resolve();
+  // Serial bounded drain: at most one write in flight plus the newest pending snapshot.
+  // Intermediate updates only overwrite the pending slot; call chains always await finish
+  // sequentially, so at most one terminal write is outstanding.
+  let activeWrite: Promise<void> | null = null;
+  let pendingSnapshot: DeepAnalysisTaskPayload | null = null;
+  let finalWrite: {
+    snapshot: DeepAnalysisTaskPayload;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  } | null = null;
   const emit = (event: DeepAnalysisEmittedEvent) => target.emit?.(event);
-  const persist = () => {
+  const writeSnapshot = (snapshot: DeepAnalysisTaskPayload): Promise<void> =>
+    getAnalysisTaskService().updateTaskArtifacts(
+      target.taskId!,
+      {
+        analysisPayload: snapshot,
+        requestSeq: target.requestSeq,
+        resultSummary:
+          snapshot.runState.status === "failed"
+            ? tApp("analysis.task.artifacts.404", { value: snapshot.runState.error || "" })
+            : snapshot.runState.status === "cancelled"
+              ? snapshot.runState.error
+              : buildDeepAnalysisTaskResult(snapshot).resultSummary,
+      },
+      target.identity
+    );
+  const pump = (): void => {
+    if (activeWrite || !pendingSnapshot) return;
+    const snapshot = pendingSnapshot;
+    pendingSnapshot = null;
+    activeWrite = Promise.resolve()
+      .then(() => writeSnapshot(snapshot))
+      .then(
+        () => {
+          activeWrite = null;
+          if (finalWrite?.snapshot === snapshot) {
+            finalWrite.resolve();
+            finalWrite = null;
+          }
+          pump();
+        },
+        (error) => {
+          activeWrite = null;
+          // Every failure keeps the existing log semantics. A final snapshot with no newer
+          // pending write additionally rejects, so finish never reports a lost success.
+          logger.error(tApp("analysis.task.artifacts.405"), { taskId: target.taskId, error });
+          if (!pendingSnapshot && finalWrite?.snapshot === snapshot) {
+            finalWrite.reject(error);
+            finalWrite = null;
+          }
+          pump();
+        }
+      );
+  };
+  // Intermediate updates only refresh the pending slot and never reject: failures are
+  // logged by the writer, and the next pending snapshot still carries the full body.
+  const schedulePersist = (): void => {
+    if (!target.taskId) return;
+    pendingSnapshot = payload;
+    pump();
+  };
+  // The terminal write waits until the final snapshot itself lands.
+  const persistFinal = (): Promise<void> => {
     if (!target.taskId) return Promise.resolve();
     const snapshot = payload;
-    const write = writes.then(async () => {
-      await getAnalysisTaskService().updateTaskArtifacts(
-        target.taskId!,
-        {
-          analysisPayload: snapshot,
-          requestSeq: target.requestSeq,
-          resultSummary:
-            snapshot.runState.status === "failed"
-              ? tApp("analysis.task.artifacts.404", { value: snapshot.runState.error || "" })
-              : snapshot.runState.status === "cancelled"
-                ? snapshot.runState.error
-                : buildDeepAnalysisTaskResult(snapshot).resultSummary,
-        },
-        target.identity
-      );
+    pendingSnapshot = snapshot;
+    const rendezvous = new Promise<void>((resolve, reject) => {
+      finalWrite = { snapshot, resolve, reject };
     });
-    writes = write.catch((error) =>
-      logger.error(tApp("analysis.task.artifacts.405"), { taskId: target.taskId, error })
-    );
-    return write;
+    pump();
+    return rendezvous;
   };
   const progress = () => {
     const previous = payload.runState;
@@ -206,7 +258,7 @@ export function createDeepAnalysisArtifactStore(target: {
       ].sort((a, b) => a.seq - b.seq),
     };
     progress();
-    void persist();
+    schedulePersist();
     emit({ type: "analysis_activity", content: activity, timestamp: Date.now() });
     emitState();
   };
@@ -272,7 +324,7 @@ export function createDeepAnalysisArtifactStore(target: {
               }
         ),
       };
-      void persist();
+      schedulePersist();
       emit({ type: "thinking_state", node: "analysis", content, timestamp: Date.now() });
     },
     section(
@@ -300,7 +352,7 @@ export function createDeepAnalysisArtifactStore(target: {
         ].sort((a, b) => a.order - b.order),
       };
       progress();
-      void persist();
+      schedulePersist();
       emit({
         type: "analysis_section",
         content: { ...section, markdown: input.markdown, mode, offset },
@@ -326,7 +378,7 @@ export function createDeepAnalysisArtifactStore(target: {
           ).values(),
         ],
       };
-      void persist();
+      schedulePersist();
       emit({
         type: "analysis_charts",
         content: { scopeId, charts, diagnostics },
@@ -366,7 +418,7 @@ export function createDeepAnalysisArtifactStore(target: {
       };
       progress();
       // The final artifact and the task terminal state are one write; failure must propagate and never publish a successful terminal state.
-      await persist();
+      await persistFinal();
       emitState();
       return payload;
     },

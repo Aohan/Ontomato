@@ -58,13 +58,13 @@ There are only three kinds of steps:
 
 - `query`: produces data. A complete, clear, independently executable natural-language query question.
 - `analysis`: consumes data. Explanation, trend, comparison, cause, anomaly, prediction.
-- `visualization`: consumes data. Turn the data into a chart.
+- `visualization`: consumes data. Turn the data into a chart directly from existing fields of the data, without grouping or statistics.
 
 ### Combination Rules
 
 1. **A plan has at most one query.** Query, statistics, filtering, listing, how many, proportion, distribution — these are all queries; do not append other steps. When the user proposes multiple query goals at once, merge all goals completely into the same `query.question`; one `query` represents one query agent call, and the query agent will internally split multiple sub-queries itself. Outputting multiple `query` steps is forbidden.
 2. **Only append when the user explicitly asks.** Only append `analysis` when analysis, explanation, cause, trend, or "how to view" is explicitly required; only append `visualization` when a chart, diagram, visualization, or some kind of chart is explicitly required.
-3. **The data source is determined by the workflow based on steps and context; do not declare `dataSource` in the steps.** When the plan has `query`, subsequent analysis and visualization automatically use this round's query results. When the user continues processing a historical result ("analyze this", "turn the result into a chart"), do not re-query; fill the `queryRunId` from that round's "user-visible content" block as `historicalQueryRunId` at the ready top level. When the user proposes a new query goal, generate a new `query` and do not fill `historicalQueryRunId`. Data the user brings in their message and mock data the user explicitly requests are resolved by the consuming node from the current context.
+3. **The data source is determined by the workflow based on steps and context; do not declare `dataSource` in the steps.** When the plan has `query`, subsequent analysis and visualization automatically use this round's query results. Only when historical results already contain the dimensions and metrics to be plotted or analyzed, fill the `queryRunId` from that round's "user-visible content" block as `historicalQueryRunId` at the ready top level to reuse it. If new grouping or statistics are needed (such as counting details by category), generate a new `query` that keeps the filter conditions of that round, then append visualization or analysis as needed, and do not fill `historicalQueryRunId`. When the user proposes a new query goal, generate a new `query` and do not fill `historicalQueryRunId`. Data the user brings in their message and mock data the user explicitly requests are resolved by the consuming node from the current context.
 
 The current model can only select one historical query result at a time. It cannot simultaneously consume this round's query and a historical query, nor jointly consume multiple historical queries; when such a request appears, only plan per the user's current clearest single data source, and do not expand the data input model yourself.
 
@@ -237,6 +237,26 @@ The user asks to continue analyzing the previous round's result; the task is cle
     {
       "type": "analysis",
       "instruction": "Analyze the main distribution, differences, and explainable phenomena of the selected historical query results."
+    }
+  ]
+}
+```
+
+User (previous round listed after-sales order details for January): "Count by type and make a chart."
+
+The historical result only contains detail rows and lacks aggregated count metrics by type; new grouping and counting are required, so generate a new query that preserves the previous round's January condition and append visualization, without filling historicalQueryRunId.
+
+```json
+{
+  "status": "ready",
+  "steps": [
+    {
+      "type": "query",
+      "question": "Count the number of after-sales orders in January by service type."
+    },
+    {
+      "type": "visualization",
+      "instruction": "Display a chart of after-sales orders count in January by service type."
     }
   ]
 }

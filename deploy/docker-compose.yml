@@ -60,10 +60,15 @@ services:
         max-size: "50m"
         max-file: "5"
     healthcheck:
-      test: ["CMD", "python3", "-c", "import json, urllib.request; req=urllib.request.Request('http://127.0.0.1:18087/getABCTaskCountInQueue', headers={'Accept-Language':'en'}); r=urllib.request.urlopen(req, timeout=3); body=json.load(r); assert r.status == 200 and body.get('success') is True and type(body.get('data')) is int and body['data'] >= 0"]
+      test: ["CMD", "python3", "-c", "import json, urllib.request; r=urllib.request.urlopen('http://127.0.0.1:18087/health', timeout=3); body=json.load(r); assert r.status == 200 and body.get('success') is True"]
       interval: 10s
       timeout: 5s
       retries: 5
+      # Grace period: failed checks do not count during it, and the first passing check marks
+      # the service healthy. On a slow machine or a first start on an empty database DataRAG
+      # can take longer than retries x interval (about 50 s); without it the service is marked
+      # unhealthy and the Node app, which waits for it, does not start.
+      start_period: 120s
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,9 +1,12 @@
 package io.ontomato.dataengine.service.impl;
 
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -50,6 +53,7 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	public void insert(String className, JSONArray objs, String sandboxId, String domainId) throws Exception {
 		Map<String, Object> classDef = getClassDefByClassName(className, domainId);
 		if (classDef != null) {
+			stripVectorAttrs(classDef, objs);
 			DataAdapter adapter = getDataAdapter(domainId);
 			adapter.insertObjects(sandboxId, classDef, objs);
 		} else {
@@ -70,10 +74,139 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 		return classDef;
 	}
 
+	/** Collect the names of all enabled vector-type attributes of a class. */
+	private Set<String> collectVectorAttrs(Map<String, Object> classDef) {
+		Set<String> vectorAttrs = new HashSet<String>();
+		if (classDef != null && classDef.get("attrs") != null) {
+			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>) classDef.get("attrs");
+			for (Map<String, Object> attrDef : attrDefs) {
+				if (attrDef.get("enable") == null || (Boolean) attrDef.get("enable")) {
+					if ("vector".equals(attrDef.get("type"))) {
+						vectorAttrs.add((String) attrDef.get("name"));
+					}
+				}
+			}
+		}
+		return vectorAttrs;
+	}
+
+	/** insert silently drops vector attributes (they are written only via appendVector/updateVector). */
+	private void stripVectorAttrs(Map<String, Object> classDef, JSONArray objs) {
+		Set<String> vectorAttrs = collectVectorAttrs(classDef);
+		if (vectorAttrs.isEmpty() || objs == null) {
+			return;
+		}
+		for (int i = 0; i < objs.size(); i++) {
+			JSONObject obj = objs.getJSONObject(i);
+			if (obj == null) {
+				continue;
+			}
+			for (String va : vectorAttrs) {
+				obj.remove(va);
+			}
+		}
+	}
+
+	/** update rejects any vector attribute in setValues (use updateVector/appendVector instead). */
+	private void rejectVectorAttrs(Map<String, Object> classDef, JSONObject setValues, String domainId) throws Exception {
+		Set<String> vectorAttrs = collectVectorAttrs(classDef);
+		if (vectorAttrs.isEmpty() || setValues == null) {
+			return;
+		}
+		for (String va : vectorAttrs) {
+			if (setValues.containsKey(va)) {
+				throw new Exception(langService.get(businessConfigService.get(domainId).getLang(), "WriteFunctionOperation.vectorAttrNotAllowed") + "[" + va + "]");
+			}
+		}
+	}
+
+	/** Before deleting objects, remove their vector table records and files. */
+	private void cleanupVectorAttrs(DataAdapter adapter, Map<String, Object> classDef, String className, JSONObject where, String sandboxId, String domainId) throws Exception {
+		Set<String> vectorAttrs = collectVectorAttrs(classDef);
+		if (vectorAttrs.isEmpty()) {
+			return;
+		}
+		List<String> objectIds = queryObjectIds(adapter, className, classDef, where, sandboxId, domainId);
+		if (objectIds.isEmpty()) {
+			return;
+		}
+		boolean sandbox = inSandbox(sandboxId);
+		String prefixClassName = sandbox ? adapter.sandboxClassName(sandboxId, className) : className;
+		for (String objectId : objectIds) {
+			for (String va : vectorAttrs) {
+				vectorResourceDao.deleteByObjectId(prefixClassName, va, objectId, domainId);
+			}
+		}
+	}
+
+	/** Query the primary-key values of the objects matching the where condition. */
+	private List<String> queryObjectIds(DataAdapter adapter, String className, Map<String, Object> classDef, JSONObject where, String sandboxId, String domainId) throws Exception {
+		String pk = DslUtil.getPrimaryKey(classDef);
+
+		JSONObject object = new JSONObject();
+		object.put("idx", 0);
+		object.put("variable", "c");
+		object.put("class", className);
+		if (where != null && !where.isEmpty()) {
+			JSONObject conditions = new JSONObject();
+			conditions.put("properties", where);
+			object.put("conditions", conditions);
+		}
+
+		JSONArray objects = new JSONArray();
+		objects.add(object);
+		JSONObject pattern = new JSONObject();
+		pattern.put("objects", objects);
+		JSONArray patterns = new JSONArray();
+		patterns.add(pattern);
+		JSONObject graph = new JSONObject();
+		graph.put("patterns", patterns);
+		graph.put("pattern_logic", "and");
+
+		JSONObject field = new JSONObject();
+		field.put("as", "pk");
+		field.put("variable", "c");
+		field.put("field", pk);
+		JSONArray fields = new JSONArray();
+		fields.add(field);
+		JSONObject output = new JSONObject();
+		output.put("to_user", true);
+		output.put("fields", fields);
+
+		JSONObject step = new JSONObject();
+		step.put("graph", graph);
+		step.put("output", output);
+		JSONArray steps = new JSONArray();
+		steps.add(step);
+		JSONObject answer = new JSONObject();
+		answer.put("steps", steps);
+		JSONObject dsl = new JSONObject();
+		dsl.put("answer", answer);
+
+		Map<String, Object> result = adapter.query(dsl, sandboxId, domainId, vectorResourceDao, dataRagConfig);
+		List<String> ids = new ArrayList<String>();
+		JSONArray dataArr = result == null ? null : (JSONArray) result.get("data");
+		if (dataArr != null && !dataArr.isEmpty()) {
+			JSONObject first = dataArr.getJSONObject(0);
+			JSONArray rows = first == null ? null : first.getJSONArray("answer");
+			if (rows != null) {
+				for (int i = 0; i < rows.size(); i++) {
+					JSONObject row = rows.getJSONObject(i);
+					Object pkVal = row == null ? null : row.get("pk");
+					if (pkVal != null) {
+						ids.add(String.valueOf(pkVal));
+					}
+				}
+			}
+		}
+		return ids;
+	}
+
 	@Override
 	public void update(String className, JSONObject setValues, JSONObject where, String sandboxId, String domainId) throws Exception {
 		Map<String, Object> classDef = getClassDefByClassName(className, domainId);
 		if (classDef != null) {
+			rejectVectorAttrs(classDef, setValues, domainId);
 			DataAdapter adapter = getDataAdapter(domainId);
 			adapter.updateObjects(sandboxId, classDef, setValues, where);
 		} else {
@@ -86,6 +219,7 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 		Map<String, Object> classDef = getClassDefByClassName(className, domainId);
 		if (classDef != null) {
 			DataAdapter adapter = getDataAdapter(domainId);
+			cleanupVectorAttrs(adapter, classDef, className, where, sandboxId, domainId);
 			adapter.deleteObjects(sandboxId, classDef, where);
 		} else {
 			throw new Exception(langService.get(businessConfigService.get(domainId).getLang(), "WriteFunctionOperation.classNotExist") + "[" + className + "]");
@@ -136,7 +270,7 @@ public class WriteFunctionOperationServiceImpl implements WriteFunctionOperation
 	
 	/** Write the object's vector attribute back through the plain class def + plain object id; the adapter re-applies the sandbox prefix. */
 	private void writeVectorAttr(DataAdapter adapter, Map<String, Object> classDef, String attrName, String objectId, String sandboxId, JSONArray vectorAttr) throws Exception {
-		String pkField = adapter.useM3() ? "id" : DslUtil.getPrimaryKey(classDef);
+		String pkField = DslUtil.getPrimaryKey(classDef);
 		JSONObject setValues = new JSONObject();
 		setValues.put(attrName, vectorAttr);
 		JSONObject where = new JSONObject();

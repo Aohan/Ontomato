@@ -2,6 +2,7 @@ package io.ontomato.dataengine.service;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.lang.reflect.Proxy;
 
@@ -10,6 +11,7 @@ import org.springframework.beans.factory.UnsatisfiedDependencyException;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.service.impl.EnvServiceImpl;
 
 class ProductionEnvironmentLoginPolicyRequiredTest {
@@ -24,6 +26,8 @@ class ProductionEnvironmentLoginPolicyRequiredTest {
                     factory.registerResolvableDependency(io.ontomato.dataengine.dataAdapter.DataAdapterRegistry.class, new io.ontomato.dataengine.dataAdapter.DataAdapterRegistry(java.util.List.of(), new DataRagConfig()));
                     factory.registerResolvableDependency(AdminService.class, unused(AdminService.class));
                     factory.registerResolvableDependency(SchemaPermissionService.class, unused(SchemaPermissionService.class));
+                    factory.registerResolvableDependency(VectorResourceDao.class, mock(VectorResourceDao.class));
+                    factory.registerResolvableDependency(VectorResourceService.class, unused(VectorResourceService.class));
                 });
                 ctx.register(EnvServiceImpl.class);
                 ctx.refresh();

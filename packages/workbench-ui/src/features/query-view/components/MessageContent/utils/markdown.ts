@@ -127,22 +127,7 @@ export function extractAllTables(markdown: string): TableData[] {
   let id = 0;
 
   while ((match = tableRegex.exec(markdown)) !== null) {
-    const headers = match[1]
-      .split("|")
-      .map((h) => h.trim())
-      .filter(Boolean);
-
-    const rowsStr = match[2].trim();
-    const rows = rowsStr.split("\n").map((row) =>
-      row
-        .split("|")
-        .map((cell) => cell.trim())
-        .filter(Boolean)
-    );
-
     const beforeTable = markdown.substring(0, match.index);
-    const titleMatch = beforeTable.match(/#{1,4}\s+([^\n]+)\s*$/);
-    const title = titleMatch ? titleMatch[1].trim() : "";
 
     const contextBefore = beforeTable.slice(-200).toLowerCase();
     let chartType: TableData["chartType"] = "bar";
@@ -158,10 +143,7 @@ export function extractAllTables(markdown: string): TableData[] {
 
     tables.push({
       id: id++,
-      headers,
-      rows,
       chartType,
-      title,
       beforeContent: beforeTable,
     });
   }

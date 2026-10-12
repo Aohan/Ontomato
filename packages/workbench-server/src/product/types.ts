@@ -45,12 +45,10 @@ export interface WorkbenchProduct {
     upstreamTurns: "\u4e0a\u6e38Turn" | "upstream-turns";
     queryLogicFile: "mqls_logic.md" | "query_logic.md";
   };
-  /** Group names and default service names for backend/frontend in service-health diagnosis output. */
+  /** Group name and default service name for the backend in service-health diagnosis output. */
   serviceHealthNames: {
     backendGroup: string;
     backendDefault: string;
-    frontendGroup: string;
-    frontendDefault: string;
   };
   /** Table header shown for localized group column names in the fallback field display plan. The escaped literal is the historical Chinese group column header matched in user data. */
   groupColumnHeader: "\u5206\u7ec4" | "group";

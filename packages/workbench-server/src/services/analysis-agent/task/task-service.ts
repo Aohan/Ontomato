@@ -33,12 +33,14 @@ import type { DeepAnalysisTaskPayload } from "@ontomato/contracts/analysis-prese
 import { createThreadPlaceholder } from "../../chat/thread-store";
 import type { AnalysisConversationTurnRecord } from "./conversation-types";
 import {
-  applyAnalysisRunUpdate,
   isCurrentAnalysisRun,
+  planAnalysisRunUpdate,
   readAnalysisRunHistory,
   type AnalysisRunIdentity,
 } from "./run-history";
 import { isAnalysisTaskTerminalStatus } from "./events";
+import { PERSISTED_RESULT_KEYS } from "../../data-query/query-fact";
+import type { AnalysisEvidenceQuestion } from "@ontomato/contracts/analysis-presentation";
 import { tApp } from "../../../i18n";
 
 
@@ -117,6 +119,67 @@ function taskListFeedSql(): string {
     ${scheduleRuleTaskFeedSql()}`;
 }
 
+/** Plain task-row columns; the two large JSONB columns are projected per read. */
+const TASK_COLUMNS = `id, agent_id, user_id, domain_id, name, description, status, thread_id, question,
+  notify_email, notify_on_complete, result_summary, trigger_source, token, last_run_at,
+  created_at, updated_at, report_deliverable_enabled, request_seq, harness_session_id`;
+
+const RESULT_KEYS_SQL = `ARRAY[${PERSISTED_RESULT_KEYS.map((key) => `'${key}'`).join(", ")}]`;
+
+/**
+ * Stored activities with the persisted result copies dropped from each question execution and the
+ * question marked deferred; the same rule as withoutPersistedResult, applied inside PostgreSQL so a
+ * large stored payload never reaches Node.
+ */
+function deferredActivitiesSql(activities: string): string {
+  return `(SELECT COALESCE(jsonb_agg(
+      CASE WHEN jsonb_typeof(activity->'questions') = 'array'
+        THEN jsonb_set(activity, '{questions}', (
+          SELECT COALESCE(jsonb_agg(
+            CASE WHEN question->'execution' ?| ${RESULT_KEYS_SQL}
+              THEN jsonb_set(question, '{execution}', (question->'execution') - ${RESULT_KEYS_SQL})
+                || '{"executionDeferred": true}'::jsonb
+              ELSE question END
+            ORDER BY question_position), '[]'::jsonb)
+          FROM jsonb_array_elements(activity->'questions')
+            WITH ORDINALITY AS question_items(question, question_position)))
+        ELSE activity END
+      ORDER BY activity_position), '[]'::jsonb)
+    FROM jsonb_array_elements(${activities}) WITH ORDINALITY AS activity_items(activity, activity_position))`;
+}
+
+/** Run records reduced to identity and status: what run attribution checks need. */
+const RUN_META_SQL = `(SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+    'id', run->'id', 'requestSeq', run->'requestSeq', 'status', run->'status')) ORDER BY position), '[]'::jsonb)
+  FROM jsonb_array_elements(run_history) WITH ORDINALITY AS runs(run, position))`;
+
+export interface TaskReadScope {
+  /**
+   * none: row metadata; state: plus run state and execution mode; report: artifacts without activities
+   * (body, charts, final answer); light: artifacts with deferred query results; full: the stored payload.
+   */
+  payload: "none" | "state" | "report" | "light" | "full";
+  /** meta: run identity and status; summary: run records without replay snapshots. */
+  runs: "none" | "meta" | "summary";
+}
+
+const PAYLOAD_SQL: Record<TaskReadScope["payload"], string> = {
+  none: "NULL::jsonb AS analysis_payload",
+  state: `NULL::jsonb AS analysis_payload, analysis_payload->'runState' AS run_state,
+    analysis_payload->>'executionMode' AS execution_mode`,
+  report: "jsonb_set(analysis_payload, '{activities}', '[]'::jsonb) AS analysis_payload",
+  light: `jsonb_set(analysis_payload, '{activities}',
+    ${deferredActivitiesSql("analysis_payload->'activities'")}) AS analysis_payload`,
+  full: "analysis_payload",
+};
+
+const RUNS_SQL: Record<TaskReadScope["runs"], string> = {
+  none: "NULL::jsonb AS run_history",
+  meta: `${RUN_META_SQL} AS run_history`,
+  summary: `(SELECT COALESCE(jsonb_agg(run - 'snapshot' ORDER BY position), '[]'::jsonb)
+    FROM jsonb_array_elements(run_history) WITH ORDINALITY AS runs(run, position)) AS run_history`,
+};
+
 function mapTaskRow(row: AnalysisTaskRow): AnalysisTask {
   const analysisPayload = row.analysis_payload || undefined;
   return {
@@ -164,7 +227,8 @@ export class AnalysisTaskService {
   async listConversationTurns(taskId: string): Promise<AnalysisConversationTurnRecord[]> {
     const result = await this.pool.query(
       `SELECT request_seq AS "requestSeq", user_message AS "userMessage", status,
-        harness_turn_id AS "harnessTurnId", activities, evidence_refs AS "evidenceRefs",
+        harness_turn_id AS "harnessTurnId", ${deferredActivitiesSql("activities")} AS activities,
+        evidence_refs AS "evidenceRefs",
         summary_charts AS "charts", chart_diagnostics AS "chartDiagnostics",
         final_answer AS "finalAnswer", error, created_at AS "createdAt", updated_at AS "updatedAt"
        FROM ${qualifiedTable("analysis_task_turns")} WHERE task_id = $1 ORDER BY request_seq`,
@@ -305,7 +369,8 @@ export class AnalysisTaskService {
     identity: AnalysisRunIdentity
   ): Promise<string> {
     const current = await this.pool.query(
-      `SELECT harness_session_id, run_history FROM ${qualifiedTable("analysis_tasks")} WHERE id = $1`,
+      `SELECT harness_session_id, ${RUN_META_SQL} AS run_history
+       FROM ${qualifiedTable("analysis_tasks")} WHERE id = $1`,
       [taskId]
     );
     const row = current.rows[0];
@@ -408,12 +473,80 @@ export class AnalysisTaskService {
     };
   }
 
-  async getTask(id: string, domainId: string): Promise<AnalysisTask | null> {
+  /** Reads one task with only the parts of its large columns that the caller's use needs. */
+  async getTask(id: string, domainId: string, scope: TaskReadScope): Promise<AnalysisTask | null> {
     const result = await this.pool.query(
-      `SELECT * FROM ${qualifiedTable("analysis_tasks")} WHERE id = $1 AND domain_id = $2`,
+      `SELECT ${TASK_COLUMNS}, ${PAYLOAD_SQL[scope.payload]}, ${RUNS_SQL[scope.runs]}
+       FROM ${qualifiedTable("analysis_tasks")} WHERE id = $1 AND domain_id = $2`,
       [id, domainId]
     );
     return result.rows.length > 0 ? mapTaskRow(result.rows[0]) : null;
+  }
+
+  /**
+   * One run's replay snapshot with deferred query results. Undefined when the run does not exist;
+   * null when that legacy run saved no snapshot.
+   */
+  async getRunSnapshot(taskId: string, runId: string): Promise<unknown> {
+    const result = await this.pool.query(
+      `SELECT jsonb_set(run->'snapshot', '{deepAnalysis,activities}',
+         ${deferredActivitiesSql("run->'snapshot'->'deepAnalysis'->'activities'")}) AS snapshot
+       FROM ${qualifiedTable("analysis_tasks")} AS task,
+         jsonb_array_elements(task.run_history) AS runs(run)
+       WHERE task.id = $1 AND run->>'id' = $2`,
+      [taskId, runId]
+    );
+    return result.rows.length > 0 ? result.rows[0].snapshot : undefined;
+  }
+
+  /**
+   * A question as its run stored it, with the acceptance sequence its query run is keyed by: a
+   * historical report run (runId), a regular-session turn (requestSeq), or the current report run.
+   * `light` leaves stored result copies in PostgreSQL (the query run is authoritative when it exists);
+   * `full` returns the stored execution, read only when that query run is missing.
+   * Null when that run or turn does not exist.
+   */
+  async getStoredQuestion(
+    taskId: string,
+    questionId: string,
+    at: { runId?: string; requestSeq?: number },
+    part: "light" | "full"
+  ): Promise<{ requestSeq?: number; question?: AnalysisEvidenceQuestion } | null> {
+    const found = (document: string, path: string) =>
+      `LATERAL (SELECT jsonb_path_query_first(${document},
+        '${path}.questions[*] ? (@.questionId == $id)', jsonb_build_object('id', $2::text)) AS q) AS found`;
+    const question =
+      part === "full"
+        ? "found.q"
+        : `CASE WHEN found.q ? 'execution'
+            THEN jsonb_set(found.q, '{execution}', (found.q->'execution') - ${RESULT_KEYS_SQL})
+            ELSE found.q END`;
+    const result =
+      at.runId !== undefined
+        ? await this.pool.query(
+            `SELECT (run->>'requestSeq')::int AS request_seq, ${question} AS question
+             FROM ${qualifiedTable("analysis_tasks")} AS task,
+               jsonb_array_elements(task.run_history) AS runs(run),
+               ${found("run->'snapshot'", "$.deepAnalysis.activities[*]")}
+             WHERE task.id = $1 AND run->>'id' = $3`,
+            [taskId, questionId, at.runId]
+          )
+        : at.requestSeq !== undefined
+          ? await this.pool.query(
+              `SELECT request_seq, ${question} AS question
+               FROM ${qualifiedTable("analysis_task_turns")}, ${found("activities", "$[*]")}
+               WHERE task_id = $1 AND request_seq = $3`,
+              [taskId, questionId, at.requestSeq]
+            )
+          : await this.pool.query(
+              `SELECT request_seq, ${question} AS question
+               FROM ${qualifiedTable("analysis_tasks")}, ${found("analysis_payload", "$.activities[*]")}
+               WHERE id = $1`,
+              [taskId, questionId]
+            );
+    const row = result.rows[0];
+    if (!row) return null;
+    return { requestSeq: row.request_seq ?? undefined, question: row.question ?? undefined };
   }
 
   async getLatestTaskByThread(threadId: string, domainId: string): Promise<AnalysisTask | null> {
@@ -482,7 +615,7 @@ export class AnalysisTaskService {
       ]
     );
     logger.info(tApp("analysis.task.task-service.447", { id: id, name: params.name }));
-    return (await this.getTask(id, params.domainId))!;
+    return (await this.getTask(id, params.domainId, { payload: "state", runs: "none" }))!;
   }
 
   /** Single-row task update: id is pinned to $1 and the remaining parameters start at $2 in `sets` order. */
@@ -505,6 +638,9 @@ export class AnalysisTaskService {
    * The single atomic boundary for run-attribution writes: after reading the run history with the row locked, first confirm the writing run is still
    * the most recently accepted run. Only it may rewrite the task's current state and artifacts; a late write superseded by a new run only backfills
    * its own history record by identity — it cannot touch any current fact of the new run and never appends a run record.
+   *
+   * Status and acceptance paths need the rewritten row back; the artifact hot path only needs
+   * completion as its confirmation, so it passes `confirmationOnly` and no full row travels back.
    */
   private async applyTaskUpdateWithRunIdentity(
     id: string,
@@ -512,7 +648,23 @@ export class AnalysisTaskService {
     vals: any[],
     identity: AnalysisRunIdentity,
     runPatch?: Partial<AnalysisTaskRun>
-  ): Promise<AnalysisTask | null> {
+  ): Promise<AnalysisTask | null>;
+  private async applyTaskUpdateWithRunIdentity(
+    id: string,
+    sets: string[],
+    vals: any[],
+    identity: AnalysisRunIdentity,
+    runPatch: Partial<AnalysisTaskRun> | undefined,
+    confirmationOnly: true
+  ): Promise<void>;
+  private async applyTaskUpdateWithRunIdentity(
+    id: string,
+    sets: string[],
+    vals: any[],
+    identity: AnalysisRunIdentity,
+    runPatch?: Partial<AnalysisTaskRun>,
+    confirmationOnly?: boolean
+  ): Promise<AnalysisTask | null | void> {
     if (identity.runId === undefined && identity.requestSeq === undefined) {
       logger.error(tApp("analysis.task.task-service.448", { id: id }));
       return null;
@@ -521,7 +673,8 @@ export class AnalysisTaskService {
     try {
       await client.query("BEGIN");
       const current = await client.query(
-        `SELECT status, run_history FROM ${qualifiedTable("analysis_tasks")} WHERE id = $1 FOR UPDATE`,
+        `SELECT status, ${RUN_META_SQL} AS run_history
+         FROM ${qualifiedTable("analysis_tasks")} WHERE id = $1 FOR UPDATE`,
         [id]
       );
       if (!current.rows.length) {
@@ -530,7 +683,7 @@ export class AnalysisTaskService {
       }
       const row = current.rows[0];
       const history = readAnalysisRunHistory(row.run_history);
-      const merged = runPatch ? applyAnalysisRunUpdate(history, identity, runPatch) : undefined;
+      const runUpdate = runPatch ? planAnalysisRunUpdate(history, identity, runPatch) : undefined;
       // Current facts are rewritten only while the writer is still the most recently accepted run and the task has not entered a terminal state from this run:
       // a running run's late artifacts cannot flip a settled terminal state back to running; completion of the same terminal state may still write body and time.
       const incomingStatus = (runPatch?.status ?? "running") as AnalysisTaskStatus;
@@ -538,23 +691,31 @@ export class AnalysisTaskService {
         isCurrentAnalysisRun(history, identity) &&
         (!isAnalysisTaskTerminalStatus(row.status as AnalysisTaskStatus) ||
           incomingStatus === row.status);
-      if (!mayWriteCurrent && !merged) {
+      if (!mayWriteCurrent && !runUpdate) {
         await client.query("ROLLBACK");
-        return null;
+        return confirmationOnly ? undefined : null;
       }
       const nextSets = mayWriteCurrent ? [...sets] : [];
       const nextVals = mayWriteCurrent ? [...vals] : [];
-      if (merged) {
-        nextVals.push(JSON.stringify(merged));
-        nextSets.push(`run_history = $${nextVals.length + 1}::jsonb`);
+      if (runUpdate) {
+        // Rewrite only the attributed record: its stored snapshot never travels through Node.
+        nextVals.push(String(runUpdate.index), runUpdate.index, JSON.stringify(runUpdate.patch));
+        const at = nextVals.length - 1;
+        nextSets.push(
+          `run_history = jsonb_set(run_history, ARRAY[$${at}::text], (run_history -> $${at + 1}::int) || $${at + 2}::jsonb)`
+        );
       }
       const result = await client.query(
-        `UPDATE ${qualifiedTable("analysis_tasks")} SET ${nextSets.join(", ")}
+        confirmationOnly
+          ? `UPDATE ${qualifiedTable("analysis_tasks")} SET ${nextSets.join(", ")}
+         WHERE id = $1`
+          : `UPDATE ${qualifiedTable("analysis_tasks")} SET ${nextSets.join(", ")}
          WHERE id = $1
          RETURNING *`,
         [id, ...nextVals]
       );
       await client.query("COMMIT");
+      if (confirmationOnly) return;
       if ((result.rowCount ?? 0) === 0) return null;
       return mapTaskRow(result.rows[0]);
     } catch (error) {
@@ -680,13 +841,13 @@ export class AnalysisTaskService {
       }
     }
 
-    if (sets.length === 1) return this.getTask(id, domainId);
+    if (sets.length === 1) return this.getTask(id, domainId, { payload: "state", runs: "none" });
 
     vals.push(id, domainId);
     const result = await this.pool.query(
       `UPDATE ${qualifiedTable("analysis_tasks")} SET ${sets.join(", ")}
        WHERE id = $${idx} AND domain_id = $${idx + 1}
-       RETURNING *`,
+       RETURNING ${TASK_COLUMNS}, ${PAYLOAD_SQL.state}, ${RUNS_SQL.none}`,
       vals
     );
     if ((result.rowCount ?? 0) === 0) return null;
@@ -724,7 +885,7 @@ export class AnalysisTaskService {
     },
     /** Run identity captured at acceptance; artifacts and terminal states are run-attributed current facts, and without identity nothing is written. */
     identity?: AnalysisRunIdentity
-  ): Promise<AnalysisTask | null> {
+  ): Promise<void> {
     const now = Date.now();
     const sets: string[] = ["updated_at = $2"];
     const vals: any[] = [now];
@@ -770,9 +931,11 @@ export class AnalysisTaskService {
       vals.push(artifacts.requestSeq);
       sets.push(`request_seq = $${idx}`);
     }
-    if (sets.length === 1) return null;
+    if (sets.length === 1) return;
 
-    return this.applyTaskUpdateWithRunIdentity(id, sets, vals, identity ?? {}, runPatch);
+    // The artifact store never consumes the rewritten row; write completion is the only
+    // confirmation it needs, so the hot path returns no full task row.
+    await this.applyTaskUpdateWithRunIdentity(id, sets, vals, identity ?? {}, runPatch, true);
   }
 
   async upsertTaskEvent(input: UpsertAnalysisTaskEventInput): Promise<void> {

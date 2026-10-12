@@ -323,7 +323,10 @@ async function persistTermination(
   entry: ActiveAnalysisRun
 ): Promise<void> {
   const identity = entry.identity;
-  const task = await getAnalysisTaskService().getTask(request.task.id, request.task.domainId);
+  const task = await getAnalysisTaskService().getTask(request.task.id, request.task.domainId, {
+    payload: "full",
+    runs: "meta",
+  });
   // Only while the current task row still belongs to this run does it hold this run's written body and acceptance sequence;
   // once superseded, the run neither borrows the new run's body/sequence nor rewrites the terminal state the new run has already settled.
   const belongsToRun = task

@@ -1,4 +1,4 @@
-import type { ChatClientEvent } from "@ontomato/contracts/chat";
+import { applyAbcContent, type AbcContentEvent, type ChatClientEvent } from "@ontomato/contracts/chat";
 /**
  * API Chat execution strategy.
  *
@@ -167,8 +167,8 @@ export async function executeApiChat(options: ApiChatOptions): Promise<Execution
               return;
             }
 
-            handleEvent(frontendEvent, tokens, analysisTokens, (c) => {
-              abcContent = c;
+            handleEvent(frontendEvent, tokens, analysisTokens, (content) => {
+              abcContent = applyAbcContent(abcContent, content);
             });
           },
         })
@@ -270,7 +270,7 @@ function handleEvent(
   event: ChatClientEvent,
   tokens: string[],
   analysisTokens: string[],
-  setAbcContent: (content: string) => void
+  applyAbcContent: (content: AbcContentEvent) => void
 ): void {
   const type = event.type;
   if (!type) return;
@@ -283,7 +283,7 @@ function handleEvent(
       if (typeof event.content === "string") analysisTokens.push(event.content);
       break;
     case "abc_content":
-      if (typeof event.content === "string") setAbcContent(event.content);
+      applyAbcContent(event);
       break;
     case "error":
       break;

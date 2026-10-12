@@ -45,7 +45,7 @@ node ontomato.mjs import-schema
 node ontomato.mjs prod-distinct-values <class> <attribute> [--like <pattern>] [--limit <n>]
 node ontomato.mjs prod-query @query.json
 node ontomato.mjs prod-knowledge [--max <n>] <question>
-node ontomato.mjs import-test-data testData.json
+node ontomato.mjs import-test-data testData.zip
 node ontomato.mjs vector-upload <class> <attribute> <object-id> --text <text|@file>
 node ontomato.mjs vector-upload <class> <attribute> <object-id> --file <path> --text <description|@file>
 node ontomato.mjs vector-delete <class> <attribute> <object-id> <path>
@@ -89,14 +89,23 @@ node ontomato.mjs ask "How many orders were placed last month?"
 
 1. `import-schema` to bring the production definitions into the test environment.
 2. `dataset-desc`, `classes`, `schema` and `relationships` to learn the dataset; `prod-knowledge` for business knowledge the application depends on; `prod-distinct-values` and `prod-query` (with a `limit`, to keep results small) to see what real production data looks like.
-3. Write a test data file in the format below (leave `vector` attributes empty in the file) and load it with `import-test-data`; then upload vector resources for specific objects via `vector-upload`; check the result with `distinct-values` and `execute-dsl`.
+3. Write a test data zip in the format below and load it with `import-test-data`; vector resources are declared inline in `data.json` (their files packed under `files/`) and imported automatically; check the result with `distinct-values` and `execute-dsl`.
 4. Generate the interfaces the pages need with `metric-view generate` / `action generate`, and debug them with `execute`. Once you understand the structure, editing the definition from `get` and running `save` is usually faster than generating again from natural language.
-5. Run `import-test-data` again before each full test pass, so data changed by Actions in the previous pass does not confuse your checks (re-importing test data clears vector resources of classes present in the file, requiring re-upload).
+5. Run `import-test-data` again before each full test pass, so data changed by Actions in the previous pass does not confuse your checks (re-importing clears the vector resources of classes present in the file and re-attaches the ones in the zip).
 6. Build the pages on the tested MetricViews and Actions; see [Calling interfaces from a page](#calling-interfaces-from-a-page).
 
 ## Test data
 
-Test data should be varied and typical enough to cover the cases the application must handle, but small. File format:
+Test data should be varied and typical enough to cover the cases the application must handle, but small. It is uploaded as a **zip archive** with this layout:
+
+```
+- data.json          the object and relationship data
+- files/             the files referenced by vector attributes
+  - file1.suffix
+  - ...
+```
+
+`data.json` keeps the same top-level structure; a `vector` attribute's value is an array of `{"path": "...", "text": "..."}` entries, where `path` is the file's relative path inside the zip (e.g. `files/photo.jpg`) and `text` is the content used to generate the embedding:
 
 ```json
 {
@@ -104,7 +113,7 @@ Test data should be varied and typical enough to cover the cases the application
     {
       "className": "/namespace/class1",
       "rows": [
-        {"id": "c1", "attr1": "East", "attr2": 3.5}
+        {"id": "c1", "attr1": "East", "attr2": 3.5, "photo": [{"path": "files/c1.jpg", "text": "a bright ward"}]}
       ]
     }
   ],
@@ -114,17 +123,20 @@ Test data should be varied and typical enough to cover the cases the application
 }
 ```
 
-The backend checks everything before importing and rejects the whole file, with the reason, on the first violation:
+Before writing anything, the backend checks the archive's structure, the rows, the references and the vector files and text, and rejects the whole file, with the reason, on the first violation:
 
 - `className` must be an existing class in the test environment, written as `classes` returns it.
 - A row may contain only the class's **enabled** attributes (the ones `schema` lists).
 - Every row must have a non-empty primary key value. The primary key is the attribute `schema` marks as primary key; when a class has none, `import-schema` makes its first enabled attribute the primary key.
 - Primary key values must be unique across the whole file, across classes as well.
 - `relationName` must be an existing relationship type. `sourceObjId` must be the primary key value of a row of the relationship's source class in this file, and `targetObjId` of a row of its target class.
-- A row containing a `vector` attribute must leave it empty or omit it (providing a value will cause the entire file to be rejected); after importing test data, use `vector-upload` to attach vector resources to specific objects. The target object must already exist (otherwise upload fails without creating file or record); an attached file must not be empty.
-- On import, every class that appears in the file is emptied along with its associated vector resources and then written; classes not in the file are left alone.
-- Vector write and storage are supported only on PostgreSQL and DuckDB (Enterprise edition also supports M3); performing vector write operations on MySQL, Oracle, SQL Server, Db2, GaussDB, or DM will explicitly report an unsupported error.
+- A `vector` attribute's value must be an array of `{"path": "...", "text": "..."}` entries (or empty/omitted). Each `path` must point to an existing, non-empty file under the archive's `files/` directory whose name has a 1–16 character alphanumeric extension (it becomes the stored resource's suffix), and `text` must be non-empty. The file is stored as the vector resource and `text` is embedded; for string resources (txt/doc/pdf…) `text` is the verbatim string content, and for video/audio `text` is the transcription/description produced by a speech-to-text model — the backend does not transcribe media, so the caller must supply that text in `data.json`.
+- The archive must contain a `data.json` at its root.
+- On import, every class that appears in the file is emptied along with its associated vector resources and then written (objects first, then their vector resources); classes not in the file are left alone.
+- Vector write and storage are supported only on PostgreSQL and DuckDB; performing vector write operations on MySQL, SQL Server, or GaussDB will explicitly report an unsupported error.
 - Production environments do not expose vector upload or delete interfaces; vector links returned by `prod-query` point directly to the production environment, while test environment vector resources must be prepared by testers using the above interfaces.
+
+The import is not atomic: an error while writing (for example embedding or storage) is reported with its reason, but whatever was already cleared or written stays as it is. Fix the cause and run `import-test-data` again.
 
 ## MetricViews and Actions
 
@@ -138,6 +150,8 @@ A MetricView is a read-only query interface and an Action is a write interface. 
 - `delete <id>`: deletes the interface.
 
 The core of a definition is `function`: `logic` says in natural language what the interface does, `parameters` are its inputs (`name`, `type`, `description`, `sample`), `code` is the program that runs, and `returnDef` describes the returned structure.
+
+> **Action code and vector attributes:** an Action's `code` is a Python write function. Its object writes use `/writeFunctionOperation/insert` and `/writeFunctionOperation/update`, which write **only non-vector attributes** — `insert` silently ignores any vector attribute and `update` raises an error. Write vector attributes only through the vector primitives `appendVector` / `updateVector` / `deleteVector`, never through `insert`/`update`.
 
 ## Calling interfaces from a page
 

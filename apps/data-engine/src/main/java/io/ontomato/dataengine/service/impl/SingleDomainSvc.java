@@ -28,6 +28,11 @@ public class SingleDomainSvc implements DomainSvc {
     }
 
     @Override
+    public List<String> listDomainIds() {
+        return List.of(DEFAULT_DOMAIN_ID);
+    }
+
+    @Override
     public SysDomain update(String domainId, String domainName, String domainDesc) {
         throw new UnsupportedOperationException("The open-source edition does not support modifying domains");
     }

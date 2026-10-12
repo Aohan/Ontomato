@@ -15,22 +15,27 @@ From `deploy/` in the source repository:
 
 ```bash
 cp .env.example .env    # set ARCH, POSTGRES_PASSWORD and PUBLIC_HOST
-docker compose -f docker-compose.ghcr.yml up -d
+echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
+docker compose up -d
 ```
 
 `ARCH` names this machine's architecture, `amd64` or `arm64`; the assembly checks the
-images against it. `docker-compose.ghcr.yml` inherits every service from
-`docker-compose.yml` and only points the runtime, app and ontology manager images at
-`ghcr.io/aohan/ontomato-*`. They follow `latest` unless `ONTOMATO_VERSION` is set in
+images against it. `docker-compose.ghcr.yml` is an override layered on
+`docker-compose.yml` through `COMPOSE_FILE`; it only points the runtime, app and
+ontology manager images at `ghcr.io/aohan/ontomato-*`, so every later `docker compose`
+command in this directory uses the registry. They follow `latest` unless `ONTOMATO_VERSION` is set in
 `.env`. A runtime image is published under its compatibility fingerprint, so an update
 downloads new app images and reuses the runtime while the fingerprint is unchanged.
+The layout interface is part of that fingerprint: after a layout upgrade the first
+update builds fresh runtimes once, and an old runtime never pairs with a new app
+(the assembly check rejects the mix).
 
 To update:
 
 ```bash
-docker compose -f docker-compose.ghcr.yml pull
-docker compose -f docker-compose.ghcr.yml build --pull
-docker compose -f docker-compose.ghcr.yml up -d
+docker compose pull
+docker compose build --pull
+docker compose up -d
 ```
 
 ## Build the offline pack

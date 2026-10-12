@@ -21,35 +21,20 @@ test("dev keeps the old three-process pnpm arguments and the open-source default
   assert.equal(settings.env.DATARAG_ORIGIN, undefined);
 });
 
-test("a product default fills DATARAG_ORIGIN and never overrides an explicit value", () => {
-  const product = { root: ROOT, dataragOrigin: "http://localhost:18087" };
-  assert.equal(configuration("dev", product, {}).env.DATARAG_ORIGIN, "http://localhost:18087");
-  assert.equal(configuration("manager", product, {}).env.DATARAG_ORIGIN, "http://localhost:18087");
-  assert.equal(
-    configuration("manager", product, { DATARAG_ORIGIN: "http://custom:18087" }).env.DATARAG_ORIGIN,
-    "http://custom:18087"
-  );
-  const inherited = {};
-  configuration("dev", product, inherited);
-  assert.deepEqual(inherited, {});
-});
-
 test("server, web and manager keep their own cwd and pass this checkout's absolute entry", () => {
-  const server = configuration("server", { root: ROOT, dataragOrigin: "http://localhost:18087" }, {});
+  const server = configuration("server", { root: ROOT }, {});
   assert.equal(server.tool, "tsx");
   assert.deepEqual(server.args, ["watch", join(ROOT, "apps/workbench/src/index.ts")]);
   assert.equal(server.cwd, join(ROOT, "apps/workbench"));
   assert.equal(server.env.NODE_ENV, "development");
-  assert.equal(server.env.DATARAG_ORIGIN, undefined);
 
-  const web = configuration("web", { root: ROOT, dataragOrigin: "http://localhost:18087" }, {});
+  const web = configuration("web", { root: ROOT }, {});
   assert.equal(web.tool, "vite");
   assert.deepEqual(web.args, ["--config", join(ROOT, "apps/workbench/web/vite.config.ts")]);
   assert.equal(web.cwd, join(ROOT, "apps/workbench"));
   // A standalone dev:web sets no NODE_ENV, as the old entry point did; the combined dev
   // still has the parent set it for all of them.
   assert.equal(web.env.NODE_ENV, undefined);
-  assert.equal(web.env.DATARAG_ORIGIN, undefined);
 
   const manager = configuration("manager", { root: ROOT }, {});
   assert.equal(manager.tool, "vite");

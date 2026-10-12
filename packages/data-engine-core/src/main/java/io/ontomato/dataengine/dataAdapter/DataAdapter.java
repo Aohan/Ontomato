@@ -1,5 +1,7 @@
 package io.ontomato.dataengine.dataAdapter;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 
@@ -7,19 +9,33 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
-import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
 
 public interface DataAdapter {
 
-	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception;
+	/**
+	 * Open a new JDBC connection from this adapter's own connection.
+	 * Driver choice and URL rewriting stay in each adapter module.
+	 */
+	Connection openConnection() throws SQLException;
+
+	/**
+	 * Test this adapter's connection without touching any saved configuration.
+	 * DuckDB overrides it to reject a missing database file before connecting; non-JDBC adapters run their own probe instead.
+	 */
+	default JSONObject testConnection() throws Exception {
+		return new DataAdapterConnectionTester().test(this);
+	}
+
+	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception;
 	
 	public String getSampleDataFileName(String sampleDataDirName, String className);
 	
 	public String querySampleDataByClassName(String className, List<String> attrs);
 	
-	public boolean useM3();
-	
 	public void validateClassNameFormat(String className) throws Exception;
+
+	/** Refuse an attribute this data source cannot key a class's objects by. */
+	public void validatePrimaryKeyName(String attrName) throws Exception;
 	
 	public void createNamespace(String namespace);
 	

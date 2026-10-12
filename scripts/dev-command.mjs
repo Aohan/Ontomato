@@ -9,19 +9,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const WINDOWS = process.platform === "win32";
 
-// Pure: mode + product -> the child's env/tool/args/cwd. `product.dataragOrigin`
-// is the edition's own default and never overrides what the caller already set;
-// the shared entry passes none, so the open-source edition keeps its old behavior.
+// Pure: mode + product -> the child's env/tool/args/cwd.
 // server/web/manager pass the entry, config and root as absolute paths so a
 // Windows process can be bound back to this checkout by its argv alone (no cwd).
-export function configuration(mode, { root, dataragOrigin }, inherited = process.env) {
+export function configuration(mode, { root }, inherited = process.env) {
   const env = { ...inherited };
   let tool, args, cwd = root;
   switch (mode) {
     case "dev":
       env.NODE_ENV = "development";
       env.ONTOLOGY_MANAGER_URL = "http://localhost:5174";
-      if (dataragOrigin) env.DATARAG_ORIGIN ||= dataragOrigin;
       tool = "concurrently";
       args = ["pnpm:dev:server", "pnpm:dev:web", "pnpm:dev:ontology-manager"];
       break;
@@ -37,7 +34,6 @@ export function configuration(mode, { root, dataragOrigin }, inherited = process
       cwd = resolve(root, "apps/workbench");
       break;
     case "manager":
-      if (dataragOrigin) env.DATARAG_ORIGIN ||= dataragOrigin;
       tool = "vite";
       args = [resolve(root, "apps/ontology-manager"), "--port", "5174"];
       cwd = resolve(root, "apps/ontology-manager");

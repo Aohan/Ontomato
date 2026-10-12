@@ -30,6 +30,7 @@ let statusFor: (path: string) => number;
 let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
 let dataAdapter: string;
+let instanceNodeCount: number;
 let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
 let knowledge: Record<string, Record<string, unknown>>;
 /** Knowledge IDs whose delete returns a business failure. */
@@ -56,13 +57,50 @@ function respond(url: string, body?: Record<string, unknown>): Response {
   const status = statusFor(path);
   if (status !== 200) return json({ success: false }, status);
   if (path === "/admin/getBussinessKnowledge") return json({ success: true, data: knowledge });
+  if (path.endsWith("BussinessKnowledge") && body?.knowledgeText === "")
+    return json({ success: false, message: "Business knowledge content is required" });
+  if (path === "/admin/editBussinessKnowledge") {
+    knowledge[String(body?.knowledgeID)] = { ...body };
+    return json({ success: true });
+  }
   if (path === "/admin/delBussinessKnowledge" && knowledgeDeleteFails.has(String(body?.knowledgeID)))
     return json({ success: false, message: "locked" });
   if (path === "/admin/getMetas") return json(metasFor(url));
+  if (path === "/data/instanceGraph/summary") return json({ success: true, status: "READY", data: {
+    classes: [{ class: "Order", instanceCount: instanceNodeCount }, { class: "Item", instanceCount: 1 }],
+    relationships: [{ source: "Order", target: "Item", count: 1 }],
+    overviewNodes: [{ id: "Order:1", name: "First order", class: "Order" }, { id: "Item:2", name: "Spare part", class: "Item" }],
+    overviewEdges: [{ source: "Order:1", target: "Item:2" }],
+    nodeCount: instanceNodeCount, edgeCount: 1, componentCount: 1, isolatedNodeCount: 0,
+    largestComponentSize: instanceNodeCount, version: "v1", generatedAt: "2026-10-10T00:00:00Z",
+  } });
+  if (path === "/data/instanceGraph/search") return json({ success: true, status: "READY", data: {
+    nodes: [{ id: "Item:2", name: "Spare part", class: "Item" }], hasMore: false, version: "v1",
+  } });
+  if (path === "/data/instanceGraph/neighborhood") return json({ success: true, status: "READY", data: {
+    nodes: [{ id: "Item:2", name: "Spare part", class: "Item" }, { id: "Order:1", name: "First order", class: "Order" }],
+    edges: [{ source: "Order:1", target: "Item:2" }], total: 1, nextOffset: null, version: "v1",
+  } });
+  if (path === "/data/queryWholeDataMode0")
+    return json({ success: true, status: "READY", data: {
+      nodes: instanceNodeCount > 2 ? Array.from({ length: instanceNodeCount }, (_, index) => ({
+        id: `Order:${index}`, name: `Order ${index}`, class: "Order",
+      })) : [
+        { id: "Order:1", name: "First order", class: "Order" },
+        { id: "Item:2", name: "Spare part", class: "Item" },
+      ],
+      edges: [{ source: "Order:1", target: instanceNodeCount > 2 ? "Order:2" : "Item:2" }],
+    } });
+  if (path === "/data/queryInfoByNode")
+    return json({ success: true, data: {
+      classDef: { attrs: [{ name: "id", showName: "ID" }] },
+      data: { id: body?.id },
+    } });
   if (path === "/data/getWholeClassDataByPage")
     return json({ success: true, data: [{ id: "row-1" }], total_count: 1 });
-  if (path === "/businessConfig/getConfig") return json({ success: true, data: { dataAdapter } });
-  if (path === "/businessConfig/dataAdapters") return json({ success: true, data: dataAdapters });
+  if (path === "/businessConfig/dataAdapters") {
+    return json({ success: true, data: { currentType: dataAdapter, adapters: dataAdapters } });
+  }
   if (path === "/function/queryList") return json({ success: true, data: functions });
   if (path.endsWith("/queryList")) return json({ success: true, data: [] });
   return json({ success: true, data: {} });
@@ -73,6 +111,12 @@ beforeEach(() => {
   graphRecord.addedNodes = [];
   graphRecord.zoom = 1;
   graphRecord.zoomTo = [];
+  graphRecord.focusElement = [];
+  graphRecord.states = [];
+  graphRecord.dataBatches = [];
+  graphRecord.layouts = [];
+  graphRecord.nodeUpdates = [];
+  instanceNodeCount = 2;
   requests = [];
   mountedApps = [];
   held = new Map();
@@ -207,6 +251,81 @@ function clickButton(text: string) {
 }
 
 describe("OntologyManager root component with real pages", () => {
+  it("a 50,000-instance graph initially loads only the type summary", async () => {
+    instanceNodeCount = 50000;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 800, height: 600,
+    } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    await settle();
+    const options = graphRecord.options.at(-1);
+    expect(options.data).toEqual({ nodes: [], edges: [] });
+    expect(options.layout).toBeUndefined();
+    expect(options.node.style.shadowBlur).toBe(10);
+    expect(graphRecord.dataBatches.map((batch) => batch.nodes?.length || batch.edges?.length))
+      .toEqual([2, 1]);
+    expect(paths()).toContain("/data/instanceGraph/summary");
+    expect(paths()).not.toContain("/data/queryWholeDataMode0");
+    expect(root().querySelector(".node-search input")?.hasAttribute("disabled")).toBe(false);
+
+    (root().querySelector(".graph-toolbar button[title='Relayout']") as HTMLButtonElement).click();
+    await settle();
+    await settle();
+    expect(graphRecord.layouts.length).toBe(0);
+  });
+
+  it("instance graph search filters nodes and focuses the selected result without stale record details", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 800, height: 600,
+    } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+
+    const input = root().querySelector<HTMLInputElement>(".node-search input")!;
+    expect(input).not.toBeNull();
+    input.focus();
+    input.value = "spare";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await settle();
+    expect(root().querySelector(".instance-candidates")?.textContent).toContain("Spare part");
+    expect(root().querySelector(".instance-candidates")?.textContent).toContain("Item:2");
+    expect(root().querySelector(".instance-candidates")?.textContent).not.toContain("First order");
+    (root().querySelector(".instance-candidates button") as HTMLElement).click();
+    await settle();
+    expect(graphRecord.focusElement).toContainEqual(["Item:2", false]);
+    expect(graphRecord.zoomTo).toContainEqual([1, false]);
+    expect(graphRecord.states).toContainEqual([{ "Item:2": ["selected"] }, false]);
+    expect(root().querySelector(".detail-title h2")?.textContent).toBe("Spare part");
+    expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+    expect(requests.find((request) => request.url.endsWith("/instanceGraph/search"))?.body)
+      .toEqual({ term: "spare", version: "v1", limit: 50 });
+    expect(requests.some((request) => request.url.endsWith("/instanceGraph/neighborhood"))).toBe(false);
+    const expandButton = Array.from(root().querySelectorAll<HTMLButtonElement>(".detail-content button"))
+      .find((button) => button.textContent?.includes("Expand neighbors"))!;
+    expandButton.click();
+    await settle();
+    expect(requests.find((request) => request.url.endsWith("/instanceGraph/neighborhood"))?.body)
+      .toEqual({ id: "Item:2", version: "v1", offset: 0, limit: 100 });
+
+    holdPaths.add("/data/queryInfoByNode");
+    graphHandlers["node:click"]({ target: { id: "Order:1" } });
+    await settle();
+    graphHandlers["node:click"]({ target: { id: "Item:2" } });
+    await settle();
+    const waiting = held.get("/data/queryInfoByNode")!;
+    waiting[1].resolve(new Response());
+    await settle();
+    waiting[0].resolve(new Response());
+    await settle();
+    expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+  });
+
   it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
     mountHost(base);
     await settle();
@@ -347,9 +466,12 @@ describe("OntologyManager root component with real pages", () => {
       view: "/visual-modeling?focus=object&id=Order&back=playground",
     });
     await settle();
-    const config = requests.find((request) => request.url.endsWith("/businessConfig/getConfig"));
-    expect(config?.method).toBe("GET");
-    expect(config?.headers["x-api-key"]).toBe("key-a");
+    // The current adapter type comes from the one adapter read; the full business config is never requested.
+    const adapters = requests.filter((request) => request.url.endsWith("/businessConfig/dataAdapters"));
+    expect(adapters).toHaveLength(1);
+    expect(adapters[0].method).toBe("GET");
+    expect(adapters[0].headers["x-api-key"]).toBe("key-a");
+    expect(paths()).not.toContain("/businessConfig/getConfig");
 
     clickButton("Edit");
     await settle();
@@ -645,10 +767,12 @@ describe("OntologyManager root component with real pages", () => {
     expect(fills).toEqual(byClass);
   });
 
-  it("the data browser header description comes from the host function with the current object's display name", async () => {
+  it("the data browser keeps its controls without a redundant content header", async () => {
     const { root } = mountHost({ ...base, view: "/data/Order" });
     await settle();
-    expect(root().textContent).toContain("description of Order-label");
+    expect(root().querySelector(".content-header")).toBeNull();
+    expect(root().querySelector(".mode-bar")).not.toBeNull();
+    expect(root().querySelector(".toolbar")?.textContent).toContain("Order-label");
   });
 
   it("the description fallback pre-fills the form with the host value, is unchanged by locale/theme switches, and is submitted in the original field after editing", async () => {
@@ -766,7 +890,7 @@ describe("OntologyManager root component with real pages", () => {
       classDesc: "Pump desc",
     });
     if (view === "/objects") {
-      expect(root().textContent).toContain("Primary key attribute: pump_no");
+      expect(root().textContent).toContain("Primary key property: pump_no");
     } else {
       const panel = root().querySelector(".attr-item")!;
       expect(panel.textContent).toContain("pump_no");
@@ -782,7 +906,7 @@ describe("OntologyManager root component with real pages", () => {
       document.body.getAttribute("style"),
       document.body.children.length,
     ];
-    clickButton("New Attribute");
+    clickButton("New Property");
     await settle();
     const dialog = openDialog("Create");
     expect(dialog.closest(".ontology-manager > [id*='popper-container']")).not.toBeNull();
@@ -819,7 +943,7 @@ describe("Manager business knowledge page", () => {
       (item) => item.textContent?.trim() === text
     )!;
 
-  it("lists knowledge and adds an entry through the dialog inside the instance", async () => {
+  it("lists knowledge and adds an entry in the detail panel; the success message stays inside the instance", async () => {
     const { root } = mountHost({ ...base, view: "/knowledge" });
     await settle();
     expect(paths()).toContain("/admin/getBussinessKnowledge");
@@ -827,20 +951,19 @@ describe("Manager business knowledge page", () => {
 
     buttonIn(root(), "Add Knowledge").click();
     await settle();
-    const dialog = openDialog("Add Knowledge");
-    expect(root().contains(dialog)).toBe(true);
-    const title = dialog.querySelector("input")!;
-    title.value = "Shipping rule";
-    title.dispatchEvent(new Event("input"));
+    const form = root().querySelector(".knowledge-form")!;
+    expect(form.querySelector("h2")?.textContent).toBe("Add Knowledge");
+    typeInto(form.querySelector("input")!, "Shipping rule");
+    typeInto(form.querySelector("textarea")!, "Ships in 2 days");
     await settle();
 
     requests = [];
-    buttonIn(dialog, "Save").click();
+    buttonIn(form, "Save").click();
     await settle();
     expect(requests.find((r) => r.url.endsWith("/admin/addBussinessKnowledge"))?.body).toEqual({
       knowledgeID: "",
       knowledgeTitle: "Shipping rule",
-      knowledgeText: "",
+      knowledgeText: "Ships in 2 days",
       knowledgeTags: [],
       status: 1,
     });
@@ -882,6 +1005,11 @@ describe("Manager business knowledge page", () => {
   });
 });
 
+function typeInto(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+}
+
 function openDialog(buttonText: string) {
   const dialog = [...document.querySelectorAll(".el-dialog")].find((item) =>
     item.textContent?.includes(buttonText)
@@ -898,17 +1026,39 @@ function confirmDialog() {
 
 describe("business knowledge page", () => {
   const knowledgeView = { ...base, view: "/knowledge" };
-  const rowTitles = () =>
-    [...document.querySelectorAll(".knowledge-table .el-table__body tr")].map(
-      (row) => row.querySelectorAll("td")[1]?.textContent?.trim()
+  const itemTitles = () =>
+    [...document.querySelectorAll(".knowledge-item-title")].map((item) => item.textContent?.trim());
+  const item = (title: string) =>
+    [...document.querySelectorAll<HTMLElement>(".knowledge-item")].find(
+      (element) => element.querySelector(".knowledge-item-title")?.textContent?.trim() === title
+    )!;
+  const detailTitle = () => document.querySelector(".knowledge-detail-head h2")?.textContent?.trim();
+  const detailButtons = () =>
+    [...document.querySelectorAll(".knowledge-detail-actions button")].map((button) =>
+      button.textContent?.trim()
     );
-  const messageText = () => document.querySelector(".el-message")?.textContent?.trim();
+  const tabTexts = () =>
+    [...document.querySelectorAll(".knowledge-filter")].map((tab) =>
+      tab.textContent?.replace(/\s+/g, " ").trim()
+    );
+  const messageText = () =>
+    [...document.querySelectorAll(".el-message")].at(-1)?.textContent?.trim();
+  const confirmButton = (text: string) =>
+    [...confirmDialog()!.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === text
+    )!;
+  const search = async (value: string) => {
+    typeInto(document.querySelector<HTMLInputElement>(".knowledge-search input")!, value);
+    await settle();
+  };
+  const saved = (path: string) =>
+    requests.filter((request) => request.url.endsWith(path)).map((request) => request.body);
 
   it("standalone shows the brand header and no governance entry; embedded hides the header and shows the entry only with a governance URL, opening it in the top window", async () => {
     mountHost(knowledgeView);
     await settle();
     expect(document.querySelector(".workspace-header")).not.toBeNull();
-    expect(rowTitles()).toEqual(["Refund rule", "Legacy note"]);
+    expect(itemTitles()).toEqual(["Refund rule", "Legacy note"]);
     expect(document.querySelector(".knowledge-actions a")).toBeNull();
     mountedApps.splice(0).forEach((app) => app.unmount());
 
@@ -930,75 +1080,155 @@ describe("business knowledge page", () => {
     expect(link.getAttribute("target")).toBe("_top");
   });
 
-  it("create and edit dialogs have different titles; editing submits the entry's own tags and creating offers only the three host tag values", async () => {
+  it("search needs every space-separated term in the title, content or tags, ignores case, ranks title hits first and highlights the terms", async () => {
+    knowledge = {
+      k1: { knowledgeID: "k1", knowledgeTitle: "Shipping", knowledgeText: "Ships in 2 days", knowledgeTags: ["refund-ops"], status: 1 },
+      k2: { knowledgeID: "k2", knowledgeTitle: "Legacy note", knowledgeText: "Old refund path for VIP members", status: 0 },
+      k3: { knowledgeID: "k3", knowledgeTitle: "Refund rule", knowledgeText: "Within 7 days", knowledgeTags: [], status: 1 },
+      k4: { knowledgeID: "k4", knowledgeTitle: "Holidays", knowledgeText: "Closed on Sunday", knowledgeTags: [], status: 1 },
+    };
+    mountHost(knowledgeView);
+    await settle();
+
+    await search("REFUND");
+    expect(itemTitles()).toEqual(["Refund rule", "Shipping", "Legacy note"]);
+    expect(tabTexts()).toEqual(["All 3", "Pending Review 1", "Approved 2"]);
+
+    await search("refund  vip");
+    expect(itemTitles()).toEqual(["Legacy note"]);
+    expect([...item("Legacy note").querySelectorAll("mark")].map((mark) => mark.textContent)).toEqual([
+      "refund",
+      "VIP",
+    ]);
+    expect(detailTitle()).toBe("Legacy note");
+    expect([...document.querySelectorAll(".knowledge-detail-text mark")].map((mark) => mark.textContent)).toEqual([
+      "refund",
+      "VIP",
+    ]);
+
+    await search("refund sunday");
+    expect(itemTitles()).toEqual([]);
+    expect(document.querySelector(".knowledge-list .el-empty")?.textContent).toContain(
+      "No knowledge matches the search"
+    );
+  });
+
+  it("the pending filter lists only pending entries; approving one saves it with status 1, and approved entries offer no approve action", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    expect(detailTitle()).toBe("Refund rule");
+    expect(detailButtons()).toEqual(["Edit", "Delete"]);
+
+    clickButton("Pending Review 1");
+    await settle();
+    expect(itemTitles()).toEqual(["Legacy note"]);
+    expect(detailTitle()).toBe("Legacy note");
+
+    clickButton("Approve");
+    await settle();
+    expect(saved("/admin/editBussinessKnowledge")).toEqual([
+      { knowledgeID: "k2", knowledgeTitle: "Legacy note", knowledgeText: "t2", knowledgeTags: [], status: 1 },
+    ]);
+    expect(messageText()).toBe("Knowledge approved");
+    // The approved entry leaves the pending list, and the detail moves on to the next pending entry (none here).
+    expect(itemTitles()).toEqual([]);
+    expect(detailTitle()).toBeUndefined();
+  });
+
+  it("create and edit panels have different titles; editing submits the entry's own tags and creating offers only the three host tag values", async () => {
     mountHost(knowledgeView);
     await settle();
     clickButton("Add Knowledge");
     await settle();
-    const addDialog = document.querySelector(".el-dialog")!;
-    expect(addDialog.querySelector(".el-dialog__title")?.textContent).toBe("Add Knowledge");
-    (addDialog.querySelector(".el-select__wrapper") as HTMLElement).click();
+    expect(document.querySelector(".knowledge-form h2")?.textContent).toBe("Add Knowledge");
+    (document.querySelector(".knowledge-form .el-select__wrapper") as HTMLElement).click();
     await settle();
-    const options = [...document.querySelectorAll(".el-select-dropdown__item")].map((item) =>
-      item.textContent?.trim()
+    const options = [...document.querySelectorAll(".el-select-dropdown__item")].map((option) =>
+      option.textContent?.trim()
     );
     expect(options).toEqual(["General", "Business", "Tech"]);
     clickButton("Cancel");
     await settle();
+    expect(document.querySelector(".knowledge-form")).toBeNull();
 
-    const editButtons = [...document.querySelectorAll(".knowledge-table button")].filter(
-      (button) => button.textContent?.trim() === "Edit"
-    ) as HTMLElement[];
-    editButtons[0]!.click();
+    item("Refund rule").querySelector<HTMLElement>(".knowledge-item-main")!.click();
     await settle();
-    const editDialog = [...document.querySelectorAll(".el-dialog")].find(
-      (dialog) => (dialog as HTMLElement).closest<HTMLElement>(".el-overlay")?.style.display !== "none"
-    )!;
-    expect(editDialog.querySelector(".el-dialog__title")?.textContent).toBe("Edit Knowledge");
+    clickButton("Edit");
+    await settle();
+    expect(document.querySelector(".knowledge-form h2")?.textContent).toBe("Edit Knowledge");
     clickButton("Save");
     await settle();
-    const saved = requests.find((request) => request.url.endsWith("/admin/editBussinessKnowledge"));
-    expect(saved?.body).toEqual({
-      knowledgeID: "k1",
-      knowledgeTitle: "Refund rule",
-      knowledgeText: "t1",
-      knowledgeTags: ["Business"],
-      status: 1,
-    });
+    expect(saved("/admin/editBussinessKnowledge")).toEqual([
+      { knowledgeID: "k1", knowledgeTitle: "Refund rule", knowledgeText: "t1", knowledgeTags: ["Business"], status: 1 },
+    ]);
+    expect(detailTitle()).toBe("Refund rule");
   });
 
-  it("closing the delete confirmation sends no delete and reports no error; a partially failed batch delete reports the count and reloads", async () => {
+  it("a save the data engine refuses shows its message and keeps the form open with the input", async () => {
     mountHost(knowledgeView);
     await settle();
-    const deleteButtons = () =>
-      [...document.querySelectorAll(".knowledge-table button")].filter(
-        (button) => button.textContent?.trim() === "Delete"
-      ) as HTMLElement[];
-    deleteButtons()[0]!.click();
+    clickButton("Add Knowledge");
+    await settle();
+    typeInto(document.querySelector<HTMLInputElement>(".knowledge-form input")!, "Empty entry");
+    await settle();
+    clickButton("Save");
+    await settle();
+    expect(messageText()).toBe("Business knowledge content is required");
+    expect(document.querySelector<HTMLInputElement>(".knowledge-form input")!.value).toBe("Empty entry");
+  });
+
+  it("leaving an edit with unsaved changes asks first: keeping it stays in the edit, discarding it opens the other entry without saving", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    clickButton("Edit");
+    await settle();
+    typeInto(document.querySelector<HTMLInputElement>(".knowledge-form input")!, "Refund rule v2");
+    await settle();
+
+    item("Legacy note").querySelector<HTMLElement>(".knowledge-item-main")!.click();
     await settle();
     expect(confirmDialog()).not.toBeNull();
-    clickButton("Cancel");
+    confirmButton("Cancel").click();
+    await settle();
+    expect(document.querySelector<HTMLInputElement>(".knowledge-form input")!.value).toBe("Refund rule v2");
+
+    item("Legacy note").querySelector<HTMLElement>(".knowledge-item-main")!.click();
+    await settle();
+    confirmButton("OK").click();
+    await settle();
+    expect(document.querySelector(".knowledge-form")).toBeNull();
+    expect(detailTitle()).toBe("Legacy note");
+    expect(saved("/admin/editBussinessKnowledge")).toEqual([]);
+  });
+
+  it("closing the delete confirmation sends no delete; batch approve saves only the checked pending entries; a partially failed batch delete reports the count and reloads", async () => {
+    mountHost(knowledgeView);
+    await settle();
+    clickButton("Delete");
+    await settle();
+    expect(confirmDialog()).not.toBeNull();
+    confirmButton("Cancel").click();
     await settle();
     expect(confirmDialog()).toBeNull();
     expect(paths()).not.toContain("/admin/delBussinessKnowledge");
     expect(document.querySelector(".el-message")).toBeNull();
 
-    knowledgeDeleteFails = new Set(["k2"]);
-    document
-      .querySelectorAll<HTMLInputElement>(".knowledge-table tbody input")
-      .forEach((input) => input.click());
+    document.querySelector<HTMLInputElement>(".knowledge-list-head input")!.click();
     await settle();
+    expect(document.querySelector(".knowledge-checked")?.textContent).toBe("2 selected");
+    clickButton("Approve");
+    await settle();
+    expect(saved("/admin/editBussinessKnowledge").map((body) => [body?.knowledgeID, body?.status])).toEqual([
+      ["k2", 1],
+    ]);
+
+    knowledgeDeleteFails = new Set(["k2"]);
     const loads = paths().filter((path) => path === "/admin/getBussinessKnowledge").length;
     clickButton("Batch Delete");
     await settle();
-
     clickButton("OK");
     await settle();
-    expect(
-      requests
-        .filter((request) => request.url.endsWith("/admin/delBussinessKnowledge"))
-        .map((request) => request.body?.knowledgeID)
-    ).toEqual(["k1", "k2"]);
+    expect(saved("/admin/delBussinessKnowledge").map((body) => body?.knowledgeID)).toEqual(["k1", "k2"]);
     expect(messageText()).toBe("1 of 2 knowledge entries could not be deleted");
     expect(paths().filter((path) => path === "/admin/getBussinessKnowledge")).toHaveLength(loads + 1);
   });

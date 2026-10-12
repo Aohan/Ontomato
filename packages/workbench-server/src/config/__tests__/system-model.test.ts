@@ -81,13 +81,13 @@ describe("system-model configuration", () => {
     ).toThrow(SystemModelConfigError);
   });
 
-  it("detects legacy config file with models or agents on read and throws SystemModelConfigError", () => {
+  it("migrates a legacy config file with models or agents on read, keeping only the surviving fields", () => {
     const domainId = "domain-legacy-file";
     const encoded = encodeURIComponent(domainId).replace(/\./g, "%2E");
     const filePath = path.join(tmpDir, "data", "system-model-config", `${encoded}.json`);
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
-    // Write file with legacy models field
+    // Write file with legacy models field and an invalid legacy abcQuestionMode.
     fs.writeFileSync(
       filePath,
       JSON.stringify({
@@ -98,7 +98,18 @@ describe("system-model configuration", () => {
       "utf-8"
     );
 
-    expect(() => getSystemModelConfig(domainId)).toThrow(SystemModelConfigError);
+    const config = getSystemModelConfig(domainId);
+    expect(config).toEqual({
+      abcQuestionMode: DEFAULT_ABC_QUESTION_MODE,
+      queryTimeoutSeconds: 300,
+    });
+
+    // The file is rewritten in the current shape, with models/agents dropped.
+    const rewritten = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    expect(rewritten).toEqual({
+      abcQuestionMode: DEFAULT_ABC_QUESTION_MODE,
+      queryTimeoutSeconds: 300,
+    });
   });
 
   it("validates invalid queryTimeoutSeconds and abcQuestionMode", () => {

@@ -16,7 +16,7 @@ import {
 } from "../utils/query-artifact-cache";
 import { executeBaseQuery, STANDARD_QUERY_BRANCHES } from "../../../data-query/base-query-executor";
 import { runtimeDefaults } from "../../../../runtime/defaults";
-import type { QueryBackendSession } from "@ontomato/contracts/query-execution";
+import { answerBodyText, type QueryBackendSession } from "@ontomato/contracts/query-execution";
 import {
   startQueryRun,
   updateQueryRunBackendSessions,
@@ -212,7 +212,7 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
               abcCodes: fallback?.abcCodes,
               abcOutKeyRefs: fallback?.abcOutKeyRefs,
               replayPlan: fallback?.replayPlan,
-              markdownTable: fallbackContent || undefined,
+              markdownTable: fallbackContent ? answerBodyText(fallbackContent) : undefined,
               datasets: fallbackDatasets,
               // The failure reason travels with the execution facts: live and history both see the error description through the same facts.
               error: errorMsg,
@@ -296,7 +296,7 @@ export async function queryNode(state: GraphState, config?: any): Promise<GraphU
       abcCodes,
       abcOutKeyRefs,
       replayPlan,
-      markdownTable: content,
+      markdownTable: answerBodyText(content),
       datasets,
     };
 

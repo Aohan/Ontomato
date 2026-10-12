@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { canonical, fingerprint, parsePythonRequirements } from "../build-support.mjs";
 import { productionGraph } from "./production-graph.mjs";
 
-export const INTERFACE = 3;
+export const INTERFACE = 4;
 const FAMILY = "node-app";
 
 function cpuFor(arch) {

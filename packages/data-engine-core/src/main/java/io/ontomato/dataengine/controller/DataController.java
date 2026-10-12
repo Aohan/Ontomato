@@ -30,19 +30,11 @@ public class DataController {
 	@Autowired
     private DataService dataService;
 	
-	@GetMapping("/data/refreshStarChartData")
+	@PostMapping("/data/refreshStarChartData")
     @ResponseBody
-    public Boolean refreshStarChartData() {
+    public JSONObject refreshStarChartData() {
 		User user = SystemUtils.getCurUser();
-		dataService.refreshStarChartData(user.getDomainId());
-		return true;
-	}
-	
-	@GetMapping("/data/queryWholeData")
-    @ResponseBody
-    public JSONObject queryWholeData() {
-		User user = SystemUtils.getCurUser();
-		return dataService.queryWholeDataMode0(user.getDomainId());
+		return dataService.refreshStarChartData(user.getDomainId());
 	}
 
 	@GetMapping("/data/queryWholeDataMode0")
@@ -58,12 +50,25 @@ public class DataController {
 		User user = SystemUtils.getCurUser();
 		return dataService.queryWholeDataMode1(user.getDomainId());
 	}
-	
-	@PostMapping("/data/queryNextByNode")
-    @ResponseBody
-    public JSONObject queryNextByNode(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
-		User user = SystemUtils.getCurUser();
-		return dataService.queryNextByNode(param, lang, user.getDomainId());
+
+	@GetMapping("/data/instanceGraph/summary")
+	public JSONObject instanceGraphSummary() {
+		return dataService.queryInstanceGraph("summary", new JSONObject(), SystemUtils.getCurUser().getDomainId());
+	}
+
+	@GetMapping("/data/instanceGraph/statistics")
+	public JSONObject instanceGraphStatistics() {
+		return dataService.queryInstanceGraph("statistics", new JSONObject(), SystemUtils.getCurUser().getDomainId());
+	}
+
+	@PostMapping("/data/instanceGraph/search")
+	public JSONObject instanceGraphSearch(@RequestBody JSONObject param) {
+		return dataService.queryInstanceGraph("search", param, SystemUtils.getCurUser().getDomainId());
+	}
+
+	@PostMapping("/data/instanceGraph/neighborhood")
+	public JSONObject instanceGraphNeighborhood(@RequestBody JSONObject param) {
+		return dataService.queryInstanceGraph("neighborhood", param, SystemUtils.getCurUser().getDomainId());
 	}
 	
 	@PostMapping("/data/queryInfoByNode")

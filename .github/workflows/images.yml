@@ -5,7 +5,7 @@ name: Images
 # Registry. Runtime and app images are published separately and assembled on the
 # deployment machine, as in the offline bundle. A push to main publishes `edge`; a
 # version tag `v<version>` publishes `<version>` and `latest`.
-# deploy/docker-compose.ghcr.yml is the stack that pulls them.
+# deploy/docker-compose.ghcr.yml is the override that pulls them (selected through COMPOSE_FILE).
 
 on:
   push:
@@ -158,7 +158,8 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           export ONTOMATO_VERSION="${VERSION#v}"
           sed "s/^ARCH=.*/ARCH=$ARCH/" .env.example > .env
-          docker compose -f docker-compose.ghcr.yml up -d --wait --wait-timeout 300
+          echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
+          docker compose up -d --wait --wait-timeout 300
           for port in 3000 3005; do
             curl --fail --silent --show-error --retry 20 --retry-delay 3 --retry-all-errors \
               --output /dev/null "http://127.0.0.1:$port/"
@@ -168,5 +169,5 @@ jobs:
         if: always()
         working-directory: deploy
         run: |
-          docker compose -f docker-compose.ghcr.yml ps -a
-          docker compose -f docker-compose.ghcr.yml logs --tail 200
+          docker compose ps -a
+          docker compose logs --tail 200

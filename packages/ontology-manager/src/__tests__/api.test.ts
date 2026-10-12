@@ -186,7 +186,7 @@ describe("stale responses and authentication failures", () => {
     const pending = deferred();
     respond = () => pending.promise;
     const { context, client, failures } = setup({ type: "anonymous" });
-    const result = client.getBusinessConfig();
+    const result = client.listDataAdapters();
     context.apiBase = "/other-api";
     pending.resolve(json({}, 401));
 
@@ -296,15 +296,18 @@ describe("stale responses and authentication failures", () => {
 });
 
 describe("requests used by data browsing and visual modeling", () => {
-  it("business config is read with GET and no body", async () => {
-    respond = async () => json({ success: true, data: { dataAdapter: "postgres" } });
+  it("the adapter read is one GET without a body and yields the current type with the installed adapters", async () => {
+    const data = {
+      currentType: "postgresql",
+      adapters: [{ type: "postgresql", label: "PostgreSQL", sql: true, fields: ["url"], examples: {} }],
+    };
+    respond = async () => json({ success: true, data });
     const { client } = setup({ type: "apiKey", apiKey: "k" });
 
-    const config = await client.getBusinessConfig();
-
-    expect(config.data.dataAdapter).toBe("postgres");
+    expect(await client.listDataAdapters()).toEqual(data);
+    expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({
-      url: "/custom/manager-api/data-query/businessConfig/getConfig",
+      url: "/custom/manager-api/data-query/businessConfig/dataAdapters",
       method: "GET",
       body: undefined,
     });
@@ -321,6 +324,65 @@ describe("requests used by data browsing and visual modeling", () => {
       { classname: "Order", pagenum: 2, pagecount: 50, search: "abc" },
       { classname: "Order", pagenum: 1, pagecount: 25 },
     ]);
+  });
+
+  it("instance graph reads whole data with GET and instance info with POST, dropping the synthetic center", async () => {
+    respond = async (url: string) => {
+      if (url.endsWith("/data/queryWholeDataMode0")) {
+        return json({
+          success: true,
+          status: "READY",
+          data: {
+            nodes: [
+              { id: "Order:1", name: "O1", class: "Order" },
+              { id: "root", name: "root", class: "virtual_root", isCenter: true },
+            ],
+            edges: [
+              { source: "Order:1", target: "Item:1" },
+              { source: "root", target: "Order:1" },
+            ],
+          },
+        });
+      }
+      return json({ success: true, data: { classDef: { className: "Order" }, data: { id: "1" } } });
+    };
+    const { client } = setup({ type: "token", token: "t" });
+
+    const result = await client.loadInstanceGraph();
+    const info = await client.queryInstanceInfo("Order:1", "Order");
+
+    expect(result).toEqual({
+      status: "READY",
+      graph: {
+        nodes: [{ id: "Order:1", name: "O1", class: "Order" }],
+        edges: [{ source: "Order:1", target: "Item:1" }],
+      },
+    });
+    expect(info).toEqual({ classDef: { className: "Order" }, data: { id: "1" } });
+
+    expect(
+      requests.map((r) => [r.url.replace("/custom/manager-api/data-query", ""), r.method, r.body])
+    ).toEqual([
+      ["/data/queryWholeDataMode0", "GET", undefined],
+      ["/data/queryInfoByNode", "POST", { id: "Order:1", class: "Order" }],
+    ]);
+  });
+
+  it("instance graph reports a state without data while the star chart is not generated", async () => {
+    respond = async () => json({ success: true, status: "NOT_GENERATED" });
+    const { client } = setup({ type: "token", token: "t" });
+
+    expect(await client.loadInstanceGraph()).toEqual({ status: "NOT_GENERATED" });
+  });
+
+  it("regenerating the star chart posts without a body and returns the build state", async () => {
+    respond = async () => json({ success: true, status: "GENERATED" });
+    const { client } = setup({ type: "token", token: "t" });
+
+    expect(await client.refreshStarChartData()).toBe("GENERATED");
+    expect(
+      requests.map((r) => [r.url.replace("/custom/manager-api/data-query", ""), r.method, r.body])
+    ).toEqual([["/data/refreshStarChartData", "POST", undefined]]);
   });
 
   it("creating classes and relations in modeling keeps the original request body fields", async () => {

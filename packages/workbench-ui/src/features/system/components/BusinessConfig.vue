@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { SystemModelConfig } from "@ontomato/contracts/system-model";
+import type {
+  DataAdapterInfo,
+  DataAdaptersData,
+  DataAdapterTestResult,
+} from "@ontomato/contracts/data-adapters";
 
-import { ref, reactive, onMounted } from "vue";
+import { ref, reactive, onMounted, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { adminApi } from "../../admin";
 import { useI18n } from "vue-i18n";
@@ -12,7 +17,7 @@ import QuerySettingsCard from "./business-config/QuerySettingsCard.vue";
 import SkillDirConfigCard from "./business-config/SkillDirConfigCard.vue";
 import {
   type BusinessConfig,
-  type DataAdapterInfo,
+  type DataAdapterTestOutcome,
   type GeneralConfigKey,
   type SystemSettings,
 } from "../types";
@@ -53,7 +58,7 @@ async function loadConfig() {
       adminApi.listDataAdapters(),
     ]);
     if (res?.success) {
-      dataAdapters.value = adaptersRes.data;
+      dataAdapters.value = (adaptersRes.data as DataAdaptersData).adapters;
       const data = res.data as BusinessConfig;
       // The skill directory hangs on the coding role and is empty when unset.
       skilldir.value = data.agents.coding.skilldir ?? "";
@@ -135,17 +140,39 @@ async function saveGeneralField(key: GeneralConfigKey) {
 
 const dataAdapterMode = ref("");
 const savingAdapter = ref(false);
+const testingAdapter = ref(false);
+const adapterTest = ref<DataAdapterTestOutcome | null>(null);
+// Bumped whenever the type or a connection field changes, so a test answering after such a change is dropped.
+let adapterFormRevision = 0;
+
+// A previous outcome describes the values it was run with, not the edited form.
+watch(
+  [dataAdapterMode, () => config.dataAdapterConnections],
+  () => {
+    adapterFormRevision++;
+    adapterTest.value = null;
+  },
+  { deep: true }
+);
+
+function selectedDataAdapter(): DataAdapterInfo {
+  return dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
+}
+
+// Save and test send the same body: the type plus the current form values of only the connection fields it declares; the card form builds the connection object.
+function dataAdapterRequest(adapter: DataAdapterInfo) {
+  const connection = config.dataAdapterConnections[adapter.type];
+  return {
+    type: adapter.type,
+    ...Object.fromEntries(adapter.fields.map((field) => [field, connection[field]])),
+  };
+}
 
 async function saveDataAdapter() {
   savingAdapter.value = true;
   try {
-    const adapter = dataAdapters.value.find(({ type }) => type === dataAdapterMode.value)!;
-    // Submit only the connection fields declared by the type; for types with fields, the card form builds the connection object.
-    const connection = config.dataAdapterConnections[adapter.type];
-    await adminApi.useDataAdapter({
-      type: adapter.type,
-      ...Object.fromEntries(adapter.fields.map((field) => [field, connection[field]])),
-    });
+    const adapter = selectedDataAdapter();
+    await adminApi.useDataAdapter(dataAdapterRequest(adapter));
     ElMessage.success(t("admin.switchedDataAdapter", { name: adapter.label }));
     config.dataAdapter = dataAdapterMode.value;
   } catch (e: any) {
@@ -153,6 +180,23 @@ async function saveDataAdapter() {
   } finally {
     savingAdapter.value = false;
   }
+}
+
+// Tests the form's current values without saving them or switching this domain's adapter.
+async function testDataAdapter() {
+  testingAdapter.value = true;
+  adapterTest.value = null;
+  const revision = adapterFormRevision;
+  let outcome: DataAdapterTestOutcome;
+  try {
+    const res = await adminApi.testDataAdapter(dataAdapterRequest(selectedDataAdapter()));
+    outcome = { ok: true, result: res.data as DataAdapterTestResult };
+  } catch (e: any) {
+    outcome = { ok: false, message: e.message };
+  } finally {
+    testingAdapter.value = false;
+  }
+  if (revision === adapterFormRevision) adapterTest.value = outcome;
 }
 
 // Query settings live in the Node system model file and hold only the query mode and total time limit.
@@ -249,8 +293,11 @@ onMounted(() => {
       :adapters="dataAdapters"
       :adapter-display="adapterDisplay"
       :saving="savingAdapter"
+      :testing="testingAdapter"
+      :test="adapterTest"
       :disabled="loading || !!backendLoadError"
       @save="saveDataAdapter"
+      @test="testDataAdapter"
     />
   </div>
 </template>

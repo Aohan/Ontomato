@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { AbcProgramDashboard } from "@ontomato/contracts/dashboard";
+import type { QueryDatasetIdentity } from "@ontomato/contracts/query-execution";
 import { createModel } from "../../config/model-factory";
 import { modelAgentName } from "../../logging/model-agents";
 import { renderPrompt } from "../../core/prompts/loader";
@@ -19,7 +21,7 @@ export type FieldDisplayPlanItem = {
 
 export type FieldDisplayPlan = Record<string, FieldDisplayPlanItem>;
 
-export interface Dataset {
+export interface Dataset extends QueryDatasetIdentity {
   name: string;
   description: string;
   columns: string[];
@@ -836,6 +838,7 @@ export function convertChunkToDataset(
   const columns = collectAllHeaders(chunk.data);
 
   return {
+    id: randomUUID(),
     name,
     description: problem,
     columns,

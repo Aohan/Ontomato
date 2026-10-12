@@ -69,4 +69,9 @@ export interface WorkbenchIdentity {
    * preventing a self-declared request domain from splitting the single-domain storage.
    */
   requireDomainId(identity: { domainId?: string | null }): string;
+  /**
+   * Added only to Node's own model settings read (`resolveModelForRole`), next to the caller's credential; never to
+   * other backend calls or the proxy. Enterprise sends its model runtime service credential; OSS sends nothing.
+   */
+  modelSettingsReadHeaders: Readonly<Record<string, string>>;
 }

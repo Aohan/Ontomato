@@ -31,6 +31,7 @@ export function buildResultDatasets(
     const outKeyRefs = facts?.abcOutKeyRefs;
     return datasets.map((dataset, index) => ({
       id: `dataset-${index}`,
+      datasetId: dataset?.id,
       title:
         dataset?.subQuestion ||
         dataset?.name ||

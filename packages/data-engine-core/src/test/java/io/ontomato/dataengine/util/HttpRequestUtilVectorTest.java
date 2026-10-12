@@ -26,18 +26,18 @@ import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.bean.VectorResource;
 import io.ontomato.dataengine.config.DataRagConfig;
-import io.ontomato.dataengine.config.EmbeddingModelProperties;
 import io.ontomato.dataengine.core.exception.ServiceException;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
-import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
+import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 
 /**
- * A vector condition becomes an id filter on the key the executing adapter actually matches objects by, and the
- * stored vector entries come back as resource URLs whether the adapter returns them as an array (M3) or as the
- * JSON text of a SQL column.
+ * A vector condition becomes an id filter on the class's model primary key for every adapter, and the stored vector
+ * entries come back as resource URLs whether the adapter returns them as an array (M3) or as the JSON text of a SQL
+ * column.
  */
 class HttpRequestUtilVectorTest {
 
@@ -69,15 +69,15 @@ class HttpRequestUtilVectorTest {
 	private static final String STORED = "[{\"path\":\"idx/a.png\",\"text\":\"red car\"},{\"path\":\"idx/b.png\",\"text\":\"blue boat\"}]";
 
 	@Test
-	void aRelationalAdapterFiltersByTheClassPrimaryKey() throws Exception {
-		Run run = run(false, WHERE_DSL, STORED);
+	void theIdFilterUsesTheClassPrimaryKey() throws Exception {
+		Run run = run(WHERE_DSL, STORED);
 		assertEquals("code", run.idFilter().getString("field"));
 		assertEquals(List.of("P'1"), run.idFilter().getJSONArray("value"));
 	}
 
 	@Test
 	void anObjectWithoutConditionsReceivesInFilter() throws Exception {
-		Run run = run(false, SELECT_DSL_NO_CONDITIONS, STORED);
+		Run run = run(SELECT_DSL_NO_CONDITIONS, STORED);
 		assertEquals("code", run.idFilter().getString("field"));
 		assertEquals(List.of("P'1"), run.idFilter().getJSONArray("value"));
 	}
@@ -92,8 +92,8 @@ class HttpRequestUtilVectorTest {
 		dataRagConfig.setCardBaseUrl("http://card");
 		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
 
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, adapter, PLAIN_DSL, "s1", true, jsonRule,
-				mock(VectorResourceDao.class), mock(UserDataPermission.class), M3Mode.V1, "d1");
+		DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, adapter, PLAIN_DSL, "s1", true, jsonRule,
+				mock(VectorResourceDao.class), mock(UserDataPermission.class), DslExecutionMode.OPTIMIZED, "d1");
 
 		assertEquals(JSON.parseArray(PLAIN_DSL), JSON.parseArray(executed.getValue()));
 		assertEquals(false, results[1].failed());
@@ -105,11 +105,9 @@ class HttpRequestUtilVectorTest {
 		JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 		EmbeddingService embeddingService = mock(EmbeddingService.class);
 		when(embeddingService.embedding(anyString(), anyString())).thenThrow(new RuntimeException(errorMessage));
-		EmbeddingModelProperties embeddingModelProperties = new EmbeddingModelProperties();
-		embeddingModelProperties.setDimensions(1024);
 		ReflectionTestUtils.setField(vectorResourceDao, "jdbcTemplate", jdbcTemplate);
 		ReflectionTestUtils.setField(vectorResourceDao, "embeddingService", embeddingService);
-		ReflectionTestUtils.setField(vectorResourceDao, "embeddingModelProperties", embeddingModelProperties);
+		ReflectionTestUtils.setField(vectorResourceDao, "retrievalGate", mock(VectorRetrievalGate.class));
 		return vectorResourceDao;
 	}
 
@@ -122,8 +120,8 @@ class HttpRequestUtilVectorTest {
 		dataRagConfig.setCardBaseUrl("http://card");
 		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
 
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, adapter, WHERE_DSL, "s1", true, jsonRule,
-				vectorResourceDao, mock(UserDataPermission.class), M3Mode.V1, "d1");
+		DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, adapter, WHERE_DSL, "s1", true, jsonRule,
+				vectorResourceDao, mock(UserDataPermission.class), DslExecutionMode.OPTIMIZED, "d1");
 
 		assertTrue(results[1].failed());
 		assertTrue(results[1].failure().cause().getMessage().contains("Vector search down"));
@@ -158,30 +156,25 @@ class HttpRequestUtilVectorTest {
 		});
 
 		assertThrows(ServiceException.class, () ->
-				HttpRequestUtil.getM3Data(dataRagConfig, adapter, PLAIN_DSL, "s1", true, jsonRule,
-						vectorResourceDao, permission, M3Mode.V1, "d1"));
+				HttpRequestUtil.executeDsl(dataRagConfig, adapter, PLAIN_DSL, "s1", true, jsonRule,
+						vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, "d1"));
 	}
 
 	@Test
-	void m3FiltersByItsObjectId() throws Exception {
-		assertEquals("id", run(true, WHERE_DSL, JSON.parseArray(STORED)).idFilter().getString("field"));
-	}
-
-	@Test
-	void anM3ArrayComesBackAsResourceUrls() throws Exception {
+	void anArrayComesBackAsResourceUrls() throws Exception {
 		assertEquals(List.of("http://card/vectorResource/resource/idx/a.png", "http://card/vectorResource/resource/idx/b.png"),
-				run(true, WHERE_DSL, JSON.parseArray(STORED)).paths());
+				run(WHERE_DSL, JSON.parseArray(STORED)).paths());
 	}
 
 	@Test
 	void aSqlColumnsJsonTextComesBackAsResourceUrls() throws Exception {
 		assertEquals(List.of("http://card/vectorResource/resource/idx/a.png", "http://card/vectorResource/resource/idx/b.png"),
-				run(false, WHERE_DSL, STORED).paths());
+				run(WHERE_DSL, STORED).paths());
 	}
 
 	@Test
 	void aSelectQueryKeepsOnlyTheMatchedResources() throws Exception {
-		assertEquals(List.of("http://card/vectorResource/resource/idx/a.png"), run(false, SELECT_DSL, STORED).paths());
+		assertEquals(List.of("http://card/vectorResource/resource/idx/a.png"), run(SELECT_DSL, STORED).paths());
 	}
 
 	private record Run(String executedDsl, DslExecutionResult result) {
@@ -200,7 +193,7 @@ class HttpRequestUtilVectorTest {
 	}
 
 	/** Run one query whose adapter answers the photos column with {@code stored}. */
-	private Run run(boolean useM3, String dsl, Object stored) throws Exception {
+	private Run run(String dsl, Object stored) throws Exception {
 		VectorResource hit = new VectorResource();
 		hit.setObjectId("P'1");
 		hit.setPath("idx/a.png");
@@ -209,7 +202,6 @@ class HttpRequestUtilVectorTest {
 		when(vectorResourceDao.find(eq("red"), anyInt(), eq("/Product"), eq("photos"), eq("d1"))).thenReturn(List.of(hit));
 
 		DataAdapter adapter = mock(DataAdapter.class);
-		when(adapter.useM3()).thenReturn(useM3);
 		JSONObject answerRow = new JSONObject();
 		answerRow.put("photos", stored);
 		JSONObject answer = new JSONObject();
@@ -221,8 +213,8 @@ class HttpRequestUtilVectorTest {
 		dataRagConfig.setCardBaseUrl("http://card");
 		Map<String, Object> jsonRule = Map.of("classDef", List.of(PRODUCT));
 
-		DslExecutionResult[] results = HttpRequestUtil.getM3Data(dataRagConfig, adapter, dsl, "s1", true, jsonRule,
-				vectorResourceDao, mock(UserDataPermission.class), M3Mode.V1, "d1");
+		DslExecutionResult[] results = HttpRequestUtil.executeDsl(dataRagConfig, adapter, dsl, "s1", true, jsonRule,
+				vectorResourceDao, mock(UserDataPermission.class), DslExecutionMode.OPTIMIZED, "d1");
 		return new Run(executed.getValue(), results[1]);
 	}
 }

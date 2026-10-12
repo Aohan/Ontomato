@@ -1,5 +1,6 @@
 import type { OutKeyRef } from "../../data-query/replay-plan";
 import type { QueryExecutionFact } from "../../data-query/query-fact";
+import { answerBodyText, datasetPlacement } from "@ontomato/contracts/query-execution";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -178,6 +179,7 @@ function parsePythonAnswer(stdout: string): { rows: QueryResultRow[]; error?: st
 
 function dataset(title: string, rows: QueryResultRow[], dsl?: unknown): Dataset {
   return {
+    id: randomUUID(),
     name: title.replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_").slice(0, 50) || "hot_report",
     description: title,
     columns: [...new Set(rows.flatMap((row) => Object.keys(row)))],
@@ -195,21 +197,28 @@ function table(title: string, rows: QueryResultRow[] | undefined, error?: string
 
 function toResult(items: ReplayItem[], plan: HotReportReplayPlan): AbcReplayExecutionResult {
   const completed = items.filter((item) => item.status === "completed" && item.rows);
-  const datasets = completed.map((item) => dataset(item.title, item.rows || [], item.dsl));
+  const datasetByItem = new Map(
+    completed.map((item) => [item, dataset(item.title, item.rows || [], item.dsl)])
+  );
+  const datasets = [...datasetByItem.values()];
   const errors = items
     .filter((item) => item.status !== "completed" && item.error)
     .map((item) => item.error as string);
-  // Display body and result table are one and the same: a replay result's body is each dataset's title and row-count description.
-  const markdownTable = items
-    .map((item) => `### ${item.title}\n\n${table(item.title, item.rows, item.error)}`)
+  // A replay result's body is each dataset's title and row-count description; the result table is the same text without placements.
+  const fullContent = items
+    .map((item) => {
+      const section = `### ${item.title}\n\n${table(item.title, item.rows, item.error)}`;
+      const itemDataset = datasetByItem.get(item);
+      return itemDataset ? `${section}\n\n${datasetPlacement(itemDataset.id)}` : section;
+    })
     .join("\n\n");
 
   return {
     status: completed.length > 0 ? "completed" : "failed",
     data: buildQueryResultDataFromDatasets(datasets),
     dsl: buildQueryResultDslFromDatasets(datasets),
-    fullContent: markdownTable,
-    markdownTable,
+    fullContent,
+    markdownTable: answerBodyText(fullContent),
     datasets,
     datasetPreviews: completed.map((item) => ({
       title: item.title,
@@ -329,20 +338,27 @@ function mergeDirectDslReplayResults(
     datasets.length > 0
       ? datasets.reduce((sum, dataset) => sum + (dataset.data?.length || 0), 0)
       : completedResults.reduce((sum, result) => sum + getQueryResultDataCount(result.data), 0);
-  const markdownTable =
+  // Each result's own datasets are placed right after its table, keeping the ids they were created with.
+  const withPlacements = (result: DimensionQueryResult, section: string) =>
+    result.status === "completed"
+      ? [section, ...(result.datasets || []).map((item) => datasetPlacement(item.id))].join("\n\n")
+      : section;
+  const fullContent =
     results.length > 1
       ? buildDirectDslDatasetPreviews(results)
-          .map((preview) => `### ${preview.title}\n\n${preview.markdownTable}`)
+          .map((preview, index) =>
+            withPlacements(results[index]!, `### ${preview.title}\n\n${preview.markdownTable}`)
+          )
           .join("\n\n")
-      : completedResults[0]?.markdownTable || "";
+      : withPlacements(completedResults[0]!, completedResults[0]!.markdownTable || "");
 
   return {
     status: "completed",
     data,
     dsl,
-    // Display body and result table are one and the same.
-    fullContent: markdownTable,
-    markdownTable,
+    // The result table is the body without placements.
+    fullContent,
+    markdownTable: answerBodyText(fullContent),
     datasets,
     datasetPreviews,
     abcSubQuestions,
@@ -446,6 +462,7 @@ export async function executeAbcProgram(params: {
 
     const columns = rawData.length > 0 ? Object.keys(rawData[0]) : [];
     const dataset: Dataset = {
+      id: randomUUID(),
       name:
         subQuestion.replace(/[^\u4e00-\u9fa5a-zA-Z0-9_-]/g, "_").slice(0, 50) ||
         "abc_program_result",

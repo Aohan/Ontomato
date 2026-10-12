@@ -317,7 +317,8 @@ export async function streamConclusion(
 
     for await (const chunk of stream) {
       const text = chunk.content;
-      if (typeof text === "string") {
+      // Reasoning-only chunks arrive with empty string content and add no body text.
+      if (typeof text === "string" && text) {
         fullContent += text;
         const patched = fullContent.replace(plainPrefix, styledPrefix);
         push(patched);

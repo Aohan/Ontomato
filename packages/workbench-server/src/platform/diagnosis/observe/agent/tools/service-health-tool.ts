@@ -3,7 +3,6 @@ import { getApiConfig, buildUrl } from "../../../../../config/data-query-api";
 import { backendGet } from "../../../../../utils/backend-client";
 import { createLogger } from "../../../../../logging/logger";
 import type { DiagnosisCallerIdentity } from "./caller-identity";
-import { m3DiagnosticSupport } from "../../m3-support";
 import { workbenchProduct } from "../../../../../product/installed";
 import { tApp } from "../../../../../i18n";
 
@@ -22,19 +21,10 @@ const MAX_RESPONSE_LENGTH = 8000;
  * here because the deployed maintenance service is outside this repo and we must
  * format whatever it sends without throwing.
  */
-export interface ServiceItem {
+interface ServiceItem {
   name?: string;
   status?: string;
   pid?: number;
-  cpu_percent?: number;
-  memory_mb?: number;
-  uptime_seconds?: number;
-}
-
-interface DockerContainer {
-  name?: string;
-  image?: string;
-  status?: string;
   cpu_percent?: number;
   memory_mb?: number;
   uptime_seconds?: number;
@@ -61,23 +51,19 @@ interface ServerInfo {
   disk?: DiskInfo[];
 }
 
-export interface SystemStatus {
+interface SystemStatus {
   hostname?: string;
   timestamp?: string;
   server?: ServerInfo;
-  m3?: { services?: ServiceItem[] };
   backend?: { service?: ServiceItem };
-  frontend?: { docker?: { containers?: DockerContainer[] } };
 }
 
 /** A flattened "one service" view used for uniform formatting. */
-export interface FlatService {
+interface FlatService {
   /** Which subsystem this entry belongs to. */
   group: string;
   name: string;
   status: string;
-  isCritical: boolean;
-  note?: string;
   pid?: number;
   cpu_percent?: number;
   memory_mb?: number;
@@ -92,14 +78,8 @@ export interface FlatService {
 function extractStatus(json: unknown): SystemStatus | null {
   if (!json || typeof json !== "object") return null;
   const obj = json as Record<string, unknown>;
-  // Bare SystemStatus: any of the known top-level service keys present.
-  // Only apps with M3 support assembled treat m3 as a known top-level service key (the enterprise's original behavior).
-  if (
-    "server" in obj ||
-    (m3DiagnosticSupport() !== null && "m3" in obj) ||
-    "backend" in obj ||
-    "frontend" in obj
-  ) {
+  // Bare SystemStatus: any of the known top-level keys present.
+  if ("server" in obj || "backend" in obj) {
     return obj as SystemStatus;
   }
   // Wrapped under data envelope.
@@ -164,7 +144,6 @@ function flattenServices(status: SystemStatus): FlatService[] {
       group,
       name: item.name || defaultName,
       status: item.status || "unknown",
-      isCritical: true,
       pid: item.pid,
       cpu_percent: item.cpu_percent,
       memory_mb: item.memory_mb,
@@ -172,19 +151,7 @@ function flattenServices(status: SystemStatus): FlatService[] {
     });
   };
 
-  out.push(...(m3DiagnosticSupport()?.serviceHealth.services(status) ?? []));
   pushItem(names.backendGroup, status.backend?.service, names.backendDefault);
-  for (const c of status.frontend?.docker?.containers ?? []) {
-    out.push({
-      group: names.frontendGroup,
-      name: c.name || names.frontendDefault,
-      status: c.status || "unknown",
-      isCritical: true,
-      cpu_percent: c.cpu_percent,
-      memory_mb: c.memory_mb,
-      uptime_seconds: c.uptime_seconds,
-    });
-  }
 
   return out;
 }
@@ -217,46 +184,27 @@ function formatServerResource(server?: ServerInfo): string {
 
 /** Compose the final human-readable report, highlighting any non-running service. */
 function formatReport(status: SystemStatus): string {
-  const support = m3DiagnosticSupport();
   const services = flattenServices(status);
 
   if (services.length === 0) {
     return tApp("diag.observe.agent.tools.service-health-tool.11");
   }
 
-  const downCritical = services.filter((s) => s.isCritical && !isRunning(s.status));
-  const downUnused = services.filter((s) => !s.isCritical && !isRunning(s.status));
+  const down = services.filter((s) => !isRunning(s.status));
   const lines: string[] = [];
 
   const header = status.hostname ? tApp("diag.observe.agent.tools.service-health-tool.12", { p0: status.hostname }) : tApp("diag.observe.agent.tools.service-health-tool.13");
   lines.push(`# ${header}`);
 
   // Lead with the verdict so the agent can react fast.
-  if (downCritical.length === 0) {
+  if (down.length === 0) {
     lines.push(tApp("diag.observe.agent.tools.service-health-tool.14"));
-    if (downUnused.length > 0 && support) {
-      const health = support.serviceHealth;
-      lines.push(health.unusedDownIntro(downUnused.length));
-      for (const s of downUnused) {
-        lines.push(health.unusedDownItem(s.group, s.name, statusLabel(s.status)));
-      }
-    }
   } else {
-    lines.push(tApp("diag.observe.agent.tools.service-health-tool.15", { p0: downCritical.length, p1: services.length }));
-    for (const s of downCritical) {
+    lines.push(tApp("diag.observe.agent.tools.service-health-tool.15", { p0: down.length, p1: services.length }));
+    for (const s of down) {
       lines.push(`- [${s.group}] ${s.name} — ${statusLabel(s.status)}`);
     }
-    if (downUnused.length > 0 && support) {
-      const health = support.serviceHealth;
-      lines.push(health.unusedDownAlso(downUnused.length));
-      for (const s of downUnused) {
-        lines.push(health.unusedDownItem(s.group, s.name, statusLabel(s.status)));
-      }
-    }
   }
-
-  const m3Note = support?.serviceHealth.summaryNote;
-  if (m3Note) lines.push(m3Note);
 
   // Group the full per-service listing by subsystem.
   lines.push(tApp("diag.observe.agent.tools.service-health-tool.details"));
@@ -269,13 +217,8 @@ function formatReport(status: SystemStatus): string {
   for (const [group, items] of groups) {
     lines.push(`\n### ${group}`);
     for (const s of items) {
-      let flag = "";
-      if (!isRunning(s.status)) {
-        if (s.isCritical) flag = " ⚠️";
-        else if (support) flag = support.serviceHealth.unusedDetailMark;
-      }
-      const note = s.note && support ? `${support.serviceHealth.noteSeparator}${s.note}` : "";
-      lines.push(`- ${s.name}: ${statusLabel(s.status)}${flag} ${metricTail(s)}${note}`.trimEnd());
+      const flag = isRunning(s.status) ? "" : " ⚠️";
+      lines.push(`- ${s.name}: ${statusLabel(s.status)}${flag} ${metricTail(s)}`.trimEnd());
     }
   }
 
@@ -295,9 +238,7 @@ function formatReport(status: SystemStatus): string {
  * Factory for the `service_health` tool. Probes the deployment's service status
  * via `GET /maintenance/getserviceinfo` (datarag baseUrl + tk, same pattern as
  * `view_app_config`) and returns which subsystems are running, highlighting
- * critical services that are stopped, plus a server-resource overview.
- * Non-critical M3 wording comes from the installed provider; a null install
- * does not list those services. tk is read from the
+ * services that are stopped, plus a server-resource overview. tk is read from the
  * per-session holder at execute time. Read-only: never starts/stops services.
  */
 export function createServiceHealthTool(caller: DiagnosisCallerIdentity): AgentTool {

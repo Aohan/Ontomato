@@ -42,11 +42,11 @@ test("the Java fingerprint comes from the runtime recipe, the exported jars and 
     writeFileSync(join(dir, "a.jar"), "a");
     writeFileSync(join(dir, "libx.so"), "native");
     const recipe = "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:x\nARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy@sha256:y\n";
-    const input = { dockerfileRuntimeText: recipe, exportedLibDir: dir, requirementsText: "numpy==1.26.4\n", arch: "arm64", interfaceVersion: 3 };
+    const input = { dockerfileRuntimeText: recipe, exportedLibDir: dir, requirementsText: "numpy==1.26.4\n", arch: "arm64", interfaceVersion: 4 };
     const contract = computeDataEngineContract(input);
     assert.deepEqual(contract, {
       family: "java-app",
-      interfaceVersion: 3,
+      interfaceVersion: 4,
       platform: "linux/arm64",
       java: { classVersion: 65 },
       runtimeDependencies: { jars: fingerprint({ "a.jar": createHash("sha256").update("a").digest("hex") }) },
@@ -83,9 +83,9 @@ test("prompt language staging: the selected variant replaces the plain file, oth
 test("revision is the single concrete public POM property", () => {
   assert.equal(
     readRevision(
-      "<parent><version>3.5.0</version></parent><properties><revision>4.0.0-dev</revision></properties>",
+      "<parent><version>3.5.0</version></parent><properties><revision>4.0.0-beta.1</revision></properties>",
     ),
-    "4.0.0-dev",
+    "4.0.0-beta.1",
   );
   assert.throws(() => readRevision("<revision>${revision}</revision>"));
   assert.throws(() =>
@@ -95,7 +95,8 @@ test("revision is the single concrete public POM property", () => {
   const live = readRevision(
     readFileSync(fileURLToPath(new URL("../../pom.xml", import.meta.url)), "utf8"),
   );
-  assert.equal(live, "4.0.0-dev");
+  // The live POM carries one concrete release version; its value changes with each release.
+  assert.match(live, /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/);
 });
 test("pack-app rejects a missing lock before any export or build", () =>
   temporary((dir) => {
@@ -152,6 +153,7 @@ function fixture(t) {
     "apps/data-engine/src/main/java/App.java": "class App {}\n",
     "scripts/data-engine/container-entrypoint.sh": "#!/bin/bash\n",
     "scripts/data-engine/runtime-contract.py": "# public checker\n",
+    "scripts/data-engine/sync-product-files.py": "# sync\n",
   });
   repository(ent, {
     "pom.xml": "<project/>\n",
@@ -167,6 +169,7 @@ function fixture(t) {
     "apps/data-engine/src/main/java/EntApp.java": "class EntApp {}\n",
     "scripts/data-engine/verify-license-jar.sh": "#!/bin/sh\n",
     "scripts/data-engine/enterprise-runtime-contract.py": "# enterprise checker\n",
+    "scripts/data-engine/enterprise-entrypoint.sh": "#!/bin/sh\n",
   });
   const settings = join(dir, "home/.m2/settings.xml");
   put(dir, { "home/.m2/settings.xml": `<settings>${SETTINGS_MARK}</settings>\n` });
@@ -177,13 +180,14 @@ function publicApp({ pub }) {
   return {
     repoRoot: pub, lockRoot: join(pub, "apps/data-engine"), lockExclude: LOCK, versionPom: join(pub, "pom.xml"),
     sources: [{ id: "ontomato", root: pub }],
-    component: "datarag-opensource", family: "java-app", interfaceVersion: 3, promptLang: "en", supportedPromptLangs: ["en"],
+    component: "datarag-opensource", family: "java-app", interfaceVersion: 4, promptLang: "en", supportedPromptLangs: ["en"],
     reactorDir: "ontomato", appModule: "apps/data-engine", appLibModules: ["packages/data-engine-core", "apps/data-engine"], excludeArtifactIds: "data-engine-core,data-engine-app",
     contextTrees: [publicTree(pub)],
     secretExport: null,
     requirements: { root: pub, path: "packages/data-engine-core/requirements-py310.txt" },
     mcp: { root: pub, path: "packages/data-engine-core/mcp/mcpserver.py" },
-    bin: [[pub, "scripts/data-engine/container-entrypoint.sh", "bin/container-entrypoint.sh"], [pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"]],
+    bin: [[pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"]],
+    appBin: [[pub, "scripts/data-engine/container-entrypoint.sh", "payload/bin/container-entrypoint.sh"], [pub, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"]],
     pairContract: "/opt/datarag/bin/runtime-contract.py", runtimeTarget: "runtime",
     resources: [[pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"], [pub, "packages/data-engine-core/skills", "payload/skills"]],
     requiredSkill: "payload/skills/aftercalculate/trend-forecaster/SKILL.md",
@@ -209,7 +213,14 @@ function enterpriseApp({ pub, ent, settings }, mode) {
       check: { script: "enterprise/scripts/data-engine/verify-license-jar.sh", jarArtifactId: "data-engine-enterprise", argument: mode },
     },
     bin: [...base.bin, [ent, "scripts/data-engine/enterprise-runtime-contract.py", "bin/enterprise-runtime-contract.py"]],
-    pairContract: "/opt/datarag/bin/enterprise-runtime-contract.py", runtimeTarget: "runtime-native",
+    // The enterprise app ships its own thin entrypoint at the fixed path,
+    // delegating to the public lifecycle script beside it.
+    appBin: [
+      [ent, "scripts/data-engine/enterprise-entrypoint.sh", "payload/bin/container-entrypoint.sh"],
+      [pub, "scripts/data-engine/container-entrypoint.sh", "payload/bin/data-engine-entrypoint.sh"],
+      [pub, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"],
+    ],
+    pairContract: "/opt/datarag/bin/enterprise-runtime-contract.py", runtimeTarget: "runtime",
     resources: [
       [pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"],
       [ent, "packages/data-engine-enterprise/conf-defaults", "payload/conf-defaults"],
@@ -231,7 +242,7 @@ import { join } from "node:path";
 const args = process.argv.slice(2);
 const state = process.env.FAKE_STATE;
 const canonical = (v) => Array.isArray(v) ? "[" + v.map(canonical).join(",") + "]" : v !== null && typeof v === "object" ? "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + canonical(v[k])).join(",") + "}" : JSON.stringify(v);
-const contract = { family: "java-app", interfaceVersion: 3, platform: "linux/arm64", java: { version: "21", classVersion: 65 }, runtimeDependencies: { jars: "a", native: "b" }, python: { version: "3.10", packages: { numpy: "2.2.6" } } };
+const contract = { family: "java-app", interfaceVersion: 4, platform: "linux/arm64", java: { version: "21", classVersion: 65 }, runtimeDependencies: { jars: "a", native: "b" }, python: { version: "3.10", packages: { numpy: "2.2.6" } } };
 const fp = createHash("sha256").update(canonical(contract)).digest("hex");
 const images = existsSync(join(state, "images.json")) ? JSON.parse(readFileSync(join(state, "images.json"), "utf8")) : {};
 const save = () => writeFileSync(join(state, "images.json"), JSON.stringify(images));
@@ -299,7 +310,7 @@ test("the CLI is parsed once; help reads nothing and bad input fails before any 
   assert.throws(() => parseJavaArgs(["app", "--arch", "arm64", "--pack-runtime"], JAVA_FLAGS), /does not match build action/);
 });
 
-test("recipes: the secret export checks one explicit script on the exported jar; runtime-native only adds the JNA CMD", () => {
+test("recipes: the secret export checks one explicit script on the exported jar", () => {
   const build = readFileSync(join(RECIPES, "Dockerfile.build"), "utf8");
   const runtime = readFileSync(join(RECIPES, "Dockerfile.runtime"), "utf8");
   const secret = build.slice(build.indexOf("FROM enterprise-src AS build-secret"), build.indexOf("FROM scratch AS export-secret"));
@@ -310,7 +321,15 @@ test("recipes: the secret export checks one explicit script on the exported jar;
   assert.match(build, /org\.codehaus\.mojo:license-maven-plugin:2\.4\.0:add-third-party[\s\S]*cp "\$\{reactor\}\/\$\{APP_MODULE\}\/target\/generated-sources\/license\/maven-licenses\.json" \/out\/maven-licenses\.json\n/);
   assert.match(runtime, /third_party_notices\.py \/licenses\/THIRD_PARTY_NOTICES\.txt --python --jars \/opt\/datarag\/lib \/tmp\/maven-licenses\.json/);
   assert.doesNotMatch(build + runtime, /verify-license|data-engine-enterprise|license-mode|LicenseConfig/);
-  assert.match(runtime, /\nFROM runtime-files AS runtime\n[\s\S]*ENTRYPOINT \["\/opt\/datarag\/bin\/container-entrypoint.sh"\]\nCMD \[\]\n[\s\S]*FROM runtime AS runtime-native\nCMD \["-Djna.library.path=\/opt\/datarag\/lib"\]\n$/);
+  // The runtime carries no product entrypoint; the final assembly pins the app's.
+  // No edition-specific runtime target remains: the native JVM argument ships
+  // with the enterprise app entrypoint wrapper (proven by its behavior test).
+  assert.doesNotMatch(runtime, /^ENTRYPOINT\s/m);
+  assert.doesNotMatch(runtime, /mcpserver\.py/);
+  assert.doesNotMatch(runtime, /runtime-native/);
+  const assemble = readFileSync(join(RECIPES, "../../deploy/assemble/data-engine/Dockerfile.assemble"), "utf8");
+  assert.match(assemble, /COPY --from=app_source \/ \/app\//);
+  assert.match(assemble, /ENTRYPOINT \["\/app\/bin\/container-entrypoint\.sh"\]/);
 });
 
 test("public build: central export of the public tree only, runtime target and en prompts", async (t) => {
@@ -324,8 +343,10 @@ test("public build: central export of the public tree only, runtime target and e
   assert.equal(Object.keys(exp.context).some((p) => p.includes("src/test")), false);
   assert.deepEqual(argOf(exp.args, "APP_LIB_MODULES"), ["packages/data-engine-core apps/data-engine"]);
   const runtime = docker.build("runtime");
-  assert.ok(runtime && !docker.build("runtime-native"));
-  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/container-entrypoint.sh", "bin/runtime-contract.py"]);
+  assert.ok(runtime);
+  // Only the pairing checker rides the runtime context; product startup files do not.
+  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/runtime-contract.py"]);
+  assert.equal(Object.keys(runtime.context).some((p) => p.startsWith("mcp/")), false);
   assert.equal(runtime.context["requirements-py310.txt"], "numpy==2.2.6\n");
   // Third-party notice inputs; the public LICENSE and NOTICE go to both images.
   const shipped = (name) => readFileSync(join(RECIPES, "../..", name), "utf8");
@@ -336,6 +357,10 @@ test("public build: central export of the public tree only, runtime target and e
   assert.equal(app.context["payload/conf-defaults/prompt.md"], "public English\n");
   assert.equal(app.context["payload/conf-defaults/static/login.html"], "oss page\n");
   assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
+  // Product startup files ride the app payload at their fixed /app layout.
+  assert.equal(app.context["payload/bin/container-entrypoint.sh"], "#!/bin/bash\n");
+  assert.equal(app.context["payload/bin/sync-product-files.py"], "# sync\n");
+  assert.equal(app.context["payload/mcp/mcpserver.py"], "# mcp\n");
   assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
   assert.equal("payload/license-mode" in app.context, false);
   for (const name of ["LICENSE", "NOTICE"]) {
@@ -364,8 +389,27 @@ test("public build: central export of the public tree only, runtime target and e
   assert.equal(JSON.parse(readFileSync(join(fx.pub, LOCK), "utf8")).runtimes["linux/arm64"].length, 64);
 });
 
+test("product startup file changes enter only the app: no runtime rebuilt, fingerprint and lock unchanged", async (t) => {
+  const fx = fixture(t);
+  const docker = fakeDocker(t, fx.dir);
+  await run(publicApp(fx), ["all", "--arch", "arm64", "--prompt-lang", "en"]);
+  const lock = readFileSync(join(fx.pub, LOCK), "utf8");
+  put(fx.pub, {
+    "scripts/data-engine/container-entrypoint.sh": "#!/bin/bash\n# changed entry\n",
+    "scripts/data-engine/sync-product-files.py": "# changed sync\n",
+    "packages/data-engine-core/mcp/mcpserver.py": "# changed mcp\n",
+  });
+  await run(publicApp(fx), ["app", "--arch", "arm64", "--prompt-lang", "en"]);
+  assert.deepEqual(docker.builds().map((b) => b.target), ["export-central", "runtime", "app", "export-central", "app"]);
+  assert.equal(readFileSync(join(fx.pub, LOCK), "utf8"), lock);
+  const apps = docker.builds().filter((b) => b.target === "app");
+  assert.equal(apps[1].context["payload/bin/container-entrypoint.sh"], "#!/bin/bash\n# changed entry\n");
+  assert.equal(apps[1].context["payload/bin/sync-product-files.py"], "# changed sync\n");
+  assert.equal(apps[1].context["payload/mcp/mcpserver.py"], "# changed mcp\n");
+});
+
 for (const mode of ["real", "override"])
-  test(`enterprise ${mode}: secret export with the explicit jar check, native runtime, public-then-enterprise resources, one mode everywhere`, async (t) => {
+  test(`enterprise ${mode}: secret export with the explicit jar check, native library, public-then-enterprise resources, one mode everywhere`, async (t) => {
     const fx = fixture(t);
     put(fx.pub, { "packages/data-engine-core/conf-defaults/draft.md": "untracked public\n" });
     const docker = fakeDocker(t, fx.dir);
@@ -383,10 +427,12 @@ for (const mode of ["real", "override"])
     assert.equal(Object.keys(exp.context).some((p) => /conf-defaults|skills|runtime-contract|src\/test/.test(p)), false);
     const everything = JSON.stringify(docker.builds());
     assert.equal(everything.includes(SETTINGS_MARK), false);
-    const runtime = docker.build("runtime-native");
-    assert.ok(runtime && !docker.build("runtime"));
+    const runtime = docker.build("runtime");
+    assert.ok(runtime);
     assert.deepEqual(argOf(runtime.args, "PAIR_CONTRACT"), ["/opt/datarag/bin/enterprise-runtime-contract.py"]);
     assert.equal(runtime.context["bin/enterprise-runtime-contract.py"], "# enterprise checker\n");
+    assert.equal(runtime.context["bin/runtime-contract.py"], "# public checker\n");
+    assert.equal(Object.keys(runtime.context).some((p) => p.startsWith("mcp/") || p === "bin/container-entrypoint.sh"), false);
     assert.equal(runtime.context["lib/libLicense-native-aarch64-5.4.2.so"], "so");
     const app = docker.build("app");
     assert.equal(app.context["payload/conf-defaults/prompt.md"], "enterprise Chinese\n");
@@ -398,11 +444,23 @@ for (const mode of ["real", "override"])
     assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "enterprise skill Chinese\n");
     assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/scripts/forecaster.py"], "# py\n");
     assert.equal(app.context["payload/license-mode"], mode);
+    // The enterprise app entrypoint is the thin wrapper at the fixed path, with
+    // the public lifecycle script beside it sharing the sync helper.
+    assert.equal(app.context["payload/bin/container-entrypoint.sh"], "#!/bin/sh\n");
+    assert.equal(app.context["payload/bin/data-engine-entrypoint.sh"], "#!/bin/bash\n");
+    assert.equal(app.context["payload/bin/sync-product-files.py"], "# sync\n");
+    assert.equal(app.context["payload/mcp/mcpserver.py"], "# mcp\n");
     // The fake names each exported jar after its module directory.
     assert.deepEqual(Object.keys(app.context).filter((p) => p.startsWith("payload/lib/")), ["payload/lib/data-engine-core.jar", "payload/lib/data-engine-enterprise.jar", "payload/lib/data-engine.jar"]);
     const tag = app.args[app.args.indexOf("-t") + 1];
     const enterpriseHead = git(fx.ent, "rev-parse", "HEAD");
     assert.match(tag, new RegExp(`^datarag-app:${VERSION}-\\d{8}-\\d{6}-g${enterpriseHead.slice(0, 12)}-dirty${mode === "override" ? "-override" : ""}-arm64$`));
+    // The deploy alias carries the same suffix: an override build never claims
+    // the alias the deployment assembles from.
+    assert.deepEqual(
+      Object.keys(docker.images()).filter((name) => name.startsWith("datarag-app:deploy")),
+      [`datarag-app:deploy${mode === "override" ? "-override" : ""}`],
+    );
     // The edition mode is the only app label on top of the shared runtime pair.
     const runtimeFp = argOf(runtime.args, "RUNTIME_COMPAT_FINGERPRINT")[0];
     assert.deepEqual(docker.images()[tag], {
@@ -461,7 +519,7 @@ test("app-only: a missing lock fails before settings or export; with a lock no r
   const depHash = createHash("sha256").update("dep").digest("hex");
   const contract = {
     family: "java-app",
-    interfaceVersion: 3,
+    interfaceVersion: 4,
     platform: "linux/arm64",
     java: { classVersion: 65 },
     runtimeDependencies: { jars: fingerprint({ "dep.jar": depHash }) },

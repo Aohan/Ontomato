@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
- * The name, row count, and actions of one result dataset: data/DSL download, the dashboard entry,
- * and the on-demand-expanded DSL view, post-calculation program, and field lineage details.
+ * The actions of one result dataset, named when the body does not name it: data/DSL download, the
+ * dashboard entry, and the on-demand-expanded DSL view, post-calculation program, and field lineage
+ * details.
  *
  * Download and detail dialogs belong to this component itself; both the standalone body card and
  * the shared execution view that use it get the full set of actions, and the caller only needs to
@@ -26,6 +27,8 @@ import type { ResultDataset, ResultDetailRequest } from "./types";
 
 const props = defineProps<{
   dataset: ResultDataset;
+  /** False where the body places this dataset: the body already names it right above. */
+  showTitle: boolean;
   showDashboardAction: boolean;
 }>();
 
@@ -77,11 +80,8 @@ function openDetail(kind: ResultDetailRequest["kind"]) {
 
 <template>
   <div class="result-dataset">
-    <div class="result-dataset-head">
+    <div v-if="showTitle" class="result-dataset-head">
       <span class="result-dataset-title">{{ dataset.title }}</span>
-      <span class="result-dataset-count">
-        {{ t("analysis.rowCountHint", { n: dataset.rows.length }) }}
-      </span>
     </div>
     <div class="result-dataset-buttons">
       <button
@@ -164,10 +164,7 @@ function openDetail(kind: ResultDetailRequest["kind"]) {
   border: 1px solid var(--el-border-color-lighter);
 }
 .result-dataset-head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
+  margin-bottom: 8px;
   font-size: 12px;
 }
 .result-dataset-title {
@@ -175,17 +172,14 @@ function openDetail(kind: ResultDetailRequest["kind"]) {
   font-weight: 600;
   word-break: break-word;
 }
-.result-dataset-count {
-  color: var(--el-text-color-secondary);
-}
 .result-dataset-buttons,
 .result-dataset-details {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 8px;
 }
 .result-dataset-details {
+  margin-top: 8px;
   padding-top: 8px;
   border-top: 1px dashed var(--el-border-color-lighter);
 }

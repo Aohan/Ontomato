@@ -14,17 +14,6 @@ public class DataRagConfig {
 
 	private String nodeId;
 
-    private String m3rootpath;
-
-    private String ragchatrootpath;
-    private String m3DataUrl;
-    private String m3SchemaUrl;
-
-
-    private String m3auth;
-
-    private String nameSpace;
-
 //    /** Metadata storage location */
 //    private String metaNameSpace = "datarag";
 
@@ -112,15 +101,7 @@ public class DataRagConfig {
 		this.questionSpliterTries = questionSpliterTries;
 	}
 
-	public String getRagchatrootpath() {
-        return ragchatrootpath;
-    }
-
-    public void setRagchatrootpath(String ragchatrootpath) {
-        this.ragchatrootpath = ragchatrootpath;
-    }
-
-    public Long getDslCookerTimeout() {
+	public Long getDslCookerTimeout() {
 		return dslCookerTimeout;
 	}
 
@@ -170,52 +151,6 @@ public class DataRagConfig {
     public void setPythonpath(String pythonpath) {
         this.pythonpath = pythonpath;
     }
-
-    public String getM3rootpath() {
-        return m3rootpath;
-    }
-
-    public void setM3rootpath(String m3rootpath) {
-        this.m3rootpath = m3rootpath;
-    }
-
-
-    public String getM3DataUrl() {
-        return m3DataUrl;
-    }
-
-    public void setM3DataUrl(String m3DataUrl) {
-        this.m3DataUrl = m3DataUrl;
-    }
-
-    public String getM3SchemaUrl() {
-        return m3SchemaUrl;
-    }
-
-    public void setM3SchemaUrl(String m3SchemaUrl) {
-        this.m3SchemaUrl = m3SchemaUrl;
-    }
-
-    public String getM3auth() {
-        return m3auth;
-    }
-
-    public void setM3auth(String m3auth) {
-        this.m3auth = m3auth;
-    }
-
-    public String getNameSpace() {
-        return nameSpace;
-    }
-
-    public void setNameSpace(String nameSpace) {
-        this.nameSpace = nameSpace;
-    }
-
-
-
-
-
 
 
     public List<Map<String, String>> getMcpClients() {

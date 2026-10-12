@@ -12,6 +12,7 @@ import {
 } from "../../query-view";
 import { DeepAnalysisResult } from "../../analysis";
 import type { ClarificationOption } from "@ontomato/contracts/chat";
+import { answerBodyText } from "@ontomato/contracts/query-execution";
 import type { ResponseSnapshot } from "../../../types/chat";
 import { analysisReportApi } from "../../analysis";
 import {
@@ -115,7 +116,7 @@ const canExportDeepAnalysisPdf = computed(
 );
 
 const getStandardReportMarkdown = () => {
-  const sections = [props.snapshot.primaryText, props.snapshot.analysisText]
+  const sections = [answerBodyText(props.snapshot.primaryText), props.snapshot.analysisText]
     .map((item) => String(item || "").trim())
     .filter(Boolean);
   return sections.join("\n\n---\n\n");
@@ -289,6 +290,7 @@ const shouldExpandThinkingPanel = () => {
       :activities="snapshot.deepAnalysis.activities"
       :run-state="snapshot.deepAnalysis.runState"
       :archived="archived"
+      :execution-scope="snapshot.taskId ? { taskId: snapshot.taskId } : undefined"
     />
 
     <div v-if="shouldShowStandardPending" class="standard-thinking-pending">

@@ -274,14 +274,14 @@ test("the public entry builds ontomato-ontology-manager from its two owners and 
   assert.equal(out.includes(`[build] pack ${tar}`), true);
 
   const calls = docker.calls();
-  assert.deepEqual(calls.map((argv) => argv[0]), ["buildx", "version", "image", "save"]);
+  assert.deepEqual(calls.map((argv) => argv[0]), ["buildx", "version", "image", "version", "save"]);
   const build = calls[0];
   assert.deepEqual(build.slice(0, 5), ["buildx", "build", "--provenance=false", "--platform", "linux/arm64"]);
   assert.equal(build.includes("--load"), true);
   assert.equal(build.includes("--push"), false);
   assert.deepEqual(buildArg(build, "WORKSPACE"), ["ontomato"]);
   assert.deepEqual(buildArg(build, "APPLICATION"), ["@ontomato/ontology-manager-app"]);
-  assert.deepEqual(calls[3], ["save", tag, "ontomato-ontology-manager:deploy-arm64"]);
+  assert.deepEqual(calls[4], ["save", tag, "ontomato-ontology-manager:deploy-arm64"]);
 
   const listing = docker.context();
   assert.equal(listing.context, join(publicRoot, ".build/contexts/ontology-manager/arm64"));
@@ -397,15 +397,49 @@ test("a built image with a missing or wrong platform or identity label is reject
 
 test("packing writes the archive and reports it on the build line", async (t) => {
   const { dir } = fixture(t);
-  const docker = fakeDocker(t, dir);
+  const docker = fakeDocker(t, dir, { DOCKER_API_VERSION: "1.52" });
   const logs = [];
   t.mock.method(console, "log", (line) => logs.push(line));
   const file = join(dir, "pack", "ontology-manager.tar.gz");
-  await exportImage(["ontology-manager:x-arm64", "ontology-manager:deploy-arm64"], file);
+  await exportImage(
+    ["ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
+    file,
+    "linux/arm64",
+  );
   assert.deepEqual(logs, [`[build] pack ${file}`]);
+  assert.equal(existsSync(file), true);
+  assert.deepEqual(
+    docker.calls().find((argv) => argv[0] === "save"),
+    ["save", "--platform", "linux/arm64", "ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
+  );
+});
+
+test("packing omits --platform on servers older than API 1.49", async (t) => {
+  const { dir } = fixture(t);
+  const docker = fakeDocker(t, dir, { DOCKER_API_VERSION: "1.47" });
+  const file = join(dir, "pack", "ontology-manager.tar.gz");
+  await exportImage(
+    ["ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
+    file,
+    "linux/arm64",
+  );
   assert.equal(existsSync(file), true);
   assert.deepEqual(
     docker.calls().find((argv) => argv[0] === "save"),
     ["save", "ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
   );
+});
+
+// The DataRAG proxy the entrypoint renders clears the model runtime service credential, so a
+// browser-supplied one never reaches DataRAG. The real assignment is evaluated by sh; no Nginx runs.
+test("the rendered DataRAG proxy clears the model runtime credential header", () => {
+  const entrypoint = readFileSync(join(REPO, RECIPE, "docker-entrypoint.sh"), "utf8");
+  const assignment = entrypoint.match(/^API_LOCATION="[\s\S]*?^}"$/m)[0];
+  const rendered = execFileSync("sh", ["-c", `${assignment}\nprintf '%s' "$API_LOCATION"`], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, ONTOLOGY_API_BASE: "/api", DATARAG_ORIGIN: "http://datarag:18087" },
+  });
+  assert.match(rendered, /^location \/api\/data-query\/ \{\n {2}proxy_pass http:\/\/datarag:18087\/;\n/);
+  assert.match(rendered, /^ {2}proxy_set_header X-Ontomato-Model-Runtime-Token "";$/m);
+  assert.match(rendered, /\n\}$/);
 });

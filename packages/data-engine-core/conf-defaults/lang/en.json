@@ -12,16 +12,8 @@
     "value": "Authorization activated successfully"
   },
   {
-    "key": "Maintenance.action.paramError",
-    "value": "Invalid request parameters"
-  },
-  {
-    "key": "Data.queryM3.error",
-    "value": "Failed to query M3 database"
-  },
-  {
-    "key": "Data.remoteDB.notSupport",
-    "value": "Non-M3 mode does not support this feature"
+    "key": "Data.query.error",
+    "value": "Failed to query the data source"
   },
   {
     "key": "Data.dataPermission.noPermission",
@@ -72,12 +64,16 @@
     "value": "The object class name and display name are required"
   },
   {
-    "key": "Admin.class.primaryKeyRequired",
-    "value": "A new object class needs a primary key field name"
+    "key": "Admin.knowledge.textRequired",
+    "value": "Business knowledge content is required"
   },
   {
-    "key": "Admin.class.m3PrimaryKeyId",
-    "value": "The primary key field of an M3 object class must be id"
+    "key": "Admin.knowledge.idRequired",
+    "value": "Business knowledge ID is required"
+  },
+  {
+    "key": "Admin.class.primaryKeyRequired",
+    "value": "A new object class needs a primary key field name"
   },
   {
     "key": "Admin.attr.primaryKeyLocked",
@@ -338,6 +334,26 @@
   {
     "key": "WriteFunctionOperation.relationNotExist",
     "value": "Relation does not exist"
+  },
+  {
+    "key": "WriteFunctionOperation.vectorAttrNotAllowed",
+    "value": "Vector attribute cannot be written through this interface"
+  },
+  {
+    "key": "Vector.rebuildRequired",
+    "value": "The vectors of this domain need rebuilding: the embedding configuration changed. Rebuild the vectors before searching."
+  },
+  {
+    "key": "Vector.saveRefusedWhileRebuilding",
+    "value": "A vector rebuild of this domain is running; modify the embedding configuration after it finishes."
+  },
+  {
+    "key": "Vector.rebuildNotNeeded",
+    "value": "The vectors of this domain do not need rebuilding."
+  },
+  {
+    "key": "Vector.rebuildAlreadyRunning",
+    "value": "A vector rebuild of this domain is already running."
   },
   {
     "key": "AgentRole.notConfigured",

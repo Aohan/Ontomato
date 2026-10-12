@@ -6,6 +6,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -19,10 +21,13 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.JSONWriter.Feature;
+import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
+import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
+import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 import io.ontomato.dataengine.util.DslUtil;
-import io.ontomato.dataengine.util.HttpRequestUtil.M3Mode;
+import io.ontomato.dataengine.util.HttpRequestUtil;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,13 +43,18 @@ public class MysqlAdapter implements DataAdapter {
 	}
 
 	@Override
-	public String executeDsl(String queryJson, String sessionId, M3Mode m3Mode, List<String> generatedMqls) throws Exception {
+	public Connection openConnection() throws SQLException {
+		return DriverManager.getConnection(connection.getUrl(), connection.getUser(), connection.getPassword());
+	}
+
+	@Override
+	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] DSL for querying mysql: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		String sql = toSql(dsls.getJSONObject(0), jsonRule);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] converted mysql sql: " + sql);
-		JSONArray data = executeSql(connection, sql);
+		JSONArray data = executeSql(sql);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
@@ -408,7 +418,7 @@ public class MysqlAdapter implements DataAdapter {
 	    		}
 	    	}
 	    	String sql = "select " + select + " from " + className + " limit 1";
-	    	JSONArray data = executeSql(connection, sql);
+	    	JSONArray data = executeSql(sql);
 	    	if (data.size() > 0) {
 	        	JSONObject datum = data.getJSONObject(0);
 	        	Set<String> keys = datum.keySet();
@@ -432,7 +442,7 @@ public class MysqlAdapter implements DataAdapter {
 		}
 	}
 	
-	private JSONArray executeSql(DataAdapterConnection connection, String sql) throws Exception {
+	private JSONArray executeSql(String sql) throws Exception {
 		log.info(sql);
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
@@ -440,7 +450,7 @@ public class MysqlAdapter implements DataAdapter {
 		ResultSet rs = null;
 		try {
 			JSONArray rows = new JSONArray();
-			conn = DriverManager.getConnection(connection.getUrl(), connection.getUser(), connection.getPassword());
+			conn = openConnection();
 			pst = conn.prepareStatement(sql);
 			rs = pst.executeQuery();
 			ResultSetMetaData meta = rs.getMetaData();
@@ -491,8 +501,7 @@ public class MysqlAdapter implements DataAdapter {
 	}
 
 	@Override
-	public boolean useM3() {
-		return false;
+	public void validatePrimaryKeyName(String attrName) throws Exception {
 	}
 
 	@Override
@@ -510,61 +519,479 @@ public class MysqlAdapter implements DataAdapter {
 		
 	}
 
-	private UnsupportedDataAdapterOperationException unsupported(String operation) {
-		return new UnsupportedDataAdapterOperationException("MySQL", operation);
-	}
-
 	@Override
 	public void createNamespace(String namespace) {
-		throw unsupported("createNamespace");
 	}
 
 	@Override
 	public void truncateNamespace(String namespace) {
-		throw unsupported("truncateNamespace");
+		try {
+			JSONArray currentSchemas = executeSql("SELECT DATABASE() AS current_schema;");
+			String currentSchema = currentSchemas.getJSONObject(0).getString("current_schema");
+			JSONArray tableNames = executeSql("SELECT table_name AS table_name FROM information_schema.tables WHERE table_schema = '" + currentSchema + "' AND table_type = 'BASE TABLE';");
+			for (int i = 0; i < tableNames.size(); i++) {
+				String tableName = tableNames.getJSONObject(i).getString("table_name");
+				if (namespace == null || tableName.toLowerCase().startsWith(namespace.toLowerCase())) {
+					executeUpdate("delete from " + tableName);
+				}
+			}
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+		}
 	}
 
 	@Override
 	public void dropNamespace(String namespace) {
-		throw unsupported("dropNamespace");
+		try {
+			JSONArray currentSchemas = executeSql("SELECT DATABASE() AS current_schema;");
+			String currentSchema = currentSchemas.getJSONObject(0).getString("current_schema");
+			JSONArray tableNames = executeSql("SELECT table_name AS table_name FROM information_schema.tables WHERE table_schema = '" + currentSchema + "' AND table_type = 'BASE TABLE';");
+			for (int i = 0; i < tableNames.size(); i++) {
+				String tableName = tableNames.getJSONObject(i).getString("table_name");
+				if (namespace == null || tableName.toLowerCase().startsWith(namespace.toLowerCase())) {
+					executeUpdate("drop table " + tableName);
+				}
+			}
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+		}
 	}
 
 	@Override
 	public void createClass(String namespace, Map<String, Object> classDef) {
-		throw unsupported("createClass");
+		try {
+			String fullClassName = namespace + ((String) classDef.get("className")).trim();
+			List<Map<String, Object>> attrs = (List<Map<String, Object>>) classDef.get("attrs");
+			List<String> fields = new ArrayList<String>();
+			if (attrs != null) {
+				for (Map<String, Object> attr : attrs) {
+					if (attr.get("enable") == null || (Boolean)attr.get("enable")) {
+						String name = (String) attr.get("name");
+						String type = (String) attr.get("type");
+						if (name != null && isSupportedType(type)) {
+							String ty = "";
+							if ("varchar".equals(type)) {
+								ty = "varchar(200)";
+							} else if ("text".equals(type)) {
+								ty = "text";
+							} else if ("int".equals(type)) {
+								ty = "int";
+							} else if ("long".equals(type)) {
+								ty = "bigint";
+							} else if ("double".equals(type)) {
+								ty = "double";
+							} else if ("date".equals(type)) {
+								ty = "date";
+							} else if ("timestamp".equals(type)) {
+								ty = "datetime";
+							} else if ("vector".equals(type)) {
+								ty = "text";
+							}
+							fields.add(name + " " + ty);
+						}
+					}
+				}
+			}
+
+			StringBuilder sql = new StringBuilder();
+			sql.append("create table ").append(fullClassName).append(" ( \n");
+			for (int i = 0; i < fields.size(); i++) {
+				String field = fields.get(i);
+				sql.append(" ").append(field).append(" " + (i == fields.size() - 1 ? "" : ",") + "\n");
+			}
+			sql.append(" );");
+			executeUpdate(sql.toString());
+		} catch (Exception e) {
+			log.error(e.getMessage(), e);
+		}
+	}
+
+	private boolean isSupportedType(String type) {
+		return "varchar".equals(type) || "text".equals(type) || "int".equals(type) || "long".equals(type)
+				|| "double".equals(type) || "date".equals(type) || "timestamp".equals(type)
+				|| "vector".equals(type);
 	}
 
 	@Override
 	public void createEdgeType(String namespace, String edgeName) {
-		throw unsupported("createEdgeType");
 	}
 
 	@Override
 	public void insertObjects(String namespace, Map<String, Object> classDef, JSONArray objs) throws Exception {
-		throw unsupported("insertObjects");
+		SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd");
+		SimpleDateFormat ymdhms = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+		boolean inSandbox = inSandbox(namespace);
+		String fullClassName = inSandbox ? namespace + ((String) classDef.get("className")) : (String) classDef.get("className");
+
+		int idIndex = -1;
+		List<String> fields = new ArrayList<String>();
+		Map<String, String> attrTypeMap = new HashMap<String, String>();
+		if (classDef.get("attrs") != null) {
+			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>) classDef.get("attrs");
+			for (Map<String, Object> attrDef : attrDefs) {
+				if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
+					String type = (String) attrDef.get("type");
+					if (isSupportedType(type)) {
+						if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
+							idIndex = fields.size();
+						}
+						fields.add((String) attrDef.get("name"));
+						attrTypeMap.put((String) attrDef.get("name"), (String) attrDef.get("type"));
+					}
+				}
+			}
+		}
+
+		if (idIndex >= 0) {
+			String pk = fields.get(idIndex);
+			List<String> sqls = new ArrayList<String>();
+			for (int i = 0; i < objs.size(); i++) {
+				JSONObject obj = objs.getJSONObject(i);
+				if (obj.get(pk) == null || "".equals(obj.getString(pk).trim())) {
+					throw new Exception("The insert statement must contain the primary key [" + pk + "] field");
+				}
+				StringBuilder sql = new StringBuilder();
+				sql.append("insert into ").append(fullClassName).append("(");
+				sql.append(String.join(",", fields));
+				sql.append(") values(");
+				for (int j = 0; j < fields.size(); j++) {
+					if (j > 0) {
+						sql.append(",");
+					}
+					String type = attrTypeMap.get(fields.get(j));
+					Object value = obj.get(fields.get(j));
+					if (value != null) {
+						sql.append(toSqlValue(type, value, ymd, ymdhms));
+					} else {
+						sql.append("null");
+					}
+				}
+				sql.append(")");
+				sqls.add(sql.toString());
+			}
+			executeUpdate(sqls);
+		} else {
+			throw new Exception("The insert statement must contain the primary key field");
+		}
+	}
+
+	private boolean inSandbox(String sandboxId) {
+		return sandboxId != null && !"".equals(sandboxId.trim());
 	}
 
 	@Override
 	public void updateObjects(String namespace, Map<String, Object> classDef, JSONObject setValues, JSONObject where)
 			throws Exception {
-		throw unsupported("updateObjects");
+		SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd");
+		SimpleDateFormat ymdhms = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+		boolean inSandbox = inSandbox(namespace);
+		String fullClassName = inSandbox ? namespace + ((String) classDef.get("className")) : (String) classDef.get("className");
+
+		Map<String, String> attrTypeMap = new HashMap<String, String>();
+		String pk = null;
+		if (classDef.get("attrs") != null) {
+			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>) classDef.get("attrs");
+			for (Map<String, Object> attrDef : attrDefs) {
+				if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
+					String type = (String) attrDef.get("type");
+					if (isSupportedType(type)) {
+						if (attrDef.get("primaryKey") != null && (Boolean)attrDef.get("primaryKey")) {
+							pk = (String) attrDef.get("name");
+						}
+						attrTypeMap.put((String) attrDef.get("name"), (String) attrDef.get("type"));
+					}
+				}
+			}
+		}
+
+		String setStr = "";
+		for (String key : setValues.keySet()) {
+			if (key.equals(pk)) {
+				throw new Exception("Updating the primary key [" + pk + "] field is not allowed");
+			}
+			String type = attrTypeMap.get(key);
+			if (type != null) {
+				Object value = setValues.get(key);
+				setStr += key + " = ";
+				if (value != null) {
+					setStr += toSqlValue(type, value, ymd, ymdhms);
+				} else {
+					setStr += "null";
+				}
+				setStr += ",";
+			} else {
+				throw new Exception("Field [" + key + "] does not exist");
+			}
+		}
+		if (setStr.length() > 0) {
+			setStr = setStr.substring(0, setStr.length() - 1);
+		}
+		String sql = "update " + fullClassName + " set " + setStr;
+		String whereStr = generateWhere(where, attrTypeMap, ymd, ymdhms);
+		if (!"".equals(whereStr.trim())) {
+			sql += " where " + whereStr;
+		}
+
+		executeUpdate(sql);
+	}
+
+	private String generateWhere(JSONObject condition, Map<String, String> attrTypeMap, SimpleDateFormat ymd, SimpleDateFormat ymdhms) throws Exception {
+		String whereStr = "";
+		if (condition != null) {
+			whereStr = buildWhere(condition, true, attrTypeMap, ymd, ymdhms);
+		}
+		return whereStr;
+	}
+
+	private String buildWhere(JSONObject condition, boolean topLevel, Map<String, String> attrTypeMap, SimpleDateFormat ymd, SimpleDateFormat ymdhms) throws Exception {
+		String operator = condition.getString("operator");
+		if (operator == null) {
+			operator = "";
+		}
+
+		if (condition.getJSONArray("and") != null && condition.getJSONArray("and").size() > 0 || condition.getJSONArray("or") != null && condition.getJSONArray("or").size() > 0) {
+			String connector;
+			JSONArray list;
+			if (condition.containsKey("and")) {
+				connector = " and ";
+				list = condition.getJSONArray("and");
+			} else if (condition.containsKey("or")) {
+				connector = " or ";
+				list = condition.getJSONArray("or");
+			} else {
+				return "";
+			}
+			List<String> parts = new ArrayList<String>();
+			for (int i = 0; i < list.size(); i++) {
+				parts.add(buildWhere(list.getJSONObject(i), false, attrTypeMap, ymd, ymdhms));
+			}
+			String joined = String.join(connector, parts);
+			return topLevel ? joined : "(" + joined + ")";
+		}
+
+		String field = condition.getString("field");
+		String type = attrTypeMap.get(field);
+		switch (operator) {
+			case "=":
+			case "!=":
+			case ">":
+			case ">=":
+			case "<":
+			case "<=":
+			case "like":
+				Object value = condition.get("value");
+				String valueSql = toSqlValue(type, value, ymd, ymdhms);
+				return field + " " + operator + " " + valueSql;
+			case "between":
+				JSONArray betweenArr = condition.getJSONArray("value");
+				return field + " between " + toSqlValue(type, betweenArr.get(0), ymd, ymdhms) + " and " + toSqlValue(type, betweenArr.get(1), ymd, ymdhms);
+			case "in":
+				JSONArray vs = condition.getJSONArray("value");
+				String inValue = "(";
+				for (int i = 0; i < vs.size(); i++) {
+					inValue += toSqlValue(type, vs.get(i), ymd, ymdhms) + (i == vs.size() - 1 ? ")" : ",");
+				}
+				return field + " in " + inValue;
+			case "is":
+				return field + " is null";
+			case "is not":
+				return field + " is not null";
+			default:
+				return "";
+		}
+	}
+
+	private String toSqlValue(String type, Object value, SimpleDateFormat ymd, SimpleDateFormat ymdhms) throws Exception {
+		String valueSql = "";
+		if ("varchar".equals(type) || "text".equals(type) || "vector".equals(type)) {
+			String strValue = "vector".equals(type) && value != null && !(value instanceof String)
+					? JSON.toJSONString(value) : (String) value;
+			valueSql = "'" + strValue.replace("'", "''") + "'";
+		} else if ("int".equals(type) || "long".equals(type) || "double".equals(type)) {
+			valueSql = value + "";
+		} else if ("date".equals(type)) {
+			try {
+				valueSql = "'" + ymd.format(ymd.parse((String) value)) + "'";
+			} catch (Exception e) {
+				log.error(e.getMessage(), e);
+				throw new Exception("Invalid format for a date field, expected yyyy-MM-dd");
+			}
+		} else if ("timestamp".equals(type)) {
+			try {
+				valueSql = "'" + ymdhms.format(ymdhms.parse((String) value)) + "'";
+			} catch (Exception e) {
+				log.error(e.getMessage(), e);
+				throw new Exception("Invalid format for a timestamp field, expected yyyy-MM-dd HH:mm:ss");
+			}
+		}
+		return valueSql;
 	}
 
 	@Override
 	public void deleteObjects(String namespace, Map<String, Object> classDef, JSONObject where) throws Exception {
-		throw unsupported("deleteObjects");
+		SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd");
+		SimpleDateFormat ymdhms = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+
+		boolean inSandbox = inSandbox(namespace);
+		String fullClassName = inSandbox ? namespace + ((String) classDef.get("className")) : (String) classDef.get("className");
+
+		Map<String, String> attrTypeMap = new HashMap<String, String>();
+		if (classDef.get("attrs") != null) {
+			List<Map<String, Object>> attrDefs = (List<Map<String, Object>>) classDef.get("attrs");
+			for (Map<String, Object> attrDef : attrDefs) {
+				if (attrDef.get("enable") == null || (Boolean)attrDef.get("enable")) {
+					String type = (String) attrDef.get("type");
+					if (isSupportedType(type)) {
+						attrTypeMap.put((String) attrDef.get("name"), (String) attrDef.get("type"));
+					}
+				}
+			}
+		}
+
+		String sql = "delete from " + fullClassName;
+		String whereStr = generateWhere(where, attrTypeMap, ymd, ymdhms);
+		if (!"".equals(whereStr.trim())) {
+			sql += " where " + whereStr;
+		}
+
+		executeUpdate(sql);
 	}
 
 	@Override
 	public void createEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
 			String targetClassName, String targetObjId) throws Exception {
-		throw unsupported("createEdge");
+		boolean inSandbox = inSandbox(namespace);
+
+		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
+		Map<String, Object> relationship_rule = (Map<String, Object>) jsonRule.get("relationship_rule");
+		Map<String, Object> sourceClassDef = null;
+		Map<String, Object> targetClassDef = null;
+		for (Map<String, Object> classDef : classDefs) {
+			if (classDef.get("className").equals(sourceClassName)) {
+				sourceClassDef = classDef;
+			}
+			if (classDef.get("className").equals(targetClassName)) {
+				targetClassDef = classDef;
+			}
+		}
+		Map<String, Object> relDef = (Map<String, Object>) relationship_rule.get(relationName);
+
+		if (relDef != null && sourceClassDef != null && targetClassDef != null && relDef.get("fromclass").equals(sourceClassName) && relDef.get("toclass").equals(targetClassName)) {
+			String sourcePk = DslUtil.getPrimaryKey(sourceClassDef);
+			String targetPk = DslUtil.getPrimaryKey(targetClassDef);
+			String sourceInnerField = (String) relDef.get("fromField");
+			String targetInnerField = (String) relDef.get("toField");
+
+			String sql = null;
+			if (sourcePk.equals(sourceInnerField)) {
+				if (targetPk.equals(targetInnerField)) {
+				} else {
+					String fullClassName = inSandbox ? namespace + ((String) targetClassDef.get("className")) : (String) targetClassDef.get("className");
+					sql = "update " + fullClassName + " set " + targetInnerField + " = " + toSqlValue("varchar", sourceObjId, null, null) + " where " + targetPk + " = " + toSqlValue("varchar", targetObjId, null, null);
+				}
+			} else {
+				if (targetPk.equals(targetInnerField)) {
+					String fullClassName = inSandbox ? namespace + ((String) sourceClassDef.get("className")) : (String) sourceClassDef.get("className");
+					sql = "update " + fullClassName + " set " + sourceInnerField + " = " + toSqlValue("varchar", targetObjId, null, null) + " where " + sourcePk + " = " + toSqlValue("varchar", sourceObjId, null, null);
+				} else {
+				}
+			}
+
+			if (sql != null) {
+				executeUpdate(sql);
+			}
+		} else {
+			throw new Exception("Object class [" + sourceClassName + "] and object class [" + targetClassName + "] have no relationship definition [" + relationName + "]");
+		}
 	}
 
 	@Override
 	public void deleteEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
 			String targetClassName, String targetObjId) throws Exception {
-		throw unsupported("deleteEdge");
+		boolean inSandbox = inSandbox(namespace);
+
+		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
+		Map<String, Object> relationship_rule = (Map<String, Object>) jsonRule.get("relationship_rule");
+		Map<String, Object> sourceClassDef = null;
+		Map<String, Object> targetClassDef = null;
+		for (Map<String, Object> classDef : classDefs) {
+			if (classDef.get("className").equals(sourceClassName)) {
+				sourceClassDef = classDef;
+			}
+			if (classDef.get("className").equals(targetClassName)) {
+				targetClassDef = classDef;
+			}
+		}
+		Map<String, Object> relDef = (Map<String, Object>) relationship_rule.get(relationName);
+
+		if (relDef != null && sourceClassDef != null && targetClassDef != null && relDef.get("fromclass").equals(sourceClassName) && relDef.get("toclass").equals(targetClassName)) {
+			String sourcePk = DslUtil.getPrimaryKey(sourceClassDef);
+			String targetPk = DslUtil.getPrimaryKey(targetClassDef);
+			String sourceInnerField = (String) relDef.get("fromField");
+			String targetInnerField = (String) relDef.get("toField");
+
+			String sql = null;
+			if (sourcePk.equals(sourceInnerField)) {
+				if (targetPk.equals(targetInnerField)) {
+				} else {
+					String fullClassName = inSandbox ? namespace + ((String) targetClassDef.get("className")) : (String) targetClassDef.get("className");
+					sql = "update " + fullClassName + " set " + targetInnerField + " = null where " + targetPk + " = " + toSqlValue("varchar", targetObjId, null, null);
+				}
+			} else {
+				if (targetPk.equals(targetInnerField)) {
+					String fullClassName = inSandbox ? namespace + ((String) sourceClassDef.get("className")) : (String) sourceClassDef.get("className");
+					sql = "update " + fullClassName + " set " + sourceInnerField + " = null where " + sourcePk + " = " + toSqlValue("varchar", sourceObjId, null, null);
+				} else {
+				}
+			}
+
+			if (sql != null) {
+				executeUpdate(sql);
+			}
+		} else {
+			throw new Exception("Object class [" + sourceClassName + "] and object class [" + targetClassName + "] have no relationship definition [" + relationName + "]");
+		}
+	}
+
+	private void executeUpdate(String sql) throws Exception {
+		List<String> sqls = new ArrayList<String>();
+		sqls.add(sql);
+		executeUpdate(sqls);
+	}
+
+	private void executeUpdate(List<String> sqls) throws Exception {
+		Connection conn = null;
+		Statement st = null;
+
+		try {
+			conn = openConnection();
+			conn.setAutoCommit(false);
+			st = conn.createStatement();
+			for (String sql : sqls) {
+				log.info(sql);
+				st.addBatch(sql);
+			}
+			st.executeBatch();
+			conn.commit();
+		} catch (Exception e) {
+			if (conn != null) {
+				try {
+					conn.rollback();
+				} catch (Exception e1) {
+					log.error(e1.getMessage(), e1);
+				}
+			}
+			throw e;
+		} finally {
+			if (st != null) {
+				try { st.close(); } catch (Exception e) { log.error(e.getMessage(), e); }
+			}
+			if (conn != null) {
+				try { conn.close(); } catch (Exception e) { log.error(e.getMessage(), e); }
+			}
+		}
 	}
 
 	@Override
@@ -572,7 +999,7 @@ public class MysqlAdapter implements DataAdapter {
 		String fullClassName = (String) classDef.get("className");
 		String pk = DslUtil.getPrimaryKey(classDef);
 		String sql = "select " + attrName + " from " + fullClassName + " where " + pk + " = '" + objectId.replace("'", "''") + "'";
-		JSONArray rows = executeSql(connection, sql);
+		JSONArray rows = executeSql(sql);
 		if (rows == null || rows.isEmpty()) {
 			throw new IllegalArgumentException("Object " + objectId + " of class " + fullClassName + " does not exist");
 		}
@@ -582,7 +1009,67 @@ public class MysqlAdapter implements DataAdapter {
 
 	@Override
 	public Map<String, Object> query(JSONObject dsl, String sandboxId, String domainId, VectorResourceDao vectorResourceDao, DataRagConfig dataRagConfig) throws Exception {
-		throw unsupported("query");
+		boolean inSandbox = inSandbox(sandboxId);
+
+		UserDataPermission userDataPermission = new UserDataPermission();
+		JSONArray dsls = new JSONArray();
+		dsls.add(dsl);
+		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
+		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
+		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
+
+		JSONObject dataMap = new JSONObject();
+		DslExecutionResult result = null;
+		JSONObject data = null;
+		if (inSandbox) {
+			for (Map<String, Object> classDef : classDefs) {
+				String className = sandboxId + ((String) classDef.get("className")).trim();
+				classDef.put("className", className);
+			}
+			String sandboxDslStr = addSandboxId(dslStr, sandboxId);
+			result = HttpRequestUtil.executeDsl(dataRagConfig, this, sandboxDslStr, null, true, jsonRule, vectorResourceDao, userDataPermission, DslExecutionMode.OPTIMIZED, domainId)[1];
+			data = result.data();
+		} else {
+			result = HttpRequestUtil.executeDsl(dataRagConfig, this, dslStr, null, true, jsonRule, vectorResourceDao, userDataPermission, DslExecutionMode.OPTIMIZED, domainId)[1];
+			data = result.data();
+		}
+
+		dataMap.putAll(data);
+		if (result.failed()) {
+			dataMap.put("error", MultiThreadAIChatService.rawErrorText(result.failure().cause()));
+		}
+		return dataMap;
+	}
+
+	private String addSandboxId(String dslStr, String sandboxId) {
+		JSONArray dsls = JSON.parseArray(dslStr);
+		for (int dslIndex = 0; dslIndex < dsls.size(); dslIndex++) {
+			JSONObject dsl = dsls.getJSONObject(dslIndex);
+			JSONObject answer = dsl == null ? null : dsl.getJSONObject("answer");
+			JSONArray steps = answer == null ? null : answer.getJSONArray("steps");
+			if (steps == null) {
+				continue;
+			}
+
+			JSONObject step = steps.getJSONObject(0);
+			JSONObject graph = step == null ? null : step.getJSONObject("graph");
+			JSONArray patterns = graph == null ? null : graph.getJSONArray("patterns");
+			if (patterns == null) {
+				continue;
+			}
+			JSONArray objects = patterns.getJSONObject(0).getJSONArray("objects");
+			if (objects == null) {
+				continue;
+			}
+			for (int objectIndex = 0; objectIndex < objects.size(); objectIndex++) {
+				JSONObject object = objects.getJSONObject(objectIndex);
+				if (object != null) {
+					String fullClassName = sandboxId + object.getString("class").trim();
+					object.put("class", fullClassName);
+				}
+			}
+		}
+		return JSON.toJSONString(dsls, Feature.WriteMapNullValue);
 	}
 
 }

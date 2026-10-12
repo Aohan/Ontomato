@@ -1,4 +1,3 @@
-import type { AbcAnalysisEvent } from "@ontomato/contracts/chat";
 import { createModel } from "../../config/model-factory";
 import { modelAgentName } from "../../logging/model-agents";
 import { t } from "../../i18n";
@@ -6,10 +5,6 @@ import { renderPrompt } from "../../core/prompts/loader";
 import { createLogger } from "../../logging/logger";
 
 const logger = createLogger("abc-description");
-
-export interface AbcProgressCallback {
-  (event: AbcAnalysisEvent): void;
-}
 
 export function makeAnalysisTransition(subQuestion: string): string {
   return t("query.abc.transition.analysis", { sq: (subQuestion || "").trim() });
@@ -25,7 +20,8 @@ export async function streamAbcAnalysis(
   subQuestion: string,
   subgraphDesc: string,
   _modelOptions: any,
-  onProgress: AbcProgressCallback,
+  /** Receives each piece of description text in order: the transition, then the model's body text. */
+  onText: (text: string) => void,
   signal?: AbortSignal,
   transitionText?: string
 ): Promise<string> {
@@ -37,38 +33,21 @@ export async function streamAbcAnalysis(
       subgraphDesc,
     });
 
-    onProgress({
-      type: "abc_analysis_start",
-      subQuestion,
-    });
-
     const transition = transitionText || makeAnalysisTransition(subQuestion);
     let fullContent = transition + "\n\n";
 
-    onProgress({
-      type: "abc_analysis_chunk",
-      subQuestion,
-      content: transition,
-    });
+    onText(fullContent);
 
     const stream = await model.stream(prompt, { signal });
 
     for await (const chunk of stream) {
       const text = chunk.content;
-      if (typeof text === "string") {
+      // Reasoning-only chunks arrive with empty string content and add no body text.
+      if (typeof text === "string" && text) {
         fullContent += text;
-        onProgress({
-          type: "abc_analysis_chunk",
-          subQuestion,
-          content: fullContent,
-        });
+        onText(text);
       }
     }
-
-    onProgress({
-      type: "abc_analysis_done",
-      subQuestion,
-    });
 
     return fullContent;
   } catch (error) {

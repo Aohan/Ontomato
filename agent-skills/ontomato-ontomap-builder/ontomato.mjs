@@ -126,12 +126,49 @@ async function ask(cfg, argv) {
   await printSse(res);
 }
 
+// test-datasource and use-datasource take the same arguments and send the same body.
+function datasourceBody(cmd, argv) {
+  if (argv[1] == null) die(`${cmd} requires a datasource type`);
+  if (argv[2] == null) die(`${cmd} requires a JSON payload`);
+  const payload = JSON.parse(readInput(argv[2]));
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) die(`${cmd} payload must be a JSON object`);
+  return { ...payload, type: argv[1] };
+}
+
+async function uploadVector(cfg, argv) {
+  const arg = argv[0];
+  if (arg == null) die("upload-vector requires a JSON payload");
+  const payload = JSON.parse(readInput(arg));
+  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) die("upload-vector payload must be a JSON object");
+  const { className, attrName, objectId, text, suffix } = payload;
+  if (!className || !attrName || !objectId || !text) die("upload-vector payload requires className, attrName, objectId and text");
+  const sfx = suffix || "txt";
+  const form = new FormData();
+  form.append("file", new Blob([text], { type: "text/plain" }), `${objectId}.${sfx}`);
+  form.append("content", text);
+  form.append("className", className);
+  form.append("attrName", attrName);
+  form.append("objectId", objectId);
+  form.append("suffix", sfx);
+  const res = await fetch(`${cfg.envUrl}/api/data-query/vectorResource/upload`, {
+    method: "POST",
+    body: form,
+  });
+  const resText = await res.text();
+  if (!res.ok) die(`${res.status}\n${resText}`);
+  const json = JSON.parse(resText);
+  if (json.success === false) die(json.message);
+  console.log("vector uploaded");
+}
+
 function usage() {
   die(`usage:
   ontomato.mjs list-datasources
+  ontomato.mjs test-datasource <type> <json|@file>
   ontomato.mjs use-datasource <type> <json|@file>
   ontomato.mjs get-ontomap
   ontomato.mjs set-ontomap <json|@file>
+  ontomato.mjs upload-vector <json|@file>
   ontomato.mjs ask [--lang <tag>] <question>`);
 }
 
@@ -145,12 +182,13 @@ async function main() {
     console.log(JSON.stringify(json.data, null, 2));
     return;
   }
+  if (cmd === "test-datasource") {
+    const json = await requestJson(cfg, "POST", "/businessConfig/testDataAdapter", datasourceBody(cmd, argv));
+    console.log(JSON.stringify(json.data, null, 2));
+    return;
+  }
   if (cmd === "use-datasource") {
-    if (argv[1] == null) die("use-datasource requires a datasource type");
-    if (argv[2] == null) die("use-datasource requires a JSON payload");
-    const payload = JSON.parse(readInput(argv[2]));
-    if (payload === null || typeof payload !== "object" || Array.isArray(payload)) die("use-datasource payload must be a JSON object");
-    await requestJson(cfg, "POST", "/businessConfig/useDataAdapter", { ...payload, type: argv[1] });
+    await requestJson(cfg, "POST", "/businessConfig/useDataAdapter", datasourceBody(cmd, argv));
     console.log("datasource set");
     return;
   }
@@ -163,6 +201,10 @@ async function main() {
     if (argv[1] == null) die("set-ontomap requires a JSON payload");
     await requestJson(cfg, "POST", "/admin/setSchema", JSON.parse(readInput(argv[1])));
     console.log("ontomap saved");
+    return;
+  }
+  if (cmd === "upload-vector") {
+    await uploadVector(cfg, argv.slice(1));
     return;
   }
   if (cmd === "ask") {

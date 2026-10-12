@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,16 +22,22 @@ import io.ontomato.dataengine.config.AgentConfig;
 import io.ontomato.dataengine.config.AgentRole;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.BusinessConfig.EmbeddingModelProperties;
+import io.ontomato.dataengine.config.ControllerConst;
 import io.ontomato.dataengine.config.ModelConfig;
 import io.ontomato.dataengine.config.ModelResolver;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.config.CustomRequestParameters;
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterConnection;
+import io.ontomato.dataengine.dataAdapter.DataAdapterConnectionTester;
 import io.ontomato.dataengine.dataAdapter.DataAdapterProvider;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.service.BusinessConfigService;
+import io.ontomato.dataengine.service.LangService;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
 import io.ontomato.dataengine.service.ai.MultiThreadAIChatService;
+import io.ontomato.dataengine.service.vector.VectorRebuildService;
+import io.ontomato.dataengine.service.vector.VectorRebuildStatus;
 import io.ontomato.dataengine.util.SystemUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +54,12 @@ public class BusinessConfigController {
 	
 	@Autowired
 	private EmbeddingService embeddingService;
+
+	@Autowired
+	private LangService langService;
+
+	@Autowired
+	private VectorRebuildService vectorRebuildService;
 	
 	@Autowired
 	private DataAdapterRegistry dataAdapterRegistry;
@@ -127,6 +140,9 @@ public class BusinessConfigController {
 
 			BusinessConfig stored = businessConfigService.get(user.getDomainId());
 			String existingSkillDir = stored.getAgents().get(AgentRole.CODING).getSkilldir();
+			// The first model saved into an empty library also fills every empty role reference, so a first
+			// setup needs no separate role step; a batch from empty, a second model or later edits assign nothing.
+			String firstModelName = stored.getModels().isEmpty() && models.size() == 1 ? models.get(0).getName() : null;
 
 			BusinessConfig candidate = new BusinessConfig();
 			BeanUtils.copyProperties(stored, candidate);
@@ -144,6 +160,9 @@ public class BusinessConfigController {
 					if (!str.isEmpty()) {
 						modelRef = str;
 					}
+				}
+				if (modelRef == null) {
+					modelRef = firstModelName;
 				}
 				AgentConfig agent = new AgentConfig();
 				agent.setModel(modelRef);
@@ -199,6 +218,10 @@ public class BusinessConfigController {
     	JSONObject ret = new JSONObject();
     	try {
     		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input.getJSONObject("modelConfig")), EmbeddingModelProperties.class);
+    		if (embeddingModelProperties == null || embeddingModelProperties.getDimensions() == null
+    				|| embeddingModelProperties.getDimensions() <= 0) {
+    			throw new IllegalArgumentException("modelConfig.dimensions must be a positive integer");
+    		}
     		embeddingModelProperties.setLogRequests(true);
     		embeddingModelProperties.setLogResponses(true);
     		String userContent = input.getString("userContent");
@@ -218,12 +241,20 @@ public class BusinessConfigController {
 	
 	@PostMapping("/businessConfig/saveEmbeddingModel")
     @ResponseBody
-    public JSONObject saveEmbeddingModel(@RequestBody JSONObject input) {
+    public JSONObject saveEmbeddingModel(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject input) {
     	JSONObject ret = new JSONObject();
     	try {
     		User user = SystemUtils.getCurUser();
-    		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input), EmbeddingModelProperties.class);
     		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
+    		if (vectorRebuildService.isRunning(user.getDomainId())) {
+    			throw new IllegalStateException(
+    					langService.get(lang, "Vector.saveRefusedWhileRebuilding"));
+    		}
+    		EmbeddingModelProperties embeddingModelProperties = JSONObject.parseObject(JSON.toJSONString(input), EmbeddingModelProperties.class);
+    		if (embeddingModelProperties == null || embeddingModelProperties.getDimensions() == null
+    				|| embeddingModelProperties.getDimensions() <= 0) {
+    			throw new IllegalArgumentException("dimensions must be a positive integer");
+    		}
     		EmbeddingModelProperties oldEmbeddingModelProperties = businessConfig.getEmbeddingModelProperties();
 			// In getConfig, embeddingModelProperties:null means not configured; in that case create the existing object before writing.
 			if (oldEmbeddingModelProperties == null) {
@@ -233,9 +264,43 @@ public class BusinessConfigController {
     		oldEmbeddingModelProperties.setBaseUrl(embeddingModelProperties.getBaseUrl());
     		oldEmbeddingModelProperties.setApiKey(embeddingModelProperties.getApiKey());
     		oldEmbeddingModelProperties.setModelName(embeddingModelProperties.getModelName());
+    		oldEmbeddingModelProperties.setDimensions(embeddingModelProperties.getDimensions());
     		oldEmbeddingModelProperties.setTimeout(embeddingModelProperties.getTimeout());
     		oldEmbeddingModelProperties.setCustomHeaders(embeddingModelProperties.getCustomHeaders());
     		businessConfigService.set(businessConfig, user.getDomainId());
+    		ret.put("success", true);
+    	} catch (Exception e) {
+    		log.error(e.getMessage(), e);
+    		ret.put("success", false);
+    		ret.put("message", e.getMessage());
+    	}
+		return ret;
+	}
+
+	@GetMapping("/businessConfig/vectorRebuildStatus")
+    @ResponseBody
+    public JSONObject vectorRebuildStatus() {
+    	JSONObject ret = new JSONObject();
+    	try {
+    		User user = SystemUtils.getCurUser();
+    		VectorRebuildStatus status = vectorRebuildService.status(user.getDomainId());
+    		ret.put("data", status);
+    		ret.put("success", true);
+    	} catch (Exception e) {
+    		log.error(e.getMessage(), e);
+    		ret.put("success", false);
+    		ret.put("message", e.getMessage());
+    	}
+		return ret;
+	}
+
+	@PostMapping("/businessConfig/rebuildVectors")
+    @ResponseBody
+    public JSONObject rebuildVectors(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang) {
+    	JSONObject ret = new JSONObject();
+    	try {
+    		User user = SystemUtils.getCurUser();
+    		vectorRebuildService.start(user.getDomainId(), lang);
     		ret.put("success", true);
     	} catch (Exception e) {
     		log.error(e.getMessage(), e);
@@ -396,7 +461,8 @@ public class BusinessConfigController {
 	@GetMapping("/businessConfig/dataAdapters")
     @ResponseBody
     public JSONObject dataAdapters() {
-    	JSONArray data = new JSONArray();
+		User user = SystemUtils.getCurUser();
+		JSONArray adapters = new JSONArray();
     	for (DataAdapterProvider provider : dataAdapterRegistry.installed()) {
     		JSONObject item = new JSONObject();
     		item.put("type", provider.type());
@@ -404,8 +470,12 @@ public class BusinessConfigController {
     		item.put("sql", provider.sql());
     		item.put("fields", provider.connectionFields());
     		item.put("examples", provider.connectionExamples());
-    		data.add(item);
+			adapters.add(item);
     	}
+		// The current domain's adapter type without its saved connections: what non-management readers need.
+		JSONObject data = new JSONObject();
+		data.put("currentType", businessConfigService.get(user.getDomainId()).getDataAdapter());
+		data.put("adapters", adapters);
     	JSONObject ret = new JSONObject();
     	ret.put("data", data);
     	ret.put("success", true);
@@ -420,21 +490,7 @@ public class BusinessConfigController {
     		User user = SystemUtils.getCurUser();
     		DataAdapterProvider provider = dataAdapterRegistry.provider(input.getString("type"));
     		BusinessConfig businessConfig = businessConfigService.get(user.getDomainId());
-    		List<String> fields = provider.connectionFields();
-    		// An adapter without connection fields (M3) keeps no saved connection.
-    		if (!fields.isEmpty()) {
-    			DataAdapterConnection connection = new DataAdapterConnection();
-    			if (fields.contains("url")) {
-    				connection.setUrl(input.getString("url"));
-    			}
-    			if (fields.contains("user")) {
-    				connection.setUser(input.getString("user"));
-    			}
-    			if (fields.contains("password")) {
-    				connection.setPassword(input.getString("password"));
-    			}
-    			businessConfig.getDataAdapterConnections().put(provider.type(), connection);
-    		}
+    		businessConfig.getDataAdapterConnections().put(provider.type(), connectionOf(provider, input));
     		businessConfig.setDataAdapter(provider.type());
     		businessConfigService.set(businessConfig, user.getDomainId());
     		ret.put("success", true);
@@ -444,6 +500,43 @@ public class BusinessConfigController {
     		ret.put("message", e.getMessage());
     	}
 		return ret;
+	}
+
+	@PostMapping("/businessConfig/testDataAdapter")
+    @ResponseBody
+    public JSONObject testDataAdapter(@RequestBody JSONObject input) {
+    	JSONObject ret = new JSONObject();
+    	try {
+    		DataAdapterProvider provider = dataAdapterRegistry.provider(input.getString("type"));
+    		// The candidate values are tested as given; nothing saved is read or written.
+    		DataAdapter adapter = dataAdapterRegistry.createForTest(provider.type(), connectionOf(provider, input));
+    		ret.put("data", adapter.testConnection());
+    		ret.put("success", true);
+    	} catch (Exception e) {
+    		log.error(e.getMessage(), e);
+    		ret.put("success", false);
+    		ret.put("message", DataAdapterConnectionTester.failureMessage(e));
+    	}
+		return ret;
+	}
+
+	/** The request values of the fields this provider declares; undeclared fields are ignored. */
+	private static DataAdapterConnection connectionOf(DataAdapterProvider provider, JSONObject input) {
+		List<String> fields = provider.connectionFields();
+		DataAdapterConnection connection = new DataAdapterConnection();
+		if (fields.contains("url")) {
+			connection.setUrl(input.getString("url"));
+		}
+		if (fields.contains("company")) {
+			connection.setCompany(input.getString("company"));
+		}
+		if (fields.contains("user")) {
+			connection.setUser(input.getString("user"));
+		}
+		if (fields.contains("password")) {
+			connection.setPassword(input.getString("password"));
+		}
+		return connection;
 	}
 	
 	@GetMapping("/businessConfig/getConfig")
@@ -469,7 +562,7 @@ public class BusinessConfigController {
     	try {
     		User user = SystemUtils.getCurUser();
     		JSONObject data = new JSONObject();
-    		data.put("config", businessConfigService.getRuntimeWholeConfig(user.getDomainId()));
+			data.put("config", businessConfigService.getDiagnosticConfig(user.getDomainId()));
     		data.put("desc", businessConfigService.getWholeConfigDesc());
     		ret.put("data", data);
     		ret.put("success", true);

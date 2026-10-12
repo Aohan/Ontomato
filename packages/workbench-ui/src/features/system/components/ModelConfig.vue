@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { MODEL_ROLES, type ModelSettingsData } from "@ontomato/contracts/model-settings";
-import { computed, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
 import { adminApi } from "../../admin";
@@ -16,6 +16,7 @@ import {
   type EmbeddingModelConfig,
   type ModelEntry,
   type RoleModels,
+  type VectorRebuildStatus,
 } from "../types";
 
 // Model configuration page: saved where edited. The page holds the saved model list and role references (from the last load
@@ -76,7 +77,14 @@ async function saveSettings(models: ModelEntry[], agents: RoleModels): Promise<b
 }
 
 // Model add/edit: saved with the saved roles, so an unsaved role draft is neither submitted nor lost.
-const saveModels = (models: ModelEntry[]) => saveSettings(models, savedRoles.value);
+// The first model of an empty library is assigned to every role by the backend in that same save; with no model
+// before it no role draft could exist, so the draft takes the saved roles and the role card shows them as saved.
+async function saveModels(models: ModelEntry[]): Promise<boolean> {
+  const firstModel = savedModels.value.length === 0;
+  const saved = await saveSettings(models, savedRoles.value);
+  if (saved && firstModel) roleDraft.value = { ...savedRoles.value };
+  return saved;
+}
 
 async function saveRoles() {
   if (await saveSettings(savedModels.value, roleDraft.value)) {
@@ -169,6 +177,8 @@ async function saveEmbeddingConfig(model: EmbeddingModelConfig): Promise<boolean
     await adminApi.saveEmbeddingModel(model);
     embedding.value = model;
     ElMessage.success(t("admin.embeddingSaveSuccess"));
+    // A changed URL, model name or dimensions makes the backend report that a rebuild is needed.
+    loadRebuildStatus();
     return true;
   } catch (e: any) {
     ElMessage.error(e.message || t("admin.saveFailed"));
@@ -178,10 +188,64 @@ async function saveEmbeddingConfig(model: EmbeddingModelConfig): Promise<boolean
   }
 }
 
+// This domain's vector rebuild: the backend decides whether it is needed and runs it; the page shows its status,
+// polling while a rebuild runs and stopping when it ends or the page is left.
+const REBUILD_POLL_MS = 3000;
+const rebuildStatus = shallowRef<VectorRebuildStatus | null>(null);
+let rebuildPollTimer: ReturnType<typeof setTimeout> | undefined;
+let unmounted = false;
+
+async function loadRebuildStatus() {
+  let status: VectorRebuildStatus;
+  try {
+    status = (await adminApi.getVectorRebuildStatus()).data as VectorRebuildStatus;
+  } catch (e: any) {
+    // A failed read stops polling; the next save or rebuild reads again.
+    ElMessage.error(e.message || t("admin.loadConfigFailed"));
+    return;
+  }
+  rebuildStatus.value = status;
+  // Overlapping reads (a save or rebuild during polling) each replace the pending timer, so at most one is scheduled.
+  clearTimeout(rebuildPollTimer);
+  if (status.running && !unmounted) rebuildPollTimer = setTimeout(loadRebuildStatus, REBUILD_POLL_MS);
+}
+
+async function rebuildVectors() {
+  const confirmed = await ElMessageBox.confirm(t("admin.vectorRebuildConfirm"), t("admin.rebuildVectors"), {
+    type: "warning",
+    confirmButtonText: t("admin.rebuildVectors"),
+    cancelButtonText: t("common.cancel"),
+  }).then(
+    () => true,
+    () => false
+  );
+  if (!confirmed) return;
+  try {
+    await adminApi.rebuildVectors();
+  } catch (e: any) {
+    ElMessage.error(e.message || t("admin.operationFailed"));
+  }
+  // Read again either way: a started rebuild shows its progress, and a rejection means the shown status was stale.
+  await loadRebuildStatus();
+}
+
+onBeforeUnmount(() => {
+  unmounted = true;
+  clearTimeout(rebuildPollTimer);
+});
+
+// The test runs on the config handed over by the card: the saved one, or the dialog draft before it is saved.
+const testEmbeddingTarget = shallowRef<EmbeddingModelConfig | null>(null);
 const testEmbeddingDialogVisible = ref(false);
 const testEmbeddingContent = ref("");
 const testEmbeddingResult = ref("");
 const testEmbeddingRunning = ref(false);
+
+function openEmbeddingTest(model: EmbeddingModelConfig) {
+  testEmbeddingTarget.value = model;
+  testEmbeddingResult.value = "";
+  testEmbeddingDialogVisible.value = true;
+}
 
 async function runEmbeddingTest() {
   if (!testEmbeddingContent.value.trim()) {
@@ -192,7 +256,7 @@ async function runEmbeddingTest() {
   testEmbeddingResult.value = "";
   try {
     const res = await adminApi.testEmbeddingModel({
-      modelConfig: embedding.value,
+      modelConfig: testEmbeddingTarget.value!,
       userContent: testEmbeddingContent.value,
     });
     testEmbeddingResult.value = JSON.stringify(res, null, 2);
@@ -206,6 +270,7 @@ async function runEmbeddingTest() {
 onMounted(() => {
   loadSettings();
   loadEmbedding();
+  loadRebuildStatus();
 });
 </script>
 
@@ -241,8 +306,10 @@ onMounted(() => {
       :saving="savingEmbedding"
       :load-error="embeddingLoadError"
       :save="saveEmbeddingConfig"
-      @test="testEmbeddingDialogVisible = true"
+      :rebuild-status="rebuildStatus"
+      @test="openEmbeddingTest"
       @retry="loadEmbedding"
+      @rebuild="rebuildVectors"
     />
 
     <TestResultDialog

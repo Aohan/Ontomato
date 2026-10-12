@@ -1,5 +1,10 @@
 import { mount, type DOMWrapper, type VueWrapper } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { datasetPlacement } from "@ontomato/contracts/query-execution";
+
+// Downloads are asserted by the rows each action hands over, not by a browser file save.
+vi.mock("../utils/downloadUtils", () => ({ downloadCsvFromData: vi.fn(), downloadDsl: vi.fn() }));
+import { downloadCsvFromData } from "../utils/downloadUtils";
 
 import QueryExecutionView from "../components/QueryExecutionView.vue";
 import MessageContent from "../components/MessageContent/index.vue";
@@ -9,12 +14,12 @@ import type { QueryExecutionFacts } from "../../../types/chat";
 const i18n = workbenchI18n();
 
 /**
- * Blueprint scenario: a single query's result is presented only by the body's tables — the dataset
- * name, row count, and data/DSL download aggregate onto the corresponding table, and the DSL view,
- * post-calculation program, and field lineage are details expanded on demand for the corresponding
- * result; real results without a body table are still presented as result entries. This mounts the
- * real components and asserts the actual rendered output and interactions with a real i18n
- * instance, rather than grepping component source code.
+ * Blueprint scenario: a single query's result is presented by the body — the row count and data/DSL
+ * download sit where the body places each dataset's id, and the DSL view, post-calculation program,
+ * and field lineage are details expanded on demand for that result; datasets the body does not place
+ * (saved before dataset ids) are listed after the body with their names. This mounts the real
+ * components and asserts the actual rendered output and interactions with a real i18n instance,
+ * rather than grepping component source code.
  */
 
 const global = {
@@ -46,10 +51,13 @@ async function clickButton(wrapper: VueWrapper | DOMWrapper<Element>, text: stri
 const buttonLabels = (wrapper: VueWrapper | DOMWrapper<Element>) =>
   wrapper.findAll("button").map((item) => item.text());
 
+const placed = ".message-content .result-dataset";
+const unplaced = ".unplaced-results .result-dataset";
+
 /**
- * A programmatic two-level decomposition of two sub-questions: the body has one table each, and the
- * code and lineage correspond by dataset index. abcSubQuestions includes one extra failed
- * sub-question to prove the pairing is not guessed blindly from the sub-question array position.
+ * A programmatic two-level decomposition of two sub-questions: the body places each dataset after
+ * its table, and the code and lineage correspond by dataset index. abcSubQuestions includes one
+ * extra failed sub-question to prove the pairing is not guessed from the sub-question array position.
  */
 const MULTI: QueryExecutionFacts = {
   fullContent: [
@@ -61,19 +69,25 @@ const MULTI: QueryExecutionFacts = {
     "| --- | --- |",
     "| Renhe Town | 137 |",
     "",
+    datasetPlacement("ds-stat"),
+    "",
     "### Town list",
     "",
     "| Town | Name |",
     "| --- | --- |",
     "| Renhe Town | A |",
+    "",
+    datasetPlacement("ds-list"),
   ].join("\n"),
   datasets: [
     {
+      id: "ds-stat",
       subQuestion: "Construction sites by town",
       data: [{ Town: "Renhe Town", "Site Count": 137 }],
       dsl: { problem: "stat" },
     },
     {
+      id: "ds-list",
       subQuestion: "Town list",
       data: [{ Town: "Renhe Town", Name: "A" }],
       dsl: { problem: "list" },
@@ -97,22 +111,31 @@ const render = (facts: QueryExecutionFacts) =>
   mount(QueryExecutionView, { props: { facts }, global });
 
 describe("execution display view renders by facts", () => {
-  it("removes the standalone data preview and ABC split blocks, presenting results only via body tables", () => {
+  it("removes the standalone data preview and ABC split blocks, presenting results where the body places them", () => {
     const w = render(MULTI);
 
     expect(w.find(".dataset-detail").exists()).toBe(false);
     expect(w.find(".abc-detail").exists()).toBe(false);
-    // Each of the two datasets attaches to its body table, with no redundant duplicate list.
-    expect(w.findAll(".table-section .result-dataset")).toHaveLength(2);
-    expect(w.findAll(".unattached-results .result-dataset")).toHaveLength(0);
+    expect(w.findAll(placed)).toHaveLength(2);
+    expect(w.findAll(unplaced)).toHaveLength(0);
   });
 
-  it("aggregates the real name and row count on the body tables", () => {
-    const blocks = render(MULTI).findAll(".result-dataset");
+  it("shows only actions where the body places a dataset, the name staying in the body", () => {
+    const w = render(MULTI);
+    const blocks = w.findAll(placed);
 
-    expect(blocks[0]!.text()).toContain("Construction sites by town");
-    expect(blocks[0]!.text()).toContain(t("analysis.rowCountHint", { n: 1 }));
-    expect(blocks[1]!.text()).toContain("Town list");
+    expect(blocks.map((block) => block.find(".result-dataset-title").exists())).toEqual([
+      false,
+      false,
+    ]);
+    expect(blocks.map((block) => block.find(".result-dataset-head").exists())).toEqual([
+      false,
+      false,
+    ]);
+    expect(buttonLabels(blocks[0]!)).toContain(t("chat.downloadData"));
+    // The sub-question name appears once: in the body heading, not again in the actions.
+    expect(w.text().split("Construction sites by town")).toHaveLength(2);
+    expect(w.html()).not.toContain("query-dataset:");
   });
 
   it("collapses details by default and only offers DSL view, code and lineage after expanding on demand", async () => {
@@ -152,75 +175,131 @@ describe("execution display view renders by facts", () => {
     ).toContain(`${t("common.lineage")} - Town list`);
   });
 
-  it("maps results to each table via the DSL-style sub-question description", () => {
+  it("keeps each placement with its own dataset when subgraphs split the body into segments", async () => {
+    const subgraph = ["```data-agent-subgraph", '{"subgraph":{"nodes":[]}}', "```"];
     const w = render({
       fullContent: [
-        "For <strong>«Construction sites by town»</strong> the results are as follows:",
-        "",
-        "| Town | Site Count |",
-        "| --- | --- |",
-        "| Renhe Town | 137 |",
+        ...["### Dataset A", "", "| a |", "| --- |", "| 1 |", "", datasetPlacement("ds-a"), ""],
+        ...subgraph,
+        ...["", "### Dataset B", "", "| b |", "| --- |", "| 2 |", "", datasetPlacement("ds-b"), ""],
+        ...subgraph,
+        ...["", "### Dataset C", "", "| c |", "| --- |", "| 3 |", "", datasetPlacement("ds-c")],
       ].join("\n"),
       datasets: [
-        {
-          subQuestion: "Construction sites by town",
-          data: [{ Town: "Renhe Town" }],
-          dsl: { problem: "stat" },
-        },
+        { id: "ds-a", subQuestion: "Dataset A", data: [{ a: 1 }], dsl: { problem: "A" } },
+        { id: "ds-b", subQuestion: "Dataset B", data: [{ b: 2 }], dsl: { problem: "B" } },
+        { id: "ds-c", subQuestion: "Dataset C", data: [{ c: 3 }], dsl: { problem: "C" } },
       ],
     });
 
-    const block = w.find(".table-section .result-dataset");
-    expect(block.exists()).toBe(true);
-    expect(block.text()).toContain("Construction sites by town");
-    expect(buttonLabels(block)).toContain(t("chat.downloadDsl"));
+    const blocks = w.findAll(placed);
+    expect(blocks).toHaveLength(3);
+    for (const [index, name] of ["A", "B", "C"].entries()) {
+      await clickButton(blocks[index]!, t("common.detail"));
+      await clickButton(blocks[index]!, t("common.viewDsl"));
+      expect(blocks[index]!.find(".dsl-pre").text()).toContain(name);
+    }
   });
 
-  it("still maps each segment's table to its own dataset when subgraphs split the body into segments", async () => {
+  it("presents three results of the real answer's shape in order, conclusion after them, conclusion and folded tables without actions", async () => {
+    const row = (count: number, keys: string[]) =>
+      Array.from({ length: count }, (_, index) =>
+        Object.fromEntries(keys.map((key) => [key, `${key}-${index}`]))
+      );
+    const section = (name: string, id: string) =>
+      [
+        `Based on the steps above, the data results for <strong>"${name}"</strong> are as follows:`,
+        "",
+        "| Entity | Value |",
+        "| --- | --- |",
+        "| e-0 | 1 |",
+        "",
+        "<details><summary>All rows</summary>",
+        "",
+        "| Entity | Value |",
+        "| --- | --- |",
+        "| e-1 | 2 |",
+        "</details>",
+        "",
+        datasetPlacement(id),
+        "",
+        "---",
+        "",
+      ].join("\n");
     const w = render({
       fullContent: [
-        "### Dataset A",
+        section("Revenue by entity", "ds-1"),
+        section("Cash flow by entity", "ds-2"),
+        section("Entities with growth", "ds-3"),
+        '📌 <strong class="ai-conclusion">Conclusion</strong>: 41 entities.',
         "",
-        "| a |",
-        "| --- |",
-        "| 1 |",
-        "",
-        "```data-agent-subgraph",
-        '{"subgraph":{"nodes":[]}}',
-        "```",
-        "",
-        "### Dataset B",
-        "",
-        "| b |",
-        "| --- |",
-        "| 2 |",
-        "",
-        "```data-agent-subgraph",
-        '{"subgraph":{"nodes":[]}}',
-        "```",
-        "",
-        "### Dataset C",
-        "",
-        "| c |",
-        "| --- |",
-        "| 3 |",
+        "| Summary | Count |",
+        "| --- | --- |",
+        "| entities | 41 |",
       ].join("\n"),
       datasets: [
-        { subQuestion: "Dataset A", data: [{ a: 1 }], dsl: { problem: "A" } },
-        { subQuestion: "Dataset B", data: [{ b: 2 }], dsl: { problem: "B" } },
-        { subQuestion: "Dataset C", data: [{ c: 3 }], dsl: { problem: "C" } },
+        { id: "ds-1", subQuestion: "Revenue by entity", data: row(6380, ["period", "org_code"]) },
+        { id: "ds-2", subQuestion: "Cash flow by entity", data: row(6380, ["period", "org_code"]) },
+        { id: "ds-3", subQuestion: "Entities with growth", data: row(41, ["org_code"]) },
       ],
     });
 
-    const blocks = w.findAll(".table-section .result-dataset");
-    expect(blocks.map((block) => block.text())).toEqual([
-      expect.stringContaining("Dataset A"),
-      expect.stringContaining("Dataset B"),
-      expect.stringContaining("Dataset C"),
+    // Each placed action downloads its own dataset's rows.
+    const blocks = w.findAll(placed);
+    expect(blocks).toHaveLength(3);
+    vi.mocked(downloadCsvFromData).mockClear();
+    for (const block of blocks) await clickButton(block, t("chat.downloadData"));
+    expect(
+      vi.mocked(downloadCsvFromData).mock.calls.map(([rows, name]) => [rows.length, name])
+    ).toEqual([
+      [6380, "Revenue by entity"],
+      [6380, "Cash flow by entity"],
+      [41, "Entities with growth"],
     ]);
+    expect(w.findAll(unplaced)).toHaveLength(0);
 
-    // Each segment's table id restarts from 0; mapping by object identity avoids attaching a later table to an earlier one.
-    for (const [index, name] of ["A", "B", "C"].entries()) {
+    const html = w.html();
+    const positions = [
+      html.indexOf("Revenue by entity"),
+      html.indexOf('class="result-dataset"'),
+      html.indexOf("Cash flow by entity"),
+      html.indexOf('class="result-dataset"', html.indexOf("Cash flow by entity")),
+      html.indexOf("Entities with growth"),
+      html.indexOf('class="result-dataset"', html.indexOf("Entities with growth")),
+      html.indexOf("ai-conclusion"),
+    ];
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it("gives same-named sub-questions each their own actions and downloads", async () => {
+    const w = render({
+      fullContent: [
+        "### Sales by region",
+        "",
+        "| region |",
+        "| --- |",
+        "| east |",
+        "",
+        datasetPlacement("ds-east"),
+        "",
+        "### Sales by region",
+        "",
+        "| region |",
+        "| --- |",
+        "| west |",
+        "",
+        datasetPlacement("ds-west"),
+      ].join("\n"),
+      datasets: [
+        { id: "ds-east", subQuestion: "Sales by region", data: [{ region: "east" }], dsl: { problem: "east" } },
+        { id: "ds-west", subQuestion: "Sales by region", data: [{ region: "west" }], dsl: { problem: "west" } },
+      ],
+    });
+
+    const blocks = w.findAll(placed);
+    expect(blocks).toHaveLength(2);
+    for (const [index, name] of ["east", "west"].entries()) {
       await clickButton(blocks[index]!, t("common.detail"));
       await clickButton(blocks[index]!, t("common.viewDsl"));
       expect(blocks[index]!.find(".dsl-pre").text()).toContain(name);
@@ -257,11 +336,45 @@ describe("execution display view renders by facts", () => {
     expect(render(MULTI).find(".result-technical").exists()).toBe(false);
   });
 
+  it("closes one dataset's open details when another dataset takes its place, keeping them across body updates", async () => {
+    const body = (id: string, text = "") =>
+      `### Revenue\n\n| a |\n| --- |\n| 1 |\n\n${datasetPlacement(id)}\n\nConclusion.${text}`;
+    const dataset = (datasetId: string, problem: string) => ({
+      id: "dataset-0",
+      datasetId,
+      title: "Revenue",
+      rows: [{ a: 1 }],
+      dsl: { problem },
+      code: `${problem}-code`,
+    });
+    const w = mount(MessageContent, {
+      props: { content: body("ds-a"), resultDatasets: [dataset("ds-a", "branch-a")] },
+      global,
+    });
+    const block = () => w.find(placed);
+
+    await clickButton(block(), t("common.detail"));
+    await clickButton(block(), t("common.viewDsl"));
+    expect(block().find(".dsl-pre").text()).toContain("branch-a");
+
+    // The same dataset with more body text keeps its open details.
+    await w.setProps({ content: body("ds-a", " More.") });
+    expect(block().find(".dsl-pre").text()).toContain("branch-a");
+
+    // Another dataset in the same place: the earlier details are gone, reopening shows its own.
+    await w.setProps({ content: body("ds-b"), resultDatasets: [dataset("ds-b", "branch-b")] });
+    expect(block().find(".dsl-pre").exists()).toBe(false);
+    expect(block().find(".result-dataset-details").exists()).toBe(false);
+    await clickButton(block(), t("common.detail"));
+    await clickButton(block(), t("common.code"));
+    expect(block().find(".code-pre").text()).toContain("branch-b-code");
+  });
+
   it("does not create an empty detail entry for datasets that produced no details", () => {
     const block = render({
-      fullContent: "### Only one table\n\n| a |\n| --- |\n| 1 |",
-      datasets: [{ subQuestion: "Only one table", data: [{ a: 1 }] }],
-    }).find(".result-dataset");
+      fullContent: `### Only one table\n\n| a |\n| --- |\n| 1 |\n\n${datasetPlacement("ds-1")}`,
+      datasets: [{ id: "ds-1", subQuestion: "Only one table", data: [{ a: 1 }] }],
+    }).find(placed);
 
     expect(block.exists()).toBe(true);
     expect(buttonLabels(block)).toContain(t("chat.downloadData"));
@@ -278,46 +391,107 @@ describe("execution display view renders by facts", () => {
     const blocks = w.findAll(".result-dataset");
     expect(blocks).toHaveLength(1);
     expect(blocks[0]!.text()).toContain("Data-only result");
-    expect(blocks[0]!.text()).toContain(t("analysis.rowCountHint", { n: 1 }));
     expect(w.findComponent(MessageContent).props("content")).toBe("");
   });
 
-  it("keeps the name and details of a zero-row dataset, only losing downloadable data", () => {
-    const block = render({
-      fullContent: "No data",
-      datasets: [{ subQuestion: "Empty result", data: [], dsl: { problem: "empty" } }],
-      abcCodes: ["empty-code"],
-      abcOutKeyRefs: [[{ key: "k" }]],
-    }).find(".result-dataset");
+  it("puts zero-row and no-displayable-field results' actions right after the body's empty state", async () => {
+    const w = render({
+      fullContent: [
+        "### Empty result",
+        "",
+        "No data to display.",
+        "",
+        datasetPlacement("ds-empty"),
+        "",
+        "### Blank fields",
+        "",
+        "No data to display.",
+        "",
+        datasetPlacement("ds-blank"),
+        "",
+        "Conclusion: nothing found.",
+      ].join("\n"),
+      datasets: [
+        { id: "ds-empty", subQuestion: "Empty result", data: [], dsl: { problem: "empty" } },
+        { id: "ds-blank", subQuestion: "Blank fields", data: [{ note: "" }, { note: null }] },
+      ],
+      abcCodes: ["empty-code", "blank-code"],
+      abcOutKeyRefs: [[{ key: "k" }], [{ key: "k" }]],
+    });
 
-    expect(block.exists()).toBe(true);
-    expect(block.text()).toContain("Empty result");
-    expect(block.text()).toContain(t("analysis.rowCountHint", { n: 0 }));
-    expect(buttonLabels(block)).not.toContain(t("chat.downloadData"));
-    expect(buttonLabels(block)).toContain(t("common.detail"));
+    const [empty, blank] = w.findAll(placed);
+    expect(w.findAll(unplaced)).toHaveLength(0);
+    expect(buttonLabels(empty!)).not.toContain(t("chat.downloadData"));
+    expect(buttonLabels(empty!)).toContain(t("common.detail"));
+    // Rows the adapter could not display are still the real data, downloadable as saved.
+    vi.mocked(downloadCsvFromData).mockClear();
+    await clickButton(blank!, t("chat.downloadData"));
+    expect(vi.mocked(downloadCsvFromData)).toHaveBeenCalledWith(
+      [{ note: "" }, { note: null }],
+      "Blank fields"
+    );
+    expect(w.html().indexOf("Conclusion: nothing found.")).toBeGreaterThan(
+      w.html().lastIndexOf('class="result-dataset"')
+    );
   });
 
-  it("keeps download and details in the result entry when the body table does not match a dataset", () => {
+  it("lists datasets saved before dataset ids after the body, with their names", () => {
     const w = render({
-      fullContent: "### Unmatched title\n\n| c |\n| --- |\n| 3 |",
+      fullContent: [
+        "Based on the steps above, the data results for <strong>\"Dataset A\"</strong> are as follows:",
+        "",
+        "| a |",
+        "| --- |",
+        "| 1 |",
+        "",
+        "Conclusion: done.",
+      ].join("\n"),
       datasets: [
         { subQuestion: "Dataset A", data: [{ a: 1 }], dsl: { problem: "a" } },
-        { subQuestion: "Dataset B", data: [{ b: 2 }] },
+        { subQuestion: "Dataset B", data: [] },
       ],
     });
 
-    expect(w.findAll(".table-section .result-dataset")).toHaveLength(0);
-    expect(w.findAll(".unattached-results .result-dataset")).toHaveLength(2);
+    expect(w.findAll(placed)).toHaveLength(0);
+    const listed = w.findAll(unplaced);
+    expect(listed.map((block) => block.find(".result-dataset-title").text())).toEqual([
+      "Dataset A",
+      "Dataset B",
+    ]);
+    expect(buttonLabels(listed[0]!)).toContain(t("chat.downloadData"));
+    expect(buttonLabels(listed[0]!)).toContain(t("chat.downloadDsl"));
+  });
+
+  it("waits for a placed dataset to arrive and never binds another branch's dataset in its place", async () => {
+    const body = `### Revenue\n\n| a |\n| --- |\n| 1 |\n\n${datasetPlacement("ds-abc")}\n\nConclusion.`;
+    const w = mount(MessageContent, { props: { content: body, resultDatasets: [] }, global });
+    expect(w.findAll(".result-dataset")).toHaveLength(0);
+
+    // Datasets of a branch whose body is not shown: no binding by position, only listed after the body.
+    await w.setProps({
+      resultDatasets: [{ id: "dataset-0", datasetId: "ds-hot", title: "Hot card", rows: [{ a: 9 }] }],
+    });
+    expect(w.findAll(placed)).toHaveLength(0);
+    expect(w.findAll(unplaced)).toHaveLength(1);
+
+    await w.setProps({
+      resultDatasets: [{ id: "dataset-0", datasetId: "ds-abc", title: "Revenue", rows: [{ a: 1 }] }],
+    });
+    expect(w.findAll(placed)).toHaveLength(1);
+    expect(w.findAll(unplaced)).toHaveLength(0);
   });
 
   it("passes the table's dashboard entry to the caller with the index ordered by datasets with rows", async () => {
     const w = mount(QueryExecutionView, {
       props: {
         facts: {
-          fullContent: "### Has data\n\n| a |\n| --- |\n| 1 |",
+          fullContent: [
+            `### Zero rows\n\nNo data.\n\n${datasetPlacement("ds-zero")}`,
+            `### Has data\n\n| a |\n| --- |\n| 1 |\n\n${datasetPlacement("ds-data")}`,
+          ].join("\n\n"),
           datasets: [
-            { subQuestion: "Zero rows", data: [] },
-            { subQuestion: "Has data", data: [{ a: 1 }] },
+            { id: "ds-zero", subQuestion: "Zero rows", data: [] },
+            { id: "ds-data", subQuestion: "Has data", data: [{ a: 1 }] },
           ],
         },
         dashboardContext: { threadId: "thread-1", requestSeq: 0 },
@@ -325,7 +499,7 @@ describe("execution display view renders by facts", () => {
       global,
     });
 
-    await clickButton(w.find(".table-section .result-dataset"), t("chat.addToDashboard"));
+    await clickButton(w.findAll(placed)[1]!, t("chat.addToDashboard"));
 
     expect(w.emitted("addToDashboard")).toEqual([
       [{ threadId: "thread-1", requestSeq: 0, datasetIndex: 0, datasetTitle: "Has data" }],
@@ -356,11 +530,12 @@ describe("execution display view renders by facts", () => {
 
     expect(datasets).toHaveLength(2);
     expect(datasets[0]).toMatchObject({
+      datasetId: "ds-stat",
       title: "Construction sites by town",
       subQuestion: "Construction sites by town",
       code: "code-stat",
     });
-    expect(datasets[1]).toMatchObject({ title: "Town list", code: "code-list" });
+    expect(datasets[1]).toMatchObject({ datasetId: "ds-list", title: "Town list", code: "code-list" });
   });
 
   it("orders process first, body and result in the middle, and QC after the result", () => {

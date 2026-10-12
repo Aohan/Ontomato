@@ -18,18 +18,17 @@
 
     <modules>
         <module>packages/data-engine-core</module>
+        <module>packages/data-adapter-test-support</module>
         <module>packages/data-adapters/postgresql</module>
         <module>packages/data-adapters/mysql</module>
-        <module>packages/data-adapters/oracle</module>
         <module>packages/data-adapters/sqlserver</module>
-        <module>packages/data-adapters/db2</module>
         <module>packages/data-adapters/gaussdb</module>
         <module>packages/data-adapters/duckdb</module>
         <module>apps/data-engine</module>
     </modules>
 
     <properties>
-        <revision>4.0.0-beta.1</revision>
+        <revision>4.0.0</revision>
         <!-- spring-boot:run executes in every module selected with -am; only apps/data-engine turns it on. -->
         <spring-boot.run.skip>true</spring-boot.run.skip>
         <java.version>21</java.version>
@@ -38,6 +37,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <langchain4j.version>1.13.0</langchain4j.version>
         <langchain4j-beta.version>1.13.0-beta23</langchain4j-beta.version>
+        <!-- Overrides the Spring Boot BOM (1.21.0), whose Docker API default is rejected by Docker Engine 29. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
         <!-- Host dev Python for the spring-boot:run configuration below: the MCP/skills venv of the
              inheriting app, relative to it. This property is its only source; the Windows profile at
              the end of this file swaps in the Scripts/python.exe layout. -->
@@ -87,11 +88,6 @@
                 <version>2.2.40</version>
             </dependency>
             <dependency>
-                <groupId>mysql</groupId>
-                <artifactId>mysql-connector-java</artifactId>
-                <version>8.0.28</version>
-            </dependency>
-            <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>42.7.3</version>
@@ -102,20 +98,9 @@
                 <version>0.1.6</version>
             </dependency>
             <dependency>
-                <groupId>com.oracle.database.jdbc</groupId>
-                <artifactId>ojdbc8</artifactId>
-                <version>21.15.0.0</version>
-            </dependency>
-            <dependency>
                 <groupId>com.microsoft.sqlserver</groupId>
                 <artifactId>mssql-jdbc</artifactId>
                 <version>12.8.1.jre11</version>
-            </dependency>
-            <!-- Overrides the Spring Boot BOM (12.1.0.0) for the db2 adapter and every app that installs it. -->
-            <dependency>
-                <groupId>com.ibm.db2</groupId>
-                <artifactId>jcc</artifactId>
-                <version>11.5.9.0</version>
             </dependency>
             <dependency>
                 <groupId>org.opengauss</groupId>

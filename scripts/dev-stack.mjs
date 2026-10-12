@@ -364,7 +364,7 @@ async function waitForTcp(port, deadline) {
 function javaReady(port) {
   return new Promise((done) => {
     const request = get(
-      { host: "127.0.0.1", port, path: "/getABCTaskCountInQueue", headers: { "Accept-Language": "en" }, timeout: 3000 },
+      { host: "127.0.0.1", port, path: "/health", timeout: 3000 },
       (response) => {
         let body = "";
         response.setEncoding("utf8");
@@ -373,7 +373,7 @@ function javaReady(port) {
           if (response.statusCode !== 200) return done(false);
           try {
             const parsed = JSON.parse(body);
-            done(parsed?.success === true && Number.isInteger(parsed?.data) && parsed.data >= 0);
+            done(parsed?.success === true);
           } catch {
             done(false);
           }

@@ -36,8 +36,17 @@ function getAnalysisAgentMcpUrl(req: McpRequestLocation): string {
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "")
     .split(",")[0]
     .trim();
+  // A gateway serving this service under a path prefix forwards it as X-Forwarded-Prefix.
+  const forwardedPrefix = String(req.headers["x-forwarded-prefix"] || "")
+    .split(",")[0]
+    .trim()
+    .replace(/^\/+|\/+$/g, "");
   const apiBase = config.apiBase || "/api";
-  const mountBase = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : "";
+  const mountBase = forwardedPrefix
+    ? `/${forwardedPrefix}`
+    : apiBase.endsWith("/api")
+      ? apiBase.slice(0, -4)
+      : "";
   const path = `${mountBase}${ANALYSIS_AGENT_MCP_SUFFIX}`.replace(/\/+/g, "/");
   return host ? `${proto}://${host}${path}` : path;
 }

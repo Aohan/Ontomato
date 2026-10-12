@@ -9,7 +9,7 @@ import en from "../../../../locales/en";
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
 import type { EgressMessage } from "@ontomato/contracts/agent-egress";
 import type {
-  AnalysisTaskDetail,
+  AnalysisTask,
   AnalysisTaskRun,
 } from "@ontomato/contracts/analysis-task";
 import type {
@@ -20,9 +20,14 @@ import type {
 import type { Message, ResponseSnapshot } from "../../../../types/chat";
 import { turnDiagnosisAccessKey } from "../../../diagnosis/access";
 
+const getRunSnapshot = vi.fn();
+
 vi.mock("../../api", () => ({
   analysisAgentApi: {},
-  analysisTaskApi: { getLoopSubagentTrace: vi.fn() },
+  analysisTaskApi: {
+    getLoopSubagentTrace: vi.fn(),
+    getRunSnapshot: (...args: unknown[]) => getRunSnapshot(...args),
+  },
   analysisReportApi: {},
   streamTaskExecution: vi.fn(() => () => {}),
   streamFollowUp: vi.fn(() => () => {}),
@@ -99,7 +104,7 @@ function agent(reportDeliverableEnabled: boolean): AnalysisAgent {
   };
 }
 
-function taskFixture(patch: Partial<AnalysisTaskDetail> = {}): AnalysisTaskDetail {
+function taskFixture(patch: Partial<AnalysisTask> = {}): AnalysisTask {
   return {
     id: "task-1",
     agentId: "agent-1",
@@ -139,7 +144,7 @@ function seed(options: {
   messages: Message[];
   streamingSnapshot?: ResponseSnapshot | null;
   report?: boolean;
-  taskPatch?: Partial<AnalysisTaskDetail>;
+  taskPatch?: Partial<AnalysisTask>;
   runs?: AnalysisTaskRun[];
   runIndex?: number;
 }) {
@@ -166,13 +171,15 @@ function streamingExecution(activities: AnalysisActivity[]): ResponseSnapshot {
   };
 }
 
-function render() {
+function render(diagnosisVisible = false) {
   return mount(AnalysisChatView, {
     global: {
       plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), ElementPlus],
       stubs: { DeepAnalysisResult: true, QueryExecutionView: true },
       // The turn diagnosis entry is injected by the app; here permissions are not loaded, so the entry is hidden.
-      provide: { [turnDiagnosisAccessKey as symbol]: { prepare: () => {}, visible: () => false } },
+      provide: {
+        [turnDiagnosisAccessKey as symbol]: { prepare: () => {}, visible: () => diagnosisVisible },
+      },
     },
   });
 }
@@ -324,7 +331,7 @@ it("shows the streaming carrier text for a standard follow-up turn", () => {
   expect(wrapper.find(".typing-cursor").exists()).toBe(true);
 });
 
-// Public surface under test: the authoritative source of per-turn replies; observable result: while the task row is still on the previous turn, its answer is not carried into the unfinished new turn.
+// Public surface under test: the authoritative source of per-turn replies; observable result: a finished turn's answer is not carried into the unfinished new turn (task metadata carries no answer).
 it("keeps a finished turn's answer out of the next unfinished turn", () => {
   seed({
     messages: [
@@ -333,7 +340,6 @@ it("keeps a finished turn's answer out of the next unfinished turn", () => {
       { id: 3, role: "user", content: "question-B" },
     ],
     streamingSnapshot: streamingExecution([activity("round-B-in-progress")]),
-    taskPatch: { finalAnswer: "answer-A" },
   });
   const text = render().text();
 
@@ -368,7 +374,7 @@ it("does not show a historical run's report body in the conversation view", () =
 });
 
 // Public surface under test: per-turn public messages and tool results; observable result: expanding does not mix turns and internal thinking fields are never read.
-it("does not leak partial report text from a cancelled run into chat", () => {
+it("does not leak partial report text from a cancelled run into chat", async () => {
   const cancelledPayload = execution([activity("pre-cancel-activity")], {
     runState: runState("cancelled", 1),
     sections: [
@@ -381,26 +387,25 @@ it("does not leak partial report text from a cancelled run into chat", () => {
       },
     ],
   });
+  // Run lists carry no replay snapshot; selecting the old run reads its own.
+  getRunSnapshot.mockResolvedValue({
+    mode: "deep-analysis",
+    status: "failed",
+    source: "history",
+    primaryText: "pre-cancel-partial-report",
+    deepAnalysis: cancelledPayload,
+  });
   seed({
     report: true,
     messages: [],
     runs: [
-      {
-        id: "run-cancelled",
-        status: "cancelled",
-        resultReport: "pre-cancel-partial-report",
-        snapshot: {
-          mode: "deep-analysis",
-          status: "failed",
-          source: "history",
-          primaryText: "pre-cancel-partial-report",
-          deepAnalysis: cancelledPayload,
-        },
-      },
+      { id: "run-cancelled", status: "cancelled", resultReport: "pre-cancel-partial-report" },
       { id: "run-current", status: "completed", resultReport: "current-report" },
     ],
-    runIndex: 0,
+    runIndex: 1,
   });
+  await useAnalysisStore().selectRun(0);
+  expect(getRunSnapshot).toHaveBeenCalledWith("task-1", "run-cancelled");
 
   const text = render().text();
   expect(text).toContain("pre-cancel-activity");
@@ -523,4 +528,17 @@ it("keeps one execution block plus standard follow-up turns for a report task", 
   expect(text).toContain("follow-up-question");
   expect(text).toContain("follow-up-answer");
   expect(text).not.toContain("report-body-ABC");
+});
+
+// The turn closes with its completion notice; the turn's diagnosis entry follows as a secondary tool.
+it("ends a completed turn with the completion notice, then this turn's diagnosis entry", () => {
+  const answer = answerMessage(2, "final-answer", "closing-activity");
+  answer.snapshot = { ...answer.snapshot!, threadId: "thread-1", requestSeq: 4 };
+  seed({ messages: [{ id: 1, role: "user", content: "question" }, answer] });
+
+  const html = render(true).html();
+  const notice = html.indexOf("completed-notice");
+  const diagnose = html.indexOf("turn-diagnose-btn");
+  expect(notice).toBeGreaterThan(-1);
+  expect(diagnose).toBeGreaterThan(notice);
 });

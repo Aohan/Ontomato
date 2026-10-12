@@ -1,23 +1,26 @@
 import type { EgressMessage } from "@ontomato/contracts/agent-egress";
-import type { AnalysisActivity } from "@ontomato/contracts/analysis-presentation";
-import type { AnalysisTaskDetail, LoopSubagentTrace } from "@ontomato/contracts/analysis-task";
+import type { AnalysisEvidenceQuestion } from "@ontomato/contracts/analysis-presentation";
+import type { AnalysisTask as ClientAnalysisTask, LoopSubagentTrace } from "@ontomato/contracts/analysis-task";
 import { toEgressMessages } from "../../../core/agent-loop/index";
-import { buildTurnKey } from "../../../logging/log-context";
-import { getQueryRunBySource } from "../../data-query/query-run-store";
+import { getQueryRunBySource, type QueryRun } from "../../data-query/query-run-store";
 import { toDisplayFact, toQueryExecutionFact } from "../../data-query/query-fact";
+import type { QueryExecutionDisplayFact } from "@ontomato/contracts/query-execution";
+import { ANALYSIS_SUB_QUESTION_SOURCE_KIND } from "../../../logging/log-context";
 import type { AnalysisTask, AnalysisLoopSubagentAudit } from "../task-types";
 import { tApp } from "../../../i18n";
 
 
-export function toClientTask(task: AnalysisTask): AnalysisTaskDetail {
+/** Task metadata exit: artifacts, run history and internal identity are read through their own APIs. */
+export function toClientTask(task: AnalysisTask): ClientAnalysisTask {
   const {
-    analysisPayload,
+    analysisPayload: _analysisPayload,
+    runHistory: _runHistory,
     token: _token,
     requestSeq: _requestSeq,
     domainId: _domainId,
     ...clientTask
   } = task;
-  return { ...clientTask, ...analysisPayload };
+  return clientTask;
 }
 
 /** On top of the base exit view, only the probing-body policy owned by the analysis business is layered. */
@@ -41,61 +44,33 @@ export function toSubagentAuditEgress(audit: AnalysisLoopSubagentAudit): LoopSub
   };
 }
 
-export async function buildTaskProvenance(task: AnalysisTask) {
-  const payload = task.analysisPayload;
-  if (!payload) return null;
-  const { requestSeq, threadId } = task;
-  const canRead = !!threadId && requestSeq !== undefined;
-  const activities = await attachQuestionExecution(payload.activities, { threadId, requestSeq });
+/**
+ * Overlays the question's query run (read by its own thread, acceptance sequence and stable ID) onto its stored
+ * execution. Without a run the stored facts stay as they are — no DSL, data, or success conclusion is ever invented.
+ */
+export function mergeQueryRunExecution(
+  question: Pick<AnalysisEvidenceQuestion, "execution" | "dataCount" | "error">,
+  run: QueryRun | null
+): QueryExecutionDisplayFact {
   return {
-    taskId: task.id,
-    taskName: task.name,
-    question: task.question || task.name,
-    status: task.status,
-    executionMode: payload.executionMode,
-    parentTurnKey: canRead ? buildTurnKey(threadId!, requestSeq!) : undefined,
-    activities,
+    ...question.execution,
+    ...(run ? toDisplayFact(toQueryExecutionFact(run)) : {}),
+    dataCount: run?.dataCount ?? question.dataCount ?? 0,
+    error: question.error || run?.error || undefined,
   };
 }
 
-/**
- * Fills in query execution facts for the questions in an activity: reads query_runs by **this turn's own** thread, acceptance sequence, and question stable identity.
- * Report snapshots and regular-session turns share this one read rule; when a record is missing the question keeps its existing facts — no DSL, data, or success conclusion is ever invented.
- */
-export async function attachQuestionExecution(
-  activities: AnalysisActivity[],
-  scope: { threadId?: string; requestSeq?: number }
-): Promise<AnalysisActivity[]> {
+export function readQuestionQueryRun(
+  scope: { threadId?: string; requestSeq?: number },
+  questionId: string
+): Promise<QueryRun | null> {
   const { threadId, requestSeq } = scope;
-  return Promise.all(
-    activities.map(async (activity) =>
-      activity.questions
-        ? {
-            ...activity,
-            questions: await Promise.all(
-              activity.questions.map(async (question) => {
-                const run =
-                  threadId && requestSeq !== undefined
-                    ? await getQueryRunBySource({
-                        threadId,
-                        requestSeq,
-                        sourceKind: "analysis_sub_question",
-                        sourceRef: question.questionId,
-                      })
-                    : null;
-                return {
-                  ...question,
-                  execution: {
-                    ...question.execution,
-                    ...(run ? toDisplayFact(toQueryExecutionFact(run)) : {}),
-                    dataCount: run?.dataCount ?? question.dataCount ?? 0,
-                    error: question.error || run?.error || undefined,
-                  },
-                };
-              })
-            ),
-          }
-        : activity
-    )
-  );
+  return threadId && requestSeq !== undefined
+    ? getQueryRunBySource({
+        threadId,
+        requestSeq,
+        sourceKind: ANALYSIS_SUB_QUESTION_SOURCE_KIND,
+        sourceRef: questionId,
+      })
+    : Promise.resolve(null);
 }

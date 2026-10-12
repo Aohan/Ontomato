@@ -148,7 +148,10 @@ describe("open-source anonymous report PDF", () => {
         markdown: buildDeepAnalysisMarkdown(reportPayload),
         renderInlineCharts: true,
       });
-      expect(mocks.getTask).toHaveBeenCalledWith("task-1", "default");
+      expect(mocks.getTask).toHaveBeenCalledWith("task-1", "default", {
+        payload: "report",
+        runs: "none",
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -194,6 +197,40 @@ describe("open-source anonymous report PDF", () => {
       downloadUrl: "https://public.example/api/analysis-tasks/task-1/report.pdf",
     });
     expect(mocks.exportMarkdownPdf).not.toHaveBeenCalled();
+  });
+
+  it("keeps a gateway path prefix in MCP and report download URLs", async () => {
+    const forwarded = {
+      "x-forwarded-proto": "https",
+      "x-forwarded-host": "gateway.example",
+      "x-forwarded-prefix": "/chat-bi-v4-demo/",
+    };
+    const listed = await callPdfTool(forwarded);
+    expect(listed).toEqual({
+      success: true,
+      downloadUrl:
+        "https://gateway.example/chat-bi-v4-demo/api/analysis-tasks/task-1/report.pdf",
+    });
+    const catalog = await (await fetch(`${base}/api/mcp/system/tools`, { headers: forwarded })).json();
+    expect(catalog.services.map((service: { mcpUrl: string }) => service.mcpUrl)).toEqual(
+      expect.arrayContaining([
+        "https://gateway.example/chat-bi-v4-demo/mcp/analysis-agents",
+        "https://gateway.example/chat-bi-v4-demo/mcp/ops-agent",
+      ])
+    );
+  });
+
+  it("lets an explicit MCP URL override win over a forwarded prefix", async () => {
+    vi.stubEnv("ANALYSIS_AGENT_MCP_URL", "https://fixed.example/base/mcp/analysis-agents");
+    try {
+      const listed = await callPdfTool({ "x-forwarded-prefix": "/chat-bi-v4-demo" });
+      expect(listed).toEqual({
+        success: true,
+        downloadUrl: "https://fixed.example/base/api/analysis-tasks/task-1/report.pdf",
+      });
+    } finally {
+      vi.stubEnv("ANALYSIS_AGENT_MCP_URL", "");
+    }
   });
 
   it("rejects an MCP URL override that does not end with the analysis-agent path", async () => {

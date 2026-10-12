@@ -1,7 +1,9 @@
 # DataRAG large runtime image: Debian base + JRE21 + Python 3.10 + third-party dependencies and platform native libraries.
-# Carries only runtime inputs. Application jars, default configuration, skills and license material stay out of this image.
-# The product entry assembles the context: lib/, mcp/mcpserver.py, requirements-py310.txt, runtime-arch.txt,
-# and bin/ containing the shared entrypoint/contract helpers and the explicitly selected product checker;
+# Carries only runtime inputs. Application jars, default configuration, skills, license material
+# and product startup files (entrypoint, sync helper, MCP service) stay out of this image:
+# those ride the app image at /app/bin and /app/mcp, and the final assembly sets the entrypoint.
+# The product entry assembles the context: lib/, requirements-py310.txt, runtime-arch.txt,
+# and bin/ containing only the pairing checkers (the explicitly selected product checker);
 # for the third-party notices under /licenses also maven-licenses.json (from the Maven export),
 # tools/third_party_notices.py and the public repository's LICENSE and NOTICE.
 ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:2559be987fd64d61badbdafd303ea58a9ccab36d6c3c08bce219e762177d2eca
@@ -33,7 +35,6 @@ RUN pip install --no-cache-dir --no-deps -i "${PIP_INDEX_URL}" -r /tmp/requireme
 # pip/setuptools are used only during the build above: at runtime python runs only calculation scripts and the MCP service (pip is unavailable).
 RUN if python -m pip --version >/dev/null 2>&1; then echo "pip still present, must be removed from runtime" >&2; exit 1; fi
 
-COPY mcp/mcpserver.py /opt/datarag/mcp/mcpserver.py
 COPY lib/ /opt/datarag/lib/
 COPY bin/ /opt/datarag/bin/
 COPY runtime-arch.txt /opt/datarag/runtime-arch
@@ -52,25 +53,23 @@ Python 3.10 interpreter and standard library: /usr/local/lib/python3.10/LICENSE.
 Eclipse Temurin 21 JRE (copied alone from the eclipse-temurin JRE image): /opt/java/openjdk/NOTICE
 and /opt/java/openjdk/legal/
 EOF
-RUN chmod 0755 /opt/datarag/bin/container-entrypoint.sh \
- && case "$PAIR_CONTRACT" in \
-      /*) ;; \
-      *) echo "PAIR_CONTRACT must be an absolute path" >&2; exit 1 ;; \
-    esac \
- && test -f "$PAIR_CONTRACT" \
- && PYTHONDONTWRITEBYTECODE=1 python "$PAIR_CONTRACT" verify-runtime /opt/datarag \
- && rm -rf /opt/datarag/bin/__pycache__
+RUN case "$PAIR_CONTRACT" in \
+       /*) ;; \
+       *) echo "PAIR_CONTRACT must be an absolute path" >&2; exit 1 ;; \
+     esac \
+  && test -f "$PAIR_CONTRACT" \
+  && PYTHONDONTWRITEBYTECODE=1 python "$PAIR_CONTRACT" verify-runtime /opt/datarag \
+  && rm -rf /opt/datarag/bin/__pycache__
 
 FROM runtime-files AS runtime
 ARG RUNTIME_COMPAT_FINGERPRINT
 RUN test -n "$RUNTIME_COMPAT_FINGERPRINT" \
- && printf '%s' "$RUNTIME_COMPAT_FINGERPRINT" > /opt/datarag/runtime-compat-fingerprint
+  && printf '%s' "$RUNTIME_COMPAT_FINGERPRINT" > /opt/datarag/runtime-compat-fingerprint
 
+# No ENTRYPOINT here: the product entrypoint rides the app image, and the final
+# assembly recipe sets ENTRYPOINT to /app/bin/container-entrypoint.sh. The
+# assembled image keeps ENTRYPOINT's CMD empty on purpose: an edition that needs
+# extra JVM arguments ships its own app entrypoint wrapper instead of relying on
+# an inherited runtime CMD (setting ENTRYPOINT in the assembly would clear it).
 WORKDIR /deploy
-ENTRYPOINT ["/opt/datarag/bin/container-entrypoint.sh"]
 CMD []
-
-# Same runtime with the JVM argument an edition's native library needs; the entrypoint
-# passes CMD to the JVM. Selected explicitly by the entry (the public edition uses runtime).
-FROM runtime AS runtime-native
-CMD ["-Djna.library.path=/opt/datarag/lib"]

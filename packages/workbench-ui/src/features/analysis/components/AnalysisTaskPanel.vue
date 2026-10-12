@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AnalysisTaskDetail as AnalysisTask } from "@ontomato/contracts/analysis-task";
+import type { AnalysisTask } from "@ontomato/contracts/analysis-task";
 
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
 
@@ -556,6 +556,41 @@ function handleDelete(e: Event, taskId: string) {
         </div>
       </template>
       <template v-else>
+        <div v-if="scheduledTasks.length" class="task-group">
+          <div class="history-list-heading">
+            <span class="group-dot scheduled history-list-marker"></span>
+            {{ t("analysis.scheduledTask") }} ({{ scheduledTasks.length }})
+          </div>
+          <div
+            v-for="task in scheduledTasks"
+            :key="task.id"
+            class="task-card history-list-item"
+            :class="{ active: currentTaskId === task.id }"
+            @click="handleSelectTask(task)"
+          >
+            <div class="task-card-row">
+              <div class="task-card-content">
+                <div class="task-title history-list-title" :title="task.name">{{ task.name }}</div>
+                <div class="task-meta history-list-meta">
+                  <Calendar :size="12" class="meta-icon" />
+                  {{
+                    task.scheduleExpression
+                      ? formatScheduleExpression(task.scheduleExpression)
+                      : t("analysis.pendingScheduling")
+                  }}
+                  <span class="task-status status-scheduled">{{ t("analysis.scheduled") }}</span>
+                </div>
+              </div>
+              <button
+                class="task-btn task-delete-btn"
+                :title="t('analysis.deleteTask')"
+                @click="(e) => handleDelete(e, task.id)"
+              >
+                <Trash2 :size="14" />
+              </button>
+            </div>
+          </div>
+        </div>
         <div v-if="runningTasks.length" class="task-group">
           <div class="history-list-heading">
             <span class="group-dot running history-list-marker"></span>
@@ -649,41 +684,6 @@ function handleDelete(e: Event, taskId: string) {
                   <Trash2 :size="14" />
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-        <div v-if="scheduledTasks.length" class="task-group">
-          <div class="history-list-heading">
-            <span class="group-dot scheduled history-list-marker"></span>
-            {{ t("analysis.scheduledTask") }} ({{ scheduledTasks.length }})
-          </div>
-          <div
-            v-for="task in scheduledTasks"
-            :key="task.id"
-            class="task-card history-list-item"
-            :class="{ active: currentTaskId === task.id }"
-            @click="handleSelectTask(task)"
-          >
-            <div class="task-card-row">
-              <div class="task-card-content">
-                <div class="task-title history-list-title" :title="task.name">{{ task.name }}</div>
-                <div class="task-meta history-list-meta">
-                  <Calendar :size="12" class="meta-icon" />
-                  {{
-                    task.scheduleExpression
-                      ? formatScheduleExpression(task.scheduleExpression)
-                      : t("analysis.pendingScheduling")
-                  }}
-                  <span class="task-status status-scheduled">{{ t("analysis.scheduled") }}</span>
-                </div>
-              </div>
-              <button
-                class="task-btn task-delete-btn"
-                :title="t('analysis.deleteTask')"
-                @click="(e) => handleDelete(e, task.id)"
-              >
-                <Trash2 :size="14" />
-              </button>
             </div>
           </div>
         </div>

@@ -10,12 +10,10 @@ import DataBrowser from "./data-browser/DataBrowser.vue";
 import VisualModeling from "./visual-modeling/VisualModeling.vue";
 import OntologyAssetCatalog from "./components/OntologyAssetCatalog.vue";
 import OntologyAssetDetail from "./components/OntologyAssetDetail.vue";
-import OntologyContentHeader from "./components/OntologyContentHeader.vue";
 import OntologyModelCatalog from "./components/OntologyModelCatalog.vue";
 import OntologyPlayground from "./components/OntologyPlayground.vue";
 import OntologyObjectCreateDialog from "./components/OntologyObjectCreateDialog.vue";
 import OntologyObjectDetail from "./components/OntologyObjectDetail.vue";
-import OntologyAttributeDetail from "./components/OntologyAttributeDetail.vue";
 import OntologyRelationDetail from "./components/OntologyRelationDetail.vue";
 import OntologyResourceSidebar from "./components/OntologyResourceSidebar.vue";
 import OntologyWorkspaceHeader from "./components/OntologyWorkspaceHeader.vue";
@@ -56,7 +54,6 @@ const resourceCounts = ref<OntologyResourceCounts>(emptyOntologyResourceCounts()
 const selectedAsset = ref<SmartAsset | null>(null);
 const isAssetCreating = ref(false);
 const selectedObjectClass = ref("");
-const selectedAttribute = ref<{ className: string; attributeName: string } | null>(null);
 const selectedRelation = ref("");
 const objectCreateVisible = ref(false);
 const browserObjectClass = ref("");
@@ -104,7 +101,6 @@ function applyRouteState() {
   const [section, first, second] = segments;
 
   selectedObjectClass.value = "";
-  selectedAttribute.value = null;
   selectedRelation.value = "";
   selectedAsset.value = null;
   isAssetCreating.value = false;
@@ -118,7 +114,6 @@ function applyRouteState() {
   if (section === "attributes") {
     activeWorkspace.value = "model";
     activeModelResource.value = "attributes";
-    if (first && second) selectedAttribute.value = { className: first, attributeName: second };
     return;
   }
   if (section === "relations") {
@@ -179,18 +174,6 @@ function editObjectType(className: string) {
   navigate(`/objects/${encodeURIComponent(className)}`);
 }
 
-function editAttribute(
-  className: string,
-  attributeName: string,
-  source: "catalog" | "object" = "catalog"
-) {
-  navigate(
-    `/attributes/${encodeURIComponent(className)}/${encodeURIComponent(attributeName)}${queryString(
-      { from: source }
-    )}`
-  );
-}
-
 function editRelation(relationship: string, source: "catalog" | "object" = "catalog") {
   navigate(`/relations/${encodeURIComponent(relationship)}${queryString({ from: source })}`);
 }
@@ -204,11 +187,6 @@ function openObjectData(className: string) {
 }
 
 function returnToModelCatalog() {
-  if (route.value.query.get("from") === "object" && selectedAttribute.value) {
-    navigate(`/objects/${encodeURIComponent(selectedAttribute.value.className)}`);
-    void loadResourceCounts();
-    return;
-  }
   if (route.value.query.get("from") === "object" && selectedRelation.value) {
     void loadOntology().then((ontology) => {
       const relation = ontology.relations.find(
@@ -222,10 +200,6 @@ function returnToModelCatalog() {
   }
   navigate(resourcePath(activeModelResource.value));
   void loadResourceCounts();
-}
-
-function editObjectAttribute(className: string, attributeName: string) {
-  editAttribute(className, attributeName, "object");
 }
 
 function editObjectRelation(relationship: string) {
@@ -306,32 +280,6 @@ async function loadResourceCounts() {
   if (tasks.status === "fulfilled") resourceCounts.value.tasks = tasks.value.length;
 }
 
-const workspaceTitle = computed(() => {
-  if (activeWorkspace.value === "browser") {
-    const objectLabel = objectLabels.value[browserObjectClass.value];
-    return {
-      title: objectLabel ? `${t("nav.dataBrowser")} / ${objectLabel}` : t("nav.dataBrowser"),
-      description: context.presentation.dataBrowserDescription(objectLabel),
-    };
-  }
-  if (activeWorkspace.value === "assets") {
-    return {
-      title: t("nav.intelligenceAssets"),
-      description: "",
-    };
-  }
-  if (activeWorkspace.value === "playground") {
-    return { title: t("nav.ontologyGraph"), description: "" };
-  }
-  if (activeWorkspace.value === "visual-modeling") {
-    return { title: t("nav.visualModeling"), description: "" };
-  }
-  if (activeWorkspace.value === "knowledge") {
-    return { title: t("nav.businessKnowledge"), description: "" };
-  }
-  return { title: t("nav.ontologyModeling"), description: "" };
-});
-
 onMounted(() => {
   void loadResourceCounts();
 });
@@ -356,20 +304,12 @@ onMounted(() => {
       />
 
       <section class="content-area">
-        <OntologyContentHeader
-          v-if="activeWorkspace === 'browser'"
-          :workspace="activeWorkspace"
-          :title="workspaceTitle.title"
-          :description="workspaceTitle.description"
-          @browse="changeWorkspace('browser')"
-        />
         <section v-if="activeWorkspace === 'model'" class="model-surface">
           <OntologyModelCatalog
-            v-if="!selectedObjectClass && !selectedAttribute && !selectedRelation"
+            v-if="!selectedObjectClass && !selectedRelation"
             :resource="activeModelResource"
             @create-object="createObjectType"
             @edit-object="editObjectType"
-            @edit-attribute="editAttribute"
             @edit-relation="editRelation"
           />
           <OntologyObjectDetail
@@ -378,16 +318,7 @@ onMounted(() => {
             @back="returnToModelCatalog"
             @updated="loadResourceCounts"
             @browse="openObjectData"
-            @attribute="editObjectAttribute"
             @relation="editObjectRelation"
-          />
-          <OntologyAttributeDetail
-            v-else-if="selectedAttribute"
-            :class-name="selectedAttribute.className"
-            :attribute-name="selectedAttribute.attributeName"
-            @back="returnToModelCatalog"
-            @updated="loadResourceCounts"
-            @object="openObjectDetail"
           />
           <OntologyRelationDetail
             v-else-if="selectedRelation"

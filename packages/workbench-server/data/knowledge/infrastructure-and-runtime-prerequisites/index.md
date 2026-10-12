@@ -23,6 +23,5 @@ Read only when symptom characteristics match; entries only provide candidate dir
 | Startup failure or `sys_` table/index `is not exist` | [System index and table initialization failure causes startup or link anomalies](system-index-and-table-init-failure-causes-startup-or-link-errors.md) |
 | Business class/field/relation names report not exist, graph missing links | [Schema/metadata inconsistency causes query anomalies](schema-metadata-mismatch-causes-query-errors.md) |
 | DSL correct, execution succeeds but no result or abnormal result | [Missing data relations or identifier inconsistency causes empty query results](missing-or-inconsistent-data-relations-cause-empty-results.md) |
-| backend log repeats starChart file not exist every second | [Missing star chart full data causes retries every second](missing-star-chart-full-data-causes-retry-every-second.md) |
 
 Execution-layer failure modes (DSL execution NPE, illegal SQL) are attached under the [Standard Query Turn](../standard-query-turn/index.md) topic.

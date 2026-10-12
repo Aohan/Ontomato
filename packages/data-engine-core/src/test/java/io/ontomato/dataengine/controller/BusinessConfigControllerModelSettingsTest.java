@@ -3,6 +3,7 @@ package io.ontomato.dataengine.controller;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -150,6 +151,92 @@ class BusinessConfigControllerModelSettingsTest {
 
         JSONObject response = controller.saveModelSettings(input);
         assertTrue(response.getBooleanValue("success"));
+    }
+
+    private static JSONObject modelInput(String name) {
+        JSONObject m = new JSONObject();
+        m.put("name", name);
+        m.put("baseUrl", "http://localhost:8000/v1");
+        m.put("apiKeys", List.of("key-" + name));
+        m.put("modelName", "api-" + name);
+        return m;
+    }
+
+    private static JSONObject saveInput(List<JSONObject> models, Map<String, String> refs) {
+        JSONObject input = new JSONObject();
+        input.put("models", new JSONArray(models));
+        JSONObject agents = new JSONObject();
+        for (String role : AgentRole.ALL) {
+            agents.put(role, refs.get(role));
+        }
+        input.put("agents", agents);
+        return input;
+    }
+
+    private void emptyLibrary() {
+        stored.getModels().clear();
+        stored.getAgents().values().forEach(agent -> agent.setModel(null));
+    }
+
+    private BusinessConfig savedConfig() {
+        ArgumentCaptor<BusinessConfig> captor = ArgumentCaptor.forClass(BusinessConfig.class);
+        verify(businessConfigService).set(captor.capture(), eq("d1"));
+        return captor.getValue();
+    }
+
+    @Test
+    void firstModelIntoAnEmptyLibraryFillsEveryEmptyRoleInTheSameSave() {
+        emptyLibrary();
+        Map<String, String> refs = new java.util.HashMap<>();
+        refs.put(AgentRole.CODING, "fresh");
+        JSONObject response = controller.saveModelSettings(saveInput(List.of(modelInput("fresh")), refs));
+
+        assertTrue(response.getBooleanValue("success"), response.toJSONString());
+        BusinessConfig saved = savedConfig();
+        for (String role : AgentRole.ALL) {
+            assertEquals("fresh", saved.getAgents().get(role).getModel(), role);
+            assertEquals("fresh", response.getJSONObject("data").getJSONObject("agents").getJSONObject(role).getString("model"));
+        }
+        assertEquals("/path/to/skills", saved.getAgents().get(AgentRole.CODING).getSkilldir());
+        assertEquals("api-fresh", saved.getModels().get(0).getModelName());
+    }
+
+    @Test
+    void firstModelDoesNotRepairAnInvalidReference() {
+        emptyLibrary();
+        JSONObject response = controller.saveModelSettings(
+                saveInput(List.of(modelInput("fresh")), Map.of(AgentRole.QUERY, "ghost")));
+
+        assertFalse(response.getBooleanValue("success"));
+        assertTrue(response.getString("message").contains("ghost"), response.getString("message"));
+        verify(businessConfigService, org.mockito.Mockito.never()).set(any(), any());
+    }
+
+    @Test
+    void severalModelsFromEmptyAndASecondModelAssignNoRole() {
+        emptyLibrary();
+        assertTrue(controller.saveModelSettings(
+                saveInput(List.of(modelInput("a"), modelInput("b")), Map.of())).getBooleanValue("success"));
+        BusinessConfig batch = savedConfig();
+        AgentRole.ALL.forEach(role -> assertNull(batch.getAgents().get(role).getModel(), role));
+
+        org.mockito.Mockito.clearInvocations(businessConfigService);
+        stored.getModels().clear();
+        stored.getModels().add(batch.getModels().get(0));
+        assertTrue(controller.saveModelSettings(
+                saveInput(List.of(modelInput("a"), modelInput("b")), Map.of(AgentRole.QUERY, "a"))).getBooleanValue("success"));
+        BusinessConfig second = savedConfig();
+        assertEquals("a", second.getAgents().get(AgentRole.QUERY).getModel());
+        assertNull(second.getAgents().get(AgentRole.GENERAL).getModel());
+    }
+
+    @Test
+    void editingOrClearingRolesInAnExistingLibraryAssignsNothing() {
+        JSONObject response = controller.saveModelSettings(saveInput(List.of(modelInput("default")), Map.of()));
+
+        assertTrue(response.getBooleanValue("success"), response.toJSONString());
+        BusinessConfig saved = savedConfig();
+        AgentRole.ALL.forEach(role -> assertNull(saved.getAgents().get(role).getModel(), role));
     }
 
     @Test

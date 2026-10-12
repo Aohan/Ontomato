@@ -710,7 +710,6 @@ onBeforeUnmount(() => {
           <div class="panel-heading">
             <div>
               <strong>{{ ot("inspector") }}</strong>
-              <small>{{ ot("inspectorDesc") }}</small>
             </div>
             <el-button
               v-if="selectedObject || selectedRelation"

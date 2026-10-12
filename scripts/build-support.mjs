@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
 
-// Callers pass the interface version. Java data-engine is 3; this file does not own a product version.
+// Callers pass the interface version. Java data-engine is 4; this file does not own a product version.
 export const COMPAT_LABEL = "io.runtime.compat-fingerprint";
 export function canonical(value) {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -54,11 +54,12 @@ export function readRevision(text) {
 export function execute(
   executable,
   args,
-  { capture = false, input, allowFailure = false } = {},
+  { capture = false, input, allowFailure = false, env } = {},
 ) {
   const result = spawnSync(executable, args, {
     encoding: "utf8",
     input,
+    env,
     maxBuffer: 32 * 1024 * 1024,
     stdio: capture
       ? ["pipe", "pipe", "pipe"]
@@ -77,12 +78,16 @@ export function execute(
 export const output = (executable, args) =>
   execute(executable, args, { capture: true }).stdout.trim();
 export const docker = (args) => execute("docker", args);
-export function inspectImage(image, platform) {
+// `docker image inspect` accepts --platform from API 1.49 and `docker save` no
+// later; older servers reject the flag, so both commands share this threshold.
+function supportsPlatformFlag() {
   const api =
     process.env.DOCKER_API_VERSION ||
     output("docker", ["version", "--format", "{{.Server.APIVersion}}"]);
-  const platformArgs =
-    Number(api.split(".")[1]) >= 49 ? ["--platform", platform] : [];
+  return Number(api.split(".")[1]) >= 49;
+}
+export function inspectImage(image, platform) {
+  const platformArgs = supportsPlatformFlag() ? ["--platform", platform] : [];
   const result = execute(
     "docker",
     ["image", "inspect", ...platformArgs, image],
@@ -212,10 +217,11 @@ export function imageLabels(component, kind, version, fp, family) {
     `${key}=${value}`,
   ]);
 }
-export async function exportImage(tags, file) {
+export async function exportImage(tags, file, platform) {
   mkdirSync(dirname(file), { recursive: true });
   const temporary = `${file}.${process.pid}.tmp`;
-  const child = spawn("docker", ["save", ...tags], {
+  const platformArgs = supportsPlatformFlag() ? ["--platform", platform] : [];
+  const child = spawn("docker", ["save", ...platformArgs, ...tags], {
     stdio: ["ignore", "pipe", "inherit"],
     shell: false,
     windowsHide: true,
