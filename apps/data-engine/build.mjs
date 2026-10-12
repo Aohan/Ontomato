@@ -4,8 +4,8 @@ import { buildJavaApp, JAVA_FLAGS, parseJavaArgs } from "../../scripts/data-engi
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(appRoot, "../..");
-// Every public adapter module is in the reactor (the root pom lists them all); this app installs postgresql, mysql, and duckdb.
-const PUBLIC_ADAPTERS = ["postgresql", "mysql", "sqlserver", "gaussdb", "duckdb"];
+// Every public adapter module is in the reactor (the root pom lists them all); this app installs postgresql, mysql, duckdb, and neo4j.
+const PUBLIC_ADAPTERS = ["postgresql", "mysql", "sqlserver", "gaussdb", "duckdb", "neo4j"];
 const HELP =
   "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=en], make data-engine-app, make pack-data-engine, or make pack-data-engine-app.\ndata-engine-app and pack-data-engine-app compare the sources with the runtime lock and never build a runtime.";
 
@@ -27,9 +27,10 @@ export const app = {
     "packages/data-adapters/postgresql",
     "packages/data-adapters/mysql",
     "packages/data-adapters/duckdb",
+    "packages/data-adapters/neo4j",
     "apps/data-engine",
   ],
-  excludeArtifactIds: "data-engine-core,data-adapter-postgresql,data-adapter-mysql,data-adapter-duckdb,data-engine-app",
+  excludeArtifactIds: "data-engine-core,data-adapter-postgresql,data-adapter-mysql,data-adapter-duckdb,data-adapter-neo4j,data-engine-app",
   contextTrees: [
     {
       dest: "ontomato",

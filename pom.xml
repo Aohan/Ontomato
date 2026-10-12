@@ -24,6 +24,7 @@
         <module>packages/data-adapters/sqlserver</module>
         <module>packages/data-adapters/gaussdb</module>
         <module>packages/data-adapters/duckdb</module>
+        <module>packages/data-adapters/neo4j</module>
         <module>apps/data-engine</module>
     </modules>
 
@@ -111,6 +112,11 @@
                 <groupId>org.duckdb</groupId>
                 <artifactId>duckdb_jdbc</artifactId>
                 <version>1.5.5.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.neo4j.driver</groupId>
+                <artifactId>neo4j-java-driver</artifactId>
+                <version>5.26.3</version>
             </dependency>
             <dependency>
                 <groupId>cn.hutool</groupId>
