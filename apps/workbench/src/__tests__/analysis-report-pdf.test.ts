@@ -202,20 +202,20 @@ describe("open-source anonymous report PDF", () => {
   it("keeps a gateway path prefix in MCP and report download URLs", async () => {
     const forwarded = {
       "x-forwarded-proto": "https",
-      "x-forwarded-host": "demo.example.com",
+      "x-forwarded-host": "gateway.example",
       "x-forwarded-prefix": "/chat-bi-v4-demo/",
     };
     const listed = await callPdfTool(forwarded);
     expect(listed).toEqual({
       success: true,
       downloadUrl:
-        "https://demo.example.com/chat-bi-v4-demo/api/analysis-tasks/task-1/report.pdf",
+        "https://gateway.example/chat-bi-v4-demo/api/analysis-tasks/task-1/report.pdf",
     });
     const catalog = await (await fetch(`${base}/api/mcp/system/tools`, { headers: forwarded })).json();
     expect(catalog.services.map((service: { mcpUrl: string }) => service.mcpUrl)).toEqual(
       expect.arrayContaining([
-        "https://demo.example.com/chat-bi-v4-demo/mcp/analysis-agents",
-        "https://demo.example.com/chat-bi-v4-demo/mcp/ops-agent",
+        "https://gateway.example/chat-bi-v4-demo/mcp/analysis-agents",
+        "https://gateway.example/chat-bi-v4-demo/mcp/ops-agent",
       ])
     );
   });

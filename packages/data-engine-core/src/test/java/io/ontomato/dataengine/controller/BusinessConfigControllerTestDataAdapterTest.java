@@ -96,12 +96,12 @@ class BusinessConfigControllerTestDataAdapterTest {
 		when(m3.adapter.testConnection()).thenReturn(data);
 
 		JSONObject ret = controller.testDataAdapter(JSON.parseObject(
-				"{\"type\":\"m3\",\"url\":\"m3.test:8080\",\"company\":\"ontomato\",\"user\":\"admin\",\"password\":\"pw\"}"));
+				"{\"type\":\"m3\",\"url\":\"m3.test:8080\",\"company\":\"acme\",\"user\":\"admin\",\"password\":\"pw\"}"));
 
 		// Design 5: M3 is tested through the same endpoint with the values on the page.
 		assertTrue(ret.getBooleanValue("success"), ret.toJSONString());
 		assertEquals("m3.test:8080", m3.lastConnection.getUrl());
-		assertEquals("ontomato", m3.lastConnection.getCompany());
+		assertEquals("acme", m3.lastConnection.getCompany());
 		assertEquals("admin", m3.lastConnection.getUser());
 		assertEquals("pw", m3.lastConnection.getPassword());
 		verify(businessConfigService, never()).set(any(), anyString());

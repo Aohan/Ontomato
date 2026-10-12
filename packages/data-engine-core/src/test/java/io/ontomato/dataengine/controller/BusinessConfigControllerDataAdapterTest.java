@@ -105,14 +105,14 @@ class BusinessConfigControllerDataAdapterTest {
 	@Test
 	void useDataAdapterSavesTheCompanyOfAnAdapterThatDeclaresIt() {
 		JSONObject ret = controller.useDataAdapter(JSON.parseObject(
-				"{\"type\":\"m3\",\"url\":\"m3.test:8080\",\"company\":\"ontomato\",\"user\":\"admin\",\"password\":\"pw\"}"));
+				"{\"type\":\"m3\",\"url\":\"m3.test:8080\",\"company\":\"acme\",\"user\":\"admin\",\"password\":\"pw\"}"));
 
 		// Design 5: M3's connection is saved per domain like any other adapter's.
 		assertTrue(ret.getBooleanValue("success"), ret.toJSONString());
 		assertEquals("m3", businessConfig.getDataAdapter());
 		DataAdapterConnection connection = businessConfig.getDataAdapterConnections().get("m3");
 		assertEquals("m3.test:8080", connection.getUrl());
-		assertEquals("ontomato", connection.getCompany());
+		assertEquals("acme", connection.getCompany());
 		assertEquals("admin", connection.getUser());
 		assertEquals("pw", connection.getPassword());
 	}

@@ -180,7 +180,7 @@ describe("the data adapter card renders from the backend list", () => {
 
   it("M3 shows its four fields with the address example and saves them; the password stays masked", async () => {
     const card = await mountCard(enterpriseAdapters, "m3", {
-      m3: { url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+      m3: { url: "m3.test:8080", company: "acme", user: "admin", password: "pw" },
     });
 
     expect(formLabels(card)).toEqual([
@@ -196,7 +196,7 @@ describe("the data adapter card renders from the backend list", () => {
     await flushPromises();
 
     expect(backend.used).toEqual([
-      { type: "m3", url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+      { type: "m3", url: "m3.test:8080", company: "acme", user: "admin", password: "pw" },
     ]);
     expect(vi.mocked(adminApi.useDataAdapter)).toHaveBeenCalledTimes(1);
   });
@@ -289,12 +289,12 @@ async function selectAdapter(card: Card, label: string) {
 describe("testing the data adapter connection", () => {
   it("M3 is tested like any adapter, with its four form values", async () => {
     const card = await mountCard(enterpriseAdapters, "m3", {
-      m3: { url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+      m3: { url: "m3.test:8080", company: "acme", user: "admin", password: "pw" },
     });
     await runTest(card);
 
     expect(backend.tested).toEqual([
-      { type: "m3", url: "m3.test:8080", company: "ontomato", user: "admin", password: "pw" },
+      { type: "m3", url: "m3.test:8080", company: "acme", user: "admin", password: "pw" },
     ]);
     expect(backend.used).toEqual([]);
   });
