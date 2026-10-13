@@ -79,11 +79,11 @@ class BusinessConfigControllerDataAdapterTest {
 		assertFalse(body.contains("db.internal"), body);
 		assertFalse(body.contains("prod-user"), body);
 		assertEquals(JSON.parseArray("["
-				+ "{\"type\":\"duckdb\",\"label\":\"DuckDB\",\"sql\":true,\"fields\":[\"url\"],"
+				+ "{\"type\":\"duckdb\",\"label\":\"DuckDB\",\"requiresJoinFields\":true,\"fields\":[\"url\"],"
 				+ "\"examples\":{\"url\":\"jdbc:duckdb:/data/example.duckdb\"}},"
-				+ "{\"type\":\"m3\",\"label\":\"M3\",\"sql\":false,\"fields\":[\"url\",\"company\",\"user\",\"password\"],"
+				+ "{\"type\":\"m3\",\"label\":\"M3\",\"requiresJoinFields\":false,\"fields\":[\"url\",\"company\",\"user\",\"password\"],"
 				+ "\"examples\":{\"url\":\"192.0.2.72:8080\"}},"
-				+ "{\"type\":\"postgresql\",\"label\":\"PostgreSQL\",\"sql\":true,\"fields\":[\"url\",\"user\",\"password\"],"
+				+ "{\"type\":\"postgresql\",\"label\":\"PostgreSQL\",\"requiresJoinFields\":true,\"fields\":[\"url\",\"user\",\"password\"],"
 				+ "\"examples\":{\"url\":\"jdbc:postgresql://host:port/db\",\"user\":\"postgres\"}}]"),
 				JSON.parseArray(JSON.toJSONString(data.get("adapters"))));
 	}

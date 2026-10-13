@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 /** Fields a data adapter connection can have; which ones each adapter needs comes from its fields. */
 export type DataAdapterField = "url" | "company" | "user" | "password";
 
@@ -5,7 +7,8 @@ export type DataAdapterField = "url" | "company" | "user" | "password";
 export interface DataAdapterInfo {
   type: string;
   label: string;
-  sql: boolean;
+  /** Whether relations name the source and target join fields (fromField/toField) the adapter joins on; false for native graph relations. */
+  requiresJoinFields: boolean;
   fields: DataAdapterField[];
   /** Input examples (only for fields that have one), declared by the adapter module. */
   examples: Partial<Record<DataAdapterField, string>>;
@@ -17,20 +20,33 @@ export interface DataAdaptersData {
   adapters: DataAdapterInfo[];
 }
 
-/** A table or view listed by a connection test. */
-export interface DataAdapterTableInfo {
-  name: string;
-  type: "TABLE" | "VIEW";
-}
+const tableSchema = z.object({ name: z.string(), type: z.enum(["TABLE", "VIEW"]) });
 
-/** `data` of a successful POST /businessConfig/testDataAdapter: what the driver reports about the tested connection. */
-export interface DataAdapterTestResult {
-  elapsedMs: number;
-  databaseProduct: string;
-  databaseVersion: string;
-  driverName: string;
-  driverVersion: string;
-  catalog: string | null;
-  schema: string | null;
-  tables: DataAdapterTableInfo[];
-}
+/**
+ * `data` of a successful POST /businessConfig/testDataAdapter, told apart by `kind`: a JDBC-style catalog report
+ * (driver, catalog/schema and tables and views), or a search engine report (cluster and the indices visible to the
+ * tested credentials). Parsed where the response is consumed, so a malformed report is a failure, not an empty catalog.
+ */
+export const dataAdapterTestResultSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("catalog"),
+    elapsedMs: z.number(),
+    databaseProduct: z.string(),
+    databaseVersion: z.string(),
+    driverName: z.string(),
+    driverVersion: z.string(),
+    catalog: z.string().nullable(),
+    schema: z.string().nullable(),
+    tables: z.array(tableSchema),
+  }),
+  z.object({
+    kind: z.literal("search"),
+    elapsedMs: z.number(),
+    databaseProduct: z.string(),
+    databaseVersion: z.string().nullable(),
+    clusterName: z.string().nullable(),
+    indices: z.array(z.string()),
+  }),
+]);
+
+export type DataAdapterTestResult = z.infer<typeof dataAdapterTestResultSchema>;

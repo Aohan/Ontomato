@@ -21,7 +21,7 @@ public class Neo4jAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
-	public boolean sql() {
+	public boolean requiresJoinFields() {
 		return false;
 	}
 

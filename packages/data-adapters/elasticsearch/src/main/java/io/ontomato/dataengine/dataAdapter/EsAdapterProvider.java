@@ -26,8 +26,8 @@ public abstract class EsAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
-	public boolean sql() {
-		return false;
+	public boolean requiresJoinFields() {
+		return true;
 	}
 
 	@Override

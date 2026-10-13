@@ -21,7 +21,7 @@ public class DuckDBAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
-	public boolean sql() {
+	public boolean requiresJoinFields() {
 		return true;
 	}
 

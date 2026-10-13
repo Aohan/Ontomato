@@ -134,35 +134,61 @@ function connection(type: string): DataAdapterConnection {
             <el-descriptions-item :label="t('common.duration')">
               {{ test.result.elapsedMs }} ms
             </el-descriptions-item>
-            <el-descriptions-item :label="t('admin.databaseProduct')">
-              {{ test.result.databaseProduct }} {{ test.result.databaseVersion }}
-            </el-descriptions-item>
-            <el-descriptions-item :label="t('admin.databaseDriver')">
-              {{ test.result.driverName }} {{ test.result.driverVersion }}
-            </el-descriptions-item>
-            <el-descriptions-item
-              v-if="test.result.catalog !== null"
-              :label="t('admin.databaseCatalog')"
-            >
-              {{ test.result.catalog }}
-            </el-descriptions-item>
-            <el-descriptions-item
-              v-if="test.result.schema !== null"
-              :label="t('admin.databaseSchema')"
-            >
-              {{ test.result.schema }}
-            </el-descriptions-item>
+            <template v-if="test.result.kind === 'catalog'">
+              <el-descriptions-item :label="t('admin.databaseProduct')">
+                {{ test.result.databaseProduct }} {{ test.result.databaseVersion }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="t('admin.databaseDriver')">
+                {{ test.result.driverName }} {{ test.result.driverVersion }}
+              </el-descriptions-item>
+              <el-descriptions-item
+                v-if="test.result.catalog !== null"
+                :label="t('admin.databaseCatalog')"
+              >
+                {{ test.result.catalog }}
+              </el-descriptions-item>
+              <el-descriptions-item
+                v-if="test.result.schema !== null"
+                :label="t('admin.databaseSchema')"
+              >
+                {{ test.result.schema }}
+              </el-descriptions-item>
+            </template>
+            <template v-else>
+              <el-descriptions-item :label="t('admin.searchEngine')">
+                {{ test.result.databaseProduct }} {{ test.result.databaseVersion }}
+              </el-descriptions-item>
+              <el-descriptions-item
+                v-if="test.result.clusterName !== null"
+                :label="t('admin.searchCluster')"
+              >
+                {{ test.result.clusterName }}
+              </el-descriptions-item>
+            </template>
           </el-descriptions>
-          <div class="adapter-test-section">
-            {{ t("admin.dataAdapterTables", { n: test.result.tables.length }) }}
-          </div>
-          <ul v-if="test.result.tables.length > 0" class="adapter-table-list">
-            <li v-for="(table, index) in test.result.tables" :key="index">
-              <span class="adapter-table-name">{{ table.name }}</span>
-              <span class="adapter-table-type">{{ table.type }}</span>
-            </li>
-          </ul>
-          <p v-else class="card-empty">{{ t("admin.dataAdapterNoTables") }}</p>
+          <template v-if="test.result.kind === 'catalog'">
+            <div class="adapter-test-section">
+              {{ t("admin.dataAdapterTables", { n: test.result.tables.length }) }}
+            </div>
+            <ul v-if="test.result.tables.length > 0" class="adapter-table-list">
+              <li v-for="(table, index) in test.result.tables" :key="index">
+                <span class="adapter-table-name">{{ table.name }}</span>
+                <span class="adapter-table-type">{{ table.type }}</span>
+              </li>
+            </ul>
+            <p v-else class="card-empty">{{ t("admin.dataAdapterNoTables") }}</p>
+          </template>
+          <template v-else>
+            <div class="adapter-test-section">
+              {{ t("admin.dataAdapterIndices", { n: test.result.indices.length }) }}
+            </div>
+            <ul v-if="test.result.indices.length > 0" class="adapter-table-list">
+              <li v-for="index in test.result.indices" :key="index">
+                <span class="adapter-table-name">{{ index }}</span>
+              </li>
+            </ul>
+            <p v-else class="card-empty">{{ t("admin.dataAdapterNoIndices") }}</p>
+          </template>
         </template>
         <el-alert
           v-else

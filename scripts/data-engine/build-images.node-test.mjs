@@ -178,7 +178,7 @@ function fixture(t) {
 const publicTree = (pub) => ({ dest: "ontomato", root: pub, paths: ["pom.xml", "mvnw", "mvnw.cmd", ".mvn", "packages/data-engine-core/pom.xml", "packages/data-engine-core/src/main", "apps/data-engine/pom.xml", "apps/data-engine/src/main"] });
 function publicApp({ pub }) {
   return {
-    repoRoot: pub, lockRoot: join(pub, "apps/data-engine"), lockExclude: LOCK, versionPom: join(pub, "pom.xml"),
+    repoRoot: pub, lockRoot: join(pub, "apps/data-engine"), versionPom: join(pub, "pom.xml"),
     sources: [{ id: "ontomato", root: pub }],
     component: "datarag-opensource", family: "java-app", interfaceVersion: 4, promptLang: "en", supportedPromptLangs: ["en"],
     reactorDir: "ontomato", appModule: "apps/data-engine", appLibModules: ["packages/data-engine-core", "apps/data-engine"], excludeArtifactIds: "data-engine-core,data-engine-app",

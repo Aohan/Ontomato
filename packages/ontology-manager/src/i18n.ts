@@ -41,6 +41,8 @@ const ontologyEn = {
   instanceGraphTypes: "Object Type Overview",
   instanceGraphPartial: "Incomplete snapshot: {failures}",
   instanceGraphRelation: "Relationship type",
+  instanceGraphRelationLabels: "Show relationship labels",
+  instanceGraphHideRelationLabels: "Hide relationship labels",
   instanceGraphAllRelations: "All relationships",
   instanceGraphFiltersPending: "Filters changed. Apply them before expanding connections.",
   instanceGraphVersionChanged: "Graph updated. Reload snapshot",

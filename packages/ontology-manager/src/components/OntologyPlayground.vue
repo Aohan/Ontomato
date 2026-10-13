@@ -290,10 +290,10 @@ async function fitGraphToContainer(target: Graph) {
   if (!width || !height) return;
   target.resize(Math.round(width), Math.round(height));
   await target.fitView({ when: "always", direction: "both" });
-  // Host-supplied fit limit (null for none): with few nodes the graph is not zoomed beyond it.
-  const { maxFitZoom } = context.presentation;
-  if (maxFitZoom !== null && target.getZoom() > maxFitZoom) {
-    await target.zoomTo(maxFitZoom, false);
+  // Keep automatic fitting at native size or below; manual zoom remains available.
+  const maxZoom = Math.min(1, context.presentation.maxFitZoom ?? 1);
+  if (target.getZoom() > maxZoom) {
+    await target.zoomTo(maxZoom, false);
   }
   await target.fitCenter();
 }

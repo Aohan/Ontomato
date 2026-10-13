@@ -18,8 +18,9 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 
 /**
- * Tests one data adapter's connection: opens it through the adapter, validates
- * it, and reports the database, the current catalog/schema and the user tables.
+ * Tests one data adapter's connection: either the adapter's JDBC probe (opens it through the adapter,
+ * validates it, and reports the database, the current catalog/schema and the user tables) or a supplied
+ * non-JDBC probe callable.
  * The whole test runs on a dedicated thread with a fixed timeout; the probe thread
  * closes every connection it opened through try-with-resources, so a late connection
  * is closed by the probe itself. No JVM-global timeout is touched.
@@ -44,13 +45,18 @@ public class DataAdapterConnectionTester {
 
 	/** @return the connection report; every failure throws with the composed driver message */
 	public JSONObject test(DataAdapter adapter) throws Exception {
+		return test(probe(adapter));
+	}
+
+	/** Runs an arbitrary probe callable within this tester's bounded timeout and execution thread. */
+	public JSONObject test(Callable<JSONObject> probe) throws Exception {
 		ExecutorService executor = Executors.newSingleThreadExecutor(task -> {
 			Thread thread = new Thread(task);
 			thread.setDaemon(true);
 			return thread;
 		});
 		try {
-			Future<JSONObject> future = executor.submit(probe(adapter));
+			Future<JSONObject> future = executor.submit(probe);
 			try {
 				return future.get(timeoutMillis, TimeUnit.MILLISECONDS);
 			} catch (TimeoutException timeout) {
@@ -90,6 +96,7 @@ public class DataAdapterConnectionTester {
 					throw new SQLException("The connection is not mapped to any database");
 				}
 				JSONObject report = new JSONObject();
+				report.put("kind", "catalog");
 				report.put("databaseProduct", meta.getDatabaseProductName());
 				report.put("databaseVersion", meta.getDatabaseProductVersion());
 				report.put("driverName", meta.getDriverName());

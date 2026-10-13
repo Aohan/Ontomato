@@ -10,6 +10,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.sql.SQLException;
 import java.util.List;
@@ -18,9 +20,13 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
@@ -123,6 +129,31 @@ class BusinessConfigControllerTestDataAdapterTest {
 		verify(businessConfigService, never()).set(any(), anyString());
 	}
 
+	@Test
+	void aSearchReportKeepsItsNullableFieldsOnTheWire() throws Exception {
+		// The shared schema types databaseVersion and clusterName as string|null, so the keys must
+		// survive JSON serialization even when the cluster reports neither.
+		JSONObject data = new JSONObject();
+		data.put("kind", "search");
+		data.put("elapsedMs", 5);
+		data.put("databaseProduct", "OpenSearch");
+		data.put("databaseVersion", null);
+		data.put("clusterName", null);
+		data.put("indices", new JSONArray());
+		when(postgresql.adapter.testConnection()).thenReturn(data);
+
+		MockMvc mvc = MockMvcBuilders.standaloneSetup(controller).build();
+		String body = mvc.perform(post("/businessConfig/testDataAdapter")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"type\":\"postgresql\",\"url\":\"http://host:9200\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+
+		assertTrue(body.contains("\"databaseVersion\":null"), body);
+		assertTrue(body.contains("\"clusterName\":null"), body);
+		assertTrue(body.contains("\"indices\":[]"), body);
+	}
+
 	/** A provider that hands out one stubbed adapter and records what it was given. */
 	static class StubProvider implements DataAdapterProvider {
 		private final String type;
@@ -147,7 +178,7 @@ class BusinessConfigControllerTestDataAdapterTest {
 		}
 
 		@Override
-		public boolean sql() {
+		public boolean requiresJoinFields() {
 			return !fields.isEmpty();
 		}
 

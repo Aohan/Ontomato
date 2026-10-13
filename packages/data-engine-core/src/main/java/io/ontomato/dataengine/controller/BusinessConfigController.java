@@ -467,7 +467,7 @@ public class BusinessConfigController {
     		JSONObject item = new JSONObject();
     		item.put("type", provider.type());
     		item.put("label", provider.label());
-    		item.put("sql", provider.sql());
+			item.put("requiresJoinFields", provider.requiresJoinFields());
     		item.put("fields", provider.connectionFields());
     		item.put("examples", provider.connectionExamples());
 			adapters.add(item);

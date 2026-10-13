@@ -52,7 +52,7 @@ export interface VectorRebuildStatus {
 /** The saved connection of one adapter (a value of the business config dataAdapterConnections). */
 export type DataAdapterConnection = Partial<Record<DataAdapterField, string>>;
 
-/** Outcome of the last connection test of the data adapter form: the driver's report, or the backend message verbatim. */
+/** Outcome of the last connection test of the data adapter form: the adapter's report, or the failure message. */
 export type DataAdapterTestOutcome =
   { ok: true; result: DataAdapterTestResult } | { ok: false; message: string };
 

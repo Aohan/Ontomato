@@ -9,7 +9,6 @@ export const app = {
   repoRoot,
   publicRoot: repoRoot,
   lockRoot: appRoot,
-  lockExclude: "apps/workbench/runtime-lock.json",
   component: "ontomato",
   // Stable runtime alias <name>:deploy-<arch> and runtime package prefix consumed by deployment.
   runtimeImageName: "node-app-runtime",

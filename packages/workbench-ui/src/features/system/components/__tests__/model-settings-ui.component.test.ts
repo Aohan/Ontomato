@@ -148,7 +148,7 @@ vi.mock("../../../admin", () => ({
           {
             type: "postgresql",
             label: "PostgreSQL",
-            sql: true,
+            requiresJoinFields: true,
             fields: ["url", "user", "password"],
             examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
           },

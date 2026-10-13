@@ -102,6 +102,7 @@ public class Neo4jAdapter implements DataAdapter {
 				}
 			}
 			JSONObject report = new JSONObject();
+			report.put("kind", "catalog");
 			report.put("databaseProduct", "Neo4j");
 			report.put("databaseVersion", "");
 			report.put("driverName", "Neo4j Bolt");

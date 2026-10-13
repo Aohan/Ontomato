@@ -82,8 +82,8 @@ A JSON body of `{success, message, data}` with `success: false` is printed and t
 
 ## Connect a datasource
 
-1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`. Prints `currentType` (the adapter this domain uses now) and `adapters`, the adapters installed in this deployment. Each entry has `type`, `label`, `sql`, `fields` (the connection fields the type needs) and `examples` (a sample value per field); saved connections are not shown.
-2. `node ontomato.mjs test-datasource <type> '<json>'` — `POST /api/data-query/businessConfig/testDataAdapter`. Same arguments and body as `use-datasource`, but nothing is saved and the domain's datasource does not change. On success it prints `elapsedMs`, `databaseProduct`, `databaseVersion`, `driverName`, `driverVersion`, `catalog`, `schema` and `tables` (`name` and `type`, `TABLE` or `VIEW`, of the schema the connection landed in). Those names are what class `name` must resolve to, because adapters paste the class name unquoted and without a schema prefix. A connection that lands in no schema (for example a PostgreSQL `currentSchema` that does not exist) fails, as does a DuckDB file that does not exist; the test does not create the file. The connection test gives up after 15 seconds.
+1. `node ontomato.mjs list-datasources` — `GET /api/data-query/businessConfig/dataAdapters`. Prints `currentType` (the adapter this domain uses now) and `adapters`, the adapters installed in this deployment. Each entry has `type`, `label`, `requiresJoinFields`, `fields` (the connection fields the type needs) and `examples` (a sample value per field); saved connections are not shown.
+2. `node ontomato.mjs test-datasource <type> '<json>'` — `POST /api/data-query/businessConfig/testDataAdapter`. Same arguments and body as `use-datasource`, but nothing is saved and the domain's datasource does not change. On success it prints the connection report told apart by `kind`. For catalog sources (`kind: "catalog"`: JDBC, Neo4j, M3), it prints `elapsedMs`, `databaseProduct`, `databaseVersion`, `driverName`, `driverVersion`, `catalog`, `schema` and `tables` (`name` and `type`, `TABLE` or `VIEW`, of the schema the connection landed in). For search engines (`kind: "search"`: `elasticsearch`, `opensearch`), it prints `elapsedMs`, `databaseProduct`, `databaseVersion`, `clusterName` and `indices` (visible, queryable open indices). For catalog sources those table names are what class `name` must resolve to; for search engines the class `name` derives the index (see the class `name` rule below). A connection that lands in no schema (for example a PostgreSQL `currentSchema` that does not exist) fails, as does a DuckDB file that does not exist; the test does not create the file. The connection test gives up after 15 seconds.
 3. `node ontomato.mjs use-datasource <type> '{"url":"jdbc:postgresql://db.example:5432/my_database?currentSchema=public","user":"app","password":"change-me"}'` — `POST /api/data-query/businessConfig/useDataAdapter`. The script merges `type` into the JSON and posts it. Send the fields listed in that type's `fields`; usually `url`, `user`, `password`.
 
 Which types are actually available depends on the deployment. `list-datasources` is authoritative.
@@ -100,6 +100,8 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | gaussdb | Scheme `jdbc:opengauss://`, e.g. `jdbc:opengauss://db.example:5432/my_database`. |
 | duckdb | The URL is a file path the backend can access, e.g. `jdbc:duckdb:/data/warehouse.duckdb`; `fields` is `url` only. |
 | neo4j | Bolt URI plus `user` and `password`, e.g. `bolt://db.example:7687`; queries run against the server's default database. |
+| elasticsearch | HTTP URL plus optional `user` and `password` for Basic authentication, e.g. `http://host:9200`. |
+| opensearch | HTTP URL plus optional `user` and `password` for Basic authentication, e.g. `https://host:9200`. Point-in-time (PIT) requires OpenSearch 2.4+. The declared object primary key must be unique and map to a sortable `keyword` field or `.keyword` subfield. |
 
 ## Ontomap
 
@@ -111,11 +113,11 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | --- | --- |
 | `datasetDesc` | Business description of the whole dataset. It is inserted into the abcHarness programmer prompt and the question-splitter prompt. Write the business meaning, units, and enumeration values in the language the model should use. |
 | `classList` | Class names. The star-chart cut uses the first name as the root class. |
-| class `name` | SQL table name. Adapters paste it unchanged and unquoted into `from` and `join`. They do not add a schema prefix and do not change case. A name matches a class only as an exact string; a leading `/` is accepted only when the stored name has none. Write the identifier the database resolves in that unquoted SQL. Put the schema in the JDBC URL, such as PostgreSQL `currentSchema`. |
+| class `name` | SQL table name, or the index name for Elasticsearch/OpenSearch. A name matches a class only as an exact string; a leading `/` is accepted only when the stored name has none. Relational adapters paste it unchanged and unquoted into `from` and `join`, add no schema prefix and change no case; put the schema in the JDBC URL, such as PostgreSQL `currentSchema`. Elasticsearch/OpenSearch derive the physical index from it: trimmed, lower-cased, each `/` and every character outside `a-z0-9_-` becomes `_`, and a leading `-`, `_`, `+` or `.` gets an `i` prefix, so an existing index is reachable only when its name already equals that derived form. |
 | class `showName` | Display label. The question-split subgraph shows this instead of the class name. It is not the SQL name and not the class description in the prompt. |
 | class `desc` | Class description in the prompt. The programmer's class list and `getSchemaByClassName` both show it. Write the business meaning, units, and enumeration values. |
 | `inStarChart` | `true` includes the class in the star chart. A relationship is kept only when both classes are `true`. Use `true`. |
-| attr `name` | SQL column name. Adapters paste it unchanged and unquoted (`alias.column`). Same exact-match rule as the class name. |
+| attr `name` | SQL column name, or document field name for Elasticsearch/OpenSearch. Relational adapters paste it unchanged and unquoted (`alias.column`); search requests use it as the document field name. Same exact-match rule as the class name. |
 | attr `showName` | Saved on the ontomap and returned by `get-ontomap`. The schema text and SQL use `name` and `desc`. |
 | attr `desc` | Field description the model reads. `getSchemaByClassName` and the question-splitter schema put it in the "field description" column. Write the business meaning, units, and enumeration values. |
 | `type` | One of `varchar`, `text`, `int`, `long`, `double`, `date`, `timestamp`, `vector`. Adapters pick the SQL type and the comparison form from this value. When set to `vector`, it corresponds to a text column in the underlying database storing a JSON array `[{"path":"...","text":"..."}]`, which is maintained by the vector upload interface and should not be hand-written; vector writes are supported only on PostgreSQL and DuckDB, while other data sources (MySQL, SQL Server, GaussDB) explicitly fail with unsupported; vector attributes cannot be used for equality or range comparisons and can only be semantically queried via DSL vector conditions. |
@@ -124,8 +126,8 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | `primaryKey` | Exactly one `true` on each class. The schema text marks it, and insert and object lookup use it as the id column. |
 | relationship key | Relationship type name. A join looks the relationship up by this key. The prompt table calls it the relationship type. |
 | `fromClass`, `toClass` | Class `name` of the two ends. |
-| `fromField` | Column `name` on `fromClass`. |
-| `toField` | Column `name` on `toClass`. The join is `fromClass.fromField = toClass.toField`. |
+| `fromField` | Column/field `name` on `fromClass`. Both relational databases and search engines (Elasticsearch / OpenSearch) require this join field. |
+| `toField` | Column/field `name` on `toClass`. The join is `fromClass.fromField = toClass.toField`. Both relational databases and search engines require this join field. |
 | relationship `desc` | Relationship description in the prompt table. Write the business meaning. |
 
 ```json

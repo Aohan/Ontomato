@@ -1,7 +1,9 @@
 package io.ontomato.dataengine.dataAdapter;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.text.SimpleDateFormat;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -85,14 +87,39 @@ public class EsAdapter implements DataAdapter {
 
 	@Override
 	public JSONObject testConnection() throws Exception {
-		JSONObject info = http().get("/", null);
-		JSONObject report = new JSONObject();
-		report.put("databaseProduct", dialect.label());
-		JSONObject version = info.getJSONObject("version");
-		report.put("databaseVersion", version == null ? null : version.getString("number"));
-		report.put("clusterName", info.getString("cluster_name"));
-		report.put("tagline", info.getString("tagline"));
-		return report;
+		return new DataAdapterConnectionTester().test(() -> {
+			long startNanos = System.nanoTime();
+			try (EsHttp probeHttp = new EsHttp(connection)) {
+				JSONObject info = probeHttp.get("/", null);
+				JSONObject version = info.getJSONObject("version");
+				String databaseVersion = version == null ? null : version.getString("number");
+				String clusterName = info.getString("cluster_name");
+
+				JSONArray catIndices = probeHttp.getArray("/_cat/indices/*", Map.of(
+						"format", "json",
+						"h", "index",
+						"expand_wildcards", "open"));
+				List<String> indices = new ArrayList<>();
+				for (int i = 0; i < catIndices.size(); i++) {
+					JSONObject item = catIndices.getJSONObject(i);
+					String indexName = item == null ? null : item.getString("index");
+					if (indexName == null || indexName.isBlank()) {
+						throw new IOException(dialect.label() + " index listing returned a row without an index name");
+					}
+					indices.add(indexName);
+				}
+				indices.sort(String::compareTo);
+
+				JSONObject report = new JSONObject();
+				report.put("kind", "search");
+				report.put("elapsedMs", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
+				report.put("databaseProduct", dialect.label());
+				report.put("databaseVersion", databaseVersion);
+				report.put("clusterName", clusterName);
+				report.put("indices", indices);
+				return report;
+			}
+		});
 	}
 
 	// ----------------------------------------------------------------------------------
@@ -779,8 +806,10 @@ public class EsAdapter implements DataAdapter {
 		try {
 			JSONArray searchAfter = null;
 			while (true) {
-				JSONArray hits = searchPage(pit, effectiveQuery, searchAfter);
-				if (hits == null || hits.isEmpty()) {
+				PageResult page = searchPage(index, pit, effectiveQuery, searchAfter);
+				pit = page.pitId();
+				JSONArray hits = page.hits();
+				if (hits.isEmpty()) {
 					break;
 				}
 				for (int i = 0; i < hits.size(); i++) {
@@ -857,8 +886,10 @@ public class EsAdapter implements DataAdapter {
 		try {
 			JSONArray searchAfter = null;
 			while (true) {
-				JSONArray hits = searchPage(pit, effectiveQuery, searchAfter);
-				if (hits == null || hits.isEmpty()) {
+				PageResult page = searchPage(index, pit, effectiveQuery, searchAfter);
+				pit = page.pitId();
+				JSONArray hits = page.hits();
+				if (hits.isEmpty()) {
 					break;
 				}
 				for (int i = 0; i < hits.size(); i++) {
@@ -1595,6 +1626,8 @@ public class EsAdapter implements DataAdapter {
 		return response.getLongValue("count");
 	}
 
+	private record PageResult(String pitId, JSONArray hits) {}
+
 	/** Every matching document's _source, capped and streamed through PIT + search_after so deep reads never use from/size. */
 	private List<JSONObject> searchAll(String index, JSONObject query, List<String> generatedMqls, long cap) throws Exception {
 		List<JSONObject> rows = new ArrayList<>();
@@ -1605,8 +1638,10 @@ public class EsAdapter implements DataAdapter {
 		try {
 			JSONArray searchAfter = null;
 			while (rows.size() < cap) {
-				JSONArray hits = searchPage(pit, query, searchAfter);
-				if (hits == null || hits.isEmpty()) {
+				PageResult page = searchPage(index, pit, query, searchAfter);
+				pit = page.pitId();
+				JSONArray hits = page.hits();
+				if (hits.isEmpty()) {
 					break;
 				}
 				for (int i = 0; i < hits.size() && rows.size() < cap; i++) {
@@ -1624,43 +1659,71 @@ public class EsAdapter implements DataAdapter {
 		return rows;
 	}
 
-	/** Open a point-in-time reader. Elasticsearch and OpenSearch expose different PIT endpoints and
-	 *  response keys, so the dialect picks the call. */
 	private String openPit(String index) throws Exception {
-		if (dialect == EsDialect.OPENSEARCH) {
-			JSONObject response = http().post("/" + index + "/_search/point_in_time", null, Map.of("keep_alive", "2m"));
-			String id = response.getString("pit_id");
-			return id != null ? id : response.getString("id");
+		JSONObject response = http().post(dialect.openPitPath(index), null, Map.of("keep_alive", "2m"));
+		String id = dialect.parsePitId(response);
+		if (id == null || id.isBlank()) {
+			throw new IOException("Failed to obtain point-in-time ID from " + dialect.label());
 		}
-		return http().post("/" + index + "/_pit", null, Map.of("keep_alive", "2m")).getString("id");
+		return id;
 	}
 
+	/** Best-effort cleanup; a PIT that cannot be closed must not fail an already successful query. */
 	private void closePit(String id) {
 		try {
-			if (dialect == EsDialect.OPENSEARCH) {
-				http().request("DELETE", "/_search/point_in_time",
-						JSON.toJSONString(new JSONObject(Map.of("pit_id", List.of(id)))), null);
-			} else {
-				http().request("DELETE", "/_pit", JSON.toJSONString(new JSONObject(Map.of("id", id))), null);
-			}
+			http().request("DELETE", dialect.closePitPath(), dialect.closePitBody(id), null);
 		} catch (Exception e) {
 			log.debug("closing PIT failed: {}", e.getMessage());
 		}
 	}
 
-	private JSONArray searchPage(String pit, JSONObject query, JSONArray searchAfter) throws Exception {
+	private PageResult searchPage(String index, String pit, JSONObject query, JSONArray searchAfter) throws Exception {
 		JSONObject body = new JSONObject();
 		body.put("size", PAGE);
 		body.put("query", query);
-		// _shard_doc is Elasticsearch's PIT tiebreaker; OpenSearch rejects it and uses _doc instead.
-		body.put("sort", JSONArray.of(new JSONObject(Map.of(
-				dialect == EsDialect.OPENSEARCH ? "_doc" : "_shard_doc", "asc"))));
+		body.put("sort", dialect.pitSort(openSearchSortField(index)));
 		if (searchAfter != null) {
 			body.put("search_after", searchAfter);
 		}
 		body.put("pit", new JSONObject(Map.of("id", pit, "keep_alive", "2m")));
 		JSONObject response = http().post("/_search", body);
-		return response.getJSONObject("hits").getJSONArray("hits");
+		// Elasticsearch may return a new pit_id per page; OpenSearch answers without one, so the
+		// current ID stays valid for the next page and for the final close.
+		String nextPit = response.getString("pit_id");
+		if (nextPit == null || nextPit.isBlank()) {
+			nextPit = pit;
+		}
+		JSONObject hitsObj = response.getJSONObject("hits");
+		if (hitsObj == null) {
+			throw new IOException(dialect.label() + " search response has no hits object: " + response);
+		}
+		JSONArray hits = hitsObj.getJSONArray("hits");
+		if (hits == null) {
+			throw new IOException(dialect.label() + " search response has no hits array: " + response);
+		}
+		return new PageResult(nextPit, hits);
+	}
+
+	/**
+	 * The field OpenSearch pages by. Elasticsearch's {@code _shard_doc} needs none; OpenSearch has no
+	 * shard-document tiebreaker before 3.3, so it sorts by the class primary key, which must be a
+	 * sortable keyword field. The class is resolved through the physical index, because EsNaming may
+	 * change the class name's case and characters.
+	 */
+	private String openSearchSortField(String index) throws Exception {
+		if (dialect != EsDialect.OPENSEARCH) {
+			return null;
+		}
+		Map<String, Object> classDef = classDefOfIndex(index);
+		if (classDef == null) {
+			throw new IOException("No object class maps to index [" + index + "]");
+		}
+		String field = exactField(index, DslUtil.getPrimaryKey(classDef));
+		if (!"keyword".equals(fieldCaps(index).get(field))) {
+			throw new IOException("The primary key field [" + field + "] of index [" + index
+					+ "] is not a sortable keyword field, so OpenSearch cannot page it");
+		}
+		return field;
 	}
 
 	// ----------------------------------------------------------------------------------
@@ -1682,6 +1745,16 @@ public class EsAdapter implements DataAdapter {
 	private Map<String, Object> classDefOf(String className) {
 		for (Map<String, Object> classDef : classDefs()) {
 			if (className.equals(classDef.get("className"))) {
+				return classDef;
+			}
+		}
+		return null;
+	}
+
+	/** The class whose physical index is `index`; compared after EsNaming normalization, not by raw class name. */
+	private Map<String, Object> classDefOfIndex(String index) {
+		for (Map<String, Object> classDef : classDefs()) {
+			if (index.equals(EsNaming.sanitize((String) classDef.get("className")))) {
 				return classDef;
 			}
 		}

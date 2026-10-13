@@ -5,6 +5,7 @@ import type { ManagerHostContext, ManagerPresentation } from "../context";
 import { englishMessages, type ManagerMessages } from "../i18n";
 import de from "element-plus/es/locale/lang/de";
 import { graphHandlers, graphRecord } from "./graph-double";
+import type { DataAdapterInfo } from "@ontomato/contracts/data-adapters";
 
 // Only the graph library internals are doubled; the root component, pages, request client and fetch calls are real code.
 vi.mock("@antv/g6", async () => ({ Graph: (await import("./graph-double")).GraphDouble }));
@@ -31,7 +32,7 @@ let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
 let dataAdapter: string;
 let instanceNodeCount: number;
-let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
+let dataAdapters: DataAdapterInfo[];
 let knowledge: Record<string, Record<string, unknown>>;
 /** Knowledge IDs whose delete returns a business failure. */
 let knowledgeDeleteFails: Set<string>;
@@ -70,7 +71,7 @@ function respond(url: string, body?: Record<string, unknown>): Response {
     classes: [{ class: "Order", instanceCount: instanceNodeCount }, { class: "Item", instanceCount: 1 }],
     relationships: [{ source: "Order", target: "Item", count: 1 }],
     overviewNodes: [{ id: "Order:1", name: "First order", class: "Order" }, { id: "Item:2", name: "Spare part", class: "Item" }],
-    overviewEdges: [{ source: "Order:1", target: "Item:2" }],
+    overviewEdges: [{ source: "Order:1", target: "Item:2", type: "has" }],
     nodeCount: instanceNodeCount, edgeCount: 1, componentCount: 1, isolatedNodeCount: 0,
     largestComponentSize: instanceNodeCount, version: "v1", generatedAt: "2026-10-10T00:00:00Z",
   } });
@@ -116,6 +117,7 @@ beforeEach(() => {
   graphRecord.dataBatches = [];
   graphRecord.layouts = [];
   graphRecord.nodeUpdates = [];
+  graphRecord.edgeUpdates = [];
   instanceNodeCount = 2;
   requests = [];
   mountedApps = [];
@@ -126,8 +128,9 @@ beforeEach(() => {
   functions = [];
   dataAdapter = "mysql";
   dataAdapters = [
-    { type: "m3", label: "M3", sql: false, fields: [] },
-    { type: "mysql", label: "MySQL", sql: true, fields: ["url", "user", "password"] },
+    { type: "m3", label: "M3", requiresJoinFields: false, fields: [], examples: {} },
+    { type: "mysql", label: "MySQL", requiresJoinFields: true, fields: ["url", "user", "password"], examples: {} },
+    { type: "elasticsearch", label: "Elasticsearch", requiresJoinFields: true, fields: ["url", "user", "password"], examples: {} },
   ];
   knowledge = {
     k1: { knowledgeID: "k1", knowledgeTitle: "Refund rule", knowledgeText: "t1", knowledgeTags: ["Business"], status: 1, knowledgeVector: [0.1] },
@@ -299,7 +302,7 @@ describe("OntologyManager root component with real pages", () => {
     (root().querySelector(".instance-candidates button") as HTMLElement).click();
     await settle();
     expect(graphRecord.focusElement).toContainEqual(["Item:2", false]);
-    expect(graphRecord.zoomTo).toContainEqual([1, false]);
+    expect(graphRecord.zoomTo.every(([zoom]) => Number(zoom) <= 1)).toBe(true);
     expect(graphRecord.states).toContainEqual([{ "Item:2": ["selected"] }, false]);
     expect(root().querySelector(".detail-title h2")?.textContent).toBe("Spare part");
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
@@ -324,6 +327,68 @@ describe("OntologyManager root component with real pages", () => {
     waiting[0].resolve(new Response());
     await settle();
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+  });
+
+  it("caps automatic focus at native size when the graph fit would enlarge one node", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    graphRecord.zoom = 3;
+    (root().querySelector(".sample-legend button") as HTMLElement).click();
+    await settle();
+    (root().querySelector(".instance-candidates button") as HTMLElement).click();
+    await settle();
+    expect(graphRecord.zoomTo).toContainEqual([1, false]);
+  });
+
+  it("toggles relation names on existing edges without hiding node labels or reloading data", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    const edge = graphRecord.dataBatches.flatMap((batch) => batch.edges || [])[0];
+    const node = graphRecord.dataBatches.flatMap((batch) => batch.nodes || [])[0];
+    const options = graphRecord.options.at(-1);
+    const toggle = root().querySelector<HTMLButtonElement>(".graph-toolbar button[aria-pressed]")!;
+    expect(options.node.style.labelText(node)).toBe("First order");
+    expect(options.edge.style.labelText(edge)).toBeTruthy();
+    requests = [];
+    toggle.click();
+    await settle();
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(options.edge.style.labelText(edge)).toBe("");
+    expect(graphRecord.edgeUpdates.at(-1)).toEqual([{ id: edge.id, style: { labelText: "" } }]);
+    expect(options.node.style.labelText(node)).toBe("First order");
+    toggle.click();
+    await settle();
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(graphRecord.edgeUpdates.at(-1)?.[0].style.labelText).toBeTruthy();
+    expect(requests).toEqual([]);
+  });
+
+  it("updates instance labels and their backgrounds when switching themes", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { host, root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    const edge = graphRecord.dataBatches.flatMap((batch) => batch.edges || [])[0];
+    const toggle = root().querySelector<HTMLButtonElement>(".graph-toolbar button[aria-pressed]")!;
+    toggle.click();
+    await settle();
+    requests = [];
+    host.theme = "dark";
+    await settle();
+    expect(graphRecord.nodeUpdates.some((updates) => Array.isArray(updates)
+      && updates.some((node) => node.style?.labelFill === "#f4f6ff"))).toBe(true);
+    expect(graphRecord.edgeUpdates.some((updates) => Array.isArray(updates)
+      && updates.some((item) => item.style?.labelFill === "#c4cce8" && item.style?.labelBackgroundFill === "#181a2e"))).toBe(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(graphRecord.options.at(-1).edge.style.labelText(edge)).toBe("");
+    expect(requests).toEqual([]);
   });
 
   it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
@@ -506,8 +571,9 @@ describe("OntologyManager root component with real pages", () => {
 
   it.each([
     ["mysql", true],
+    ["elasticsearch", true],
     ["m3", false],
-  ])("visual modeling: with current adapter %s, the backend list's sql flag decides whether relations take join fields", async (current, sql) => {
+  ])("visual modeling: with current adapter %s, the backend list's requiresJoinFields decides whether relations take join fields", async (current, requiresJoinFields) => {
     dataAdapter = current;
     mountHost({ ...base, view: "/visual-modeling?focus=object&id=Order&back=playground" });
     await settle();
@@ -515,7 +581,36 @@ describe("OntologyManager root component with real pages", () => {
 
     graphHandlers["edge:dblclick"]!({ edge: { id: "has" } });
     await settle();
-    expect(openDialog("Rel Desc").textContent?.includes("Src Field")).toBe(sql);
+    expect(openDialog("Rel Desc").textContent?.includes("Src Field")).toBe(requiresJoinFields);
+  });
+
+  it("visual modeling: a new relation on an adapter requiring join fields is not sent without them and is sent with fromField/toField", async () => {
+    dataAdapter = "elasticsearch";
+    // No existing relation, so the dialog's default Order -> Item pair is new.
+    metasFor = () => ({ success: true, data: { ...metas(["Order", "Item"]).data, relationship_rule: {} } });
+    mountHost({ ...base, view: "/visual-modeling?focus=object&id=Order&back=playground" });
+    await settle();
+    clickButton("Add Relation");
+    await settle();
+    const dialog = openDialog("Rel Desc");
+    const fill = (placeholder: string, value: string) => {
+      const input = dialog.querySelector<HTMLInputElement>(`input[placeholder='${placeholder}']`)!;
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+    };
+    fill("Rel Desc", "contains");
+    await settle();
+    clickButton("Add");
+    await settle();
+    expect(paths()).not.toContain("/admin/addRelationship");
+
+    fill("Enter Src Field", "order_id");
+    fill("Enter Tgt Field", "id");
+    await settle();
+    clickButton("Add");
+    await settle();
+    expect(requests.find((request) => request.url.endsWith("/admin/addRelationship"))?.body)
+      .toMatchObject({ relationDesc: "contains", fromField: "order_id", toField: "id" });
   });
 
   it("when only locale/theme change, the open edit dialog and its input are kept without reloading", async () => {
@@ -744,13 +839,13 @@ describe("OntologyManager root component with real pages", () => {
     expect(graph.edge.style).toMatchObject({ labelPlacement: "center", labelAutoRotate: false });
     expect(graphRecord.zoomTo).toEqual([[1, false]]);
 
-    // No limit and an empty fragment: zoom is untouched and the edge style has neither entry.
+    // The native-size cap applies even when the host does not provide a fit limit.
     mountedApps.forEach((app) => app.unmount());
     graphRecord.options = [];
     graphRecord.zoomTo = [];
     mountHost(base);
     await settle();
-    expect(graphRecord.zoomTo).toEqual([]);
+    expect(graphRecord.zoomTo).toEqual([[1, false]]);
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelPlacement");
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelAutoRotate");
 

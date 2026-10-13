@@ -203,34 +203,24 @@ test("architecture is mandatory and flags remain literal argv", () => {
   for (const args of [[], ["--arch"], ["--arch", "windows"], ["--bogus"]])
     assert.throws(() => parseOptions(args, spec));
 });
-test("source identity reads the given repo and excludes only the service lock", () =>
+test("source identity reads the given repo and excludes every runtime lock", () =>
   temporary((dir) => {
     git(dir, ["init"]);
     writeFileSync(join(dir, "keep.txt"), "a");
     git(dir, ["add", "keep.txt"]);
     git(dir, ["commit", "-m", "init"]);
-    const lock = "apps/data-engine/runtime-lock.json";
     const head = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], {
       encoding: "utf8",
     }).trim();
-    const clean = sourceIdentity(dir, lock);
+    const clean = sourceIdentity(dir);
     assert.equal(clean.dirty, false);
     assert.equal(clean.revision, head);
-    mkdirSync(join(dir, "apps/data-engine"), { recursive: true });
-    writeFileSync(join(dir, lock), "{}\n");
-    assert.equal(sourceIdentity(dir, lock).dirty, false);
-    writeFileSync(join(dir, "other.txt"), "wip");
-    assert.equal(sourceIdentity(dir, lock).dirty, true);
-  }));
-test("without a runtime lock the whole source state counts", () =>
-  temporary((dir) => {
-    git(dir, ["init"]);
-    writeFileSync(join(dir, "keep.txt"), "a");
-    git(dir, ["add", "keep.txt"]);
-    git(dir, ["commit", "-m", "init"]);
+    for (const service of ["data-engine", "workbench"]) {
+      mkdirSync(join(dir, "apps", service), { recursive: true });
+      writeFileSync(join(dir, "apps", service, "runtime-lock.json"), "{}\n");
+    }
     assert.equal(sourceIdentity(dir).dirty, false);
-    mkdirSync(join(dir, "apps/data-engine"), { recursive: true });
-    writeFileSync(join(dir, "apps/data-engine/runtime-lock.json"), "{}\n");
+    writeFileSync(join(dir, "other.txt"), "wip");
     assert.equal(sourceIdentity(dir).dirty, true);
   }));
 test("parsePythonRequirements parses pinned requirements correctly and rejects non-pinned", () => {

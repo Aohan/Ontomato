@@ -298,6 +298,7 @@ class Neo4jAdapterTest extends AbstractDataAdapterTest {
 	@Test
 	void connectionProbeReportsLabels() throws Exception {
 		JSONObject report = newAdapter().testConnection();
+		assertEquals("catalog", report.getString("kind"));
 		assertEquals("Neo4j", report.getString("databaseProduct"));
 	}
 

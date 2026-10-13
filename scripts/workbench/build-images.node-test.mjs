@@ -20,7 +20,7 @@ import { buildWorkbenchApp } from "./build-images.mjs";
 // The contract command resolves its YAML parser from this checkout's install.
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const VERSION = "9.9.9-test";
-const LOCK_EXCLUDE = "apps/workbench/runtime-lock.json";
+const LOCK = "apps/workbench/runtime-lock.json";
 const AMD64_FP = "a".repeat(64);
 const OLD_ARM64_FP = "b".repeat(64);
 
@@ -80,7 +80,6 @@ function descriptor(root, component = "ontomato", runtimeImageName = "node-app-r
     repoRoot: root,
     publicRoot: root,
     lockRoot: join(root, "apps/workbench"),
-    lockExclude: LOCK_EXCLUDE,
     component,
     runtimeImageName,
     workspaceId: "ontomato",
@@ -104,7 +103,7 @@ function enterpriseDescriptor(pub, ent) {
 
 function writeLock(dir, arm64) {
   writeFileSync(
-    join(dir, LOCK_EXCLUDE),
+    join(dir, LOCK),
     `${JSON.stringify({ schema: 3, family: "node-app", runtimes: { "linux/amd64": AMD64_FP, "linux/arm64": arm64 } }, null, 2)}\n`,
   );
 }
@@ -250,8 +249,11 @@ test("the stamp takes this version's app repo and any dirty source dirties it", 
   const app = enterpriseDescriptor(pub, ent);
   const stamp = () => buildStamp(VERSION, ent, sampleSources(app));
   assert.match(stamp(), new RegExp(`^${VERSION}-\\d{8}-\\d{6}-g${head(ent).slice(0, 12)}$`));
-  // The builder's own lock is excluded from its source and never dirties it.
-  writeFileSync(join(ent, LOCK_EXCLUDE), '{"schema":3}\n');
+  // Runtime locks never dirty the stamp: neither this builder's own lock nor the one
+  // an earlier data-engine build in the same packaging run rewrote.
+  writeFileSync(join(ent, LOCK), '{"schema":3}\n');
+  mkdirSync(join(ent, "apps/data-engine"), { recursive: true });
+  writeFileSync(join(ent, "apps/data-engine/runtime-lock.json"), '{"schema":3}\n');
   assert.doesNotMatch(stamp(), /-dirty$/);
   // A dirty public source dirties the whole stamp, not just its own source.
   writeFileSync(join(pub, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n# dirty\n");
@@ -278,7 +280,7 @@ test("an early Docker failure writes no lock", async (t) => {
   } finally {
     process.env.PATH = prior;
   }
-  assert.equal(existsSync(join(root, LOCK_EXCLUDE)), false);
+  assert.equal(existsSync(join(root, LOCK)), false);
   const context = contextDir(root, "runtime");
   for (const rel of [
     "sources/ontomato/package.json",
@@ -298,7 +300,7 @@ test("a wrong-family image fails and leaves the prior lock untouched", async (t)
   const pub = repo(t, "@ontomato/workbench");
   const ent = repo(t, "@enterprise/workbench");
   writeLock(ent, OLD_ARM64_FP);
-  const before = readFileSync(join(ent, LOCK_EXCLUDE), "utf8");
+  const before = readFileSync(join(ent, LOCK), "utf8");
   const docker = fakeDocker(t, ent);
   await withDocker({ ...docker, mode: "bad-family" }, async () => {
     await assert.rejects(
@@ -306,7 +308,7 @@ test("a wrong-family image fails and leaves the prior lock untouched", async (t)
       /identity mismatch/,
     );
   });
-  assert.equal(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"), before);
+  assert.equal(readFileSync(join(ent, LOCK), "utf8"), before);
 });
 
 test("success saves the fingerprint for this arch only, with pairing metadata", async (t) => {
@@ -318,7 +320,7 @@ test("success saves the fingerprint for this arch only, with pairing metadata", 
     await buildWorkbenchApp(enterpriseDescriptor(pub, ent), ["runtime", "--arch", "arm64"]);
   });
   const context = contextDir(ent, "runtime");
-  const lock = JSON.parse(readFileSync(join(ent, LOCK_EXCLUDE), "utf8"));
+  const lock = JSON.parse(readFileSync(join(ent, LOCK), "utf8"));
   const expected = lock.runtimes["linux/arm64"];
   assert.ok(/^[a-f0-9]{64}$/.test(expected));
   assert.equal(lock.runtimes["linux/amd64"], AMD64_FP);
@@ -348,6 +350,6 @@ test("the runtime package is named after the product's runtime image name", asyn
   await withDocker({ ...docker, mode: "ok" }, async () => {
     await buildWorkbenchApp(descriptor(root), ["runtime", "--arch", "arm64", "--pack-runtime"]);
   });
-  const fp = JSON.parse(readFileSync(join(root, LOCK_EXCLUDE), "utf8")).runtimes["linux/arm64"];
+  const fp = JSON.parse(readFileSync(join(root, LOCK), "utf8")).runtimes["linux/arm64"];
   assert.deepEqual(readdirSync(join(root, ".build/pack")), [`node-app-runtime-compat-${fp.slice(0, 16)}-arm64.tar.gz`]);
 });

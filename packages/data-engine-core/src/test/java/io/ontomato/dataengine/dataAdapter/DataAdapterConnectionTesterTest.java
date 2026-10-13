@@ -54,6 +54,7 @@ class DataAdapterConnectionTesterTest {
 
 		JSONObject report = tester.test(adapter);
 
+		assertEquals("catalog", report.getString("kind"));
 		assertEquals("AcmeDB", report.getString("databaseProduct"));
 		assertEquals("1.0", report.getString("databaseVersion"));
 		assertEquals("Acme JDBC Driver", report.getString("driverName"));

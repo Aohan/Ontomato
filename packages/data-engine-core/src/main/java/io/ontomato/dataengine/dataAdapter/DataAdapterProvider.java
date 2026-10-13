@@ -6,8 +6,8 @@ import java.util.Map;
 import io.ontomato.dataengine.config.DataRagConfig;
 
 /**
- * One installed data adapter. Each adapter module contributes exactly one Spring component;
- * the application pom decides which modules, and therefore which types, an edition has.
+ * One installed data adapter type, contributed by a Spring component.
+ * The application pom selects modules, each of which can contribute multiple types.
  */
 public interface DataAdapterProvider {
 
@@ -17,8 +17,8 @@ public interface DataAdapterProvider {
 	/** Display name, e.g. "PostgreSQL". */
 	String label();
 
-	/** Whether the adapter's query language is SQL. */
-	boolean sql();
+	/** Whether relations name the source and target join fields (fromField/toField) this adapter joins on. */
+	boolean requiresJoinFields();
 
 	/** Connection fields the adapter reads, each one of "url", "company", "user", "password". */
 	List<String> connectionFields();
