@@ -33,7 +33,7 @@ const backendLoadError = ref("");
 const querySettingsRef = ref<{ markSaved: () => void } | null>(null);
 
 // Draft of the general config, language and data adapter, bound two-way by the cards.
-const config = reactive<SystemSettings>({
+let config = reactive<SystemSettings>({
   knowledgeMaxResult: 10,
   toolAndPythonRetry: 0,
   dslCookerTries: 1,
@@ -200,7 +200,7 @@ async function testDataAdapter() {
 }
 
 // Query settings live in the Node system model file and hold only the query mode and total time limit.
-const querySettings = reactive<SystemModelConfig>({
+let querySettings = reactive<SystemModelConfig>({
   abcQuestionMode: "harness",
   queryTimeoutSeconds: 600,
 });
