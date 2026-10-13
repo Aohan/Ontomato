@@ -244,7 +244,7 @@ export async function buildWorkbenchApp(app, args) {
     return;
   }
   const context = stagingDirectory(app.repoRoot, "workbench", arch, "runtime");
-  const record = collectMetadataContext({
+  collectMetadataContext({
     sources: app.sources,
     workspaceId: app.workspaceId,
     appImporter: app.appImporter,

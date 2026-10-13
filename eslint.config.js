@@ -75,22 +75,9 @@ export default [
     },
   },
   {
-    // .mjs entry points running on Node (app build entries and development entries): add
-    // only the Node globals.
-    files: [
-      "apps/*/build.mjs",
-      "apps/*/build.node-test.mjs",
-      "scripts/dev-command.mjs",
-      "scripts/dev-command.node-test.mjs",
-      "scripts/product-targets.node-test.mjs",
-      "scripts/dev-stack.mjs",
-      "scripts/dev-stack.node-test.mjs",
-      "scripts/dev-platform-windows.mjs",
-      "scripts/dev-platform-windows.node-test.mjs",
-      "apps/data-engine/dev.mjs",
-      "scripts/data-engine/dev-java.mjs",
-      "scripts/data-engine/dev-java.node-test.mjs",
-    ],
+    // Every .mjs here runs on Node (build, packaging and development entries, their tests, and
+    // the agent skill CLIs): add only the Node globals.
+    files: ["scripts/**/*.mjs", "apps/*/*.mjs", "agent-skills/*/*.mjs"],
     languageOptions: { globals: globals.node },
   },
   {

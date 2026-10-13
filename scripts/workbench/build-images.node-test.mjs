@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
-import { buildStamp, fingerprint, sampleSources } from "../build-support.mjs";
+import { buildStamp, sampleSources } from "../build-support.mjs";
 import { buildWorkbenchApp } from "./build-images.mjs";
 
 // The contract command resolves its YAML parser from this checkout's install.
