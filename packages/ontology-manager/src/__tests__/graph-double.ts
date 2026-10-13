@@ -31,6 +31,7 @@ export const graphRecord = {
   dataBatches: [] as any[],
   layouts: [] as unknown[][],
   nodeUpdates: [] as any[],
+  edgeUpdates: [] as any[],
 };
 
 export class GraphDouble {
@@ -53,6 +54,11 @@ export class GraphDouble {
             };
           }
           if (key === "getZoom") return () => graphRecord.zoom;
+          if (key === "getNodeData") return (id?: string) => {
+            const nodes = graphRecord.dataBatches.flatMap((batch) => batch.nodes || []);
+            return id ? nodes.find((node) => node.id === id) : nodes;
+          };
+          if (key === "getEdgeData") return () => graphRecord.dataBatches.flatMap((batch) => batch.edges || []);
           if (key === "zoomTo") {
             return (...args: unknown[]) => {
               graphRecord.zoomTo.push(args);
@@ -65,10 +71,10 @@ export class GraphDouble {
               return base;
             };
           }
-          if (key === "addData" || key === "updateNodeData" || key === "layout") {
+          if (key === "addData" || key === "updateNodeData" || key === "updateEdgeData" || key === "layout") {
             return (...args: unknown[]) => {
               if (key === "layout") graphRecord.layouts.push(args);
-              else graphRecord[key === "addData" ? "dataBatches" : "nodeUpdates"].push(args[0]);
+              else graphRecord[key === "addData" ? "dataBatches" : key === "updateEdgeData" ? "edgeUpdates" : "nodeUpdates"].push(args[0]);
               return base;
             };
           }

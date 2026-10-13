@@ -71,7 +71,7 @@ function respond(url: string, body?: Record<string, unknown>): Response {
     classes: [{ class: "Order", instanceCount: instanceNodeCount }, { class: "Item", instanceCount: 1 }],
     relationships: [{ source: "Order", target: "Item", count: 1 }],
     overviewNodes: [{ id: "Order:1", name: "First order", class: "Order" }, { id: "Item:2", name: "Spare part", class: "Item" }],
-    overviewEdges: [{ source: "Order:1", target: "Item:2" }],
+    overviewEdges: [{ source: "Order:1", target: "Item:2", type: "has" }],
     nodeCount: instanceNodeCount, edgeCount: 1, componentCount: 1, isolatedNodeCount: 0,
     largestComponentSize: instanceNodeCount, version: "v1", generatedAt: "2026-10-10T00:00:00Z",
   } });
@@ -117,6 +117,7 @@ beforeEach(() => {
   graphRecord.dataBatches = [];
   graphRecord.layouts = [];
   graphRecord.nodeUpdates = [];
+  graphRecord.edgeUpdates = [];
   instanceNodeCount = 2;
   requests = [];
   mountedApps = [];
@@ -301,7 +302,7 @@ describe("OntologyManager root component with real pages", () => {
     (root().querySelector(".instance-candidates button") as HTMLElement).click();
     await settle();
     expect(graphRecord.focusElement).toContainEqual(["Item:2", false]);
-    expect(graphRecord.zoomTo).toContainEqual([1, false]);
+    expect(graphRecord.zoomTo.every(([zoom]) => Number(zoom) <= 1)).toBe(true);
     expect(graphRecord.states).toContainEqual([{ "Item:2": ["selected"] }, false]);
     expect(root().querySelector(".detail-title h2")?.textContent).toBe("Spare part");
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
@@ -326,6 +327,68 @@ describe("OntologyManager root component with real pages", () => {
     waiting[0].resolve(new Response());
     await settle();
     expect(root().querySelector(".attribute-row code")?.textContent).toBe("Item:2");
+  });
+
+  it("caps automatic focus at native size when the graph fit would enlarge one node", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    graphRecord.zoom = 3;
+    (root().querySelector(".sample-legend button") as HTMLElement).click();
+    await settle();
+    (root().querySelector(".instance-candidates button") as HTMLElement).click();
+    await settle();
+    expect(graphRecord.zoomTo).toContainEqual([1, false]);
+  });
+
+  it("toggles relation names on existing edges without hiding node labels or reloading data", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    const edge = graphRecord.dataBatches.flatMap((batch) => batch.edges || [])[0];
+    const node = graphRecord.dataBatches.flatMap((batch) => batch.nodes || [])[0];
+    const options = graphRecord.options.at(-1);
+    const toggle = root().querySelector<HTMLButtonElement>(".graph-toolbar button[aria-pressed]")!;
+    expect(options.node.style.labelText(node)).toBe("First order");
+    expect(options.edge.style.labelText(edge)).toBeTruthy();
+    requests = [];
+    toggle.click();
+    await settle();
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(options.edge.style.labelText(edge)).toBe("");
+    expect(graphRecord.edgeUpdates.at(-1)).toEqual([{ id: edge.id, style: { labelText: "" } }]);
+    expect(options.node.style.labelText(node)).toBe("First order");
+    toggle.click();
+    await settle();
+    expect(toggle.getAttribute("aria-pressed")).toBe("true");
+    expect(graphRecord.edgeUpdates.at(-1)?.[0].style.labelText).toBeTruthy();
+    expect(requests).toEqual([]);
+  });
+
+  it("updates instance labels and their backgrounds when switching themes", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { host, root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    const edge = graphRecord.dataBatches.flatMap((batch) => batch.edges || [])[0];
+    const toggle = root().querySelector<HTMLButtonElement>(".graph-toolbar button[aria-pressed]")!;
+    toggle.click();
+    await settle();
+    requests = [];
+    host.theme = "dark";
+    await settle();
+    expect(graphRecord.nodeUpdates.some((updates) => Array.isArray(updates)
+      && updates.some((node) => node.style?.labelFill === "#f4f6ff"))).toBe(true);
+    expect(graphRecord.edgeUpdates.some((updates) => Array.isArray(updates)
+      && updates.some((item) => item.style?.labelFill === "#c4cce8" && item.style?.labelBackgroundFill === "#181a2e"))).toBe(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(graphRecord.options.at(-1).edge.style.labelText(edge)).toBe("");
+    expect(requests).toEqual([]);
   });
 
   it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
@@ -776,13 +839,13 @@ describe("OntologyManager root component with real pages", () => {
     expect(graph.edge.style).toMatchObject({ labelPlacement: "center", labelAutoRotate: false });
     expect(graphRecord.zoomTo).toEqual([[1, false]]);
 
-    // No limit and an empty fragment: zoom is untouched and the edge style has neither entry.
+    // The native-size cap applies even when the host does not provide a fit limit.
     mountedApps.forEach((app) => app.unmount());
     graphRecord.options = [];
     graphRecord.zoomTo = [];
     mountHost(base);
     await settle();
-    expect(graphRecord.zoomTo).toEqual([]);
+    expect(graphRecord.zoomTo).toEqual([[1, false]]);
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelPlacement");
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelAutoRotate");
 

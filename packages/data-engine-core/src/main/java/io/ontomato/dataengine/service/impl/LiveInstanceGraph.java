@@ -43,7 +43,7 @@ public class LiveInstanceGraph {
         this.adapters = adapters;
     }
 
-    private record ObjectType(String name, String pk, String label) {}
+    private record ObjectType(String name, String pk, String label, List<String> searchFields) {}
     private record Relation(String type, ObjectType from, ObjectType to) {}
 
     static String identifier(String value) {
@@ -101,17 +101,24 @@ public class LiveInstanceGraph {
             String name = identifier((String) def.get("className"));
             String pk = identifier(DslUtil.getPrimaryKey(def));
             String label = pk;
+            boolean preferredLabel = false;
+            List<String> searchFields = new ArrayList<>();
             for (var attr : (List<Map<String, Object>>) def.get("attrs")) {
                 String field = (String) attr.get("name");
-                if (!Boolean.FALSE.equals(attr.get("enable")) && Boolean.TRUE.equals(attr.get("bizzkey"))) {
+                if (Boolean.FALSE.equals(attr.get("enable"))) continue;
+                if (field.matches("(?:.*_)?(?:name|title)(?:_.*)?")
+                        && ("varchar".equals(attr.get("type")) || "text".equals(attr.get("type")))) {
+                    searchFields.add(identifier(field));
+                }
+                if (Boolean.TRUE.equals(attr.get("bizzkey"))) {
                     if (label.equals(pk)) label = identifier(field);
-                    if (!field.equals(pk) && (field.equals("name") || field.endsWith("_name"))) {
+                    if (!preferredLabel && !field.equals(pk) && (field.equals("name") || field.endsWith("_name"))) {
                         label = identifier(field);
-                        break;
+                        preferredLabel = true;
                     }
                 }
             }
-            types.put(name, new ObjectType(name, pk, label));
+            types.put(name, new ObjectType(name, pk, label, searchFields));
         }
         return types;
     }
@@ -198,7 +205,10 @@ public class LiveInstanceGraph {
                 JSONObject or = new JSONObject();
                 JSONArray ors = new JSONArray();
                 ors.add(condition(type.pk, "like", effectiveTerm));
-                ors.add(condition(type.label, "like", effectiveTerm));
+                if (!type.label.equals(type.pk)) ors.add(condition(type.label, "like", effectiveTerm));
+                for (String field : type.searchFields) {
+                    if (!field.equals(type.pk) && !field.equals(type.label)) ors.add(condition(field, "like", effectiveTerm));
+                }
                 or.put("or", ors);
                 conditions = conditions(or);
             }

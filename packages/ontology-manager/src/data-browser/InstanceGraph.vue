@@ -12,13 +12,15 @@ import {
   Unplug,
   ZoomIn,
   ZoomOut,
+  Eye,
+  EyeOff,
   GitFork,
   CircleMinus,
   SlidersHorizontal,
   X,
   Info,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { ElButton, ElPopover, ElSelect, ElOption, ElCheckbox, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult, InstanceGraphSummary } from "../api";
@@ -30,6 +32,7 @@ import {
   isLargeInstanceGraph,
   neighborNodePosition,
   instanceEdgeGeometry,
+  instanceGraphNodeLabel,
   overviewPositions,
 } from "./instance-graph-rendering";
 
@@ -63,6 +66,7 @@ const filtersDirty = computed(() => (appliedNeighborFilters.value.neighborClass 
   || (appliedNeighborFilters.value.direction || "both") !== direction.value);
 const versionChanged = ref(false);
 const relationLabels = ref<Record<string, string>>({});
+const showRelationLabels = ref(true);
 const classLabels = ref<Record<string, string>>({});
 const layouting = ref(false);
 const rendering = ref(false);
@@ -177,7 +181,7 @@ function nodeOptions(colors: ReturnType<typeof graphColors>) {
       lineWidth: 4,
       shadowColor: colors.shadow,
       shadowBlur: largeGraph.value ? 0 : 10,
-      labelText: (datum: any) => largeGraph.value ? "" : datum.data.node.name || datum.id,
+      labelText: (datum: any) => instanceGraphNodeLabel(datum.data.node.name, datum.id),
       labelFill: colors.text,
       labelFontSize: 12,
       labelFontWeight: 600,
@@ -198,10 +202,11 @@ function edgeOptions(colors: ReturnType<typeof graphColors>) {
       stroke: colors.edge,
       lineWidth: 1.5,
       endArrow: !largeGraph.value,
-      labelText: (datum: any) => {
-        return relationLabels.value[datum.data?.type] || datum.data?.type || "";
-      },
+      labelText: (datum: any) => showRelationLabels.value ? relationLabels.value[datum.data?.type] || datum.data?.type || "" : "",
       labelFill: colors.muted,
+      labelBackground: true,
+      labelBackgroundFill: colors.surface,
+      labelBackgroundPadding: [2, 4] as [number, number],
     },
   };
 }
@@ -212,9 +217,9 @@ async function fitGraph(target: Graph) {
   if (!width || !height) return;
   target.resize(Math.round(width), Math.round(height));
   await target.fitView({ when: "always", direction: "both" });
-  const { maxFitZoom } = context.presentation;
-  if (maxFitZoom !== null && target.getZoom() > maxFitZoom) {
-    await target.zoomTo(maxFitZoom, false);
+  const maxZoom = Math.min(1, context.presentation.maxFitZoom ?? 1);
+  if (target.getZoom() > maxZoom) {
+    await target.zoomTo(maxZoom, false);
   }
   await target.fitCenter();
 }
@@ -425,7 +430,8 @@ async function focusNode(id: string | undefined) {
   await renderGraph(++graphRequest);
   await selectNode(id);
   if (graph) {
-    await graph.zoomTo(Math.max(1, graph.getZoom()), false);
+    const maxZoom = Math.min(1, context.presentation.maxFitZoom ?? 1);
+    if (graph.getZoom() > maxZoom) await graph.zoomTo(maxZoom, false);
     await graph.focusElement(id, false);
   }
 }
@@ -568,6 +574,34 @@ function zoomOut() {
   void graph?.zoomBy(0.8);
 }
 
+async function toggleRelationLabels() {
+  showRelationLabels.value = !showRelationLabels.value;
+  const target = graph;
+  if (!target) return;
+  target.updateEdgeData(target.getEdgeData().map((edge) => ({
+    id: edge.id,
+    style: { labelText: showRelationLabels.value ? relationLabels.value[String(edge.data?.type)] || String(edge.data?.type || "") : "" },
+  })));
+  await target.draw();
+}
+
+async function updateGraphTheme() {
+  const target = graph;
+  if (!target || rendering.value) return;
+  const colors = graphColors();
+  target.setNode(nodeOptions(colors));
+  target.setEdge(edgeOptions(colors));
+  target.updateNodeData(target.getNodeData().map((node) => ({
+    id: node.id,
+    style: { stroke: colors.nodeStroke, shadowColor: colors.shadow, labelFill: colors.text },
+  })));
+  target.updateEdgeData(target.getEdgeData().map((edge) => ({
+    id: edge.id,
+    style: { stroke: colors.edge, labelFill: colors.muted, labelBackgroundFill: colors.surface },
+  })));
+  await target.draw();
+}
+
 function fitGraphView() {
   if (graph) void fitGraph(graph);
 }
@@ -655,6 +689,8 @@ async function refresh() {
 // Generation scans all star-chart data, so it is confirmed first; the empty state and the toolbar share this entry.
 const isEmpty = computed(() => !loading.value && !error.value && nodes.value.length === 0);
 
+watch(() => context.theme, () => void updateGraphTheme());
+
 onMounted(() => {
   resizeObserver = new ResizeObserver(([entry]) => {
     if (!graph || !entry) return;
@@ -715,6 +751,7 @@ onBeforeUnmount(() => {
     <div class="graph-toolbar" role="toolbar" :aria-label="ot('instanceGraphTitle')">
       <button :title="ot('zoomIn')" :aria-label="ot('zoomIn')" @click="zoomIn"><ZoomIn :size="17" /></button>
       <button :title="ot('zoomOut')" :aria-label="ot('zoomOut')" @click="zoomOut"><ZoomOut :size="17" /></button>
+      <button :title="ot(showRelationLabels ? 'instanceGraphHideRelationLabels' : 'instanceGraphRelationLabels')" :aria-label="ot(showRelationLabels ? 'instanceGraphHideRelationLabels' : 'instanceGraphRelationLabels')" :aria-pressed="showRelationLabels" :disabled="rendering || expanding" @click="toggleRelationLabels"><Eye v-if="showRelationLabels" :size="17" /><EyeOff v-else :size="17" /></button>
       <button :title="ot('fitCanvas')" :aria-label="ot('fitCanvas')" @click="fitGraphView"><Scan :size="17" /></button>
       <button :title="ot('relayout')" :aria-label="ot('relayout')" :disabled="loading || rendering || layouting || expanding" @click="relayoutGraph">
         <Network :size="17" />
@@ -748,7 +785,7 @@ onBeforeUnmount(() => {
         <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
       </div>
       <div v-if="overview" class="sample-legend">
-        <button v-for="item in summary.classes" :key="item.class" :class="{ 'is-selected': selectedClass === item.class }" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }}</button>
+        <button v-for="item in summary.classes" :key="item.class" :title="classLabels[item.class] || item.class" :class="{ 'is-selected': selectedClass === item.class }" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }}</button>
       </div>
       <small v-if="summary.complete === false" role="alert" class="graph-warning">{{ ot('instanceGraphPartial', { failures: (summary.failures || []).join(', ') }) }}</small>
       <el-button v-if="versionChanged" size="small" :icon="RefreshCw" @click="refresh">{{ ot('instanceGraphVersionChanged') }}</el-button>
@@ -948,6 +985,7 @@ onBeforeUnmount(() => {
 }
 .toolbar-separator { width: 1px; height: 18px; margin: 0 4px; background: var(--el-border-color-light); }
 .graph-toolbar button[aria-expanded="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+.graph-toolbar button[aria-pressed="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
 .graph-toolbar button {
   display: grid;
   width: 34px;
@@ -1105,10 +1143,10 @@ onBeforeUnmount(() => {
 .summary-info:hover { color: var(--el-color-primary); background: var(--el-fill-color-light); }
 .summary-details { display: grid; gap: var(--spacing-sm); font-size: var(--text-xs); line-height: var(--leading-relaxed); }
 .summary-details strong { font-size: var(--text-sm); }
-.sample-legend { display: flex; min-width: 0; overflow-x: auto; gap: 12px; }
-.sample-legend button { pointer-events: auto; display: inline-flex; flex-shrink: 0; align-items: center; gap: 5px; padding: 2px 0; border: 0; background: transparent; color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 18px; }
+.sample-legend { display: flex; flex-wrap: wrap; align-content: start; min-width: 0; max-height: 112px; overflow-y: auto; gap: 4px 12px; }
+.sample-legend button { pointer-events: auto; display: inline-flex; max-width: 100%; align-items: center; gap: 5px; padding: 2px 0; border: 0; background: transparent; color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 18px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .sample-legend button:hover, .sample-legend button.is-selected { color: var(--el-color-primary); }
-.sample-legend button > span { width: 8px; height: 8px; border-radius: 50%; }
+.sample-legend button > span { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
 .instance-candidates { display: grid; gap: 2px; min-width: 0; max-height: 260px; overflow: auto; }
 .instance-candidates button {
   display: flex;
