@@ -33,8 +33,15 @@ class EsAdapterTest extends AbstractDataAdapterTest {
 	private static final String EXTERNAL_URL = System.getenv("ONTOMATO_TEST_ES_URL");
 	private static final String EXTERNAL_USER = System.getenv("ONTOMATO_TEST_ES_USER");
 	private static final String EXTERNAL_PASSWORD = System.getenv("ONTOMATO_TEST_ES_PASSWORD");
+	/** The engine under test: {@code elasticsearch} (default) or {@code opensearch}, from
+	 *  {@code ONTOMATO_TEST_ES_DIALECT}. The suite is shared; only the dialect differs. */
+	private static final EsDialect DIALECT = "opensearch".equalsIgnoreCase(System.getenv("ONTOMATO_TEST_ES_DIALECT"))
+			? EsDialect.OPENSEARCH
+			: EsDialect.ELASTICSEARCH;
 	private static final String IMAGE = System.getenv().getOrDefault("ONTOMATO_TEST_ES_IMAGE",
-			"docker.elastic.co/elasticsearch/elasticsearch:9.5.5");
+			DIALECT == EsDialect.OPENSEARCH
+					? "opensearchproject/opensearch:2.19.0"
+					: "docker.elastic.co/elasticsearch/elasticsearch:9.5.5");
 
 	private static String url;
 	private static String user;
@@ -55,10 +62,15 @@ class EsAdapterTest extends AbstractDataAdapterTest {
 				"Docker is not running and ONTOMATO_TEST_ES_URL is not set; skipping Elasticsearch contract tests");
 		container = new GenericContainer<>(IMAGE)
 				.withEnv("discovery.type", "single-node")
-				.withEnv("xpack.security.enabled", "false")
 				.withEnv("ES_JAVA_OPTS", "-Xms512m -Xmx512m")
 				.withExposedPorts(9200)
 				.waitingFor(Wait.forHttp("/").forPort(9200).withStartupTimeout(java.time.Duration.ofMinutes(3)));
+		if (DIALECT == EsDialect.OPENSEARCH) {
+			container.withEnv("DISABLE_SECURITY_PLUGIN", "true");
+			container.withEnv("DISABLE_INSTALL_DEMO_CONFIG", "true");
+		} else {
+			container.withEnv("xpack.security.enabled", "false");
+		}
 		container.start();
 		url = "http://" + container.getHost() + ":" + container.getMappedPort(9200);
 	}
@@ -81,7 +93,7 @@ class EsAdapterTest extends AbstractDataAdapterTest {
 
 	@Override
 	protected DataAdapter newAdapter(JSONObject jsonRule) {
-		return new EsAdapter(connection(), jsonRule, EsDialect.ELASTICSEARCH);
+		return new EsAdapter(connection(), jsonRule, DIALECT);
 	}
 
 	@Override

@@ -31,6 +31,11 @@ class EsAdapterScaleTest {
 
 	private static final String CAP = "ontomato.es.maxMaterialize";
 
+	/** The engine under test: {@code elasticsearch} (default) or {@code opensearch}. */
+	private static final EsDialect DIALECT = "opensearch".equalsIgnoreCase(System.getenv("ONTOMATO_TEST_ES_DIALECT"))
+			? EsDialect.OPENSEARCH
+			: EsDialect.ELASTICSEARCH;
+
 	private static String url;
 	private static String user;
 	private static String password;
@@ -149,7 +154,7 @@ class EsAdapterScaleTest {
 		connection.setUrl(url);
 		connection.setUser(user);
 		connection.setPassword(password);
-		return new EsAdapter(connection, rule, EsDialect.ELASTICSEARCH);
+		return new EsAdapter(connection, rule, DIALECT);
 	}
 
 	private JSONObject seedRule() {
