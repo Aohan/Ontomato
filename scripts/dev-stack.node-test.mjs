@@ -184,6 +184,10 @@ test("classify keeps Maven, RAGMain, MCP and helper inside exact path and cwd bo
   assert.equal(classify(`node ${ctx.javaEntry} -o`, ctx.root, ctx), "java-helper");
   assert.equal(classify(`node ${ctx.javaEntry}`, ctx.devRoot, ctx), undefined);
   assert.equal(classify(`${ctx.venvPython} ${ctx.mcpScript} --port 18500`, ctx.devRoot, ctx), "mcp");
+  // A macOS framework Python reports its own binary rather than the venv symlink.
+  const framework = "/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/Resources/Python.app/Contents/MacOS/Python";
+  assert.equal(classify(`${framework} ${ctx.mcpScript} --port 18500`, ctx.devRoot, ctx), "mcp");
+  assert.equal(classify(`${framework} -c pass ${ctx.mcpScript}`, ctx.devRoot, ctx), undefined);
   assert.equal(classify(`${ctx.venvPython} ${ctx.mcpScript}`, ctx.root, ctx), undefined);
   assert.equal(classify(`python -c "x=${ctx.mcpScript}"`, ctx.devRoot, ctx), undefined);
   assert.equal(classify(`java -cp ${join(ctx.devRoot, "conf")}:x io.ontomato.dataengine.RAGMain`, ctx.devRoot, ctx), "ragmain");

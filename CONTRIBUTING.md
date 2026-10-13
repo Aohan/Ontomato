@@ -26,6 +26,8 @@ fits real business data.
    pnpm typecheck:workbench
    pnpm test:workbench
    pnpm lint:workbench
+   pnpm test:scripts   # build, packaging and dev scripts
+   pnpm lint:scripts
    ```
 
    Java tests that need a database, a model or another external system are not run as a

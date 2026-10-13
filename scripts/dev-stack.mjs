@@ -170,10 +170,13 @@ export function classify(command, cwd, ctx) {
   if (cwd === ctx.devRoot) {
     const python = afterScript(command, ctx.venvPython);
     if (python !== undefined && afterScript(python, ctx.mcpScript) !== undefined) return "mcp";
-    // macOS framework Python (e.g. Homebrew) re-execs into the framework binary, so ps reports the
-    // resolved interpreter path instead of the venv symlink. Fall back to the MCP script path so the
-    // stack can still be owned on such installs.
-    if (hasArg(command, ctx.mcpScript)) return "mcp";
+    // macOS framework Python (e.g. Homebrew) re-execs into the framework binary
+    // (.../Python.app/Contents/MacOS/Python), so ps reports that interpreter instead of the venv
+    // symlink. Accept any Python interpreter running the MCP script as its first argument, but
+    // never a command that merely mentions the script path.
+    const end = command.indexOf(" ");
+    if (end > 0 && /^python[\d.]*$/i.test(basename(command.slice(0, end))) &&
+        afterScript(command.slice(end + 1), ctx.mcpScript) !== undefined) return "mcp";
     if (java !== undefined && hasArg(java, "io.ontomato.dataengine.RAGMain") &&
         (java.includes(`-cp ${ctx.devRoot}/conf:`) || java.includes(`-classpath ${ctx.devRoot}/conf:`))) return "ragmain";
   }
