@@ -7,6 +7,12 @@ export function isLargeInstanceGraph(nodeCount: number, edgeCount: number) {
   return nodeCount > 1000 || edgeCount > 2000;
 }
 
+export function instanceGraphNodeLabel(name: string | undefined, id: string) {
+  const label = name?.trim() || id;
+  const characters = Array.from(label);
+  return characters.length > 24 ? `${characters.slice(0, 23).join("")}…` : label;
+}
+
 export function instanceNodePosition(index: number, nodeCount: number) {
   const columns = Math.max(1, Math.ceil(Math.sqrt(nodeCount)));
   return { x: (index % columns) * 160, y: Math.floor(index / columns) * 120 };
