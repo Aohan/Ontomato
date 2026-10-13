@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { SystemModelConfig } from "@ontomato/contracts/system-model";
-import type {
-  DataAdapterInfo,
-  DataAdaptersData,
-  DataAdapterTestResult,
+import {
+  dataAdapterTestResultSchema,
+  type DataAdapterInfo,
+  type DataAdaptersData,
 } from "@ontomato/contracts/data-adapters";
 
 import { ref, reactive, onMounted, watch } from "vue";
@@ -190,7 +190,10 @@ async function testDataAdapter() {
   let outcome: DataAdapterTestOutcome;
   try {
     const res = await adminApi.testDataAdapter(dataAdapterRequest(selectedDataAdapter()));
-    outcome = { ok: true, result: res.data as DataAdapterTestResult };
+    const report = dataAdapterTestResultSchema.safeParse(res.data);
+    outcome = report.success
+      ? { ok: true, result: report.data }
+      : { ok: false, message: t("admin.dataAdapterInvalidReport") };
   } catch (e: any) {
     outcome = { ok: false, message: e.message };
   } finally {

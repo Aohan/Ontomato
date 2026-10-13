@@ -529,7 +529,7 @@ export function createManagerClient(
     })) as SmartAsset[];
   }
 
-  /** The current domain's adapter type and this edition's installed adapters; visual modeling uses the current type's sql flag to decide whether to show join fields. */
+  /** The current domain's adapter type and this edition's installed adapters; visual modeling uses the current type's requiresJoinFields to decide whether relations take join fields. */
   async function listDataAdapters(): Promise<DataAdaptersData> {
     return (await send("/businessConfig/dataAdapters", { method: "GET" })).data;
   }

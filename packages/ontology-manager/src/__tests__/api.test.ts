@@ -299,7 +299,7 @@ describe("requests used by data browsing and visual modeling", () => {
   it("the adapter read is one GET without a body and yields the current type with the installed adapters", async () => {
     const data = {
       currentType: "postgresql",
-      adapters: [{ type: "postgresql", label: "PostgreSQL", sql: true, fields: ["url"], examples: {} }],
+      adapters: [{ type: "postgresql", label: "PostgreSQL", requiresJoinFields: true, fields: ["url"], examples: {} }],
     };
     respond = async () => json({ success: true, data });
     const { client } = setup({ type: "apiKey", apiKey: "k" });

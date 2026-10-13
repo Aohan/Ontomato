@@ -9,12 +9,12 @@ import { adminApi } from "../../../admin";
 import { workbenchI18n } from "../../../../i18n";
 import { businessConfig } from "../../../../../../../apps/workbench/web/src/business-config";
 
-/** Two backend GET /businessConfig/dataAdapters responses: the open-source edition installs only postgresql; a larger edition installs 9 (sorted by label). */
+/** Two backend GET /businessConfig/dataAdapters responses: the open-source edition installs only postgresql; a larger edition installs 11 (sorted by label). */
 const openSourceAdapters: DataAdapterInfo[] = [
   {
     type: "postgresql",
     label: "PostgreSQL",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
   },
@@ -23,63 +23,77 @@ const enterpriseAdapters: DataAdapterInfo[] = [
   {
     type: "db2",
     label: "DB2",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:db2://host:port/db", user: "db2inst1" },
   },
   {
     type: "dm",
     label: "DM",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:dm://host:port/db", user: "SYSDBA" },
   },
   {
     type: "duckdb",
     label: "DuckDB",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url"],
     examples: { url: "jdbc:duckdb:/data/example.duckdb" },
   },
   {
+    type: "elasticsearch",
+    label: "Elasticsearch",
+    requiresJoinFields: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "http://host:9200", user: "elastic" },
+  },
+  {
     type: "gaussdb",
     label: "GaussDB",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:postgresql://host:port/db", user: "gaussdb" },
   },
   {
     type: "m3",
     label: "M3",
-    sql: false,
+    requiresJoinFields: false,
     fields: ["url", "company", "user", "password"],
     examples: { url: "192.0.2.72:8080" },
   },
   {
     type: "mysql",
     label: "MySQL",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:mysql://host:port/db?useSSL=false", user: "root" },
   },
   {
+    type: "opensearch",
+    label: "OpenSearch",
+    requiresJoinFields: true,
+    fields: ["url", "user", "password"],
+    examples: { url: "https://host:9200", user: "admin" },
+  },
+  {
     type: "oracle",
     label: "Oracle",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:oracle:thin:@//host:port/service", user: "system" },
   },
   {
     type: "postgresql",
     label: "PostgreSQL",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:postgresql://host:port/db", user: "postgres" },
   },
   {
     type: "sqlserver",
     label: "SQL Server",
-    sql: true,
+    requiresJoinFields: true,
     fields: ["url", "user", "password"],
     examples: { url: "jdbc:sqlserver://host:port;database=db", user: "sa" },
   },
@@ -172,7 +186,7 @@ describe("the data adapter card renders from the backend list", () => {
     ).toEqual(["jdbc:postgresql://db/app", "pg", "secret"]);
   });
 
-  it("a 9-adapter list: shows all 9 items with display names from the backend label", async () => {
+  it("an 11-adapter list: shows all 11 items with display names from the backend label", async () => {
     const card = await mountCard(enterpriseAdapters, "m3");
 
     expect(radioLabels(card)).toEqual(enterpriseAdapters.map(({ label }) => label));
@@ -254,6 +268,7 @@ describe("the data adapter card renders from the backend list", () => {
 
 /** A successful POST /businessConfig/testDataAdapter `data`; catalog is null as some drivers report. */
 const postgresReport: DataAdapterTestResult = {
+  kind: "catalog",
   elapsedMs: 123,
   databaseProduct: "PostgreSQL",
   databaseVersion: "16.4",
@@ -265,6 +280,16 @@ const postgresReport: DataAdapterTestResult = {
     { name: "orders", type: "TABLE" },
     { name: "v_sales", type: "VIEW" },
   ],
+};
+
+/** A successful search engine `data` of POST /businessConfig/testDataAdapter. */
+const searchReport: DataAdapterTestResult = {
+  kind: "search",
+  elapsedMs: 45,
+  databaseProduct: "OpenSearch",
+  databaseVersion: "2.19.1",
+  clusterName: "search-prod",
+  indices: ["orders", "customers"],
 };
 
 const testButton = (card: Card) =>
@@ -407,5 +432,86 @@ describe("testing the data adapter connection", () => {
     await flushPromises();
 
     expect(resultText(card).exists()).toBe(false);
+  });
+
+  it("Elasticsearch and OpenSearch are separate types: each shows and tests its own connection without touching the other", async () => {
+    const card = await mountCard(enterpriseAdapters, "elasticsearch", {
+      elasticsearch: { url: "http://es:9200", user: "elastic", password: "es-pw" },
+      opensearch: { url: "https://os:9200", user: "admin", password: "os-pw" },
+    });
+    const values = () =>
+      card.findAll("input.el-input__inner").map((input) => (input.element as HTMLInputElement).value);
+    expect(values()).toEqual(["http://es:9200", "elastic", "es-pw"]);
+
+    await selectAdapter(card, "OpenSearch");
+    expect(placeholders(card)).toEqual(["https://host:9200", "admin", "******"]);
+    expect(values()).toEqual(["https://os:9200", "admin", "os-pw"]);
+    await card.find("input.el-input__inner").setValue("https://os-2:9200");
+    await runTest(card);
+
+    await selectAdapter(card, "Elasticsearch");
+    expect(values()).toEqual(["http://es:9200", "elastic", "es-pw"]);
+    await card.find("button.el-button--primary").trigger("click");
+    await flushPromises();
+
+    expect(backend.tested).toEqual([
+      { type: "opensearch", url: "https://os-2:9200", user: "admin", password: "os-pw" },
+    ]);
+    expect(backend.used).toEqual([
+      { type: "elasticsearch", url: "http://es:9200", user: "elastic", password: "es-pw" },
+    ]);
+  });
+
+  it("a search engine report shows the engine, cluster and indices, without driver, catalog, schema or tables", async () => {
+    vi.mocked(adminApi.testDataAdapter).mockResolvedValueOnce({ success: true, data: searchReport });
+    const card = await mountCard(enterpriseAdapters, "opensearch", { opensearch: {} });
+    await runTest(card);
+
+    expect(card.findAll(".el-descriptions__label").map((label) => label.text())).toEqual([
+      t("common.duration"),
+      t("admin.searchEngine"),
+      t("admin.searchCluster"),
+    ]);
+    expect(card.findAll(".el-descriptions__content").map((value) => value.text())).toEqual([
+      "45 ms",
+      "OpenSearch 2.19.1",
+      "search-prod",
+    ]);
+    expect(resultText(card).text()).toContain(t("admin.dataAdapterIndices", { n: 2 }));
+    expect(card.findAll(".adapter-table-list li").map((row) => row.text())).toEqual([
+      "orders",
+      "customers",
+    ]);
+    expect(resultText(card).text()).not.toContain(t("admin.dataAdapterTables", { n: 2 }));
+  });
+
+  it("a search engine report with no indices and no version or cluster says there are no indices", async () => {
+    vi.mocked(adminApi.testDataAdapter).mockResolvedValueOnce({
+      success: true,
+      data: { ...searchReport, databaseVersion: null, clusterName: null, indices: [] },
+    });
+    const card = await mountCard(enterpriseAdapters, "elasticsearch", { elasticsearch: {} });
+    await runTest(card);
+
+    expect(card.find(".el-alert--success").exists()).toBe(true);
+    expect(card.findAll(".el-descriptions__label").map((label) => label.text())).toEqual([
+      t("common.duration"),
+      t("admin.searchEngine"),
+    ]);
+    expect(card.find(".adapter-table-list").exists()).toBe(false);
+    expect(card.find(".card-empty").text()).toBe(t("admin.dataAdapterNoIndices"));
+  });
+
+  it.each([
+    ["a report without kind", { databaseProduct: "Elasticsearch", databaseVersion: "9.1.0", clusterName: "c", tagline: "x" }],
+    ["a catalog report without kind", { ...postgresReport, kind: undefined }],
+    ["a search report missing its indices", { ...searchReport, indices: undefined }],
+  ])("%s is shown as a failed test, not a success or an empty catalog", async (_name, data) => {
+    vi.mocked(adminApi.testDataAdapter).mockResolvedValueOnce({ success: true, data });
+    const card = await mountCard(enterpriseAdapters, "elasticsearch", { elasticsearch: {} });
+    await runTest(card);
+
+    expect(card.find(".el-alert--success").exists()).toBe(false);
+    expect(card.find("pre.adapter-test-message").text()).toBe(t("admin.dataAdapterInvalidReport"));
   });
 });

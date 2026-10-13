@@ -21,7 +21,7 @@ public class SqlServerAdapterProvider implements DataAdapterProvider {
 	}
 
 	@Override
-	public boolean sql() {
+	public boolean requiresJoinFields() {
 		return true;
 	}
 

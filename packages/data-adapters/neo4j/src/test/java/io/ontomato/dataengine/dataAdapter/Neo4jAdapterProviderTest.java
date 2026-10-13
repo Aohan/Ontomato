@@ -19,7 +19,7 @@ class Neo4jAdapterProviderTest {
 	void declaresTypeLabelAndFields() {
 		assertEquals("neo4j", provider.type());
 		assertEquals("Neo4j", provider.label());
-		assertFalse(provider.sql());
+		assertFalse(provider.requiresJoinFields());
 		assertEquals(List.of("url", "user", "password"), provider.connectionFields());
 		assertEquals(Map.of("url", "bolt://host:7687", "user", "neo4j"), provider.connectionExamples());
 	}

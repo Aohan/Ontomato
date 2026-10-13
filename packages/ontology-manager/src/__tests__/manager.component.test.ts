@@ -5,6 +5,7 @@ import type { ManagerHostContext, ManagerPresentation } from "../context";
 import { englishMessages, type ManagerMessages } from "../i18n";
 import de from "element-plus/es/locale/lang/de";
 import { graphHandlers, graphRecord } from "./graph-double";
+import type { DataAdapterInfo } from "@ontomato/contracts/data-adapters";
 
 // Only the graph library internals are doubled; the root component, pages, request client and fetch calls are real code.
 vi.mock("@antv/g6", async () => ({ Graph: (await import("./graph-double")).GraphDouble }));
@@ -31,7 +32,7 @@ let metasFor: (url: string) => unknown;
 let functions: Record<string, unknown>[];
 let dataAdapter: string;
 let instanceNodeCount: number;
-let dataAdapters: { type: string; label: string; sql: boolean; fields: string[] }[];
+let dataAdapters: DataAdapterInfo[];
 let knowledge: Record<string, Record<string, unknown>>;
 /** Knowledge IDs whose delete returns a business failure. */
 let knowledgeDeleteFails: Set<string>;
@@ -126,8 +127,9 @@ beforeEach(() => {
   functions = [];
   dataAdapter = "mysql";
   dataAdapters = [
-    { type: "m3", label: "M3", sql: false, fields: [] },
-    { type: "mysql", label: "MySQL", sql: true, fields: ["url", "user", "password"] },
+    { type: "m3", label: "M3", requiresJoinFields: false, fields: [], examples: {} },
+    { type: "mysql", label: "MySQL", requiresJoinFields: true, fields: ["url", "user", "password"], examples: {} },
+    { type: "elasticsearch", label: "Elasticsearch", requiresJoinFields: true, fields: ["url", "user", "password"], examples: {} },
   ];
   knowledge = {
     k1: { knowledgeID: "k1", knowledgeTitle: "Refund rule", knowledgeText: "t1", knowledgeTags: ["Business"], status: 1, knowledgeVector: [0.1] },
@@ -506,8 +508,9 @@ describe("OntologyManager root component with real pages", () => {
 
   it.each([
     ["mysql", true],
+    ["elasticsearch", true],
     ["m3", false],
-  ])("visual modeling: with current adapter %s, the backend list's sql flag decides whether relations take join fields", async (current, sql) => {
+  ])("visual modeling: with current adapter %s, the backend list's requiresJoinFields decides whether relations take join fields", async (current, requiresJoinFields) => {
     dataAdapter = current;
     mountHost({ ...base, view: "/visual-modeling?focus=object&id=Order&back=playground" });
     await settle();
@@ -515,7 +518,36 @@ describe("OntologyManager root component with real pages", () => {
 
     graphHandlers["edge:dblclick"]!({ edge: { id: "has" } });
     await settle();
-    expect(openDialog("Rel Desc").textContent?.includes("Src Field")).toBe(sql);
+    expect(openDialog("Rel Desc").textContent?.includes("Src Field")).toBe(requiresJoinFields);
+  });
+
+  it("visual modeling: a new relation on an adapter requiring join fields is not sent without them and is sent with fromField/toField", async () => {
+    dataAdapter = "elasticsearch";
+    // No existing relation, so the dialog's default Order -> Item pair is new.
+    metasFor = () => ({ success: true, data: { ...metas(["Order", "Item"]).data, relationship_rule: {} } });
+    mountHost({ ...base, view: "/visual-modeling?focus=object&id=Order&back=playground" });
+    await settle();
+    clickButton("Add Relation");
+    await settle();
+    const dialog = openDialog("Rel Desc");
+    const fill = (placeholder: string, value: string) => {
+      const input = dialog.querySelector<HTMLInputElement>(`input[placeholder='${placeholder}']`)!;
+      input.value = value;
+      input.dispatchEvent(new Event("input"));
+    };
+    fill("Rel Desc", "contains");
+    await settle();
+    clickButton("Add");
+    await settle();
+    expect(paths()).not.toContain("/admin/addRelationship");
+
+    fill("Enter Src Field", "order_id");
+    fill("Enter Tgt Field", "id");
+    await settle();
+    clickButton("Add");
+    await settle();
+    expect(requests.find((request) => request.url.endsWith("/admin/addRelationship"))?.body)
+      .toMatchObject({ relationDesc: "contains", fromField: "order_id", toField: "id" });
   });
 
   it("when only locale/theme change, the open edit dialog and its input are kept without reloading", async () => {
