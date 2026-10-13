@@ -20,7 +20,7 @@ import {
   X,
   Info,
 } from "lucide-vue-next";
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { ElButton, ElPopover, ElSelect, ElOption, ElCheckbox, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult, InstanceGraphSummary } from "../api";
@@ -204,6 +204,9 @@ function edgeOptions(colors: ReturnType<typeof graphColors>) {
       endArrow: !largeGraph.value,
       labelText: (datum: any) => showRelationLabels.value ? relationLabels.value[datum.data?.type] || datum.data?.type || "" : "",
       labelFill: colors.muted,
+      labelBackground: true,
+      labelBackgroundFill: colors.surface,
+      labelBackgroundPadding: [2, 4] as [number, number],
     },
   };
 }
@@ -582,6 +585,23 @@ async function toggleRelationLabels() {
   await target.draw();
 }
 
+async function updateGraphTheme() {
+  const target = graph;
+  if (!target || rendering.value) return;
+  const colors = graphColors();
+  target.setNode(nodeOptions(colors));
+  target.setEdge(edgeOptions(colors));
+  target.updateNodeData(target.getNodeData().map((node) => ({
+    id: node.id,
+    style: { stroke: colors.nodeStroke, shadowColor: colors.shadow, labelFill: colors.text },
+  })));
+  target.updateEdgeData(target.getEdgeData().map((edge) => ({
+    id: edge.id,
+    style: { stroke: colors.edge, labelFill: colors.muted, labelBackgroundFill: colors.surface },
+  })));
+  await target.draw();
+}
+
 function fitGraphView() {
   if (graph) void fitGraph(graph);
 }
@@ -668,6 +688,8 @@ async function refresh() {
 
 // Generation scans all star-chart data, so it is confirmed first; the empty state and the toolbar share this entry.
 const isEmpty = computed(() => !loading.value && !error.value && nodes.value.length === 0);
+
+watch(() => context.theme, () => void updateGraphTheme());
 
 onMounted(() => {
   resizeObserver = new ResizeObserver(([entry]) => {

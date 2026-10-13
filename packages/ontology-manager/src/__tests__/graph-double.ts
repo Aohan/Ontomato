@@ -54,6 +54,10 @@ export class GraphDouble {
             };
           }
           if (key === "getZoom") return () => graphRecord.zoom;
+          if (key === "getNodeData") return (id?: string) => {
+            const nodes = graphRecord.dataBatches.flatMap((batch) => batch.nodes || []);
+            return id ? nodes.find((node) => node.id === id) : nodes;
+          };
           if (key === "getEdgeData") return () => graphRecord.dataBatches.flatMap((batch) => batch.edges || []);
           if (key === "zoomTo") {
             return (...args: unknown[]) => {

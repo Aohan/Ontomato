@@ -367,6 +367,28 @@ describe("OntologyManager root component with real pages", () => {
     expect(requests).toEqual([]);
   });
 
+  it("updates instance labels and their backgrounds when switching themes", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ width: 800, height: 600 } as DOMRect);
+    const { host, root } = mountHost({ ...base, view: "/data/Order" });
+    await settle();
+    (root().querySelectorAll(".mode-bar .el-segmented__item")[1] as HTMLElement).click();
+    await settle();
+    const edge = graphRecord.dataBatches.flatMap((batch) => batch.edges || [])[0];
+    const toggle = root().querySelector<HTMLButtonElement>(".graph-toolbar button[aria-pressed]")!;
+    toggle.click();
+    await settle();
+    requests = [];
+    host.theme = "dark";
+    await settle();
+    expect(graphRecord.nodeUpdates.some((updates) => Array.isArray(updates)
+      && updates.some((node) => node.style?.labelFill === "#f4f6ff"))).toBe(true);
+    expect(graphRecord.edgeUpdates.some((updates) => Array.isArray(updates)
+      && updates.some((item) => item.style?.labelFill === "#c4cce8" && item.style?.labelBackgroundFill === "#181a2e"))).toBe(true);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(graphRecord.options.at(-1).edge.style.labelText(edge)).toBe("");
+    expect(requests).toEqual([]);
+  });
+
   it("non-default API entry and API key: real graph and catalog-count requests go to the host entry with x-api-key", async () => {
     mountHost(base);
     await settle();
