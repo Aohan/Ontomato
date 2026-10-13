@@ -22,6 +22,7 @@ import io.ontomato.dataengine.dao.ActionDao;
 import io.ontomato.dataengine.dao.AssetLookupPolicy;
 import io.ontomato.dataengine.dao.MetricViewDao;
 import io.ontomato.dataengine.service.ai.EmbeddingService;
+import io.ontomato.dataengine.service.vector.VectorRetrievalGate;
 
 class OssAssetLookupAssemblyTest {
 
@@ -104,6 +105,7 @@ class OssAssetLookupAssemblyTest {
             properties.setDimensions(3);
             factory.registerResolvableDependency(EmbeddingModelProperties.class, properties);
             factory.registerResolvableDependency(EmbeddingService.class, new EmbeddingService());
+            factory.registerResolvableDependency(VectorRetrievalGate.class, new VectorRetrievalGate());
         });
         ctx.register(assembly, ActionDao.class, MetricViewDao.class);
         ctx.refresh();
