@@ -807,13 +807,13 @@ describe("OntologyManager root component with real pages", () => {
     expect(graph.edge.style).toMatchObject({ labelPlacement: "center", labelAutoRotate: false });
     expect(graphRecord.zoomTo).toEqual([[1, false]]);
 
-    // No limit and an empty fragment: zoom is untouched and the edge style has neither entry.
+    // The native-size cap applies even when the host does not provide a fit limit.
     mountedApps.forEach((app) => app.unmount());
     graphRecord.options = [];
     graphRecord.zoomTo = [];
     mountHost(base);
     await settle();
-    expect(graphRecord.zoomTo).toEqual([]);
+    expect(graphRecord.zoomTo).toEqual([[1, false]]);
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelPlacement");
     expect(graphRecord.options[0].edge.style).not.toHaveProperty("labelAutoRotate");
 
