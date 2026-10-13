@@ -6,10 +6,10 @@ import java.util.Set;
 /**
  * The operations a {@code DataAdapter} implementation actually supports.
  *
- * <p>Adapters are not uniform: object-graph adapters such as PostgreSQL and DuckDB
- * implement the full object-graph write path, while read-only relational adapters
- * such as MySQL, GaussDB, and SQLServer only translate DSL to SQL against existing
- * tables and throw {@code UnsupportedDataAdapterOperationException} for the rest.
+ * <p>Adapters are not uniform: object-graph adapters such as PostgreSQL, MySQL, SQL Server,
+ * DuckDB, Neo4j, and Elasticsearch implement the full object-graph write path, while read-only
+ * relational adapters such as GaussDB, Oracle, DB2, and DM only translate DSL to SQL against
+ * existing tables and throw {@code UnsupportedDataAdapterOperationException} for the rest.
  * A concrete test declares the capabilities its adapter supports; the shared suite
  * skips every test gated on a capability the adapter does not have.</p>
  */
@@ -53,8 +53,8 @@ public enum DataAdapterCapability {
 
 	/**
 	 * The full write path with key-field edges — what object-graph adapters such as
-	 * PostgreSQL/DuckDB support. It deliberately excludes {@link #RELATIONSHIP_EDGES}, whose
-	 * representation is the opposite one.
+	 * PostgreSQL, MySQL, SQL Server, DuckDB, and Elasticsearch support. It deliberately
+	 * excludes {@link #RELATIONSHIP_EDGES}, whose representation is the opposite one.
 	 */
 	public static final Set<DataAdapterCapability> FULL = EnumSet.of(
 			JDBC_CONNECTION, READ_QUERY, SAMPLE_DATA, NAMESPACE_LIFECYCLE, CLASS_SCHEMA, OBJECT_CRUD,
