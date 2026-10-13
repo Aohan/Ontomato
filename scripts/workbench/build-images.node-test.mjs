@@ -211,6 +211,13 @@ function runtimeMeta(state) {
   return JSON.parse(raw.slice("RUNTIME_META_JSON=".length));
 }
 
+test("the assembly recipe pins the app stage to the deployment ARCH, not a BuildKit-only platform", () => {
+  // Deployment hosts may lack buildx; the classic builder leaves $BUILDPLATFORM empty.
+  const assemble = readFileSync(join(REPO_ROOT, "deploy/assemble/workbench/Dockerfile.assemble"), "utf8");
+  assert.match(assemble, /^FROM --platform=linux\/\$\{EXPECTED_ARCH\} \$\{APP_IMAGE\} AS app-source$/m);
+  assert.doesNotMatch(assemble, /^FROM[^\n]*\$\{?(BUILD|TARGET)PLATFORM/m);
+});
+
 test("only the runtime and app subcommands exist", async () => {
   await assert.rejects(() => buildWorkbenchApp({}, ["all", "--arch", "arm64"]), /Expected runtime or app/);
   await assert.rejects(

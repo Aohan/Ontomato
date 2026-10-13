@@ -2,16 +2,18 @@
 # app image into the pre-imported runtime image. No source compilation, no
 # dependency installation, no network; application content or check changes do
 # not require editing this file.
-# The app image is architecture-independent (scratch with files only): its stage
-# is pinned to $BUILDPLATFORM so the assembly never depends on the app image's
-# recorded platform. The only architecture source is EXPECTED_ARCH (deployment ARCH).
+# The app image content is architecture-independent (scratch with files only);
+# its stage is pinned to linux/EXPECTED_ARCH (the deployment ARCH), the only
+# architecture source. The pin uses a declared ARG rather than BuildKit's
+# automatic $BUILDPLATFORM, so assembly also works with the classic builder
+# (Docker without the buildx plugin), where $BUILDPLATFORM is empty.
 # APP_COMPONENT names the product (public ontomato; a private caller passes its own).
 ARG RUNTIME_IMAGE
 ARG APP_IMAGE
 ARG EXPECTED_ARCH
 ARG APP_COMPONENT
 
-FROM --platform=$BUILDPLATFORM ${APP_IMAGE} AS app-source
+FROM --platform=linux/${EXPECTED_ARCH} ${APP_IMAGE} AS app-source
 FROM ${RUNTIME_IMAGE}
 
 ARG EXPECTED_ARCH

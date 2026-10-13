@@ -2,9 +2,11 @@
 # the pre-imported app image into /app of the pre-imported runtime image, then run
 # the pairing checker the runtime selected (PAIR_CONTRACT); no source
 # compilation, no dependency installation, no network.
-# The application image is architecture-independent (scratch + files): this stage
-# pins the $BUILDPLATFORM reference, so assembly does not depend on the platform
-# recorded in the app image. The only architecture source is EXPECTED_ARCH.
+# The application image content is architecture-independent (scratch + files);
+# this stage is pinned to linux/EXPECTED_ARCH, the only architecture source. The
+# pin uses a declared ARG rather than BuildKit's automatic $BUILDPLATFORM, so
+# assembly also works with the classic builder (Docker without the buildx
+# plugin), where $BUILDPLATFORM is empty.
 # APP_COMPONENT names the product (public datarag-opensource). No edition passes
 # its license mode here; it is decided at build time and baked into the image.
 ARG RUNTIME_IMAGE
@@ -12,7 +14,7 @@ ARG APP_IMAGE
 ARG EXPECTED_ARCH
 ARG APP_COMPONENT
 
-FROM --platform=$BUILDPLATFORM ${APP_IMAGE} AS app_source
+FROM --platform=linux/${EXPECTED_ARCH} ${APP_IMAGE} AS app_source
 
 FROM ${RUNTIME_IMAGE}
 

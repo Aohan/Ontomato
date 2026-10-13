@@ -330,6 +330,9 @@ test("recipes: the secret export checks one explicit script on the exported jar"
   const assemble = readFileSync(join(RECIPES, "../../deploy/assemble/data-engine/Dockerfile.assemble"), "utf8");
   assert.match(assemble, /COPY --from=app_source \/ \/app\//);
   assert.match(assemble, /ENTRYPOINT \["\/app\/bin\/container-entrypoint\.sh"\]/);
+  // Deployment hosts may lack buildx; the classic builder leaves $BUILDPLATFORM empty.
+  assert.match(assemble, /^FROM --platform=linux\/\$\{EXPECTED_ARCH\} \$\{APP_IMAGE\} AS app_source$/m);
+  assert.doesNotMatch(assemble, /^FROM[^\n]*\$\{?(BUILD|TARGET)PLATFORM/m);
 });
 
 test("public build: central export of the public tree only, runtime target and en prompts", async (t) => {
