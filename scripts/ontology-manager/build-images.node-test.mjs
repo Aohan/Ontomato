@@ -31,7 +31,6 @@ function text(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, value);
 }
-const json = (path, value) => text(path, `${JSON.stringify(value)}\n`);
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 // Local identity only; the user's Git configuration is never touched.
