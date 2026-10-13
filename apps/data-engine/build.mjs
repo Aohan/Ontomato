@@ -12,7 +12,6 @@ const HELP =
 export const app = {
   repoRoot,
   lockRoot: appRoot,
-  lockExclude: "apps/data-engine/runtime-lock.json",
   versionPom: resolve(repoRoot, "pom.xml"),
   sources: [{ id: "ontomato", root: repoRoot }],
   component: "datarag-opensource",

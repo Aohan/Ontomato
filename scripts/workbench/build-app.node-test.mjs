@@ -22,7 +22,7 @@ import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context
 import { assembleAppStage, stageDirectory } from "./stage-app.mjs";
 
 const VERSION = "9.9.9-test";
-const LOCK_EXCLUDE = "apps/workbench/runtime-lock.json";
+const LOCK = "apps/workbench/runtime-lock.json";
 const CONTRACT = {
   family: "node-app",
   interfaceVersion: 3,
@@ -85,13 +85,13 @@ function descriptor(pub, ent = null) {
   if (!ent)
     return {
       repoRoot: pub, publicRoot: pub, lockRoot: join(pub, "apps/workbench"),
-      lockExclude: LOCK_EXCLUDE, component: "ontomato", runtimeImageName: "node-app-runtime",
+      component: "ontomato", runtimeImageName: "node-app-runtime",
       workspaceId: "ontomato", appImporter: "apps/workbench",
       sources: [{ id: "ontomato", root: pub }],
     };
   return {
     repoRoot: ent, publicRoot: pub, lockRoot: join(ent, "apps/workbench"),
-    lockExclude: LOCK_EXCLUDE, component: "data-agent", runtimeImageName: "data-agent-runtime",
+    component: "data-agent", runtimeImageName: "data-agent-runtime",
     workspaceId: "enterprise", appImporter: "apps/workbench",
     sources: [{ id: "ontomato", root: pub }, { id: "enterprise", root: ent }],
   };
@@ -99,7 +99,7 @@ function descriptor(pub, ent = null) {
 
 function writeLock(dir, arm64Fp = fingerprint(CONTRACT)) {
   writeFileSync(
-    join(dir, LOCK_EXCLUDE),
+    join(dir, LOCK),
     `${JSON.stringify({ schema: 3, family: "node-app", runtimes: { "linux/arm64": arm64Fp } }, null, 2)}\n`,
   );
 }
@@ -206,14 +206,14 @@ test("a missing lock fails before any Docker call", async (t) => {
       /missing/,
     );
   });
-  assert.equal(existsSync(join(root, LOCK_EXCLUDE)), false);
+  assert.equal(existsSync(join(root, LOCK)), false);
   assert.equal(existsSync(join(docker.state, "args.jsonl")), false);
 });
 
 test("a changed dependency or contract fails without touching the lock", async (t) => {
   const root = repo(t, "@ontomato/workbench");
   writeLock(root, "0".repeat(64));
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
+  const before = readFileSync(join(root, LOCK), "utf8");
   const docker = fakeDocker(t, root);
   await withDocker({ ...docker, mode: "ok" }, async () => {
     await assert.rejects(
@@ -221,13 +221,13 @@ test("a changed dependency or contract fails without touching the lock", async (
       /Runtime dependencies or contract changed/,
     );
   });
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
+  assert.equal(readFileSync(join(root, LOCK), "utf8"), before);
 });
 
 test("a late build failure writes no lock and no pack", async (t) => {
   const root = repo(t, "@ontomato/workbench");
   writeLock(root);
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
+  const before = readFileSync(join(root, LOCK), "utf8");
   const docker = fakeDocker(t, root);
   await withDocker({ ...docker, mode: "fail-build" }, async () => {
     await assert.rejects(
@@ -235,7 +235,7 @@ test("a late build failure writes no lock and no pack", async (t) => {
       /failed/,
     );
   });
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
+  assert.equal(readFileSync(join(root, LOCK), "utf8"), before);
   assert.equal(existsSync(join(root, ".build/pack")), false);
 });
 
@@ -244,12 +244,12 @@ test("success packs and keeps the runtime lock, writing only the pairing metadat
   const ent = repo(t, "@enterprise/workbench");
   for (const [root, app] of [[pub, descriptor(pub)], [ent, descriptor(pub, ent)]]) {
     writeLock(root);
-    const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
+    const before = readFileSync(join(root, LOCK), "utf8");
     const docker = fakeDocker(t, root);
     await withDocker({ ...docker, mode: "ok" }, async () => {
       await buildWorkbenchApp(app, ["app", "--arch", "arm64", "--pack-app"]);
     });
-    assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
+    assert.equal(readFileSync(join(root, LOCK), "utf8"), before);
     const tars = readdirSync(join(root, ".build/pack"));
     assert.equal(tars.some((name) => name.startsWith(`${app.component}-app-${VERSION}-`)), true);
     const buildArgv = calls(docker.state).find((argv) => argv.includes("--load"));
@@ -289,7 +289,7 @@ test("the public entry names the ontomato product and the node-app-runtime alias
 test("a late inspect failure writes no lock and no pack", async (t) => {
   const root = repo(t, "@ontomato/workbench");
   writeLock(root);
-  const before = readFileSync(join(root, LOCK_EXCLUDE), "utf8");
+  const before = readFileSync(join(root, LOCK), "utf8");
   const docker = fakeDocker(t, root);
   await withDocker({ ...docker, mode: "fail-inspect" }, async () => {
     await assert.rejects(
@@ -297,7 +297,7 @@ test("a late inspect failure writes no lock and no pack", async (t) => {
       /identity mismatch/,
     );
   });
-  assert.equal(readFileSync(join(root, LOCK_EXCLUDE), "utf8"), before);
+  assert.equal(readFileSync(join(root, LOCK), "utf8"), before);
   assert.equal(existsSync(join(root, ".build/pack")), false);
 });
 

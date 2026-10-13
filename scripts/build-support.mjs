@@ -185,9 +185,11 @@ export function saveRuntimeLock(
   renameSync(temporary, file);
   return fp;
 }
-// lockPath is the service's own runtime lock (Node/Java); a builder without a
-// runtime lock (Manager) omits it and the whole source state counts as dirty.
-export function sourceIdentity(root, lockPath) {
+// Runtime locks are build outputs: a runtime build rewrites its own lock, and a
+// full packaging run builds the services one after another. Every service's lock
+// is therefore left out, so one service's refreshed lock never dirties the stamp
+// of a later one. A stale committed lock is caught by the release gate instead.
+export function sourceIdentity(root) {
   const revision = output("git", ["-C", root, "rev-parse", "HEAD"]);
   const dirty =
     output("git", [
@@ -198,7 +200,7 @@ export function sourceIdentity(root, lockPath) {
       "--untracked-files=all",
       "--",
       ".",
-      ...(lockPath ? [`:(exclude)${lockPath}`] : []),
+      ":(exclude,glob)**/runtime-lock.json",
     ]) !== "";
   return { revision, dirty };
 }
@@ -281,7 +283,7 @@ export function sampleSources(app) {
   return app.sources.map((source) => ({
     id: source.id,
     root: source.root,
-    ...sourceIdentity(source.root, app.lockExclude),
+    ...sourceIdentity(source.root),
   }));
 }
 
