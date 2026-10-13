@@ -77,11 +77,25 @@ public abstract class AbstractDataAdapterTest {
 	/** The plain class definitions of the three graph classes, in order: source, middle, target. */
 	protected abstract java.util.List<JSONObject> graphClassDefs();
 
-	/** The relationship rule map: relation name -> {fromclass, toclass, fromField, toField}. */
+	/** The relationship rule map: relation name -> {fromclass, toclass}. A key-field adapter's entries
+	 *  also carry {fromField, toField}; a relationship-edge adapter's do not (its edges are
+	 *  relationships, not stored fields). */
 	protected abstract JSONObject relationshipRule();
 
 	/** Seed objects per plain class name, with the join fields already populated. */
 	protected abstract java.util.Map<String, JSONArray> graphSeed();
+
+	/** One seed edge: a relation between two graph-class indices and the two object ids it connects. */
+	public record SeedEdge(String relation, int sourceGraphIdx, String sourceId, int targetGraphIdx, String targetId) {
+	}
+
+	/**
+	 * The edges {@link #seedGraph()} materializes through {@code createEdge()} for relationship-edge
+	 * adapters. Key-field adapters leave it empty: their seed objects already carry the key field.
+	 */
+	protected List<SeedEdge> seedEdges() {
+		return List.of();
+	}
 
 	/** The plain class name at index {@code i} of {@link #graphClassDefs()}. */
 	protected String graphClass(int i) {
@@ -139,6 +153,11 @@ public abstract class AbstractDataAdapterTest {
 			if (objs != null && !objs.isEmpty()) {
 				adapter.insertObjects(ns, classDef, objs);
 			}
+		}
+		// A relationship-edge adapter has no key field in its seed to imply edges; materialize them.
+		for (SeedEdge edge : seedEdges()) {
+			adapter.createEdge(ns, edge.relation(), graphClass(edge.sourceGraphIdx()), edge.sourceId(),
+					graphClass(edge.targetGraphIdx()), edge.targetId());
 		}
 		return adapter;
 	}
@@ -755,22 +774,35 @@ public abstract class AbstractDataAdapterTest {
 	// ----------------------------------------------------------------------------------
 
 	@Test
-	void createEdgeStoresForeignKey() throws Exception {
+	void createEdgeConnectsTheObjects() throws Exception {
 		assume(DataAdapterCapability.EDGE_CRUD);
 		DataAdapter adapter = seedGraph();
 		adapter.createEdge(namespace(), firstRelation(), graphClass(0), "p1", graphClass(1), "o2");
-		assertEquals("o2", str(graphRow(graphClass(0), "p1").get(joinField(0))));
+		assertEdge(true, "p1", "o2");
 		dropGraph();
 	}
 
 	@Test
-	void deleteEdgeClearsForeignKey() throws Exception {
+	void deleteEdgeDisconnectsTheObjects() throws Exception {
 		assume(DataAdapterCapability.EDGE_CRUD);
 		DataAdapter adapter = seedGraph();
 		adapter.createEdge(namespace(), firstRelation(), graphClass(0), "p1", graphClass(1), "o2");
 		adapter.deleteEdge(namespace(), firstRelation(), graphClass(0), "p1", graphClass(1), "o2");
-		assertEquals(null, graphRow(graphClass(0), "p1").get(joinField(0)));
+		assertEdge(false, "p1", "o2");
 		dropGraph();
+	}
+
+	/**
+	 * Assert the first relation between the source class's {@code sourceId} object and the target class's
+	 * {@code targetId} object after a createEdge/deleteEdge. A relationship-edge adapter reads the connection
+	 * back through the read path; a key-field adapter reads the foreign-key field its source class stores.
+	 */
+	private void assertEdge(boolean connected, String sourceId, String targetId) throws Exception {
+		if (capabilities().contains(DataAdapterCapability.RELATIONSHIP_EDGES)) {
+			assertEquals(connected, edgeExists(sourceId, targetId, firstRelation()));
+		} else {
+			assertEquals(connected ? targetId : null, str(graphRow(graphClass(0), sourceId).get(joinField(0))));
+		}
 	}
 
 	@Test
@@ -790,6 +822,26 @@ public abstract class AbstractDataAdapterTest {
 		java.util.List<String> mqls = new java.util.ArrayList<>();
 		String result = adapter.executeDsl(dslJson, "test-session", null, mqls);
 		return JSON.parseArray(result).getJSONObject(0).getJSONArray("answer");
+	}
+
+	/** Whether the read path joins the source-class {@code sourceId} object to the target-class {@code targetId}. */
+	protected boolean edgeExists(String sourceId, String targetId, String relation) throws Exception {
+		JSONArray objects = new JSONArray();
+		JSONObject source = readObject(0, "s", 0);
+		JSONObject sourceConditions = new JSONObject();
+		sourceConditions.put("properties", readCond(primaryKey(), "=", sourceId));
+		source.put("conditions", sourceConditions);
+		objects.add(source);
+		JSONObject target = readObject(1, "t", 1);
+		JSONObject targetConditions = new JSONObject();
+		targetConditions.put("properties", readCond(primaryKey(), "=", targetId));
+		target.put("conditions", targetConditions);
+		objects.add(target);
+		JSONArray relationships = new JSONArray();
+		relationships.add(readRelation(0, 1, relation));
+		JSONArray fields = new JSONArray();
+		fields.add(readField("s", primaryKey(), "source_id"));
+		return !readQuery(singleStepDsl(objects, relationships, fields, null, null, null)).isEmpty();
 	}
 
 	protected JSONArray queryPersons(JSONObject condition) throws Exception {
@@ -946,8 +998,13 @@ public abstract class AbstractDataAdapterTest {
 		return graphSeed().get(graphClass(0)).size();
 	}
 
-	/** The foreign-key field the edge at index {@code i} maintains on its source class. */
-	protected abstract String joinField(int i);
+	/**
+	 * The foreign-key field the edge at index {@code i} maintains on its source class. Only a
+	 * key-field adapter implements it; a relationship-edge adapter leaves the default, which throws.
+	 */
+	protected String joinField(int i) {
+		throw new UnsupportedOperationException("a relationship-edge adapter stores no foreign-key field");
+	}
 
 	// ----------------------------------------------------------------------------------
 	// Sample data

@@ -34,18 +34,26 @@ import io.ontomato.dataengine.util.HttpRequestUtil;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Neo4j adapter over the Bolt driver.
+ * Neo4j adapter over the Bolt driver — the graph-native form.
  *
  * <p>Neo4j is a non-JDBC data source: {@link #openConnection()} throws, and {@link #testConnection()}
- * runs a Bolt probe instead of the JDBC tester. Classes map to node labels, objects to nodes, edges to
- * relationship-free key fields (the graph DSL joins objects by shared key fields, mirroring the relational
- * adapters so the shared contract suite passes without materializing relationships), and the read path
- * translates a graph DSL to a single Cypher {@code MATCH ... WHERE ... RETURN ...} query.</p>
+ * runs a Bolt probe instead of the JDBC tester. Classes map to node labels, objects to nodes, and
+ * <b>relationships to real Neo4j relationships</b>: the graph DSL's edges become {@code -[:rel]->}
+ * traversals, never a key field. A relationship definition therefore needs no {@code fromField}/
+ * {@code toField} — those are the non-graph adapters' way of expressing an edge as a key field.</p>
+ *
+ * <p>The read path translates one graph DSL to one Cypher query. A graph pattern (several objects
+ * with relationship edges, including a star sharing a center object) becomes a comma-separated set
+ * of directed path fragments; a relationship fragment carries its types and hop range, so an
+ * any-type or variable-length traversal is native. A two-step DSL is chained with {@code WITH}:
+ * the first step (select the subgraph, filter, project the fields) flattens into named columns, and
+ * the second step groups/aggregates/sorts over them.</p>
  */
 @Slf4j
 public class Neo4jAdapter implements DataAdapter {
 
-	private static final String DEFAULT_DATABASE = "neo4j";
+	/** An unbounded hop range (max_hops = -1) is capped here so a traversal cannot run away. */
+	private static final int MAX_HOPS = 10;
 
 	private final DataAdapterConnection connection;
 	private final Map<String, Object> jsonRule;
@@ -134,8 +142,9 @@ public class Neo4jAdapter implements DataAdapter {
 	}
 
 	/**
-	 * Translate one graph DSL to a Cypher query. Two-step DSLs are chained with {@code WITH}: the first
-	 * step's output fields become aliases the second step consumes.
+	 * Translate one graph DSL to a Cypher query. Only the first pattern of a step is used, like the
+	 * relational adapters. A two-step DSL chains the first step's projection into a {@code WITH} that
+	 * the second step consumes.
 	 */
 	private CypherQuery toCypher(JSONObject dsl, Map<String, Object> jsonRule) throws Exception {
 		try {
@@ -157,175 +166,140 @@ public class Neo4jAdapter implements DataAdapter {
 				classAttrTypeMap.put((String) classDef.get("className"), attrTypeMap);
 				classEnableAttrsMap.put((String) classDef.get("className"), enableAttrs);
 			}
-			@SuppressWarnings("unchecked")
-			Map<String, Object> relationship_rule = (Map<String, Object>) jsonRule.get("relationship_rule");
 
 			JSONArray steps = dsl.getJSONObject("answer").getJSONArray("steps");
-			JSONObject firstStep = steps.getJSONObject(0);
 			CypherQuery query = new CypherQuery();
-			buildStep(firstStep, classAttrTypeMap, classEnableAttrsMap, relationship_rule, query, steps.size() > 1);
+			String step0 = buildMatchWhere(steps.getJSONObject(0), classAttrTypeMap, classEnableAttrsMap, query);
 			if (steps.size() == 1) {
+				query.text = buildOutput(step0, steps.getJSONObject(0).getJSONObject("output"), query, true, false, null);
 				return query;
 			}
-			// Two-step DSL: the first step's output aliases feed the second step through WITH.
+			// Two-step: the first step flattens into a WITH; the second step computes over those columns.
+			String flattened = buildOutput(step0, steps.getJSONObject(0).getJSONObject("output"), query, false, false, null);
 			JSONObject secondStep = steps.getJSONObject(1);
-			String tmpClassAs = secondStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0)
+			String tmpVariable = secondStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0)
 					.getJSONArray("objects").getJSONObject(0).getString("variable");
-			CypherQuery step2 = new CypherQuery();
-			step2.counter = query.counter;
-			buildSecondStep(secondStep, query, step2, tmpClassAs);
-			return step2;
+			CypherQuery second = new CypherQuery();
+			second.counter = query.counter;
+			second.text = buildOutput(flattened, secondStep.getJSONObject("output"), second, true, true, tmpVariable);
+			return second;
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 			throw new Exception("Failed to convert DSL to Cypher");
 		}
 	}
 
-	private void buildStep(JSONObject step, Map<String, Map<String, String>> classAttrTypeMap,
-			Map<String, Set<String>> classEnableAttrsMap, Map<String, Object> relationship_rule, CypherQuery query,
-			boolean twoStep) {
-		JSONArray objects = step.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0).getJSONArray("objects");
+	/**
+	 * Build the {@code MATCH ... WHERE ...} of one step. The pattern's objects and relationships become
+	 * comma-separated directed path fragments (a star is several fragments sharing the center variable),
+	 * labels declared on a variable's first appearance, and every object's own conditions become WHERE.
+	 */
+	private String buildMatchWhere(JSONObject step, Map<String, Map<String, String>> classAttrTypeMap,
+			Map<String, Set<String>> classEnableAttrsMap, CypherQuery query) {
+		JSONObject pattern = step.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0);
+		JSONArray objects = pattern.getJSONArray("objects");
 		Map<Integer, String[]> idxMap = new HashMap<>();
-
-		// MATCH clause: one node per object, labelled with its (namespace-prefixed) class.
-		StringBuilder match = new StringBuilder("match ");
 		for (int i = 0; i < objects.size(); i++) {
 			JSONObject object = objects.getJSONObject(i);
-			String className = object.getString("class");
-			String alias = object.getString("variable");
-			idxMap.put(object.getInteger("idx"), new String[] { className, alias });
-			if (i > 0) {
-				match.append(", ");
-			}
-			match.append("(").append(alias).append(":`").append(className).append("`)");
+			idxMap.put(object.getInteger("idx"), new String[] { object.getString("class"), object.getString("variable") });
 		}
 
-		// WHERE clause: per-object conditions plus the relationship key-field joins.
+		Set<String> declared = new HashSet<>();
+		List<String> fragments = new ArrayList<>();
+		JSONArray relationships = pattern.getJSONArray("relationship");
+		if (relationships != null) {
+			for (int i = 0; i < relationships.size(); i++) {
+				JSONObject relationship = relationships.getJSONObject(i);
+				String[] from = idxMap.get(relationship.getInteger("from"));
+				String[] to = idxMap.get(relationship.getInteger("to"));
+				if (from == null || to == null) {
+					continue;
+				}
+				fragments.add(nodePattern(from[1], from[0], declared) + relationshipSpec(relationship)
+						+ nodePattern(to[1], to[0], declared));
+			}
+		}
+		for (int i = 0; i < objects.size(); i++) {
+			JSONObject object = objects.getJSONObject(i);
+			String variable = object.getString("variable");
+			fragments.add(nodePattern(variable, object.getString("class"), declared));
+		}
+
 		List<String> whereParts = new ArrayList<>();
 		for (int i = 0; i < objects.size(); i++) {
 			JSONObject object = objects.getJSONObject(i);
 			String className = object.getString("class");
-			String alias = object.getString("variable");
-			Map<String, String> attrTypeMap = classAttrTypeMap.get(className);
-			Set<String> enableAttrs = classEnableAttrsMap.get(className);
-			String objWhere = buildConditions(object.getJSONObject("conditions"), alias, attrTypeMap, enableAttrs, query);
+			String variable = object.getString("variable");
+			String objWhere = buildConditions(object.getJSONObject("conditions"), variable,
+					classAttrTypeMap.get(className), classEnableAttrsMap.get(className), query);
 			if (!objWhere.isEmpty()) {
 				whereParts.add(objWhere);
 			}
 		}
-		JSONArray relationships = step.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0)
-				.getJSONArray("relationship");
-		if (relationships != null) {
-			for (int i = 0; i < relationships.size(); i++) {
-				JSONObject relationship = relationships.getJSONObject(i);
-				String[] fromClassAlias = idxMap.get(relationship.getInteger("from"));
-				String[] toClassAlias = idxMap.get(relationship.getInteger("to"));
-				String relationshipName = relationship.getJSONArray("type").getString(0).trim();
-				@SuppressWarnings("unchecked")
-				Map<String, Object> relationDef = (Map<String, Object>) relationship_rule.get(relationshipName);
-				if (relationDef != null) {
-					String fromField = (String) relationDef.get("fromField");
-					String toField = (String) relationDef.get("toField");
-					whereParts.add(fromClassAlias[1] + "." + fromField + " = " + toClassAlias[1] + "." + toField);
+
+		StringBuilder match = new StringBuilder("match ").append(String.join(", ", fragments));
+		if (!whereParts.isEmpty()) {
+			match.append("\nwhere ").append(String.join("\nand ", whereParts));
+		}
+		return match.toString();
+	}
+
+	/** A node pattern, labelled on the variable's first appearance in this MATCH and bare afterwards. */
+	private String nodePattern(String variable, String label, Set<String> declared) {
+		return declared.add(variable) ? "(" + variable + ":`" + label + "`)" : "(" + variable + ")";
+	}
+
+	/**
+	 * A directed relationship fragment. {@code type:["*"]} means any type; several types are a union;
+	 * {@code max_hops:-1} is an unbounded range capped at {@link #MAX_HOPS}.
+	 */
+	private String relationshipSpec(JSONObject relationship) {
+		JSONArray types = relationship.getJSONArray("type");
+		List<String> typeList = new ArrayList<>();
+		if (types != null) {
+			for (int i = 0; i < types.size(); i++) {
+				String type = types.getString(i);
+				if (type != null && !type.isBlank()) {
+					typeList.add(type.trim());
 				}
 			}
 		}
+		boolean anyType = typeList.isEmpty() || typeList.contains("*");
+		int min = relationship.getInteger("min_hops") == null ? 1 : relationship.getInteger("min_hops");
+		Integer maxHops = relationship.getInteger("max_hops");
+		int max = maxHops == null || maxHops < 0 ? MAX_HOPS : maxHops;
+		boolean singleHop = min == 1 && max == 1;
 
-		JSONObject output = step.getJSONObject("output");
-		StringBuilder where = new StringBuilder();
-		if (!whereParts.isEmpty()) {
-			where.append("\nwhere ").append(String.join("\nand ", whereParts));
-		}
+		String typePart = anyType ? "" : ":" + String.join("|", typeList.stream().map(type -> "`" + type + "`").toList());
+		String hopPart = singleHop && !anyType ? "" : "*" + min + ".." + max;
+		return "-[" + typePart + hopPart + "]->";
+	}
 
-		// RETURN clause, with an explicit WITH+WHERE when a HAVING is present (Cypher filters aggregates there).
-		StringBuilder body = new StringBuilder();
-		body.append(match).append(where);
-
-		ReturnPlan plan = buildReturn(output);
-		boolean hasHaving = output.getJSONObject("group_by") != null
-				&& output.getJSONObject("group_by").getJSONArray("having") != null
-				&& !output.getJSONObject("group_by").getJSONArray("having").isEmpty();
+	/** Append the terminal projection of one step: RETURN (or WITH for an intermediate), plus order/limit when terminal. */
+	private String buildOutput(String prefix, JSONObject output, CypherQuery query, boolean terminal,
+			boolean fromAliases, String tmpVariable) {
+		ReturnPlan plan = buildReturn(output, fromAliases, tmpVariable);
+		StringBuilder body = new StringBuilder(prefix);
+		JSONObject groupBy = output.getJSONObject("group_by");
+		boolean hasHaving = groupBy != null && groupBy.getJSONArray("having") != null && !groupBy.getJSONArray("having").isEmpty();
 		if (hasHaving) {
 			body.append("\nwith ").append(plan.clause);
-			body.append(buildHaving(output.getJSONObject("group_by").getJSONArray("having"), query, plan.aggAlias));
+			body.append(buildHaving(groupBy.getJSONArray("having"), query, plan.aggAlias));
 			body.append("\nreturn ").append(String.join(", ", plan.aliases));
 		} else {
-			body.append("\nreturn ").append(plan.clause);
+			body.append("\n").append(terminal ? "return " : "with ").append(plan.clause);
 		}
-
-		String orderBy = buildOrderBy(output);
-		if (orderBy != null) {
-			body.append("\n").append(orderBy);
-		}
-		String limit = buildLimit(output);
-		if (limit != null) {
-			body.append("\n").append(limit);
-		}
-		query.text = body.toString();
-	}
-
-	private void buildSecondStep(JSONObject secondStep, CypherQuery first, CypherQuery second, String tmpClassAs) {
-		// The first step's aliases are the intermediate rows; the second step re-projects and aggregates them.
-		String firstText = first.text;
-		StringBuilder body = new StringBuilder(firstText);
-
-		JSONObject output = secondStep.getJSONObject("output");
-		JSONArray fields = output.getJSONArray("fields");
-		List<String> aliases = new ArrayList<>();
-		Map<String, String> aggAlias = new HashMap<>();
-		StringBuilder returnExprs = new StringBuilder();
-		for (int i = 0; i < fields.size(); i++) {
-			JSONObject field = fields.getJSONObject(i);
-			String as = field.getString("as");
-			String function = field.getString("function");
-			String fieldName = field.getString("field");
-			String expr = secondStepExpr(field, tmpClassAs);
-			if (as != null && !as.isBlank()) {
-				aliases.add("`" + as + "`");
-				if (function != null && !function.isBlank()) {
-					aggAlias.put(function + "\u0000" + fieldName, as);
-				}
+		if (terminal) {
+			String orderBy = buildOrderBy(output);
+			if (orderBy != null) {
+				body.append("\n").append(orderBy);
 			}
-			returnExprs.append(expr).append(as != null && !as.isBlank() ? " as `" + as + "`" : "");
-			if (i < fields.size() - 1) {
-				returnExprs.append(", ");
+			String limit = buildLimit(output);
+			if (limit != null) {
+				body.append("\n").append(limit);
 			}
 		}
-
-		body.append("\nwith ").append(returnExprs);
-		boolean hasHaving = output.getJSONObject("group_by") != null
-				&& output.getJSONObject("group_by").getJSONArray("having") != null
-				&& !output.getJSONObject("group_by").getJSONArray("having").isEmpty();
-		if (hasHaving) {
-			body.append(buildHaving(output.getJSONObject("group_by").getJSONArray("having"), second, aggAlias));
-		}
-		body.append("\nreturn ").append(String.join(", ", aliases));
-		String orderBy = buildOrderBy(output);
-		if (orderBy != null) {
-			body.append("\n").append(orderBy);
-		}
-		String limit = buildLimit(output);
-		if (limit != null) {
-			body.append("\n").append(limit);
-		}
-		second.text = body.toString();
-	}
-
-	private String secondStepExpr(JSONObject field, String tmpClassAs) {
-		String variable = field.getString("variable");
-		String fieldName = field.getString("field");
-		String function = field.getString("function");
-		boolean distinct = field.getBoolean("distinct") != null && field.getBoolean("distinct");
-		String ref;
-		if (variable != null && !variable.isBlank()) {
-			ref = "`" + fieldName + "`";
-		} else {
-			ref = fieldName;
-		}
-		if (function != null && !function.isBlank()) {
-			return function + "(" + (distinct ? "distinct " : "") + ref + ")";
-		}
-		return ref;
+		return body.toString();
 	}
 
 	/** Translate one object's conditions block to a Cypher predicate fragment, or "" when absent. */
@@ -426,7 +400,6 @@ public class Neo4jAdapter implements DataAdapter {
 			String predicate = col + " =~ $" + param;
 			return "not like".equals(operator) ? "not " + predicate : predicate;
 		}
-		// =, !=, >, >=, <, <=
 		String param = query.next();
 		query.params.put(param, coerce(type, condition.get("value")));
 		String cypherOperator = "!=".equals(operator) ? "<>" : operator;
@@ -460,7 +433,11 @@ public class Neo4jAdapter implements DataAdapter {
 		final Map<String, String> aggAlias = new HashMap<>();
 	}
 
-	private ReturnPlan buildReturn(JSONObject output) {
+	/**
+	 * Build one step's projection. {@code fromAliases} is set for a second step, whose fields reference
+	 * the first step's aliases (its "variable" is the intermediate table, not a Cypher variable).
+	 */
+	private ReturnPlan buildReturn(JSONObject output, boolean fromAliases, String tmpVariable) {
 		ReturnPlan plan = new ReturnPlan();
 		JSONArray fields = output.getJSONArray("fields");
 		StringBuilder returnExprs = new StringBuilder();
@@ -471,20 +448,28 @@ public class Neo4jAdapter implements DataAdapter {
 			String fieldName = field.getString("field");
 			String as = field.getString("as");
 			String function = field.getString("function");
-			boolean distinct = field.getBoolean("distinct") != null && field.getBoolean("distinct");
-			String expr;
-			if (function != null && !function.isBlank()) {
-				expr = function + "(" + (distinct ? "distinct " : "") + variable + "." + fieldName + ")";
-				if (as != null && !as.isBlank()) {
-					plan.aggAlias.put(function + "\u0000" + fieldName, as);
-				}
+			String expr = field.getString("expr");
+			boolean distinct = Boolean.TRUE.equals(field.getBoolean("distinct"));
+			boolean aggregate = function != null && !function.isBlank();
+
+			String projection;
+			if (expr != null && !expr.isBlank()) {
+				projection = tmpVariable == null ? expr : expr.replace(tmpVariable + ".", "");
+			} else if (fromAliases) {
+				String ref = fieldName;
+				projection = aggregate ? function + "(" + (distinct ? "distinct " : "") + ref + ")" : ref;
 			} else {
-				if (distinct) {
-					plainDistinct = true;
+				if (aggregate) {
+					projection = function + "(" + (distinct ? "distinct " : "") + variable + "." + fieldName + ")";
+				} else {
+					projection = variable + "." + fieldName;
+					plainDistinct = plainDistinct || distinct;
 				}
-				expr = variable + "." + fieldName;
 			}
-			returnExprs.append(expr);
+			if (aggregate && as != null && !as.isBlank()) {
+				plan.aggAlias.put(function + "\u0000" + fieldName, as);
+			}
+			returnExprs.append(projection);
 			if (as != null && !as.isBlank()) {
 				returnExprs.append(" as `").append(as).append("`");
 				plan.aliases.add("`" + as + "`");
@@ -548,12 +533,16 @@ public class Neo4jAdapter implements DataAdapter {
 		return "skip " + offset + " limit " + limit.getInteger("count");
 	}
 
+	/** Date/time DSL conditions carry epoch millis; the write path stores their formatted text, so compare text. */
 	private Object coerce(String type, Object value) {
 		if (value == null) {
 			return null;
 		}
-		if ("date".equals(type) || "timestamp".equals(type)) {
-			return new Date(((Number) value).longValue());
+		if ("date".equals(type)) {
+			return new SimpleDateFormat("yyyy-MM-dd").format(new Date(((Number) value).longValue()));
+		}
+		if ("timestamp".equals(type)) {
+			return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(((Number) value).longValue()));
 		}
 		return value;
 	}
@@ -594,15 +583,8 @@ public class Neo4jAdapter implements DataAdapter {
 				JSONObject map = new JSONObject();
 				value.asMap().forEach((k, v) -> map.put(k, toJsonValueStatic(v)));
 				return map;
-			case "DATE":
-			case "LOCAL_TIME":
-			case "LOCAL_DATE_TIME":
-			case "ZONED_DATE_TIME":
-			case "DURATION":
-			case "POINT":
-				return value.asObject().toString();
 			default:
-				return value.asObject();
+				return value.asObject().toString();
 		}
 	}
 
@@ -810,9 +792,9 @@ public class Neo4jAdapter implements DataAdapter {
 		}
 
 		cypher.text = "match (n:`" + fullClassName + "`)";
-		WhereClause whereClause = buildWhere(where, attrTypeMap, cypher);
-		if (!whereClause.fragment.isEmpty()) {
-			cypher.text += "\nwhere " + whereClause.fragment;
+		String whereFragment = buildWhere(where, attrTypeMap, cypher);
+		if (!whereFragment.isEmpty()) {
+			cypher.text += "\nwhere " + whereFragment;
 		}
 		cypher.text += "\nset " + set;
 		executeWrite(cypher);
@@ -839,25 +821,19 @@ public class Neo4jAdapter implements DataAdapter {
 
 		CypherQuery cypher = new CypherQuery();
 		cypher.text = "match (n:`" + fullClassName + "`)";
-		WhereClause whereClause = buildWhere(where, attrTypeMap, cypher);
-		if (!whereClause.fragment.isEmpty()) {
-			cypher.text += "\nwhere " + whereClause.fragment;
+		String whereFragment = buildWhere(where, attrTypeMap, cypher);
+		if (!whereFragment.isEmpty()) {
+			cypher.text += "\nwhere " + whereFragment;
 		}
 		cypher.text += "\ndetach delete n";
 		executeWrite(cypher);
 	}
 
-	/** A WHERE fragment plus the parameters it registered. */
-	private static final class WhereClause {
-		String fragment = "";
-	}
-
-	private WhereClause buildWhere(JSONObject condition, Map<String, String> attrTypeMap, CypherQuery cypher) {
-		WhereClause where = new WhereClause();
-		if (condition != null) {
-			where.fragment = buildWhereTree(condition, attrTypeMap, cypher, "n");
+	private String buildWhere(JSONObject condition, Map<String, String> attrTypeMap, CypherQuery cypher) {
+		if (condition == null) {
+			return "";
 		}
-		return where;
+		return buildWhereTree(condition, attrTypeMap, cypher, "n");
 	}
 
 	private String buildWhereTree(JSONObject condition, Map<String, String> attrTypeMap, CypherQuery cypher, String alias) {
@@ -922,127 +898,68 @@ public class Neo4jAdapter implements DataAdapter {
 		return col + " " + cypherOperator + " $" + param;
 	}
 
-	@Override
-	public void createEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
-			String targetClassName, String targetObjId) throws Exception {
-		boolean inSandbox = inSandbox(namespace);
+	/** One relationship definition; the edge is a real Neo4j relationship of this type between the two classes. */
+	private record RelationshipDef(String type, String fromClass, String toClass) {
+	}
 
-		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
-		Map<String, Object> relationship_rule = (Map<String, Object>) jsonRule.get("relationship_rule");
-		Map<String, Object> sourceClassDef = null;
-		Map<String, Object> targetClassDef = null;
-		for (Map<String, Object> classDef : classDefs) {
-			if (classDef.get("className").equals(sourceClassName)) {
-				sourceClassDef = classDef;
-			}
-			if (classDef.get("className").equals(targetClassName)) {
-				targetClassDef = classDef;
-			}
-		}
-		Map<String, Object> relDef = (Map<String, Object>) relationship_rule.get(relationName);
-
-		if (relDef != null && sourceClassDef != null && targetClassDef != null
-				&& relDef.get("fromclass").equals(sourceClassName) && relDef.get("toclass").equals(targetClassName)) {
-			String sourcePk = DslUtil.getPrimaryKey(sourceClassDef);
-			String targetPk = DslUtil.getPrimaryKey(targetClassDef);
-			String sourceInnerField = (String) relDef.get("fromField");
-			String targetInnerField = (String) relDef.get("toField");
-
-			String updateLabel = null;
-			String setField = null;
-			Object setValue = null;
-			String idField = null;
-			String idValue = null;
-			if (sourcePk.equals(sourceInnerField)) {
-				if (!targetPk.equals(targetInnerField)) {
-					updateLabel = inSandbox ? namespace + targetClassName : targetClassName;
-					setField = targetInnerField;
-					setValue = sourceObjId;
-					idField = targetPk;
-					idValue = targetObjId;
-				}
-			} else {
-				if (targetPk.equals(targetInnerField)) {
-					updateLabel = inSandbox ? namespace + sourceClassName : sourceClassName;
-					setField = sourceInnerField;
-					setValue = targetObjId;
-					idField = sourcePk;
-					idValue = sourceObjId;
-				}
-			}
-			if (updateLabel != null) {
-				CypherQuery cypher = new CypherQuery();
-				String idParam = cypher.next();
-				String valParam = cypher.next();
-				cypher.params.put(idParam, idValue);
-				cypher.params.put(valParam, setValue);
-				cypher.text = "match (n:`" + updateLabel + "`) where n." + idField + " = $" + idParam
-						+ " set n." + setField + " = $" + valParam;
-				executeWrite(cypher);
-			}
-		} else {
+	private RelationshipDef relationshipDef(String relationName, String sourceClassName, String targetClassName) throws Exception {
+		@SuppressWarnings("unchecked")
+		Map<String, Object> relationshipRule = jsonRule == null ? null : (Map<String, Object>) jsonRule.get("relationship_rule");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> def = relationshipRule == null ? null : (Map<String, Object>) relationshipRule.get(relationName);
+		if (def == null || !sourceClassName.equals(def.get("fromclass")) || !targetClassName.equals(def.get("toclass"))) {
 			throw new Exception("Object class [" + sourceClassName + "] and object class [" + targetClassName
 					+ "] have no relationship definition [" + relationName + "]");
 		}
+		return new RelationshipDef(relationName, sourceClassName, targetClassName);
+	}
+
+	/** The primary-key property of the plain class named {@code className}. */
+	private String primaryKeyOf(String className) {
+		@SuppressWarnings("unchecked")
+		List<Map<String, Object>> classDefs = jsonRule == null ? null : (List<Map<String, Object>>) jsonRule.get("classDef");
+		if (classDefs != null) {
+			for (Map<String, Object> classDef : classDefs) {
+				if (className.equals(classDef.get("className"))) {
+					return DslUtil.getPrimaryKey(classDef);
+				}
+			}
+		}
+		return "id";
+	}
+
+	@Override
+	public void createEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
+			String targetClassName, String targetObjId) throws Exception {
+		RelationshipDef rel = relationshipDef(relationName, sourceClassName, targetClassName);
+		String prefix = inSandbox(namespace) ? namespace : "";
+		CypherQuery cypher = new CypherQuery();
+		String sourceParam = cypher.next();
+		String targetParam = cypher.next();
+		cypher.params.put(sourceParam, sourceObjId);
+		cypher.params.put(targetParam, targetObjId);
+		cypher.text = "match (s:`" + prefix + rel.fromClass() + "`), (t:`" + prefix + rel.toClass()
+				+ "`) where s." + primaryKeyOf(rel.fromClass()) + " = $" + sourceParam
+				+ " and t." + primaryKeyOf(rel.toClass()) + " = $" + targetParam
+				+ " merge (s)-[:`" + rel.type() + "`]->(t)";
+		executeWrite(cypher);
 	}
 
 	@Override
 	public void deleteEdge(String namespace, String relationName, String sourceClassName, String sourceObjId,
 			String targetClassName, String targetObjId) throws Exception {
-		boolean inSandbox = inSandbox(namespace);
-
-		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
-		Map<String, Object> relationship_rule = (Map<String, Object>) jsonRule.get("relationship_rule");
-		Map<String, Object> sourceClassDef = null;
-		Map<String, Object> targetClassDef = null;
-		for (Map<String, Object> classDef : classDefs) {
-			if (classDef.get("className").equals(sourceClassName)) {
-				sourceClassDef = classDef;
-			}
-			if (classDef.get("className").equals(targetClassName)) {
-				targetClassDef = classDef;
-			}
-		}
-		Map<String, Object> relDef = (Map<String, Object>) relationship_rule.get(relationName);
-
-		if (relDef != null && sourceClassDef != null && targetClassDef != null
-				&& relDef.get("fromclass").equals(sourceClassName) && relDef.get("toclass").equals(targetClassName)) {
-			String sourcePk = DslUtil.getPrimaryKey(sourceClassDef);
-			String targetPk = DslUtil.getPrimaryKey(targetClassDef);
-			String sourceInnerField = (String) relDef.get("fromField");
-			String targetInnerField = (String) relDef.get("toField");
-
-			String updateLabel = null;
-			String setField = null;
-			String idField = null;
-			String idValue = null;
-			if (sourcePk.equals(sourceInnerField)) {
-				if (!targetPk.equals(targetInnerField)) {
-					updateLabel = inSandbox ? namespace + targetClassName : targetClassName;
-					setField = targetInnerField;
-					idField = targetPk;
-					idValue = targetObjId;
-				}
-			} else {
-				if (targetPk.equals(targetInnerField)) {
-					updateLabel = inSandbox ? namespace + sourceClassName : sourceClassName;
-					setField = sourceInnerField;
-					idField = sourcePk;
-					idValue = sourceObjId;
-				}
-			}
-			if (updateLabel != null) {
-				CypherQuery cypher = new CypherQuery();
-				String idParam = cypher.next();
-				cypher.params.put(idParam, idValue);
-				cypher.text = "match (n:`" + updateLabel + "`) where n." + idField + " = $" + idParam
-						+ " set n." + setField + " = null";
-				executeWrite(cypher);
-			}
-		} else {
-			throw new Exception("Object class [" + sourceClassName + "] and object class [" + targetClassName
-					+ "] have no relationship definition [" + relationName + "]");
-		}
+		RelationshipDef rel = relationshipDef(relationName, sourceClassName, targetClassName);
+		String prefix = inSandbox(namespace) ? namespace : "";
+		CypherQuery cypher = new CypherQuery();
+		String sourceParam = cypher.next();
+		String targetParam = cypher.next();
+		cypher.params.put(sourceParam, sourceObjId);
+		cypher.params.put(targetParam, targetObjId);
+		cypher.text = "match (s:`" + prefix + rel.fromClass() + "`)-[r:`" + rel.type() + "`]->(t:`" + prefix + rel.toClass()
+				+ "`) where s." + primaryKeyOf(rel.fromClass()) + " = $" + sourceParam
+				+ " and t." + primaryKeyOf(rel.toClass()) + " = $" + targetParam
+				+ " delete r";
+		executeWrite(cypher);
 	}
 
 	private void executeWrite(CypherQuery cypher) throws Exception {
