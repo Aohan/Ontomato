@@ -96,6 +96,7 @@ class Neo4jAdapterTest extends AbstractDataAdapterTest {
 				DataAdapterCapability.CLASS_SCHEMA,
 				DataAdapterCapability.OBJECT_CRUD,
 				DataAdapterCapability.EDGE_CRUD,
+				DataAdapterCapability.RELATIONSHIP_EDGES,
 				DataAdapterCapability.GRAPH_QUERY,
 				DataAdapterCapability.VECTOR_ATTR);
 	}
@@ -181,23 +182,32 @@ class Neo4jAdapterTest extends AbstractDataAdapterTest {
 		return List.of(person, org, project);
 	}
 
+	/** A relationship definition carries only its two classes; a graph edge is a relationship, not a key field. */
 	@Override
 	protected JSONObject relationshipRule() {
 		JSONObject rule = new JSONObject();
 		JSONObject worksAt = new JSONObject();
 		worksAt.put("fromclass", "person");
 		worksAt.put("toclass", "org");
-		worksAt.put("fromField", "org_id");
-		worksAt.put("toField", "id");
 		rule.put("works_at", worksAt);
 
 		JSONObject belongsTo = new JSONObject();
 		belongsTo.put("fromclass", "org");
 		belongsTo.put("toclass", "project");
-		belongsTo.put("fromField", "project_id");
-		belongsTo.put("toField", "id");
 		rule.put("belongs_to", belongsTo);
 		return rule;
+	}
+
+	/** There is no key field in the seed to imply edges, so seedGraph materializes them through createEdge. */
+	@Override
+	protected java.util.List<SeedEdge> seedEdges() {
+		return java.util.List.of(
+				new SeedEdge("works_at", 0, "p1", 1, "o1"),
+				new SeedEdge("works_at", 0, "p2", 1, "o1"),
+				new SeedEdge("works_at", 0, "p3", 1, "o2"),
+				new SeedEdge("works_at", 0, "p4", 1, "o2"),
+				new SeedEdge("belongs_to", 1, "o1", 2, "pr1"),
+				new SeedEdge("belongs_to", 1, "o2", 2, "pr2"));
 	}
 
 	@Override
@@ -214,11 +224,6 @@ class Neo4jAdapterTest extends AbstractDataAdapterTest {
 				gProject("pr1", "Alpha"),
 				gProject("pr2", "Beta"));
 		return Map.of("person", persons, "org", orgs, "project", projects);
-	}
-
-	@Override
-	protected String joinField(int i) {
-		return i == 0 ? "org_id" : "project_id";
 	}
 
 	private JSONObject gPerson(String id, String name, int age, String orgId) {
@@ -294,5 +299,41 @@ class Neo4jAdapterTest extends AbstractDataAdapterTest {
 	void connectionProbeReportsLabels() throws Exception {
 		JSONObject report = newAdapter().testConnection();
 		assertEquals("Neo4j", report.getString("databaseProduct"));
+	}
+
+	/**
+	 * A two-step DSL: the first step selects and projects the subgraph (flattening it into rows), the
+	 * second step groups/aggregates/sorts over those rows. The adapter chains them with {@code WITH}.
+	 */
+	@Test
+	void readTwoStepFlattensThenGroups() throws Exception {
+		seedGraph();
+		JSONObject source = JSONObject.of("idx", 0, "variable", "p", "class", namespace() + "person");
+		JSONObject step0 = JSONObject.of(
+				"graph", JSONObject.of("patterns", JSONArray.of(JSONObject.of("objects", JSONArray.of(source)))),
+				"output", JSONObject.of(
+						"to_user", false,
+						"save_table", "/t1",
+						"fields", JSONArray.of(
+								JSONObject.of("variable", "p", "field", "org_id", "as", "org_id"),
+								JSONObject.of("variable", "p", "field", "id", "as", "person_id"))));
+
+		JSONObject intermediate = JSONObject.of("idx", 0, "variable", "t1", "class", "/t1");
+		JSONObject step1 = JSONObject.of(
+				"graph", JSONObject.of("patterns", JSONArray.of(JSONObject.of("objects", JSONArray.of(intermediate)))),
+				"output", JSONObject.of(
+						"to_user", true,
+						"fields", JSONArray.of(
+								JSONObject.of("variable", "t1", "field", "org_id", "as", "org_id"),
+								JSONObject.of("variable", "t1", "field", "person_id", "function", "count", "as", "cnt")),
+						"group_by", JSONObject.of("fields", JSONArray.of(JSONObject.of("variable", "t1", "field", "org_id"))),
+						"sort", JSONObject.of("fields", JSONArray.of(JSONObject.of("field", "org_id", "order", "asc")))));
+
+		JSONArray rows = readQuery(JSONArray.of(
+				JSONObject.of("answer", JSONObject.of("steps", JSONArray.of(step0, step1)))).toJSONString());
+
+		assertEquals(2, rows.size());
+		assertEquals(2L, ((Number) rows.getJSONObject(0).get("cnt")).longValue());
+		dropGraph();
 	}
 }

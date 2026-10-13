@@ -36,14 +36,29 @@ public enum DataAdapterCapability {
 	/** {@code createEdge()} / {@code deleteEdge()}. */
 	EDGE_CRUD,
 
+	/**
+	 * Edges are real relationships, not a key field stored on one side. A relationship-edge
+	 * adapter materializes its seed edges through {@code createEdge()} (there is no key field in
+	 * the seed data to imply them), and the edge tests assert connectivity through the read path
+	 * instead of a foreign-key column. Adapters without this capability keep the key-field
+	 * semantics and are unaffected.
+	 */
+	RELATIONSHIP_EDGES,
+
 	/** {@code query()} — the object-graph query path. */
 	GRAPH_QUERY,
 
 	/** {@code queryVectorAttr()} reads a vector attribute's current value. */
 	VECTOR_ATTR;
 
-	/** The full write path — what object-graph adapters such as PostgreSQL/DuckDB support. */
-	public static final Set<DataAdapterCapability> FULL = EnumSet.allOf(DataAdapterCapability.class);
+	/**
+	 * The full write path with key-field edges — what object-graph adapters such as
+	 * PostgreSQL/DuckDB support. It deliberately excludes {@link #RELATIONSHIP_EDGES}, whose
+	 * representation is the opposite one.
+	 */
+	public static final Set<DataAdapterCapability> FULL = EnumSet.of(
+			JDBC_CONNECTION, READ_QUERY, SAMPLE_DATA, NAMESPACE_LIFECYCLE, CLASS_SCHEMA, OBJECT_CRUD,
+			EDGE_CRUD, GRAPH_QUERY, VECTOR_ATTR);
 
 	/** The read-only relational path — what the query-only SQL adapters support. */
 	public static final Set<DataAdapterCapability> READ_ONLY = EnumSet.of(
