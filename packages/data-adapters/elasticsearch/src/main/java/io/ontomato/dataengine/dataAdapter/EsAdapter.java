@@ -1624,13 +1624,25 @@ public class EsAdapter implements DataAdapter {
 		return rows;
 	}
 
+	/** Open a point-in-time reader. Elasticsearch and OpenSearch expose different PIT endpoints and
+	 *  response keys, so the dialect picks the call. */
 	private String openPit(String index) throws Exception {
+		if (dialect == EsDialect.OPENSEARCH) {
+			JSONObject response = http().post("/" + index + "/_search/point_in_time", null, Map.of("keep_alive", "2m"));
+			String id = response.getString("pit_id");
+			return id != null ? id : response.getString("id");
+		}
 		return http().post("/" + index + "/_pit", null, Map.of("keep_alive", "2m")).getString("id");
 	}
 
 	private void closePit(String id) {
 		try {
-			http().request("DELETE", "/_pit", JSON.toJSONString(new JSONObject(Map.of("id", id))), null);
+			if (dialect == EsDialect.OPENSEARCH) {
+				http().request("DELETE", "/_search/point_in_time",
+						JSON.toJSONString(new JSONObject(Map.of("pit_id", List.of(id)))), null);
+			} else {
+				http().request("DELETE", "/_pit", JSON.toJSONString(new JSONObject(Map.of("id", id))), null);
+			}
 		} catch (Exception e) {
 			log.debug("closing PIT failed: {}", e.getMessage());
 		}
@@ -1640,7 +1652,9 @@ public class EsAdapter implements DataAdapter {
 		JSONObject body = new JSONObject();
 		body.put("size", PAGE);
 		body.put("query", query);
-		body.put("sort", JSONArray.of(new JSONObject(Map.of("_shard_doc", "asc"))));
+		// _shard_doc is Elasticsearch's PIT tiebreaker; OpenSearch rejects it and uses _doc instead.
+		body.put("sort", JSONArray.of(new JSONObject(Map.of(
+				dialect == EsDialect.OPENSEARCH ? "_doc" : "_shard_doc", "asc"))));
 		if (searchAfter != null) {
 			body.put("search_after", searchAfter);
 		}
