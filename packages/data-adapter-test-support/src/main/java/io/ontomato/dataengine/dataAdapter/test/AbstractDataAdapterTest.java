@@ -2,6 +2,7 @@ package io.ontomato.dataengine.dataAdapter.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.sql.Connection;
@@ -22,6 +23,7 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
+import io.ontomato.dataengine.dataAdapter.DslContractViolationException;
 
 /**
  * The shared contract suite every data adapter test extends.
@@ -856,6 +858,81 @@ public abstract class AbstractDataAdapterTest {
 		JSONArray fields = new JSONArray();
 		fields.add(readField("p", "name", "person_name"));
 		return readQuery(singleStepDsl(objects, null, fields, null, null, null));
+	}
+
+	/** A person object carrying a raw {@code conditions} object (for a non-properties block). */
+	protected JSONArray queryPersonWithConditions(JSONObject conditions) throws Exception {
+		JSONArray objects = new JSONArray();
+		JSONObject p = readObject(0, "p", 0);
+		p.put("conditions", conditions);
+		objects.add(p);
+		JSONArray fields = new JSONArray();
+		fields.add(readField("p", "name", "person_name"));
+		return readQuery(singleStepDsl(objects, null, fields, null, null, null));
+	}
+
+	// ----------------------------------------------------------------------------------
+	// CONTRACT — an unrenderable construct is rejected, never silently dropped
+	//
+	// The report's problem-8/9 shapes: a condition a deployment cannot render must fail
+	// loudly with a located violation, instead of being dropped from the query and
+	// returning a confident wrong answer. The probes are fixture-independent.
+	// ----------------------------------------------------------------------------------
+
+	@Test
+	void timeseriesConditionIsRejectedNotSilentlyDropped() {
+		assume(DataAdapterCapability.READ_QUERY);
+		JSONObject properties = new JSONObject();
+		properties.put("operator", "logic");
+		JSONArray and = new JSONArray();
+		JSONObject block = new JSONObject();
+		block.put("field", "name");
+		JSONObject timeRange = new JSONObject();
+		timeRange.put("start", "2024-01-01 00:00:00");
+		timeRange.put("end", "2025-01-01 00:00:00");
+		block.put("time_range", timeRange);
+		and.add(block);
+		properties.put("and", and);
+		JSONObject timeseries = new JSONObject();
+		timeseries.put("properties", properties);
+		JSONObject conditions = new JSONObject();
+		conditions.put("timeseries", timeseries);
+
+		DslContractViolationException e = assertThrows(DslContractViolationException.class,
+				() -> queryPersonWithConditions(conditions));
+		assertTrue(e.getViolations().stream().anyMatch(
+				v -> v.getCode() == DslContractViolationException.Code.UNSUPPORTED_CONSTRUCT), e.getMessage());
+		assertTrue(e.getViolations().get(0).getDslPath() != null
+				&& !e.getViolations().get(0).getDslPath().isBlank(), e.getMessage());
+	}
+
+	@Test
+	void unrenderableOperatorIsRejectedNotSilentlyDropped() {
+		assume(DataAdapterCapability.READ_QUERY);
+		JSONObject properties = new JSONObject();
+		properties.put("operator", "and");
+		JSONArray and = new JSONArray();
+		and.add(readCond("name", "regexp", ".*"));
+		properties.put("and", and);
+
+		DslContractViolationException e = assertThrows(DslContractViolationException.class,
+				() -> queryPersons(properties));
+		assertTrue(e.getViolations().stream().anyMatch(
+				v -> v.getCode() == DslContractViolationException.Code.UNSUPPORTED_OPERATOR_FOR_TYPE),
+				e.getMessage());
+		assertTrue(e.getMessage().contains("regexp"), e.getMessage());
+	}
+
+	@Test
+	void conditionKeyedByFieldNameIsRejectedNotSilentlyDropped() {
+		assume(DataAdapterCapability.READ_QUERY);
+		JSONObject inner = new JSONObject();
+		inner.put("operator", "between");
+		inner.put("value", JSONArray.of("1996-01-01", "1997-01-01"));
+		JSONObject properties = new JSONObject();
+		properties.put("name", inner);
+
+		assertThrows(DslContractViolationException.class, () -> queryPersons(properties));
 	}
 
 	protected JSONObject readObject(int graphIdx, String variable, int idx) {

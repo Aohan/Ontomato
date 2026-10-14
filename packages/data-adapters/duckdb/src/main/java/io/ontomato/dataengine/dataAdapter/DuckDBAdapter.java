@@ -136,6 +136,12 @@ public class DuckDBAdapter implements DataAdapter {
 				String objWhere = "";
 				if (object.getJSONObject("conditions") != null) {
 					JSONObject conditions = object.getJSONObject("conditions");
+						if (conditions.getJSONObject("timeseries") != null) {
+							throw new DslContractViolationException(
+									DslContractViolationException.Code.UNSUPPORTED_CONSTRUCT,
+									"conditions.timeseries",
+									"the timeseries condition is not implemented by " + getClass().getSimpleName());
+						}
 					if (conditions.getJSONObject("properties") != null) {
 						JSONObject properties = conditions.getJSONObject("properties");
 						List<Object[]> queue = new ArrayList<>();
@@ -255,9 +261,15 @@ public class DuckDBAdapter implements DataAdapter {
 										|| "is not".equals(cond.getString("operator"))) {
 									sqlCond = "\"" + alias + "\"." + attr + " " + cond.getString("operator") + " null";
 								}
-								if (sqlCond != null) {
-									objWhere += sqlCond;
+								if (sqlCond == null) {
+									throw new DslContractViolationException(
+											DslContractViolationException.Code.UNSUPPORTED_OPERATOR_FOR_TYPE,
+											"conditions.properties",
+											"operator '" + cond.getString("operator") + "' on field '" + attr
+													+ "' of type '" + type + "' is not supported by "
+													+ getClass().getSimpleName());
 								}
+								objWhere += sqlCond;
 							}
 						}
 					}
@@ -474,6 +486,10 @@ public class DuckDBAdapter implements DataAdapter {
 				sql = appendLimit(secondStep, sql);
 				return sql;
 			}
+		} catch (DslContractViolationException e) {
+			// located + actionable: let it through unchanged
+			log.warn(e.getMessage());
+			throw e;
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 			throw new Exception("Failed to convert DSL to SQL");
