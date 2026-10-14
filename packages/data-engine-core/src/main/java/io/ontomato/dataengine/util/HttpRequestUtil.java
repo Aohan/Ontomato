@@ -8,7 +8,9 @@ import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.DataRagConfig;
 import io.ontomato.dataengine.dao.VectorResourceDao;
 import io.ontomato.dataengine.dataAdapter.DataAdapter;
+import io.ontomato.dataengine.dataAdapter.DslContractViolationException;
 import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
+import io.ontomato.dataengine.dataAdapter.DslGrammarValidator;
 import io.ontomato.dataengine.service.sys.bean.permission.UserDataPermission;
 
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,18 @@ public class HttpRequestUtil {
 		queryJson = DslUtil.normalizeClassNames(queryJson, classDefs);
 		List<JSONObject> dsls = JSON.parseArray(queryJson, JSONObject.class);
 		JSONObject originDsl = dsls.get(0);
+
+		// Grammar gate: the DSL is validated once, before dispatch, so ABC, the legacy pipeline and MCP all
+		// pass the same door and an internally contradictory construct fails with a located violation
+		// instead of reaching an adapter.
+		try {
+			DslGrammarValidator.validate(originDsl, classDefs);
+		} catch (DslContractViolationException e) {
+			log.warn("[" + sessionId + "] " + e.getMessage());
+			DslExecutionResult failResult = failedDslExecution(e, new ArrayList<String>());
+			failResult.data().put("dsl", originDsl);
+			return new DslExecutionResult[] {failResult, failResult.copy()};
+		}
 
 		Object[] dsl_selectAsFilePathsMap_vectorResourceAsSet;
 		try {
