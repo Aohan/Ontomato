@@ -13,6 +13,7 @@ import { renderPrompt } from "../../../core/prompts/loader";
 import { SkillCategory, SkillType } from "../../../core/skills/constants";
 import { skillRegistryManager } from "../../../core/skills/registry/manager";
 import { t, tApp } from "../../../i18n";
+import { DEFAULT_ANALYSIS_GRAPH_SCOPE, normalizeAnalysisGraphScope } from "./graph-scope";
 
 const logger = createLogger("analysis-agent-service");
 
@@ -56,6 +57,7 @@ interface AnalysisAgentRow {
   enabled_visualization_skill_ids: string[] | null;
   enabled_mcp_service_names: string[] | null;
   class_names: string[] | null;
+  graph_scope: unknown;
   is_enabled: boolean;
   sort_order: number;
   created_at: string;
@@ -100,9 +102,9 @@ export class AnalysisAgentService {
           `INSERT INTO ${qualifiedTable("analysis_agents")}
            (id, name, description, analysis_dimension_prompt, summarizer_prompt,
             conclusion_maker_prompt, enabled_skill_ids, enabled_visualization_skill_ids,
-            enabled_mcp_service_names, class_names, is_enabled, sort_order, domain_id,
-            report_deliverable_enabled, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+             enabled_mcp_service_names, class_names, is_enabled, sort_order, domain_id,
+             report_deliverable_enabled, graph_scope, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
             uuidv4(),
             name,
@@ -118,6 +120,7 @@ export class AnalysisAgentService {
             DEFAULT_AGENT_SORT_ORDER,
             domainId,
             true,
+            DEFAULT_ANALYSIS_GRAPH_SCOPE,
             now,
             now,
           ]
@@ -175,6 +178,7 @@ export class AnalysisAgentService {
         : agent.enabledVisualizationSkillIds;
     const enabledMcpServiceNames = normalizeStringList(agent.enabledMcpServiceNames);
     const classNames = normalizeStringList(agent.classNames);
+    const graphScope = normalizeAnalysisGraphScope(agent.graphScope);
     await this.validateSkillSelections(enabledSkillIds, SkillCategory.ANALYSIS, domainId);
     await this.validateSkillSelections(
       enabledVisualizationSkillIds,
@@ -190,8 +194,8 @@ export class AnalysisAgentService {
         analysis_dimension_prompt, summarizer_prompt,
         conclusion_maker_prompt, enabled_skill_ids, enabled_visualization_skill_ids,
         enabled_mcp_service_names, class_names, is_enabled, sort_order, domain_id,
-        report_deliverable_enabled, hot_report_enabled, summary_position, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
+         report_deliverable_enabled, hot_report_enabled, summary_position, graph_scope, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
       [
         id,
         agent.name,
@@ -216,6 +220,7 @@ export class AnalysisAgentService {
         isAnalysisReportSummaryPosition(agent.summaryPosition)
           ? agent.summaryPosition
           : DEFAULT_ANALYSIS_REPORT_SUMMARY_POSITION,
+        graphScope,
         now,
         now,
       ]
@@ -244,6 +249,9 @@ export class AnalysisAgentService {
     }
     if (updates.classNames !== undefined) {
       updates.classNames = normalizeStringList(updates.classNames);
+    }
+    if (updates.graphScope !== undefined) {
+      updates.graphScope = normalizeAnalysisGraphScope(updates.graphScope);
     }
 
     const now = Date.now();
@@ -318,6 +326,10 @@ export class AnalysisAgentService {
     if (updates.classNames !== undefined) {
       vals.push(updates.classNames);
       sets.push(`class_names = $${idx++}`);
+    }
+    if (updates.graphScope !== undefined) {
+      vals.push(updates.graphScope);
+      sets.push(`graph_scope = $${idx++}`);
     }
     if (updates.isEnabled !== undefined) {
       vals.push(updates.isEnabled);
@@ -447,6 +459,7 @@ function mapAgentRow(row: AnalysisAgentRow): AnalysisAgent {
     enabledVisualizationSkillIds: row.enabled_visualization_skill_ids || [],
     enabledMcpServiceNames: row.enabled_mcp_service_names || [],
     classNames: row.class_names || [],
+    graphScope: normalizeAnalysisGraphScope(row.graph_scope),
     isEnabled: row.is_enabled,
     sortOrder: row.sort_order ?? 0,
     createdAt: parseInt(row.created_at, 10),

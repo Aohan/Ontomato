@@ -187,8 +187,10 @@ async function executeRun(
         analysisDimensionPrompt: agent.analysisDimensionPrompt,
         enabledSkillIds: agent.enabledSkillIds,
         enabledVisualizationSkillIds: agent.enabledVisualizationSkillIds,
-        reportDeliverableEnabled: agent.reportDeliverableEnabled,
-      },
+         reportDeliverableEnabled: agent.reportDeliverableEnabled,
+        graphScope: task.graphScopeSnapshot || agent.graphScope,
+        classNames: task.classNamesSnapshot || agent.classNames,
+       },
     });
 
     if (controller.signal.aborted && artifacts?.runState.status !== "completed")

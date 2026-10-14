@@ -3,6 +3,10 @@ export type AnalysisAgentExecutionMode = "dimension" | "loop";
 /** Display position of the comprehensive summary in the report. Historical agents default to the end of the report. */
 export type AnalysisReportSummaryPosition = "top" | "bottom";
 
+export type AnalysisGraphScope =
+  | { mode: "panorama" }
+  | { mode: "subgraph"; rootClassNames: string[]; maxDepth: number };
+
 export interface AnalysisAgent {
   /** Business ID (UUID) */
   id: string;
@@ -36,6 +40,8 @@ export interface AnalysisAgent {
   enabledMcpServiceNames?: string[];
   /** Associated object class names, limiting dimension splitting and query scope */
   classNames?: string[];
+  /** Initial ontology exploration scope. Panorama is the backward-compatible default. */
+  graphScope: AnalysisGraphScope;
   /** Whether enabled */
   isEnabled: boolean;
   /** Sort order (smaller values first) */

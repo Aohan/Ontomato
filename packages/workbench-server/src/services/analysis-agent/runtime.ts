@@ -1,10 +1,11 @@
-import type { AnalysisAgentExecutionMode } from "@ontomato/contracts/analysis-agent";
+import type { AnalysisAgentExecutionMode, AnalysisGraphScope } from "@ontomato/contracts/analysis-agent";
 import { runDeepAnalysisWorkflow } from "./dimension/dimension-workflow";
 import { t } from "../../i18n";
 import { getAnalysisAgentService } from "./config/agent-service";
 import type { AnalysisConversationTurnRecord } from "./task/conversation-types";
 import type { AnalysisRunIdentity } from "./task/run-history";
 import { runAnalysisLoopWorkflow } from "./loop/loop-workflow";
+import { intersectAnalysisClassNames, resolveAnalysisGraphClassNames } from "./config/graph-scope";
 
 import type { DeepAnalysisTaskPayload } from "@ontomato/contracts/analysis-presentation";
 import type { DeepAnalysisEmittedEvent } from "@ontomato/contracts/analysis-events";
@@ -37,6 +38,8 @@ type RunDeepAnalysisParams = {
     enabledSkillIds?: string[];
     enabledVisualizationSkillIds?: string[];
     reportDeliverableEnabled?: boolean;
+    graphScope?: AnalysisGraphScope;
+    classNames?: string[];
   };
 };
 
@@ -52,6 +55,8 @@ export async function runDeepAnalysis(
   let enabledSkillIds: string[] | undefined;
   let enabledVisualizationSkillIds: string[] | undefined;
   let agentReportDeliverableEnabled: boolean | undefined;
+  let graphScope: AnalysisGraphScope | undefined;
+  let configuredClassNames: string[] | undefined;
 
   if (agentConfig) {
     executionMode = agentConfig.executionMode;
@@ -61,6 +66,8 @@ export async function runDeepAnalysis(
     enabledSkillIds = agentConfig.enabledSkillIds;
     enabledVisualizationSkillIds = agentConfig.enabledVisualizationSkillIds;
     agentReportDeliverableEnabled = agentConfig.reportDeliverableEnabled;
+    graphScope = agentConfig.graphScope;
+    configuredClassNames = agentConfig.classNames;
   } else {
     const service = await getAnalysisAgentService();
     const agent = await service.getAgent(params.agentId, params.domainId);
@@ -74,7 +81,19 @@ export async function runDeepAnalysis(
     enabledSkillIds = agent.enabledSkillIds;
     enabledVisualizationSkillIds = agent.enabledVisualizationSkillIds;
     agentReportDeliverableEnabled = agent.reportDeliverableEnabled;
+    graphScope = agent.graphScope;
+    configuredClassNames = agent.classNames;
   }
+
+  const graphClassNames = await resolveAnalysisGraphClassNames(
+    graphScope,
+    params.token,
+    params.userId,
+    undefined,
+    params.apiKey,
+    params.signal
+  );
+  const classNames = intersectAnalysisClassNames(configuredClassNames, graphClassNames);
 
   // Accepted regular-session turns always use the loop; analysis tasks still dispatch by the current agent configuration.
   if (params.conversationTurn || executionMode === "loop") {
@@ -92,6 +111,8 @@ export async function runDeepAnalysis(
       signal: params.signal,
       conversationTurn: params.conversationTurn,
       reportDeliverableEnabled: params.reportDeliverableEnabled ?? agentReportDeliverableEnabled,
+      graphScopeClassNames: graphClassNames,
+      classNames,
     });
   }
 
@@ -112,5 +133,7 @@ export async function runDeepAnalysis(
     enabledSkillIds,
     enabledVisualizationSkillIds,
     signal: params.signal,
+    graphScopeClassNames: graphClassNames,
+    classNames,
   });
 }

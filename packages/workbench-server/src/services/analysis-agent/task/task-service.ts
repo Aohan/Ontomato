@@ -42,6 +42,7 @@ import { isAnalysisTaskTerminalStatus } from "./events";
 import { PERSISTED_RESULT_KEYS } from "../../data-query/query-fact";
 import type { AnalysisEvidenceQuestion } from "@ontomato/contracts/analysis-presentation";
 import { tApp } from "../../../i18n";
+import { normalizeAnalysisGraphScope } from "../config/graph-scope";
 
 
 const logger = createLogger("analysis-task-service");
@@ -72,6 +73,8 @@ interface AnalysisTaskRow {
   created_at: string;
   updated_at: string;
   report_deliverable_enabled?: boolean;
+  graph_scope_snapshot?: unknown;
+  class_names_snapshot?: string[] | null;
   run_history?: unknown;
   harness_session_id?: string | null;
 }
@@ -122,7 +125,8 @@ function taskListFeedSql(): string {
 /** Plain task-row columns; the two large JSONB columns are projected per read. */
 const TASK_COLUMNS = `id, agent_id, user_id, domain_id, name, description, status, thread_id, question,
   notify_email, notify_on_complete, result_summary, trigger_source, token, last_run_at,
-  created_at, updated_at, report_deliverable_enabled, request_seq, harness_session_id`;
+   created_at, updated_at, report_deliverable_enabled, graph_scope_snapshot, class_names_snapshot,
+   request_seq, harness_session_id`;
 
 const RESULT_KEYS_SQL = `ARRAY[${PERSISTED_RESULT_KEYS.map((key) => `'${key}'`).join(", ")}]`;
 
@@ -191,6 +195,10 @@ function mapTaskRow(row: AnalysisTaskRow): AnalysisTask {
     description: row.description || "",
     status: row.status as AnalysisTaskStatus,
     reportDeliverableEnabled: row.report_deliverable_enabled !== false,
+    graphScopeSnapshot: row.graph_scope_snapshot
+      ? normalizeAnalysisGraphScope(row.graph_scope_snapshot)
+      : undefined,
+    classNamesSnapshot: row.class_names_snapshot || undefined,
     threadId: row.thread_id || undefined,
     question: row.question || undefined,
     scheduleExpression: row.schedule_expression || undefined,
@@ -593,8 +601,8 @@ export class AnalysisTaskService {
       `INSERT INTO ${qualifiedTable("analysis_tasks")}
        (id, agent_id, user_id, name, description, status, thread_id, question,
         notify_email, notify_on_complete, trigger_source, token, created_at, updated_at, domain_id,
-        report_deliverable_enabled)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+         report_deliverable_enabled, graph_scope_snapshot, class_names_snapshot)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
       [
         id,
         params.agentId,
@@ -612,6 +620,8 @@ export class AnalysisTaskService {
         now,
         params.domainId,
         reportDeliverableEnabled,
+        params.graphScopeSnapshot || { mode: "panorama" },
+        params.classNamesSnapshot || null,
       ]
     );
     logger.info(tApp("analysis.task.task-service.447", { id: id, name: params.name }));

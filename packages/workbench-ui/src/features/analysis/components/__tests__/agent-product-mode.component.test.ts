@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
-import ElementPlus from "element-plus";
+import ElementPlus, { ElInputNumber, ElSelect, ElOption } from "element-plus";
 import AgentCreateDialog from "../AgentCreateDialog.vue";
 import en from "../../../../locales/en";
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
@@ -44,6 +44,7 @@ const dimensionAgent: AnalysisAgent = {
   summarizerPrompt: "Dimension report",
   conclusionMakerPrompt: "Summary",
   enabledMcpServiceNames: ["orders"],
+  graphScope: { mode: "panorama" },
   isEnabled: true,
   createdAt: 1,
   updatedAt: 1,
@@ -86,6 +87,7 @@ describe("agent product and execution modes", () => {
     expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.text())).toEqual([
       "Analysis",
       "Loop Execution",
+      "Panorama",
     ]);
     await choose(wrapper, "Dimension Orchestration");
     expect(wrapper.text()).toContain("Dimension Report");
@@ -118,6 +120,7 @@ describe("agent product and execution modes", () => {
     expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.text())).toEqual([
       "Analysis",
       "Dimension Orchestration",
+      "Panorama",
     ]);
     await choose(wrapper, "Loop Execution");
     await flushPromises();
@@ -138,6 +141,92 @@ describe("agent product and execution modes", () => {
         enabledMcpServiceNames: ["orders"],
       })
     );
+    wrapper.unmount();
+  });
+
+  it("defaults historical agents to Panorama without changing related classes", async () => {
+    const { graphScope: _scope, ...historicalAgent } = dimensionAgent;
+    const wrapper = await dialog({ ...historicalAgent, classNames: ["Invoice"] } as AnalysisAgent);
+    expect(wrapper.findComponent(ElInputNumber).exists()).toBe(false);
+    await wrapper.findAll("button").find((button) => button.text() === "Save")!.trigger("click");
+    await flushPromises();
+    expect(mocks.updateAgent).toHaveBeenCalledWith("dimension", expect.objectContaining({
+      graphScope: { mode: "panorama" },
+      classNames: ["Invoice"],
+    }));
+    const payload = mocks.updateAgent.mock.calls[0][1];
+    expect(payload).not.toHaveProperty("graphScopeMode");
+    expect(payload).not.toHaveProperty("graphScopeRootClassNames");
+    expect(payload).not.toHaveProperty("graphScopeMaxDepth");
+    wrapper.unmount();
+  });
+
+  it("uses objectClasses for roots, validates Subgraph, and saves depth zero independently of classNames", async () => {
+    mocks.apiPost.mockResolvedValue({ data: { classDef: [
+      { className: "Order", showName: "Orders" },
+      { className: "Invoice", classDesc: "Invoices" },
+    ] } });
+    const wrapper = await dialog();
+    await wrapper.find("input.el-input__inner").setValue("Scoped agent");
+    await choose(wrapper, "Subgraph");
+    const depth = wrapper.findComponent(ElInputNumber);
+    expect(depth.props()).toMatchObject({ modelValue: 1, min: 0, max: 10, step: 1, stepStrictly: true });
+    const roots = wrapper.findAllComponents(ElSelect).find((select) =>
+      select.props("ariaLabel") === "Root Classes"
+    )!;
+    expect(roots.props("multiple")).toBe(true);
+    expect(roots.findAllComponents(ElOption).map((option) => [option.props("label"), option.props("value")])).toEqual([
+      ["Orders (Order)", "Order"], ["Invoices (Invoice)", "Invoice"],
+    ]);
+    const save = () => wrapper.findAll("button").find((button) => button.text() === "Save")!.trigger("click");
+    await save();
+    expect(mocks.createAgent).not.toHaveBeenCalled();
+    roots.vm.$emit("update:modelValue", ["Order"]);
+    depth.vm.$emit("update:modelValue", undefined);
+    await save();
+    expect(mocks.createAgent).not.toHaveBeenCalled();
+    depth.vm.$emit("update:modelValue", 11);
+    await save();
+    expect(mocks.createAgent).not.toHaveBeenCalled();
+    depth.vm.$emit("update:modelValue", 0);
+    await save();
+    await flushPromises();
+    expect(mocks.createAgent).toHaveBeenCalledWith(expect.objectContaining({
+      graphScope: { mode: "subgraph", rootClassNames: ["Order"], maxDepth: 0 },
+      classNames: [],
+    }));
+    wrapper.unmount();
+  });
+
+  it("loads and copies a stored Subgraph, preserves it across mode switches, and resets on reopen", async () => {
+    const agent: AnalysisAgent = {
+      ...dimensionAgent,
+      classNames: ["Invoice"],
+      graphScope: { mode: "subgraph", rootClassNames: ["Order"], maxDepth: 10 },
+    };
+    const wrapper = await dialog(agent);
+    expect(wrapper.findComponent(ElInputNumber).props("modelValue")).toBe(10);
+    const roots = () => wrapper.findAllComponents(ElSelect).find((select) =>
+      select.props("ariaLabel") === "Root Classes"
+    )!;
+    expect(roots().props("modelValue")).toEqual(["Order"]);
+    expect(roots().props("modelValue")).not.toBe(agent.graphScope.mode === "subgraph" && agent.graphScope.rootClassNames);
+    await choose(wrapper, "Panorama");
+    expect(wrapper.findComponent(ElInputNumber).exists()).toBe(false);
+    await choose(wrapper, "Subgraph");
+    expect(roots().props("modelValue")).toEqual(["Order"]);
+    expect(wrapper.findComponent(ElInputNumber).props("modelValue")).toBe(10);
+    await wrapper.findAll("button").find((button) => button.text() === "Save")!.trigger("click");
+    await flushPromises();
+    expect(mocks.updateAgent).toHaveBeenCalledWith("dimension", expect.objectContaining({
+      graphScope: agent.graphScope, classNames: ["Invoice"],
+    }));
+    await wrapper.setProps({ visible: false, editingAgent: null });
+    await wrapper.setProps({ visible: true });
+    expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.text())).toContain("Panorama");
+    await choose(wrapper, "Subgraph");
+    expect(roots().props("modelValue")).toEqual([]);
+    expect(wrapper.findComponent(ElInputNumber).props("modelValue")).toBe(1);
     wrapper.unmount();
   });
 });

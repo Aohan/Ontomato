@@ -303,7 +303,7 @@ async function runDimensionStage(
           },
           ctx.apiKey,
           ctx.locale,
-          agent.classNames,
+           ctx.classNames,
           {
             threadId: ctx.threadId,
             requestSeq: ctx.requestSeq,

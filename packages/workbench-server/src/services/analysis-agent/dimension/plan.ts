@@ -32,6 +32,7 @@ import type {
 import { throwIfAborted, type DimensionRunContext } from "./context";
 import { normalizeQuestionStatus } from "./evidence";
 import { tApp } from "../../../i18n";
+import { intersectAnalysisClassNames } from "../config/graph-scope";
 
 
 const logger = createLogger("deep-analysis-plan");
@@ -163,11 +164,12 @@ export async function resolveAnalysisPlan(
     throw new Error(t("analysis.noDimensionsOrPrompt", { agentName: agent.name }));
   }
 
+  const effectiveClassNames = intersectAnalysisClassNames(ctx.classNames, ctx.graphScopeClassNames);
   const datasetSchema = await datasetSchemaService.getSchemaForQuestion(
     ctx.userQuestion,
     ctx.token,
     ctx.apiKey,
-    agent.classNames
+    effectiveClassNames
   );
 
   throwIfAborted(ctx.signal);

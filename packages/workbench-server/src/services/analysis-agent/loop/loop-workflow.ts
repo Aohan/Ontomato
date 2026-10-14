@@ -49,6 +49,7 @@ import {
   type QueryResultDatasetEntry,
 } from "../runtime/query-result";
 import { tApp } from "../../../i18n";
+import { intersectAnalysisClassNames } from "../config/graph-scope";
 
 
 const logger = createLogger("analysis-loop-workflow");
@@ -78,6 +79,8 @@ export interface RunAnalysisLoopParams {
   conversationTurn?: AnalysisConversationTurnRecord;
   /** The entry point's override of the report deliverable; when absent the agent configuration applies. */
   reportDeliverableEnabled?: boolean;
+  graphScopeClassNames?: string[];
+  classNames?: string[];
 }
 
 function buildSystemPrompt(params: {
@@ -260,7 +263,7 @@ export async function runAnalysisLoopWorkflow(
         apiKey,
         userId,
         locale: params.locale,
-        classNames: agent.classNames,
+         classNames: params.classNames || agent.classNames,
         signal: loopSignal,
         trajectory,
         initialEvidence,
@@ -282,7 +285,7 @@ export async function runAnalysisLoopWorkflow(
         apiKey,
         userId,
         locale: params.locale,
-        classNames: agent.classNames,
+         classNames: intersectAnalysisClassNames(params.classNames || agent.classNames, params.graphScopeClassNames),
         signal: loopSignal,
         trajectory,
       });
@@ -291,7 +294,7 @@ export async function runAnalysisLoopWorkflow(
         userQuestion,
         token,
         apiKey,
-        agent.classNames
+         intersectAnalysisClassNames(params.classNames || agent.classNames, params.graphScopeClassNames)
       );
 
       const selectedSkillIds = agent.enabledSkillIds || [];

@@ -67,7 +67,8 @@ async function ensureAnalysisAgents(client: QueryableClient): Promise<void> {
       is_enabled BOOLEAN DEFAULT true,
       sort_order INTEGER DEFAULT 0,
       domain_id TEXT,
-      created_at BIGINT NOT NULL,
+       graph_scope JSONB NOT NULL DEFAULT '{"mode":"panorama"}'::jsonb,
+       created_at BIGINT NOT NULL,
       updated_at BIGINT NOT NULL
     )
   `);
@@ -77,7 +78,8 @@ async function ensureAnalysisAgents(client: QueryableClient): Promise<void> {
     "class_names TEXT[] DEFAULT '{}'",
     // Existing agents keep dimension orchestration
     "execution_mode TEXT NOT NULL DEFAULT 'dimension'",
-    "loop_prompt TEXT",
+     "loop_prompt TEXT",
+    "graph_scope JSONB NOT NULL DEFAULT '{\"mode\":\"panorama\"}'::jsonb",
   ]);
   await client.query(`
     CREATE INDEX IF NOT EXISTS idx_agents_enabled
@@ -169,7 +171,9 @@ async function ensureAnalysisTasks(client: QueryableClient): Promise<void> {
       notify_email TEXT,
       notify_on_complete BOOLEAN DEFAULT false,
       result_summary TEXT,
-      analysis_payload JSONB,
+       analysis_payload JSONB,
+      graph_scope_snapshot JSONB,
+      class_names_snapshot TEXT[],
       trigger_source TEXT DEFAULT 'manual',
       token TEXT DEFAULT '',
       last_run_at BIGINT,
@@ -190,6 +194,8 @@ async function ensureAnalysisTasks(client: QueryableClient): Promise<void> {
     "notify_on_complete BOOLEAN DEFAULT false",
     "result_summary TEXT",
     "analysis_payload JSONB",
+    "graph_scope_snapshot JSONB",
+    "class_names_snapshot TEXT[]",
     "trigger_source TEXT DEFAULT 'manual'",
     "last_run_at BIGINT",
     "token TEXT DEFAULT ''",
