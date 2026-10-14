@@ -151,19 +151,12 @@ public class ABCProgrammerSkillTools {
 				try {
 					List<ABCHarnessProgramOutKeyRef> okrs = new ArrayList<ABCHarnessProgramOutKeyRef>();
 					for (int i = 0; i < outKeyRefs.size(); i++) {
-						Map colRef = outKeyRefs.get(i);
-						ABCHarnessProgramOutKeyRef okr = new ABCHarnessProgramOutKeyRef();
-						okr.setKey((String)colRef.get("key"));
-						okr.setClassName(DBSchemaUtil.normalizeClassName((String)colRef.get("className"), classDefs));
-						okr.setAttrName((String)colRef.get("attrName"));
-						okr.setAsGroupBy((Boolean)colRef.get("asGroupBy"));
-						okr.setStatCal((Boolean)colRef.get("statCal"));
-						okrs.add(okr);
+						okrs.add(applyOutKeyRef(outKeyRefs.get(i), i, classDefs));
 					}
 					program.setOutKeyRefs(okrs);
 				} catch (Exception e) {
 					log.error(e.getMessage(), e);
-					throw new Exception("Error in the output attribute sources");
+					throw new Exception("Error in the output attribute sources: " + e.getMessage());
 				}
 				
 				Map<String, Set<String>> classAttrMap = new HashMap<String, Set<String>>();
@@ -246,6 +239,44 @@ public class ABCProgrammerSkillTools {
 	 * programmer is about to use. All C-step features are requested; the attribute types of the
 	 * named classes decide which condition rules (text/vector/timeseries) are actually included.
 	 */
+	/** Map one model-supplied output key reference onto a typed {@link ABCHarnessProgramOutKeyRef}. */
+	static ABCHarnessProgramOutKeyRef applyOutKeyRef(Map colRef, int index, List<Map<String, Object>> classDefs) {
+		ABCHarnessProgramOutKeyRef okr = new ABCHarnessProgramOutKeyRef();
+		okr.setKey((String) colRef.get("key"));
+		okr.setClassName(DBSchemaUtil.normalizeClassName((String) colRef.get("className"), classDefs));
+		okr.setAttrName((String) colRef.get("attrName"));
+		okr.setAsGroupBy(asBoolean(colRef.get("asGroupBy"), "asGroupBy", index));
+		okr.setStatCal(asBoolean(colRef.get("statCal"), "statCal", index));
+		return okr;
+	}
+
+	/**
+	 * Read a flag from the model's output strictly enough to catch a real typo, but tolerantly enough to
+	 * accept the string and number forms a model emits ("true", "1"). A value that is neither a boolean
+	 * nor one of those forms fails with the exact {@code outputKeyRefs[i].<key>} named, instead of a bare
+	 * cast error that does not say which field was wrong.
+	 */
+	static boolean asBoolean(Object value, String key, int index) {
+		if (value == null) {
+			return false;
+		}
+		if (value instanceof Boolean b) {
+			return b;
+		}
+		if (value instanceof Number n) {
+			return n.doubleValue() != 0d;
+		}
+		String s = String.valueOf(value).trim();
+		if ("true".equalsIgnoreCase(s) || "1".equals(s) || "yes".equalsIgnoreCase(s)) {
+			return true;
+		}
+		if (s.isEmpty() || "false".equalsIgnoreCase(s) || "0".equals(s) || "no".equalsIgnoreCase(s)) {
+			return false;
+		}
+		throw new IllegalArgumentException("outputKeyRefs[" + index + "]." + key
+				+ " must be a boolean (true/false), but was \"" + s + "\"");
+	}
+
 	private static JSONObject dslScope(List<String> classNames) {
 		JSONObject subQuery = new JSONObject();
 		JSONArray classes = new JSONArray();
