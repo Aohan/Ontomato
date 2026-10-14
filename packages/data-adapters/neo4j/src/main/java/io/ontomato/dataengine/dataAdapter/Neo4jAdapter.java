@@ -55,6 +55,9 @@ public class Neo4jAdapter implements DataAdapter {
 	/** An unbounded hop range (max_hops = -1) is capped here so a traversal cannot run away. */
 	private static final int MAX_HOPS = 10;
 
+	/** Rows a single query may materialize before it is refused, so a large read cannot OOM the engine. */
+	private static final long DEFAULT_MAX_MATERIALIZE = 100_000L;
+
 	private final DataAdapterConnection connection;
 	private final Map<String, Object> jsonRule;
 
@@ -119,14 +122,26 @@ public class Neo4jAdapter implements DataAdapter {
 	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] Neo4j DSL to query: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
-		CypherQuery cypher = toCypher(dsls.getJSONObject(0), jsonRule);
+		DslRowLimit.Tracker rowLimit = new DslRowLimit.Tracker();
+		CypherQuery cypher = toCypher(dsls.getJSONObject(0), jsonRule, rowLimit);
 		generatedMqls.add(cypher.text);
 		log.info("[" + sessionId + "] Converted Neo4j cypher: " + cypher.text);
 		JSONArray data = queryCypher(cypher);
+		boolean truncated = rowLimit.defaulted() && data.size() > rowLimit.effectiveLimit();
+		if (truncated) {
+			data.remove(rowLimit.effectiveLimit()); // drop the truncation probe row
+		}
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
 		answer.put("mqls", generatedMqls);
+		if (truncated) {
+			answer.put(DslRowLimit.TRUNCATED, true);
+			answer.put(DslRowLimit.ROW_LIMIT, rowLimit.effectiveLimit());
+			answer.put(DslRowLimit.TRUNCATION_HINT, DslRowLimit.truncationHint(rowLimit.effectiveLimit()));
+			log.warn("[" + sessionId + "] DSL result truncated at the default row limit of "
+					+ rowLimit.effectiveLimit());
+		}
 		answers.add(answer);
 		return JSON.toJSONString(answers, Feature.WriteMapNullValue);
 	}
@@ -147,7 +162,7 @@ public class Neo4jAdapter implements DataAdapter {
 	 * relational adapters. A two-step DSL chains the first step's projection into a {@code WITH} that
 	 * the second step consumes.
 	 */
-	private CypherQuery toCypher(JSONObject dsl, Map<String, Object> jsonRule) throws Exception {
+	private CypherQuery toCypher(JSONObject dsl, Map<String, Object> jsonRule, DslRowLimit.Tracker rowLimit) throws Exception {
 		try {
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
@@ -172,17 +187,17 @@ public class Neo4jAdapter implements DataAdapter {
 			CypherQuery query = new CypherQuery();
 			String step0 = buildMatchWhere(steps.getJSONObject(0), classAttrTypeMap, classEnableAttrsMap, query);
 			if (steps.size() == 1) {
-				query.text = buildOutput(step0, steps.getJSONObject(0).getJSONObject("output"), query, true, false, null);
+				query.text = buildOutput(step0, steps.getJSONObject(0).getJSONObject("output"), query, true, false, null, rowLimit);
 				return query;
 			}
 			// Two-step: the first step flattens into a WITH; the second step computes over those columns.
-			String flattened = buildOutput(step0, steps.getJSONObject(0).getJSONObject("output"), query, false, false, null);
+			String flattened = buildOutput(step0, steps.getJSONObject(0).getJSONObject("output"), query, false, false, null, rowLimit);
 			JSONObject secondStep = steps.getJSONObject(1);
 			String tmpVariable = secondStep.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0)
 					.getJSONArray("objects").getJSONObject(0).getString("variable");
 			CypherQuery second = new CypherQuery();
 			second.counter = query.counter;
-			second.text = buildOutput(flattened, secondStep.getJSONObject("output"), second, true, true, tmpVariable);
+			second.text = buildOutput(flattened, secondStep.getJSONObject("output"), second, true, true, tmpVariable, rowLimit);
 			return second;
 		} catch (DslContractViolationException e) {
 			// located + actionable: let it through unchanged
@@ -282,7 +297,7 @@ public class Neo4jAdapter implements DataAdapter {
 
 	/** Append the terminal projection of one step: RETURN (or WITH for an intermediate), plus order/limit when terminal. */
 	private String buildOutput(String prefix, JSONObject output, CypherQuery query, boolean terminal,
-			boolean fromAliases, String tmpVariable) {
+			boolean fromAliases, String tmpVariable, DslRowLimit.Tracker rowLimit) {
 		ReturnPlan plan = buildReturn(output, fromAliases, tmpVariable);
 		StringBuilder body = new StringBuilder(prefix);
 		JSONObject groupBy = output.getJSONObject("group_by");
@@ -299,7 +314,7 @@ public class Neo4jAdapter implements DataAdapter {
 			if (orderBy != null) {
 				body.append("\n").append(orderBy);
 			}
-			String limit = buildLimit(output);
+			String limit = buildLimit(output, rowLimit);
 			if (limit != null) {
 				body.append("\n").append(limit);
 			}
@@ -543,15 +558,20 @@ public class Neo4jAdapter implements DataAdapter {
 		return orderBy.toString();
 	}
 
-	private String buildLimit(JSONObject output) {
+	private String buildLimit(JSONObject output, DslRowLimit.Tracker rowLimit) {
 		JSONObject limit = output.getJSONObject("limit");
 		if (limit == null || limit.getInteger("count") == null) {
-			return null;
+			// An omitted limit means the engine default, never an unbounded read. One extra row is the
+			// truncation probe that executeDsl turns into a `truncated` marker.
+			int cap = DslRowLimit.defaultRowLimit();
+			rowLimit.terminalLimit(cap, true);
+			return "limit " + (cap + 1);
 		}
 		Integer offset = limit.getInteger("offset");
 		if (offset == null) {
 			offset = 0;
 		}
+		rowLimit.terminalLimit(limit.getInteger("count"), false);
 		return "skip " + offset + " limit " + limit.getInteger("count");
 	}
 
@@ -571,10 +591,15 @@ public class Neo4jAdapter implements DataAdapter {
 
 	private JSONArray queryCypher(CypherQuery cypher) throws Exception {
 		log.info(cypher.text);
+		long maxMaterialize = Long.getLong("ontomato.neo4j.maxMaterialize", DEFAULT_MAX_MATERIALIZE);
 		return withSession(session -> {
 			Result result = session.run(cypher.text, cypher.params);
 			JSONArray rows = new JSONArray();
 			while (result.hasNext()) {
+				if (rows.size() >= maxMaterialize) {
+					throw new IllegalStateException("Neo4j result exceeds the maxMaterialize budget of " + maxMaterialize
+							+ " rows; add an explicit output.limit or aggregate before relying on it");
+				}
 				Record record = result.next();
 				JSONObject row = new JSONObject();
 				for (String key : record.keys()) {

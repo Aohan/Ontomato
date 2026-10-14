@@ -1,6 +1,7 @@
 package io.ontomato.dataengine.dataAdapter.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -771,6 +772,61 @@ public abstract class AbstractDataAdapterTest {
 		dropGraph();
 	}
 
+	@Test
+	void omittedLimitIsCappedAndReportedAsTruncated() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		// An omitted output.limit means "apply the engine default", never an unbounded read. Shrink
+		// the default below the fixture size so the cap is actually hit, then assert the result is
+		// both capped and marked, instead of silently returning a partial relation.
+		int cap = totalPersonCount() - 1;
+		withDefaultRowLimit(cap, () -> {
+			JSONArray objects = new JSONArray();
+			objects.add(readObject(0, "p", 0));
+			JSONArray fields = new JSONArray();
+			fields.add(readField("p", "name", "person_name"));
+			JSONObject answer = readAnswer(singleStepDsl(objects, null, fields, null, null, null));
+			assertEquals(Boolean.TRUE, answer.getBoolean("truncated"));
+			assertEquals(cap, answer.getInteger("rowLimit").intValue());
+			assertEquals(cap, answer.getJSONArray("answer").size());
+		});
+		dropGraph();
+	}
+
+	@Test
+	void omittedLimitUnderTheCapIsNotReportedAsTruncated() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		JSONArray objects = new JSONArray();
+		objects.add(readObject(0, "p", 0));
+		JSONArray fields = new JSONArray();
+		fields.add(readField("p", "name", "person_name"));
+		JSONObject answer = readAnswer(singleStepDsl(objects, null, fields, null, null, null));
+		assertNull(answer.getBoolean("truncated"));
+		assertEquals(totalPersonCount(), answer.getJSONArray("answer").size());
+		dropGraph();
+	}
+
+	/** Run {@code body} with the engine's default row cap temporarily set to {@code cap}. */
+	protected void withDefaultRowLimit(int cap, ThrowingRunnable body) throws Exception {
+		String previous = System.getProperty("ontomato.dsl.defaultRowLimit");
+		System.setProperty("ontomato.dsl.defaultRowLimit", String.valueOf(cap));
+		try {
+			body.run();
+		} finally {
+			if (previous == null) {
+				System.clearProperty("ontomato.dsl.defaultRowLimit");
+			} else {
+				System.setProperty("ontomato.dsl.defaultRowLimit", previous);
+			}
+		}
+	}
+
+	/** A body that may throw, for {@link #withDefaultRowLimit(int, ThrowingRunnable)}. */
+	protected interface ThrowingRunnable {
+		void run() throws Exception;
+	}
+
 	// ----------------------------------------------------------------------------------
 	// EDGE — createEdge / deleteEdge
 	// ----------------------------------------------------------------------------------
@@ -820,10 +876,15 @@ public abstract class AbstractDataAdapterTest {
 	// ----------------------------------------------------------------------------------
 
 	protected JSONArray readQuery(String dslJson) throws Exception {
+		return readAnswer(dslJson).getJSONArray("answer");
+	}
+
+	/** The full answer object of one DSL execution, including any truncation marker the adapter set. */
+	protected JSONObject readAnswer(String dslJson) throws Exception {
 		DataAdapter adapter = newAdapter(prefixedGraphRule());
 		java.util.List<String> mqls = new java.util.ArrayList<>();
 		String result = adapter.executeDsl(dslJson, "test-session", null, mqls);
-		return JSON.parseArray(result).getJSONObject(0).getJSONArray("answer");
+		return JSON.parseArray(result).getJSONObject(0);
 	}
 
 	/** Whether the read path joins the source-class {@code sourceId} object to the target-class {@code targetId}. */

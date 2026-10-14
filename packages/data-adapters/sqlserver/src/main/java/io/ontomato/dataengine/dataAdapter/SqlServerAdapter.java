@@ -54,19 +54,31 @@ public class SqlServerAdapter implements DataAdapter {
 	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] SQL Server DSL to query: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
-		String sql = toSql(dsls.getJSONObject(0), jsonRule);
+		DslRowLimit.Tracker rowLimit = new DslRowLimit.Tracker();
+		String sql = toSql(dsls.getJSONObject(0), jsonRule, rowLimit);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] Converted SQL Server sql: " + sql);
 		JSONArray data = executeSql(sql);
+		boolean truncated = rowLimit.defaulted() && data.size() > rowLimit.effectiveLimit();
+		if (truncated) {
+			data.remove(rowLimit.effectiveLimit()); // drop the truncation probe row
+		}
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
 		answer.put("mqls", generatedMqls);
+		if (truncated) {
+			answer.put(DslRowLimit.TRUNCATED, true);
+			answer.put(DslRowLimit.ROW_LIMIT, rowLimit.effectiveLimit());
+			answer.put(DslRowLimit.TRUNCATION_HINT, DslRowLimit.truncationHint(rowLimit.effectiveLimit()));
+			log.warn("[" + sessionId + "] DSL result truncated at the default row limit of "
+					+ rowLimit.effectiveLimit());
+		}
 		answers.add(answer);
 		return JSON.toJSONString(answers, Feature.WriteMapNullValue);
 	}
 
-	private String toSql(JSONObject dsl, Map<String, Object> jsonRule) throws Exception {
+	private String toSql(JSONObject dsl, Map<String, Object> jsonRule, DslRowLimit.Tracker rowLimit) throws Exception {
 		try {
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
@@ -341,7 +353,7 @@ public class SqlServerAdapter implements DataAdapter {
 			if (steps.size() == 1) {
 				subSelectSql = appendGroupByHaving(firstStep, subSelectSql, null);
 				subSelectSql = appendOrderBy(firstStep, subSelectSql, null);
-				subSelectSql = appendOffsetFetch(firstStep, subSelectSql);
+				subSelectSql = appendOffsetFetch(firstStep, subSelectSql, rowLimit);
 				return subSelectSql;
 			} else {
 				JSONObject secondStep = steps.getJSONObject(1);
@@ -379,7 +391,7 @@ public class SqlServerAdapter implements DataAdapter {
 
 				sql = appendGroupByHaving(secondStep, sql, tmpClassAs);
 				sql = appendOrderBy(secondStep, sql, tmpClassAs);
-				sql = appendOffsetFetch(secondStep, sql);
+				sql = appendOffsetFetch(secondStep, sql, rowLimit);
 				return sql;
 			}
 		} catch (DslContractViolationException e) {
@@ -445,20 +457,28 @@ public class SqlServerAdapter implements DataAdapter {
 		return sql;
 	}
 
-	private String appendOffsetFetch(JSONObject step, String sql) {
-		if (step.getJSONObject("output").getJSONObject("limit") == null) {
-			return sql;
+	private String appendOffsetFetch(JSONObject step, String sql, DslRowLimit.Tracker rowLimit) {
+		JSONObject limit = step.getJSONObject("output").getJSONObject("limit");
+		if (limit == null) {
+			// An omitted limit means the engine default, never an unbounded read (one probe row extra).
+			int cap = DslRowLimit.defaultRowLimit();
+			rowLimit.terminalLimit(cap, true);
+			return offsetFetch(sql, 0, cap + 1);
 		}
-		Integer offset = step.getJSONObject("output").getJSONObject("limit").getInteger("offset");
+		Integer offset = limit.getInteger("offset");
 		if (offset == null) {
 			offset = 0;
 		}
+		rowLimit.terminalLimit(limit.getInteger("count"), false);
+		return offsetFetch(sql, offset, limit.getInteger("count"));
+	}
+
+	private String offsetFetch(String sql, int offset, int count) {
 		// SQL Server requires FETCH NEXT to be paired with ORDER BY
 		if (!sql.contains("order by")) {
 			sql += "\norder by 1";
 		}
-		sql += "\noffset " + offset + " rows fetch next "
-				+ step.getJSONObject("output").getJSONObject("limit").getInteger("count") + " rows only";
+		sql += "\noffset " + offset + " rows fetch next " + count + " rows only";
 		return sql;
 	}
 

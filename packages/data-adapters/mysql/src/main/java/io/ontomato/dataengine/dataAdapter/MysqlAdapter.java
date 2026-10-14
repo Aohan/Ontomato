@@ -51,19 +51,31 @@ public class MysqlAdapter implements DataAdapter {
 	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] DSL for querying mysql: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
-		String sql = toSql(dsls.getJSONObject(0), jsonRule);
+		DslRowLimit.Tracker rowLimit = new DslRowLimit.Tracker();
+		String sql = toSql(dsls.getJSONObject(0), jsonRule, rowLimit);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] converted mysql sql: " + sql);
 		JSONArray data = executeSql(sql);
+		boolean truncated = rowLimit.defaulted() && data.size() > rowLimit.effectiveLimit();
+		if (truncated) {
+			data.remove(rowLimit.effectiveLimit()); // drop the truncation probe row
+		}
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
 		answer.put("mqls", generatedMqls);
+		if (truncated) {
+			answer.put(DslRowLimit.TRUNCATED, true);
+			answer.put(DslRowLimit.ROW_LIMIT, rowLimit.effectiveLimit());
+			answer.put(DslRowLimit.TRUNCATION_HINT, DslRowLimit.truncationHint(rowLimit.effectiveLimit()));
+			log.warn("[" + sessionId + "] DSL result truncated at the default row limit of "
+					+ rowLimit.effectiveLimit());
+		}
 		answers.add(answer);
 		return JSON.toJSONString(answers, Feature.WriteMapNullValue);
 	}
 	
-	private String toSql(JSONObject dsl, Map<String, Object> jsonRule) throws Exception {
+	private String toSql(JSONObject dsl, Map<String, Object> jsonRule, DslRowLimit.Tracker rowLimit) throws Exception {
 		try {
 			List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 			Map<String, Map<String, String>> classAttrTypeMap = new HashMap<String, Map<String, String>>();
@@ -340,6 +352,12 @@ public class MysqlAdapter implements DataAdapter {
 				if (firstStep.getJSONObject("output").getJSONObject("limit") != null) {
 					Integer offset = firstStep.getJSONObject("output").getJSONObject("limit").getInteger("offset") != null ? firstStep.getJSONObject("output").getJSONObject("limit").getInteger("offset") : 0;
 					subSelectSql += "\nlimit " + offset + ", " + firstStep.getJSONObject("output").getJSONObject("limit").getInteger("count");
+					rowLimit.terminalLimit(firstStep.getJSONObject("output").getJSONObject("limit").getInteger("count"), false);
+				} else {
+					// An omitted limit means the engine default, never an unbounded read (one probe row extra).
+					int cap = DslRowLimit.defaultRowLimit();
+					rowLimit.terminalLimit(cap, true);
+					subSelectSql += "\nlimit 0, " + (cap + 1);
 				}
 				return subSelectSql;
 			} else {
@@ -404,6 +422,11 @@ public class MysqlAdapter implements DataAdapter {
 				if (secondStep.getJSONObject("output").getJSONObject("limit") != null) {
 					Integer offset = secondStep.getJSONObject("output").getJSONObject("limit").getInteger("offset") != null ? secondStep.getJSONObject("output").getJSONObject("limit").getInteger("offset") : 0;
 					sql += "\nlimit " + offset + ", " + secondStep.getJSONObject("output").getJSONObject("limit").getInteger("count");
+					rowLimit.terminalLimit(secondStep.getJSONObject("output").getJSONObject("limit").getInteger("count"), false);
+				} else {
+					int cap = DslRowLimit.defaultRowLimit();
+					rowLimit.terminalLimit(cap, true);
+					sql += "\nlimit 0, " + (cap + 1);
 				}
 				return sql;
 			}

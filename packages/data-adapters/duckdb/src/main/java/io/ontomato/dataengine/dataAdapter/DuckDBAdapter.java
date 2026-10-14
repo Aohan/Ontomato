@@ -85,19 +85,31 @@ public class DuckDBAdapter implements DataAdapter {
 	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception {
 		log.info("[" + sessionId + "] DuckDB query DSL: " + queryJson);
 		JSONArray dsls = JSONArray.parseArray(queryJson);
-		String sql = toSql(dsls.getJSONObject(0), jsonRule);
+		DslRowLimit.Tracker rowLimit = new DslRowLimit.Tracker();
+		String sql = toSql(dsls.getJSONObject(0), jsonRule, rowLimit);
 		generatedMqls.add(sql);
 		log.info("[" + sessionId + "] Converted DuckDB sql: " + sql);
 		JSONArray data = querySql(sql);
+		boolean truncated = rowLimit.defaulted() && data.size() > rowLimit.effectiveLimit();
+		if (truncated) {
+			data.remove(rowLimit.effectiveLimit()); // drop the truncation probe row
+		}
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", data);
 		answer.put("mqls", generatedMqls);
+		if (truncated) {
+			answer.put(DslRowLimit.TRUNCATED, true);
+			answer.put(DslRowLimit.ROW_LIMIT, rowLimit.effectiveLimit());
+			answer.put(DslRowLimit.TRUNCATION_HINT, DslRowLimit.truncationHint(rowLimit.effectiveLimit()));
+			log.warn("[" + sessionId + "] DSL result truncated at the default row limit of "
+					+ rowLimit.effectiveLimit());
+		}
 		answers.add(answer);
 		return JSON.toJSONString(answers, Feature.WriteMapNullValue);
 	}
 
-	private String toSql(JSONObject dsl, Map<String, Object> jsonRule) throws Exception {
+	private String toSql(JSONObject dsl, Map<String, Object> jsonRule, DslRowLimit.Tracker rowLimit) throws Exception {
 		try {
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
@@ -422,7 +434,7 @@ public class DuckDBAdapter implements DataAdapter {
 			if (steps.size() == 1) {
 				subSelectSql = appendGroupByHaving(firstStep, subSelectSql, null);
 				subSelectSql = appendOrderBy(firstStep, subSelectSql, null);
-				subSelectSql = appendLimit(firstStep, subSelectSql);
+				subSelectSql = appendLimit(firstStep, subSelectSql, rowLimit);
 				return subSelectSql;
 			} else {
 				JSONObject secondStep = steps.getJSONObject(1);
@@ -483,7 +495,7 @@ public class DuckDBAdapter implements DataAdapter {
 
 				sql = appendGroupByHaving(secondStep, sql, tmpClassAs);
 				sql = appendOrderBy(secondStep, sql, tmpClassAs);
-				sql = appendLimit(secondStep, sql);
+				sql = appendLimit(secondStep, sql, rowLimit);
 				return sql;
 			}
 		} catch (DslContractViolationException e) {
@@ -549,16 +561,21 @@ public class DuckDBAdapter implements DataAdapter {
 		return sql;
 	}
 
-	private String appendLimit(JSONObject step, String sql) {
-		if (step.getJSONObject("output").getJSONObject("limit") == null) {
-			return sql + "\nlimit 20000";
+	private String appendLimit(JSONObject step, String sql, DslRowLimit.Tracker rowLimit) {
+		JSONObject limit = step.getJSONObject("output").getJSONObject("limit");
+		if (limit == null) {
+			// An omitted limit means "apply the engine default", never an unbounded read. Fetch one
+			// extra row so a real truncation is detected without a count(*) pass.
+			int cap = DslRowLimit.defaultRowLimit();
+			rowLimit.terminalLimit(cap, true);
+			return sql + "\nlimit " + (cap + 1);
 		}
-		Integer offset = step.getJSONObject("output").getJSONObject("limit").getInteger("offset");
+		Integer offset = limit.getInteger("offset");
 		if (offset == null) {
 			offset = 0;
 		}
-		sql += "\nlimit " + step.getJSONObject("output").getJSONObject("limit").getInteger("count")
-				+ " offset " + offset;
+		sql += "\nlimit " + limit.getInteger("count") + " offset " + offset;
+		rowLimit.terminalLimit(limit.getInteger("count"), false);
 		return sql;
 	}
 

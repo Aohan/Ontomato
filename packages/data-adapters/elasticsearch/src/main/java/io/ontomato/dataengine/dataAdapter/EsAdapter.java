@@ -527,13 +527,21 @@ public class EsAdapter implements DataAdapter {
 		JSONArray dsls = JSONArray.parseArray(queryJson);
 		JSONObject dsl = dsls.getJSONObject(0);
 		JSONArray steps = dsl.getJSONObject("answer").getJSONArray("steps");
+		DslRowLimit.Tracker rowLimit = new DslRowLimit.Tracker();
 		List<JSONObject> rows = steps.size() <= 1
-				? executeStep(steps.getJSONObject(0), generatedMqls)
-				: executeTwoStep(steps.getJSONObject(0), steps.getJSONObject(1), generatedMqls);
+				? executeStep(steps.getJSONObject(0), generatedMqls, rowLimit, true)
+				: executeTwoStep(steps.getJSONObject(0), steps.getJSONObject(1), generatedMqls, rowLimit);
 		JSONArray answers = new JSONArray();
 		JSONObject answer = new JSONObject();
 		answer.put("answer", JSONArray.of(rows.toArray()));
 		answer.put("mqls", generatedMqls);
+		if (rowLimit.truncated()) {
+			answer.put(DslRowLimit.TRUNCATED, true);
+			answer.put(DslRowLimit.ROW_LIMIT, rowLimit.effectiveLimit());
+			answer.put(DslRowLimit.TRUNCATION_HINT, DslRowLimit.truncationHint(rowLimit.effectiveLimit()));
+			log.warn("[" + sessionId + "] DSL result truncated at the default row limit of "
+					+ rowLimit.effectiveLimit());
+		}
 		answers.add(answer);
 		return JSON.toJSONString(answers, Feature.WriteMapNullValue);
 	}
@@ -544,8 +552,9 @@ public class EsAdapter implements DataAdapter {
 	 * step 0 row as the object of step 1's first variable and runs step 1 in memory — the relational
 	 * {@code select ... from (subquery) as tmp} shape.
 	 */
-	private List<JSONObject> executeTwoStep(JSONObject first, JSONObject second, List<String> generatedMqls) throws Exception {
-		List<JSONObject> firstRows = executeStep(first, generatedMqls);
+	private List<JSONObject> executeTwoStep(JSONObject first, JSONObject second, List<String> generatedMqls,
+			DslRowLimit.Tracker rowLimit) throws Exception {
+		List<JSONObject> firstRows = executeStep(first, generatedMqls, rowLimit, false);
 		JSONArray secondObjects = second.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0)
 				.getJSONArray("objects");
 		String tmpAlias = secondObjects.getJSONObject(0).getString("variable");
@@ -558,11 +567,12 @@ public class EsAdapter implements DataAdapter {
 		if (generatedMqls != null) {
 			generatedMqls.add("TWO-STEP " + tmpAlias + " rows=" + rows.size());
 		}
-		return project(rows, second.getJSONObject("output"));
+		return project(rows, second.getJSONObject("output"), rowLimit, true);
 	}
 
 	/** One step: join the graph's objects, then project / aggregate / sort / limit. */
-	private List<JSONObject> executeStep(JSONObject step, List<String> generatedMqls) throws Exception {
+	private List<JSONObject> executeStep(JSONObject step, List<String> generatedMqls, DslRowLimit.Tracker rowLimit,
+			boolean terminal) throws Exception {
 		JSONObject pattern = step.getJSONObject("graph").getJSONArray("patterns").getJSONObject(0);
 		JSONArray objects = pattern.getJSONArray("objects");
 		JSONArray relationships = pattern.getJSONArray("relationship");
@@ -633,7 +643,7 @@ public class EsAdapter implements DataAdapter {
 			joinComponent(components.get(0), byIdx, edges, filters, counts, generatedMqls, stopAfter, sink);
 			List<JSONObject> grouped = sink.finish(output);
 			sort(grouped, output.getJSONObject("sort"));
-			return limit(grouped, output.getJSONObject("limit"));
+			return limit(grouped, output.getJSONObject("limit"), rowLimit, terminal);
 		}
 		List<Map<String, JSONObject>> rows = null;
 		for (Set<Integer> component : components) {
@@ -644,7 +654,7 @@ public class EsAdapter implements DataAdapter {
 		if (rows == null) {
 			rows = new ArrayList<>();
 		}
-		return project(rows, output);
+		return project(rows, output, rowLimit, terminal);
 	}
 
 	private boolean isAggregated(JSONObject output) {
@@ -1170,7 +1180,8 @@ public class EsAdapter implements DataAdapter {
 				+ field.getString("function") + '\u0002' + Boolean.TRUE.equals(field.getBoolean("distinct"));
 	}
 
-	private List<JSONObject> project(List<Map<String, JSONObject>> rows, JSONObject output) {
+	private List<JSONObject> project(List<Map<String, JSONObject>> rows, JSONObject output,
+			DslRowLimit.Tracker rowLimit, boolean terminal) {
 		JSONArray fields = output.getJSONArray("fields");
 		JSONObject groupBy = output.getJSONObject("group_by");
 		boolean aggregate = groupBy != null;
@@ -1234,7 +1245,7 @@ public class EsAdapter implements DataAdapter {
 		}
 
 		sort(result, output.getJSONObject("sort"));
-		return limit(result, output.getJSONObject("limit"));
+		return limit(result, output.getJSONObject("limit"), rowLimit, terminal);
 	}
 
 	private Object value(Map<String, JSONObject> row, JSONObject field) {
@@ -1349,13 +1360,27 @@ public class EsAdapter implements DataAdapter {
 		});
 	}
 
-	private List<JSONObject> limit(List<JSONObject> rows, JSONObject limit) {
-		int count = limit == null || limit.getInteger("count") == null ? 20000 : limit.getInteger("count");
-		int offset = limit == null || limit.getInteger("offset") == null ? 0 : limit.getInteger("offset");
+	private List<JSONObject> limit(List<JSONObject> rows, JSONObject limit, DslRowLimit.Tracker rowLimit,
+			boolean terminal) {
+		boolean defaulted = limit == null || limit.getInteger("count") == null;
+		if (defaulted && !terminal) {
+			// A non-terminal step's rows are an internal working set, bounded by maxMaterialize rather
+			// than by the caller-facing cap; capping it here would silently truncate what the next step
+			// aggregates over.
+			return rows;
+		}
+		int count = defaulted ? DslRowLimit.defaultRowLimit() : limit.getInteger("count");
+		int offset = defaulted || limit.getInteger("offset") == null ? 0 : limit.getInteger("offset");
+		if (terminal) {
+			rowLimit.terminalLimit(count, defaulted);
+		}
 		if (offset >= rows.size()) {
 			return new ArrayList<>();
 		}
 		int end = Math.min(rows.size(), offset + count);
+		if (terminal && defaulted && rows.size() > end) {
+			rowLimit.markTruncated();
+		}
 		return new ArrayList<>(rows.subList(offset, end));
 	}
 
