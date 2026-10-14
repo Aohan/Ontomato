@@ -115,7 +115,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
 
     @Override
     public void delBussinessKnowledge(String knowledgeID, User user) {
-        knowledgeDao.deleteKnowledge(knowledgeID);
+        knowledgeDao.deleteKnowledge(knowledgeID, user.getDomainId());
         
         if (user != null) {
         	AuditLog auditLog = new AuditLog();
@@ -136,6 +136,7 @@ public class KnowledgeServiceImpl implements KnowledgeService {
 
     @Override
     public void editBussinessKnowledge(String knowledgeID, String knowledgeTitle, String bk,int status,List<String> listknowledgeTags, User user) {
+            knowledgeDao.requireKnowledgeInDomain(knowledgeID, user.getDomainId());
             KnowledgeEntity knowledgeEntity = new KnowledgeEntity();
             knowledgeEntity.setKnowledgeID(knowledgeID);
             knowledgeEntity.setKnowledgeTitle(knowledgeTitle);

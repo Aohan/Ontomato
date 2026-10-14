@@ -43,8 +43,8 @@ async function request(cfg, method, backendPath, body, headers) {
   });
 }
 
-async function requestJson(cfg, method, backendPath, body) {
-  const res = await request(cfg, method, backendPath, body, {});
+async function requestJson(cfg, method, backendPath, body, headers) {
+  const res = await request(cfg, method, backendPath, body, headers);
   const text = await res.text();
   if (!res.ok) die(`${res.status}\n${text}`);
   const json = JSON.parse(text);
@@ -168,6 +168,9 @@ function usage() {
   ontomato.mjs use-datasource <type> <json|@file>
   ontomato.mjs get-ontomap
   ontomato.mjs set-ontomap <json|@file>
+  ontomato.mjs get-knowledge
+  ontomato.mjs save-knowledge <json|@file>
+  ontomato.mjs delete-knowledge <id>
   ontomato.mjs upload-vector <json|@file>
   ontomato.mjs ask [--lang <tag>] <question>`);
 }
@@ -201,6 +204,28 @@ async function main() {
     if (argv[1] == null) die("set-ontomap requires a JSON payload");
     await requestJson(cfg, "POST", "/admin/setSchema", JSON.parse(readInput(argv[1])));
     console.log("ontomap saved");
+    return;
+  }
+  if (cmd === "get-knowledge") {
+    const json = await requestJson(cfg, "POST", "/admin/getBussinessKnowledge", {});
+    console.log(JSON.stringify(Object.values(json.data), null, 2));
+    return;
+  }
+  if (cmd === "save-knowledge") {
+    if (argv[1] == null) die("save-knowledge requires a JSON payload");
+    const payload = JSON.parse(readInput(argv[1]));
+    const entries = Array.isArray(payload) ? payload : [payload];
+    for (const entry of entries) {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) die("Each knowledge entry must be a JSON object");
+      await requestJson(cfg, "POST", entry.knowledgeID ? "/admin/editBussinessKnowledge" : "/admin/addBussinessKnowledge", entry, { "Accept-Language": "en" });
+      console.log(`knowledge saved: ${entry.knowledgeTitle}`);
+    }
+    return;
+  }
+  if (cmd === "delete-knowledge") {
+    if (argv[1] == null) die("delete-knowledge requires an ID");
+    await requestJson(cfg, "POST", "/admin/delBussinessKnowledge", { knowledgeID: argv[1] }, { "Accept-Language": "en" });
+    console.log("knowledge deleted");
     return;
   }
   if (cmd === "upload-vector") {
