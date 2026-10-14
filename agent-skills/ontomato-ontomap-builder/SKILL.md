@@ -1,6 +1,6 @@
 ---
 name: ontomato-ontomap-builder
-description: Build an ontomap for one datasource, import it into Ontomato, and query that data in natural language. Use when connecting a database supported by this deployment, writing or replacing the ontomap, or asking a natural-language question.
+description: Build an ontomap for one datasource, maintain business knowledge in Ontomato, and query that data in natural language. Use when connecting a supported database, writing or replacing the ontomap, importing or editing business knowledge, or asking a natural-language question.
 ---
 
 # Ontomap builder
@@ -52,6 +52,9 @@ node ontomato.mjs use-datasource <type> @payload.json
 node ontomato.mjs get-ontomap
 node ontomato.mjs set-ontomap '<json>'
 node ontomato.mjs set-ontomap @ontomap.json
+node ontomato.mjs get-knowledge
+node ontomato.mjs save-knowledge @knowledge.json
+node ontomato.mjs delete-knowledge <id>
 node ontomato.mjs upload-vector @vector.json
 node ontomato.mjs ask "How many people are there?"
 node ontomato.mjs ask --lang en "How many people are there?"
@@ -79,6 +82,27 @@ node ontomato.mjs ask --lang en "How many people are there?"
 - The upload is append-only: uploading again for the same object adds another vector file rather than replacing.
 
 A JSON body of `{success, message, data}` with `success: false` is printed and the process exits non-zero. A non-2xx response prints the HTTP status and the response body, then exits non-zero.
+
+## Business knowledge
+
+Read the supplied business material and organize definitions, calculation rules, conditions and exceptions into knowledge entries. Use `get-knowledge` to inspect existing entries, `save-knowledge` to save them, then `get-knowledge` to verify the result.
+
+`get-knowledge` returns an array of the current domain's entries, including pending entries and their IDs. `save-knowledge` accepts one JSON object or an array:
+
+```json
+{
+  "knowledgeTitle": "Revenue",
+  "knowledgeText": "Revenue includes paid orders and excludes refunded amounts.",
+  "knowledgeTags": ["Business"],
+  "status": 0
+}
+```
+
+Specify `status`: `0` is pending review, `1` is approved and available for question retrieval. Keep unconfirmed extracted content pending; use approved status for confirmed knowledge. The backend computes the embedding when saving.
+
+Omit `knowledgeID` or leave it empty to add. To edit, include an existing ID from `get-knowledge` and all entry fields; saving replaces the entry's content, tags and status. Repeating an entry without an ID creates another entry. A missing or foreign-domain edit/delete ID is refused.
+
+Arrays are saved in order. The script prints each successful entry's title and stops with a non-zero exit on the first failure; earlier saves remain. `delete-knowledge <id>` deletes one entry. These commands use the same management APIs and knowledge as the Ontology Manager.
 
 ## Connect a datasource
 
