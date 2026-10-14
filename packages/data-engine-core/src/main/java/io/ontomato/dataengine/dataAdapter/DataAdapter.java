@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -24,6 +25,28 @@ public interface DataAdapter {
 	 */
 	default JSONObject testConnection() throws Exception {
 		return new DataAdapterConnectionTester().test(this);
+	}
+
+	/**
+	 * Whether this adapter's data source expects a date/timestamp condition as epoch milliseconds
+	 * instead of the literal value the DSL wrote.
+	 *
+	 * <p>Default {@code false}: the value is passed through verbatim and compared against the column
+	 * natively, so the source's own time convention is never reinterpreted. That is the only safe
+	 * default for an existing customer source whose stored time convention is unknown. M3 overrides
+	 * this because its store requires epoch millis.</p>
+	 */
+	default boolean timeConditionsAsEpochMillis() {
+		return false;
+	}
+
+	/**
+	 * The time zone used to turn a literal time condition into epoch milliseconds; only consulted
+	 * when {@link #timeConditionsAsEpochMillis()} is true. {@code null} means the process default
+	 * (the deployment time zone).
+	 */
+	default TimeZone timeConditionZone() {
+		return null;
 	}
 
 	public String executeDsl(String queryJson, String sessionId, DslExecutionMode mode, List<String> generatedMqls) throws Exception;

@@ -1,6 +1,7 @@
 package io.ontomato.dataengine.dataAdapter.test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -100,6 +101,54 @@ public abstract class AbstractDataAdapterTest {
 		return List.of();
 	}
 
+	/**
+	 * The date attribute every graph fixture's class 0 carries. It is added centrally (class def +
+	 * seed) so every adapter's read path is exercised against a real time column without each
+	 * concrete test having to restate it.
+	 */
+	protected static final String GRAPH_DATE_FIELD = "signup_date";
+	/** The timestamp attribute every graph fixture's class 0 carries. */
+	protected static final String GRAPH_TIMESTAMP_FIELD = "signup_at";
+
+	/** The date value of graph class 0's seed row {@code i}. */
+	protected static String graphDate(int i) {
+		return new String[] {"1990-01-01", "1991-02-02", "1992-03-03", "1993-04-04"}[i % 4];
+	}
+
+	/** The timestamp value of graph class 0's seed row {@code i}. */
+	protected static String graphTimestamp(int i) {
+		return new String[] {"2020-01-01 10:00:00", "2020-02-02 11:00:00", "2020-03-03 12:00:00",
+				"2020-04-04 13:00:00"}[i % 4];
+	}
+
+	/** {@link #graphClassDefs()} with the two shared time attributes on class 0 (added once). */
+	protected List<JSONObject> graphClassDefsWithTime() {
+		List<JSONObject> classDefs = graphClassDefs();
+		JSONArray attrs = classDefs.get(0).getJSONArray("attrs");
+		if (!hasAttr(attrs, GRAPH_DATE_FIELD)) {
+			attrs.add(timeAttr(GRAPH_DATE_FIELD, "date"));
+			attrs.add(timeAttr(GRAPH_TIMESTAMP_FIELD, "timestamp"));
+		}
+		return classDefs;
+	}
+
+	private static boolean hasAttr(JSONArray attrs, String name) {
+		for (int i = 0; i < attrs.size(); i++) {
+			if (name.equals(attrs.getJSONObject(i).getString("name"))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static JSONObject timeAttr(String name, String type) {
+		JSONObject attr = new JSONObject();
+		attr.put("name", name);
+		attr.put("type", type);
+		attr.put("enable", true);
+		return attr;
+	}
+
 	/** The plain class name at index {@code i} of {@link #graphClassDefs()}. */
 	protected String graphClass(int i) {
 		return graphClassDefs().get(i).getString("className");
@@ -120,7 +169,7 @@ public abstract class AbstractDataAdapterTest {
 	/** A jsonRule with plain class names (what createEdge/deleteEdge look up by). */
 	protected JSONObject graphRule() {
 		JSONObject rule = new JSONObject();
-		rule.put("classDef", new JSONArray(graphClassDefs()));
+		rule.put("classDef", new JSONArray(graphClassDefsWithTime()));
 		rule.put("relationship_rule", relationshipRule());
 		return rule;
 	}
@@ -128,7 +177,7 @@ public abstract class AbstractDataAdapterTest {
 	/** A jsonRule whose classDef class names carry the namespace prefix (what the read path resolves). */
 	protected JSONObject prefixedGraphRule() {
 		JSONArray classDefs = new JSONArray();
-		for (JSONObject classDef : graphClassDefs()) {
+		for (JSONObject classDef : graphClassDefsWithTime()) {
 			JSONObject copy = new JSONObject();
 			for (String key : classDef.keySet()) {
 				if ("className".equals(key)) {
@@ -149,11 +198,20 @@ public abstract class AbstractDataAdapterTest {
 	protected DataAdapter seedGraph() throws Exception {
 		DataAdapter adapter = newAdapter(graphRule());
 		String ns = namespace();
-		for (JSONObject classDef : graphClassDefs()) {
+		String timeClass = graphClass(0);
+		for (JSONObject classDef : graphClassDefsWithTime()) {
 			String className = classDef.getString("className");
 			adapter.createClass(ns, classDef);
 			JSONArray objs = graphSeed().get(className);
 			if (objs != null && !objs.isEmpty()) {
+				if (className.equals(timeClass)) {
+					// The shared time columns are filled centrally so every adapter's fixture has them.
+					for (int i = 0; i < objs.size(); i++) {
+						JSONObject row = objs.getJSONObject(i);
+						row.put(GRAPH_DATE_FIELD, graphDate(i));
+						row.put(GRAPH_TIMESTAMP_FIELD, graphTimestamp(i));
+					}
+				}
 				adapter.insertObjects(ns, classDef, objs);
 			}
 		}
@@ -930,6 +988,99 @@ public abstract class AbstractDataAdapterTest {
 		JSONArray fields = new JSONArray();
 		fields.add(readField("p", "name", "person_name"));
 		return readQuery(singleStepDsl(objects, null, fields, null, null, null));
+	}
+
+	// ----------------------------------------------------------------------------------
+	// READ — time conditions and returned time values (date / timestamp)
+	//
+	// A time condition is passed through verbatim and compared against the column natively, and a
+	// returned time value is the source's own text. Both are independent of the process time zone,
+	// and a value read back is usable as a condition unchanged (the loop is closed).
+	// ----------------------------------------------------------------------------------
+
+	@Test
+	void readWhereDateEqualsAndSingleDayBetween() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		assertEquals(1, queryPersons(readCond(GRAPH_DATE_FIELD, "=", graphDate(2))).size());
+		assertEquals(1, queryPersons(readCond(GRAPH_DATE_FIELD, "between",
+				JSONArray.of(graphDate(2), graphDate(2)))).size());
+		assertEquals(3, queryPersons(readCond(GRAPH_DATE_FIELD, "!=", graphDate(2))).size());
+		dropGraph();
+	}
+
+	@Test
+	void readWhereDateOrderAndIn() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		assertEquals(2, queryPersons(readCond(GRAPH_DATE_FIELD, ">", graphDate(1))).size());
+		assertEquals(3, queryPersons(readCond(GRAPH_DATE_FIELD, ">=", graphDate(1))).size());
+		assertEquals(2, queryPersons(readCond(GRAPH_DATE_FIELD, "<", graphDate(2))).size());
+		assertEquals(2, queryPersons(readCond(GRAPH_DATE_FIELD, "<=", graphDate(1))).size());
+		assertEquals(2, queryPersons(readCond(GRAPH_DATE_FIELD, "in",
+				JSONArray.of(graphDate(0), graphDate(3)))).size());
+		dropGraph();
+	}
+
+	@Test
+	void readWhereTimestampEqualsOrderAndBetween() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		assertEquals(1, queryPersons(readCond(GRAPH_TIMESTAMP_FIELD, "=", graphTimestamp(2))).size());
+		assertEquals(2, queryPersons(readCond(GRAPH_TIMESTAMP_FIELD, ">", graphTimestamp(1))).size());
+		assertEquals(3, queryPersons(readCond(GRAPH_TIMESTAMP_FIELD, "<=", graphTimestamp(2))).size());
+		assertEquals(2, queryPersons(readCond(GRAPH_TIMESTAMP_FIELD, "between",
+				JSONArray.of(graphTimestamp(0), graphTimestamp(1)))).size());
+		dropGraph();
+	}
+
+	@Test
+	void readReturnsTimeValuesAsSourceText() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		JSONObject row = rowByPrimaryKey(queryPersonTimes(), "p1");
+		assertNotNull(row, "seed row p1 is missing");
+		// The value read back is the source's own text - no process-zone re-rendering.
+		assertEquals(graphDate(0), row.getString("signup_date_out"));
+		assertEquals(graphTimestamp(0), row.getString("signup_at_out"));
+		dropGraph();
+	}
+
+	@Test
+	void readTimeValueFeedsBackAsCondition() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		JSONObject row = rowByPrimaryKey(queryPersonTimes(), "p2");
+		assertNotNull(row, "seed row p2 is missing");
+		String date = row.getString("signup_date_out");
+		String timestamp = row.getString("signup_at_out");
+		assertEquals(graphDate(1), date);
+		assertEquals(graphTimestamp(1), timestamp);
+		// The closed loop: the value read from the source matches again as a condition, unchanged.
+		assertEquals(1, queryPersons(readCond(GRAPH_DATE_FIELD, "=", date)).size());
+		assertEquals(1, queryPersons(readCond(GRAPH_TIMESTAMP_FIELD, "=", timestamp)).size());
+		dropGraph();
+	}
+
+	/** Read graph class 0's primary key plus both shared time fields. */
+	protected JSONArray queryPersonTimes() throws Exception {
+		JSONArray objects = new JSONArray();
+		objects.add(readObject(0, "p", 0));
+		JSONArray fields = new JSONArray();
+		fields.add(readField("p", primaryKey(), "id"));
+		fields.add(readField("p", GRAPH_DATE_FIELD, "signup_date_out"));
+		fields.add(readField("p", GRAPH_TIMESTAMP_FIELD, "signup_at_out"));
+		return readQuery(singleStepDsl(objects, null, fields, null, null, null));
+	}
+
+	/** The row whose primary key equals {@code id}, or null. */
+	protected JSONObject rowByPrimaryKey(JSONArray rows, String id) {
+		for (int i = 0; i < rows.size(); i++) {
+			if (id.equals(str(rows.getJSONObject(i).get("id")))) {
+				return rows.getJSONObject(i);
+			}
+		}
+		return null;
 	}
 
 	// ----------------------------------------------------------------------------------

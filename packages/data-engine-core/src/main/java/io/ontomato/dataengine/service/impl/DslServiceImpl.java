@@ -12,6 +12,7 @@ import com.alibaba.fastjson2.JSONWriter.Feature;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.core.bean.User;
 import io.ontomato.dataengine.dao.VectorResourceDao;
@@ -91,9 +92,10 @@ public class DslServiceImpl implements DslService {
     	dsls.add(dsl);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
 		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
-		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
+		DataAdapter timeConditionAdapter = dataAdapterRegistry.create(businessConfig, jsonRule);
+		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs, timeConditionAdapter.timeConditionsAsEpochMillis(), timeConditionAdapter.timeConditionZone());
     	
-		DslExecutionResult result = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, null, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId)[1];
+		DslExecutionResult result = HttpRequestUtil.executeDsl(dataRagConfig, timeConditionAdapter, dslStr, null, true, jsonRule, vectorResourceDao, permission, DslExecutionMode.OPTIMIZED, domainId)[1];
 		JSONObject dataMap = new JSONObject();
 		dataMap.putAll(result.data());
 		if (result.failed()) {
