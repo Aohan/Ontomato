@@ -112,6 +112,27 @@ class EsAdapterScaleTest {
 		}
 	}
 
+	/**
+	 * The default row cap is a terminal-step bound: step 0's working set is aggregated in full, never
+	 * silently truncated. With a 2-row cap and 300 step-0 rows, a capped inner step would count 2; the
+	 * sum stays 300 only if the cap did not touch the inner step.
+	 */
+	@Test
+	void twoStepInnerStepIsNotCappedByTheDefaultRowLimit() throws Exception {
+		String previous = System.getProperty("ontomato.dsl.defaultRowLimit");
+		System.setProperty("ontomato.dsl.defaultRowLimit", "2");
+		try {
+			seed(300, 300);
+			List<JSONObject> rows = read(twoStepDsl());
+			assertEquals(2, rows.size(), "one group per small_id");
+			long total = rows.stream().mapToLong(row -> row.getLongValue("cnt")).sum();
+			assertEquals(300, total, "the inner step was not truncated by the default row cap");
+		} finally {
+			restoreProperty("ontomato.dsl.defaultRowLimit", previous);
+			cleanup();
+		}
+	}
+
 	// ----------------------------------------------------------------------------------
 
 	private void seed(int bigRows, int matchingRows) throws Exception {
@@ -142,10 +163,14 @@ class EsAdapterScaleTest {
 	}
 
 	private void restore(String previous) {
+		restoreProperty(CAP, previous);
+	}
+
+	private void restoreProperty(String key, String previous) {
 		if (previous == null) {
-			System.clearProperty(CAP);
+			System.clearProperty(key);
 		} else {
-			System.setProperty(CAP, previous);
+			System.setProperty(key, previous);
 		}
 	}
 

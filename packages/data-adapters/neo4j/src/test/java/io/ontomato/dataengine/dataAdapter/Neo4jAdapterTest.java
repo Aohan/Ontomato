@@ -23,6 +23,7 @@ import io.ontomato.dataengine.dataAdapter.test.AbstractDataAdapterTest;
 import io.ontomato.dataengine.dataAdapter.test.DataAdapterCapability;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Full contract run for the Neo4j adapter against a real instance.
@@ -336,5 +337,27 @@ class Neo4jAdapterTest extends AbstractDataAdapterTest {
 		assertEquals(2, rows.size());
 		assertEquals(2L, ((Number) rows.getJSONObject(0).get("cnt")).longValue());
 		dropGraph();
+	}
+
+	/**
+	 * A read that would materialize more rows than the budget is refused loudly, so a large result
+	 * cannot OOM the engine. The budget is lowered through {@code ontomato.neo4j.maxMaterialize}.
+	 */
+	@Test
+	void materializeBudgetRefusesAnOversizedResult() throws Exception {
+		String previous = System.getProperty("ontomato.neo4j.maxMaterialize");
+		System.setProperty("ontomato.neo4j.maxMaterialize", "1");
+		try {
+			seedGraph();
+			assertThrows(Exception.class, () -> queryPersons(null),
+					"a result beyond the materialize budget must fail, not stream into memory");
+		} finally {
+			if (previous == null) {
+				System.clearProperty("ontomato.neo4j.maxMaterialize");
+			} else {
+				System.setProperty("ontomato.neo4j.maxMaterialize", previous);
+			}
+			dropGraph();
+		}
 	}
 }

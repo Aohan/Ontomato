@@ -36,6 +36,8 @@
 
 6. output describes the output result and consists of to_user, fields, {$replace_cStep_save_table_key}{$replace_cStep_sort_key}{$replace_cStep_limit_key}{$replace_cStep_group_by_key}
 
+	When limit is not given, the engine applies a default row cap of 20000 rows and reports the result as truncated when that cap is hit; an omitted limit is therefore never an unbounded read. Set limit explicitly (with paging) or aggregate with group_by when the result must be complete.
+
 	6.1 The value of to_user: true means the query result of this step is output directly to the user, and false means it is stored in a temporary table as the parameter of the next step
 
 {$replace_cStep_save_table_rule}
