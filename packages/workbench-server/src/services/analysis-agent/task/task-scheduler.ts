@@ -58,7 +58,12 @@ export async function triggerScheduleRule(
   if (!claimed) return null;
 
   try {
+    const agentService = await getAnalysisAgentService();
+    const agent = await agentService.getAgent(rule.agentId, rule.domainId);
+    if (!agent) throw new Error(tApp("analysis.task.task-scheduler.426"));
     const reportTask = await getAnalysisTaskService().createTask({
+      graphScopeSnapshot: agent.graphScope,
+      classNamesSnapshot: agent.classNames,
       agentId: rule.agentId,
       userId: rule.userId,
       domainId: rule.domainId,

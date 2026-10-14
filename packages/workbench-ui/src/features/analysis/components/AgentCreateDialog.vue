@@ -3,6 +3,7 @@ import type {
   AnalysisAgent,
   AnalysisReportSummaryPosition,
   AnalysisAgentExecutionMode,
+  AnalysisGraphScope,
 } from "@ontomato/contracts/analysis-agent";
 
 import { ref, computed, watch } from "vue";
@@ -170,6 +171,9 @@ const form = ref({
   enabledSkillIds: [] as string[],
   enabledVisualizationSkillIds: undefined as string[] | undefined,
   classNames: [] as string[],
+  graphScopeMode: "panorama" as AnalysisGraphScope["mode"],
+  graphScopeRootClassNames: [] as string[],
+  graphScopeMaxDepth: 1 as number | undefined,
   isEnabled: true,
   sortOrder: 0 as number,
   avatarKey: "Brain",
@@ -212,6 +216,10 @@ function fillFormFromAgent(agent: AnalysisAgent) {
     enabledSkillIds: agent.enabledSkillIds || [],
     enabledVisualizationSkillIds: agent.enabledVisualizationSkillIds || [],
     classNames: agent.classNames || [],
+    graphScopeMode: agent.graphScope?.mode === "subgraph" ? "subgraph" : "panorama",
+    graphScopeRootClassNames:
+      agent.graphScope?.mode === "subgraph" ? [...agent.graphScope.rootClassNames] : [],
+    graphScopeMaxDepth: agent.graphScope?.mode === "subgraph" ? agent.graphScope.maxDepth : 1,
     isEnabled: agent.isEnabled,
     sortOrder: agent.sortOrder ?? 0,
     avatarKey,
@@ -235,6 +243,9 @@ function resetForm() {
     enabledSkillIds: [],
     enabledVisualizationSkillIds: getDefaultVisualizationSkillIds(),
     classNames: [],
+    graphScopeMode: "panorama",
+    graphScopeRootClassNames: [],
+    graphScopeMaxDepth: 1,
     isEnabled: true,
     sortOrder: 0,
     avatarKey: "Brain",
@@ -248,9 +259,30 @@ async function handleSubmit() {
     return;
   }
 
+  const { graphScopeMode, graphScopeRootClassNames, graphScopeMaxDepth, ...agentForm } = form.value;
+  if (graphScopeMode === "subgraph") {
+    if (!graphScopeRootClassNames.length) {
+      ElMessage.warning(t("admin.graphScopeRootsRequired"));
+      return;
+    }
+    if (
+      graphScopeMaxDepth === undefined ||
+      !Number.isInteger(graphScopeMaxDepth) ||
+      graphScopeMaxDepth < 0 ||
+      graphScopeMaxDepth > 10
+    ) {
+      ElMessage.warning(t("admin.graphScopeDepthInvalid"));
+      return;
+    }
+  }
+  const graphScope: AnalysisGraphScope =
+    graphScopeMode === "subgraph"
+      ? { mode: "subgraph", rootClassNames: [...graphScopeRootClassNames], maxDepth: graphScopeMaxDepth! }
+      : { mode: "panorama" };
   saving.value = true;
   const payload = {
-    ...form.value,
+    ...agentForm,
+    graphScope,
     icon: JSON.stringify({ key: form.value.avatarKey, color: form.value.avatarColor }),
   };
   delete (payload as any).avatarKey;
@@ -294,7 +326,8 @@ watch(
         resetForm();
       }
     }
-  }
+  },
+  { immediate: true }
 );
 
 watch(
@@ -393,6 +426,49 @@ watch(isDark, () => {
               </el-select>
               <p class="form-tip">{{ t("admin.relatedClassesHint") }}</p>
             </el-form-item>
+            <el-form-item :label="t('admin.graphScope')">
+              <el-radio-group v-model="form.graphScopeMode" :aria-label="t('admin.graphScope')">
+                <el-radio value="panorama">{{ t("admin.graphScopePanorama") }}</el-radio>
+                <el-radio value="subgraph">{{ t("admin.graphScopeSubgraph") }}</el-radio>
+              </el-radio-group>
+              <p class="form-tip">{{ t("admin.graphScopeHint") }}</p>
+            </el-form-item>
+            <template v-if="form.graphScopeMode === 'subgraph'">
+              <el-form-item :label="t('admin.graphScopeRoots')" required>
+                <el-select
+                  v-model="form.graphScopeRootClassNames"
+                  multiple
+                  filterable
+                  collapse-tags
+                  collapse-tags-tooltip
+                  clearable
+                  :loading="classesLoading"
+                  :aria-label="t('admin.graphScopeRoots')"
+                  :placeholder="t('admin.graphScopeRootsHint')"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="cls in objectClasses"
+                    :key="cls.className"
+                    :label="getClassLabel(cls)"
+                    :value="cls.className"
+                  />
+                </el-select>
+                <p class="form-tip">{{ t("admin.graphScopeRootsHint") }}</p>
+              </el-form-item>
+              <el-form-item :label="t('admin.graphScopeMaxDepth')" required>
+                <el-input-number
+                  v-model="form.graphScopeMaxDepth"
+                  :min="0"
+                  :max="10"
+                  :step="1"
+                  step-strictly
+                  :precision="0"
+                  :aria-label="t('admin.graphScopeMaxDepth')"
+                />
+                <p class="form-tip">{{ t("admin.graphScopeDepthHint") }}</p>
+              </el-form-item>
+            </template>
           </AgentBasicInfoFields>
         </el-form>
 

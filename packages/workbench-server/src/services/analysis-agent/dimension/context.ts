@@ -28,6 +28,8 @@ export interface DimensionRunContext {
   enabledSkillIds: string[];
   /** An explicit empty array means no charts this run, distinct from "unconfigured, fall back to the agent settings" */
   enabledVisualizationSkillIds?: string[];
+  graphScopeClassNames?: string[];
+  classNames?: string[];
   /** Concurrency override; DEFAULT_ANALYSIS_CONCURRENCY applies when absent */
   analysisConcurrency?: {
     dimensionQueryConcurrency?: number;

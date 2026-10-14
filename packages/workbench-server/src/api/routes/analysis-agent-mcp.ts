@@ -178,6 +178,8 @@ function createAnalysisAgentMcpServer(req: Request) {
         const taskService = getAnalysisTaskService();
         const task = await taskService.createTask({
           reportDeliverableEnabled: agent.reportDeliverableEnabled,
+          graphScopeSnapshot: agent.graphScope,
+          classNamesSnapshot: agent.classNames,
           agentId: normalizedAgentId,
           userId: identity.userId,
           domainId: identity.domainId,
@@ -244,4 +246,3 @@ export async function getAnalysisAgentMcpToolCatalog() {
 }
 
 export default createStreamableMcpRouter(createAnalysisAgentMcpServer, logger);
-

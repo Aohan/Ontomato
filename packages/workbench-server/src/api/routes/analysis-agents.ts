@@ -28,6 +28,7 @@ import { listAgentHotReports } from "../../services/analysis-agent/hot-card/anal
 import { asyncHandler } from "../utils/http";
 import { HttpError } from "../../utils/errors";
 import { runtimeDefaults } from "../../runtime/defaults";
+import { normalizeAnalysisGraphScope } from "../../services/analysis-agent/config/graph-scope";
 
 const logger = createLogger("api:analysis-agents");
 const router: ReturnType<typeof Router> = Router();
@@ -127,6 +128,7 @@ router.post(
         enabledVisualizationSkillIds,
         enabledMcpServiceNames,
         classNames,
+        graphScope,
         isEnabled,
         sortOrder,
       } = req.body;
@@ -192,7 +194,8 @@ router.post(
           enabledSkillIds,
           enabledVisualizationSkillIds,
           enabledMcpServiceNames: enabledMcpServiceNames ?? [],
-          classNames: Array.isArray(classNames) ? classNames : [],
+           classNames: Array.isArray(classNames) ? classNames : [],
+           graphScope: normalizeAnalysisGraphScope(graphScope),
           isEnabled: isEnabled !== false,
           sortOrder: sortOrder ?? 0,
         },
@@ -603,8 +606,10 @@ router.get(
     const taskService = getAnalysisTaskService();
     let task;
     try {
-      task = await taskService.createTask({
-        reportDeliverableEnabled: agent.reportDeliverableEnabled,
+        task = await taskService.createTask({
+          reportDeliverableEnabled: agent.reportDeliverableEnabled,
+          graphScopeSnapshot: agent.graphScope,
+          classNamesSnapshot: agent.classNames,
         agentId,
         userId,
         domainId,

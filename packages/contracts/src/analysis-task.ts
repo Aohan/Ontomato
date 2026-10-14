@@ -5,6 +5,7 @@ import type {
 } from "./analysis-presentation";
 import type { AnalysisChartDiagnostic, AnalysisChartResult } from "./analysis-charts";
 import type { EgressMessage } from "./agent-egress";
+import type { AnalysisGraphScope } from "./analysis-agent";
 export type AnalysisTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
 export type AnalysisTaskTriggerSource = "manual" | "scheduled";
@@ -20,6 +21,8 @@ export interface AnalysisTask {
   runState?: DeepAnalysisTaskPayload["runState"];
   /** Whether a report deliverable is attached; when off, tasks are accepted turn by turn like regular sessions */
   reportDeliverableEnabled?: boolean;
+  graphScopeSnapshot?: AnalysisGraphScope;
+  classNamesSnapshot?: string[];
   threadId?: string;
   question?: string;
   scheduleExpression?: string;

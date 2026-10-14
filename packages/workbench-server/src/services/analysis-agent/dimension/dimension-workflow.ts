@@ -49,6 +49,8 @@ interface RunDeepAnalysisWorkflowParams {
   analysisDimensionPrompt?: string;
   enabledSkillIds?: string[];
   enabledVisualizationSkillIds?: string[];
+  graphScopeClassNames?: string[];
+  classNames?: string[];
   signal?: AbortSignal;
 }
 
@@ -96,6 +98,8 @@ export async function runDeepAnalysisWorkflow(
     analysisDimensionPrompt,
     enabledSkillIds,
     enabledVisualizationSkillIds,
+    graphScopeClassNames,
+    classNames,
     signal,
   } = params;
   logger.debug(tApp("analysis.dimension.dimension-workflow.91", { userQuestion: userQuestion, agentId: String(agentId) }));
@@ -137,6 +141,8 @@ export async function runDeepAnalysisWorkflow(
       analysisDimensionPrompt,
       enabledSkillIds: enabledSkillIds || [],
       enabledVisualizationSkillIds,
+      graphScopeClassNames,
+      classNames,
       signal,
       sendEvent: (event) => onEvent?.(event),
     };

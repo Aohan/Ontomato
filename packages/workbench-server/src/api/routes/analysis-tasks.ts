@@ -586,6 +586,8 @@ router.post(
 
     const task = await getAnalysisTaskService().createTask({
       reportDeliverableEnabled: agent.reportDeliverableEnabled,
+      graphScopeSnapshot: agent.graphScope,
+      classNamesSnapshot: agent.classNames,
       agentId: body.agentId,
       userId: authReq.userId,
       domainId,

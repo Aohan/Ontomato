@@ -95,6 +95,7 @@ function agent(reportDeliverableEnabled: boolean): AnalysisAgent {
     name: "Harness",
     description: "",
     executionMode: "loop",
+    graphScope: { mode: "panorama" },
     reportDeliverableEnabled,
     summarizerPrompt: "",
     conclusionMakerPrompt: "",

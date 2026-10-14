@@ -6,6 +6,7 @@ import type {
   AnalysisTaskRun,
   AnalysisTaskTriggerSource,
 } from "@ontomato/contracts/analysis-task";
+import type { AnalysisGraphScope } from "@ontomato/contracts/analysis-agent";
 export interface AnalysisTask extends ClientAnalysisTask {
   domainId: string;
   analysisPayload?: DeepAnalysisTaskPayload;
@@ -55,6 +56,8 @@ export interface CreateAnalysisTaskParams {
   token?: string;
   /** With report delivery off this is a regular session task; by default the task is created as a report-delivery task. */
   reportDeliverableEnabled?: boolean;
+  graphScopeSnapshot?: AnalysisGraphScope;
+  classNamesSnapshot?: string[];
 }
 
 export const ANALYSIS_LOOP_SUBAGENT_SOURCE_KIND = "analysis_loop_subagent";
