@@ -674,9 +674,8 @@ public class UserMessageUtil {
 		prompt = prompt.replace(BUSSINESS_KNOWLEDGE, bussinessKnowledge);
 		prompt = prompt.replace(ABC_PROGRAMMER_EXAMPLE, example);
         
-        // DSL syntax
-        String dslRule = DslRuleUtil.generateWholeDslRule(jsonRule);
-        prompt = prompt.replace(DSL_RULE, dslRule);
+        // DSL syntax: fetched on demand by the programmer via the getDslSyntax /
+        // getDslExample tools, so the full rule text is no longer injected here.
         
         // user question
         prompt = prompt.replace(USER_QUESTION, question);

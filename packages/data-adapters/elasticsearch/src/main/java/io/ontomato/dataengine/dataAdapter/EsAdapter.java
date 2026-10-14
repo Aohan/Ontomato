@@ -1371,6 +1371,12 @@ public class EsAdapter implements DataAdapter {
 		JSONObject conditions = object.getJSONObject("conditions");
 		List<JSONObject> clauses = new ArrayList<>();
 		if (conditions != null) {
+			if (conditions.getJSONObject("timeseries") != null) {
+				throw new DslContractViolationException(
+						DslContractViolationException.Code.UNSUPPORTED_CONSTRUCT,
+						"conditions.timeseries",
+						"the timeseries condition is not implemented by " + getClass().getSimpleName());
+			}
 			JSONObject properties = conditions.getJSONObject("properties");
 			if (properties != null) {
 				JSONObject clause = propertyQuery(properties, attrTypes, true, index);
@@ -1446,7 +1452,10 @@ public class EsAdapter implements DataAdapter {
 	private JSONObject conditionQuery(JSONObject cond, Map<String, String> attrTypes, boolean readPath, String index) {
 		String field = cond.getString("field");
 		if (field == null) {
-			return null;
+			throw new DslContractViolationException(
+					DslContractViolationException.Code.INVALID_GRAMMAR,
+					"conditions.properties",
+					"a condition has no 'field' property");
 		}
 		String type = attrTypes.get(field);
 		String exact = exactField(index, field);
@@ -1459,7 +1468,11 @@ public class EsAdapter implements DataAdapter {
 				Object value = normalizeForQuery(type, cond.get("value"));
 				JSONObject query = termLikeQuery(exact, type, value);
 				if (query == null) {
-					return null;
+					throw new DslContractViolationException(
+							DslContractViolationException.Code.UNSUPPORTED_OPERATOR_FOR_TYPE,
+							"conditions.properties",
+							"operator '" + operator + "' on field '" + field + "' is not supported by "
+									+ getClass().getSimpleName());
 				}
 				if ("!=".equals(operator)) {
 					return new JSONObject(Map.of("bool", new JSONObject(Map.of("must_not", JSONArray.of(query)))));
@@ -1516,7 +1529,11 @@ public class EsAdapter implements DataAdapter {
 				return query;
 			}
 			default:
-				return null;
+				throw new DslContractViolationException(
+						DslContractViolationException.Code.UNSUPPORTED_OPERATOR_FOR_TYPE,
+						"conditions.properties",
+						"operator '" + operator + "' on field '" + field + "' is not supported by "
+								+ getClass().getSimpleName());
 		}
 	}
 

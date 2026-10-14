@@ -184,6 +184,10 @@ public class Neo4jAdapter implements DataAdapter {
 			second.counter = query.counter;
 			second.text = buildOutput(flattened, secondStep.getJSONObject("output"), second, true, true, tmpVariable);
 			return second;
+		} catch (DslContractViolationException e) {
+			// located + actionable: let it through unchanged
+			log.warn(e.getMessage());
+			throw e;
 		} catch (Exception e) {
 			log.error(e.getMessage(), e);
 			throw new Exception("Failed to convert DSL to Cypher");
@@ -309,6 +313,12 @@ public class Neo4jAdapter implements DataAdapter {
 		if (conditions == null) {
 			return "";
 		}
+		if (conditions.getJSONObject("timeseries") != null) {
+			throw new DslContractViolationException(
+					DslContractViolationException.Code.UNSUPPORTED_CONSTRUCT,
+					"conditions.timeseries",
+					"the timeseries condition is not implemented by " + getClass().getSimpleName());
+		}
 		StringBuilder where = new StringBuilder();
 		if (conditions.getJSONObject("properties") != null) {
 			String props = buildConditionTree(conditions.getJSONObject("properties"), alias, attrTypeMap, query);
@@ -364,6 +374,17 @@ public class Neo4jAdapter implements DataAdapter {
 	private String buildLeafCondition(JSONObject condition, String alias, Map<String, String> attrTypeMap, CypherQuery query) {
 		String field = condition.getString("field");
 		String operator = condition.getString("operator");
+		if (field == null || operator == null
+				|| !(operator.equals("=") || operator.equals("!=") || operator.equals(">") || operator.equals(">=")
+						|| operator.equals("<") || operator.equals("<=") || operator.equals("between")
+						|| operator.equals("in") || operator.equals("like") || operator.equals("not like")
+						|| operator.equals("is") || operator.equals("is not"))) {
+			throw new DslContractViolationException(
+					DslContractViolationException.Code.UNSUPPORTED_OPERATOR_FOR_TYPE,
+					"conditions.properties",
+					"operator '" + operator + "' on field '" + field + "' is not supported by "
+							+ getClass().getSimpleName());
+		}
 		String type = attrTypeMap.get(field);
 		String col = alias + "." + field;
 		if ("is".equals(operator)) {
