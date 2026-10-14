@@ -1,5 +1,6 @@
 package io.ontomato.dataengine.service.impl;
 
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DslExecutionMode;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
@@ -355,6 +356,8 @@ public class ChatServiceImpl implements ChatService {
 		BusinessConfig businessConfig = businessConfigService.get(domainId);
 		String dslCookerExample = adminService.getDslCookerExample(domainId);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
+		// The target adapter decides how a time condition travels: literal pass-through by default, epoch millis for M3.
+		DataAdapter timeConditionAdapter = dataAdapterRegistry.create(businessConfig, jsonRule);
 		// One workspace per try session; cleaned up uniformly after the run ends (including on exception), and the second follow-up reuses the same workspace
 		for (int i = 0; i < businessConfig.getDslCookerTries(); i++) {
 			try {
@@ -529,7 +532,7 @@ public class ChatServiceImpl implements ChatService {
         		JSONCheckUtil.Result checkResult = legalCheckResultMap.get(legalTrySessionId);
         		String finalDsl = DslUtil.setConditionTextColumnToEmptyArray(checkResult.getQueryJson());
             	String finalDslWithoutTimeConvert = finalDsl + "";
-            	finalDsl = DslUtil.setConditionTimeColumnToCorrectFormat(finalDsl, dataRagConfig.getDslMightTimeFormats(), classDefs);
+            	finalDsl = DslUtil.setConditionTimeColumnToCorrectFormat(finalDsl, dataRagConfig.getDslMightTimeFormats(), classDefs, timeConditionAdapter.timeConditionsAsEpochMillis(), timeConditionAdapter.timeConditionZone());
             	finalDsl = DslUtil.setLastStepToUserAndSaveTable(finalDsl);
             	finalDslWithoutTimeConvert = DslUtil.setLastStepToUserAndSaveTable(finalDslWithoutTimeConvert);
             	finalDsl = DslUtil.enrichShouldReturnAttr(finalDsl, classDefs);
@@ -597,7 +600,7 @@ public class ChatServiceImpl implements ChatService {
                 if(secondCheckResult.isLegal()){
                 	String finalDsl = DslUtil.setConditionTextColumnToEmptyArray(secondCheckResult.getQueryJson());
                 	String finalDslWithoutTimeConvert = finalDsl + "";
-                	finalDsl = DslUtil.setConditionTimeColumnToCorrectFormat(finalDsl, dataRagConfig.getDslMightTimeFormats(), classDefs);
+                	finalDsl = DslUtil.setConditionTimeColumnToCorrectFormat(finalDsl, dataRagConfig.getDslMightTimeFormats(), classDefs, timeConditionAdapter.timeConditionsAsEpochMillis(), timeConditionAdapter.timeConditionZone());
                 	finalDsl = DslUtil.setLastStepToUserAndSaveTable(finalDsl);
                 	finalDslWithoutTimeConvert = DslUtil.setLastStepToUserAndSaveTable(finalDslWithoutTimeConvert);
                 	finalDsl = DslUtil.enrichShouldReturnAttr(finalDsl, classDefs);

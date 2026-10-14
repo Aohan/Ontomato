@@ -2,7 +2,6 @@ package io.ontomato.dataengine.dataAdapter;
 
 import java.io.IOException;
 import java.sql.Connection;
-import java.text.SimpleDateFormat;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -13,7 +12,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.TimeZone;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
@@ -294,10 +292,6 @@ public class EsAdapter implements DataAdapter {
 		if (pk == null) {
 			throw new Exception("The insert statement must contain the primary key field");
 		}
-		SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd");
-		SimpleDateFormat ymdhms = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-		ymd.setTimeZone(TimeZone.getTimeZone("UTC"));
-		ymdhms.setTimeZone(TimeZone.getTimeZone("UTC"));
 
 		StringBuilder bulk = new StringBuilder();
 		for (int i = 0; i < objs.size(); i++) {
@@ -310,7 +304,7 @@ public class EsAdapter implements DataAdapter {
 			for (Map.Entry<String, String> attr : attrTypes.entrySet()) {
 				Object value = obj.get(attr.getKey());
 				if (value != null) {
-					doc.put(attr.getKey(), normalizeForWrite(attr.getValue(), value, ymd, ymdhms));
+					doc.put(attr.getKey(), normalizeForWrite(attr.getValue(), value));
 				}
 			}
 			JSONObject action = new JSONObject();
@@ -332,10 +326,6 @@ public class EsAdapter implements DataAdapter {
 		String index = EsNaming.indexName(namespace, className);
 		Map<String, String> attrTypes = attrTypes(classDef);
 		String pk = DslUtil.getPrimaryKey(classDef);
-		SimpleDateFormat ymd = new SimpleDateFormat("yyyy-MM-dd");
-		SimpleDateFormat ymdhms = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-		ymd.setTimeZone(TimeZone.getTimeZone("UTC"));
-		ymdhms.setTimeZone(TimeZone.getTimeZone("UTC"));
 
 		StringBuilder script = new StringBuilder();
 		JSONObject params = new JSONObject();
@@ -355,7 +345,7 @@ public class EsAdapter implements DataAdapter {
 			} else {
 				String param = "v" + n++;
 				script.append("ctx._source['").append(key).append("'] = params.").append(param).append("; ");
-				params.put(param, normalizeForWrite(type, raw, ymd, ymdhms));
+				params.put(param, normalizeForWrite(type, raw));
 			}
 		}
 		JSONObject body = new JSONObject();
@@ -468,7 +458,7 @@ public class EsAdapter implements DataAdapter {
 		@SuppressWarnings("unchecked")
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
 		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
-		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
+		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs, timeConditionsAsEpochMillis(), timeConditionZone());
 		JSONObject dataMap = new JSONObject();
 		DslExecutionResult result;
 		if (sandboxId != null && !sandboxId.trim().isEmpty()) {
@@ -1490,7 +1480,7 @@ public class EsAdapter implements DataAdapter {
 		}
 		switch (operator) {
 			case "=", "!=": {
-				Object value = normalizeForQuery(type, cond.get("value"));
+				Object value = cond.get("value");
 				JSONObject query = termLikeQuery(exact, type, value);
 				if (query == null) {
 					throw new DslContractViolationException(
@@ -1505,7 +1495,7 @@ public class EsAdapter implements DataAdapter {
 				return query;
 			}
 			case ">", ">=", "<", "<=": {
-				Object value = normalizeForQuery(type, cond.get("value"));
+				Object value = cond.get("value");
 				String op = switch (operator) {
 					case ">" -> "gt";
 					case ">=" -> "gte";
@@ -1519,15 +1509,15 @@ public class EsAdapter implements DataAdapter {
 			case "between": {
 				JSONArray value = cond.getJSONArray("value");
 				JSONObject range = new JSONObject();
-				range.put("gte", normalizeForQuery(type, value.get(0)));
-				range.put("lte", normalizeForQuery(type, value.get(1)));
+				range.put("gte", value.get(0));
+				range.put("lte", value.get(1));
 				return new JSONObject(Map.of("range", new JSONObject(Map.of(exact, range))));
 			}
 			case "in": {
 				JSONArray value = cond.getJSONArray("value");
 				JSONArray values = new JSONArray();
 				for (int i = 0; i < value.size(); i++) {
-					values.add(normalizeForQuery(type, value.get(i)));
+					values.add(value.get(i));
 				}
 				return new JSONObject(Map.of("terms", new JSONObject(Map.of(exact, values))));
 			}
@@ -1824,34 +1814,17 @@ public class EsAdapter implements DataAdapter {
 		return (Map<String, Object>) map;
 	}
 
-	private Object normalizeForWrite(String type, Object value, SimpleDateFormat ymd, SimpleDateFormat ymdhms) {
+	/** A vector value is serialized; everything else (dates/timestamps included) is written verbatim. */
+	private Object normalizeForWrite(String type, Object value) {
 		if (value == null) {
 			return null;
 		}
 		if ("vector".equals(type) && !(value instanceof String)) {
 			return JSON.toJSONString(value);
 		}
-		if ("date".equals(type) && value instanceof Number number) {
-			return ymd.format(new java.util.Date(number.longValue()));
-		}
-		if ("timestamp".equals(type) && value instanceof Number number) {
-			return ymdhms.format(new java.util.Date(number.longValue()));
-		}
 		return value;
 	}
 
-	private Object normalizeForQuery(String type, Object value) {
-		if (value == null) {
-			return null;
-		}
-		if (("date".equals(type) || "timestamp".equals(type)) && value instanceof Number number) {
-			long millis = number.longValue();
-			SimpleDateFormat format = new SimpleDateFormat("date".equals(type) ? "yyyy-MM-dd" : "yyyy-MM-dd HH:mm:ss");
-			format.setTimeZone(TimeZone.getTimeZone("UTC"));
-			return format.format(new java.util.Date(millis));
-		}
-		return value;
-	}
 
 	private static String keyOf(Object value) {
 		return value == null ? null : String.valueOf(value);

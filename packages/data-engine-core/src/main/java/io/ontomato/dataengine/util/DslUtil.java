@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.UUID;
 
 import com.alibaba.fastjson2.JSON;
@@ -109,7 +110,19 @@ public class DslUtil {
     	return JSONArray.toJSONString(dsl, Feature.WriteMapNullValue);
     }
     
-    public static String setConditionTimeColumnToCorrectFormat(String dslStr, String[] mightFormats, List<Map<String, Object>> classDefs) {
+    /**
+     * Rewrite a date/timestamp condition value.
+     *
+     * <p>Only when {@code toEpochMillis} is true is the string value turned into epoch millis
+     * (using {@code zone}, or the process default when {@code zone} is null). That form exists for
+     * stores that require it (M3). Otherwise the value is passed through verbatim: a time condition
+     * is compared against the column natively, so an existing source's own time convention is never
+     * reinterpreted by this engine.</p>
+     */
+    public static String setConditionTimeColumnToCorrectFormat(String dslStr, String[] mightFormats, List<Map<String, Object>> classDefs, boolean toEpochMillis, TimeZone zone) {
+    	if (!toEpochMillis) {
+    		return dslStr;
+    	}
     	if (mightFormats == null || mightFormats.length == 0) {
     		mightFormats = new String[] {"yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-ddTHH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSS"};
     	}
@@ -171,6 +184,9 @@ public class DslUtil {
 						                                        			try {
 						                                        				if (v.length() == mightFormat.length()) {
 						                                        					SimpleDateFormat sdf = new SimpleDateFormat(mightFormat);
+	    						                                        			if (zone != null) {
+	    						                                        				sdf.setTimeZone(zone);
+	    						                                        			}
 	    						                                        			date = sdf.parse(v);
 	    						                                        			break;
 						                                        				}
@@ -190,6 +206,9 @@ public class DslUtil {
 	    						                                        			try {
 	    						                                        				if (s.length() == mightFormat.length()) {
 	    						                                        					SimpleDateFormat sdf = new SimpleDateFormat(mightFormat);
+		        						                                        			if (zone != null) {
+		        						                                        				sdf.setTimeZone(zone);
+		        						                                        			}
 		        						                                        			date = sdf.parse(s);
 		        						                                        			break;
 	    						                                        				}

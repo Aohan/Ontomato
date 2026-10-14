@@ -9,6 +9,12 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -159,7 +165,7 @@ public class MysqlAdapter implements DataAdapter {
 									} else if ("int".equals(type) || "long".equals(type) || "double".equals(type)) {
 										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
-										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " FROM_UNIXTIME(" + cond.getLong("value") + ")";
+										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + timeLiteral(cond.get("value"));
 									}
 								} else if ("like".equals(cond.getString("operator")) || "not like".equals(cond.getString("operator"))) {
 									if ("varchar".equals(type)) {
@@ -173,14 +179,14 @@ public class MysqlAdapter implements DataAdapter {
 									if ("int".equals(type) || "long".equals(type) || "double".equals(type)) {
 										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
-										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " FROM_UNIXTIME(" + cond.getLong("value") + ")";
+										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + timeLiteral(cond.get("value"));
 									}
 								} else if ("between".equals(cond.getString("operator"))) {
 									JSONArray value = cond.getJSONArray("value");
 									if ("int".equals(type) || "long".equals(type) || "double".equals(type)) {
 										sqlCond = "(`" + alias + "`." + attr + " >= " + value.get(0) + " and `" + alias + "`." + attr + " <= " + value.get(1) + ")";
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
-										sqlCond = "(`" + alias + "`." + attr + " >= FROM_UNIXTIME(" + value.getLong(0) + ") and `" + alias + "`." + attr + " <= FROM_UNIXTIME(" + value.getLong(1) + "))";
+										sqlCond = "(`" + alias + "`." + attr + " >= " + timeLiteral(value.get(0)) + " and `" + alias + "`." + attr + " <= " + timeLiteral(value.get(1)) + ")";
 									}
 								} else if ("in".equals(cond.getString("operator"))) {
 									JSONArray value = cond.getJSONArray("value");
@@ -201,7 +207,7 @@ public class MysqlAdapter implements DataAdapter {
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										String in = "";
 										for (int j = 0; j < value.size(); j++) {
-											in += "FROM_UNIXTIME(" + value.getLong(j) + "),";
+											in += timeLiteral(value.get(j)) + ",";
 										}
 										in = "(" + in.substring(0, in.length() - 1) + ")";
 										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + in;
@@ -483,7 +489,6 @@ public class MysqlAdapter implements DataAdapter {
 	
 	private JSONArray executeSql(String sql) throws Exception {
 		log.info(sql);
-		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 		Connection conn = null;
 		PreparedStatement pst = null;
 		ResultSet rs = null;
@@ -496,17 +501,12 @@ public class MysqlAdapter implements DataAdapter {
 			while (rs.next()) {
 				JSONObject row = new JSONObject();
                 for (int i = 1; i <= meta.getColumnCount(); i++) {
-                	Object value = rs.getObject(i);
-                	if (value == null) {
-                		row.put(meta.getColumnLabel(i), null);
+                	String label = meta.getColumnLabel(i);
+                	if (isTemporalColumn(meta.getColumnType(i))) {
+                		// Return the source's own text: a tz-aware column keeps its offset and a naive one keeps its wall clock.
+                		row.put(label, temporalValue(rs, i, meta.getColumnType(i)));
                 	} else {
-                		if (value instanceof Timestamp) {
-                			row.put(meta.getColumnLabel(i), sdf.format((Timestamp)value));
-                		} else if (value instanceof Date) {
-                			row.put(meta.getColumnLabel(i), sdf.format((Date)value));
-                		} else {
-                			row.put(meta.getColumnLabel(i), value);
-                		}
+                		row.put(label, rs.getObject(i));
                 	}
                 }
                 rows.add(row);
@@ -842,6 +842,49 @@ public class MysqlAdapter implements DataAdapter {
 		}
 	}
 
+	/** A time condition value is passed through verbatim: the source's own time convention is never re-interpreted. */
+	private static String timeLiteral(Object value) {
+		return "'" + String.valueOf(value).replace("'", "''") + "'";
+	}
+
+	private static final DateTimeFormatter TEMPORAL_TEXT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+	/** A temporal column is a date/time type, returned as its own text rather than re-rendered in the process zone. */
+	private static boolean isTemporalColumn(int sqlType) {
+		return sqlType == Types.DATE || sqlType == Types.TIME || sqlType == Types.TIMESTAMP
+				|| sqlType == Types.TIME_WITH_TIMEZONE || sqlType == Types.TIMESTAMP_WITH_TIMEZONE;
+	}
+
+	/**
+	 * The source's own text for a temporal column: a naive value keeps its wall clock, a tz-aware value
+	 * keeps its offset, and the process zone is never applied. A driver without the typed read falls
+	 * back to its own string form.
+	 */
+	private static Object temporalValue(ResultSet rs, int i, int sqlType) throws SQLException {
+		try {
+			switch (sqlType) {
+				case Types.DATE: {
+					LocalDate d = rs.getObject(i, LocalDate.class);
+					return d == null ? null : d.toString();
+				}
+				case Types.TIME: {
+					LocalTime t = rs.getObject(i, LocalTime.class);
+					return t == null ? null : t.toString();
+				}
+				case Types.TIMESTAMP: {
+					LocalDateTime dt = rs.getObject(i, LocalDateTime.class);
+					return dt == null ? null : dt.format(TEMPORAL_TEXT);
+				}
+				default: {
+					OffsetDateTime odt = rs.getObject(i, OffsetDateTime.class);
+					return odt == null ? null : odt.toString();
+				}
+			}
+		} catch (SQLException e) {
+			return rs.getString(i);
+		}
+	}
+
 	private String toSqlValue(String type, Object value, SimpleDateFormat ymd, SimpleDateFormat ymdhms) throws Exception {
 		String valueSql = "";
 		if ("varchar".equals(type) || "text".equals(type) || "vector".equals(type)) {
@@ -1055,7 +1098,7 @@ public class MysqlAdapter implements DataAdapter {
 		dsls.add(dsl);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
 		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
-		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
+		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs, timeConditionsAsEpochMillis(), timeConditionZone());
 
 		JSONObject dataMap = new JSONObject();
 		DslExecutionResult result = null;

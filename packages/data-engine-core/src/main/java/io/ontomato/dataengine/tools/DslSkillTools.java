@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectReader;
 import io.ontomato.dataengine.bean.DslExecutionResult;
 import io.ontomato.dataengine.config.BusinessConfig;
 import io.ontomato.dataengine.config.DataRagConfig;
+import io.ontomato.dataengine.dataAdapter.DataAdapter;
 import io.ontomato.dataengine.dataAdapter.DataAdapterRegistry;
 import io.ontomato.dataengine.dao.JSONRuleDao;
 import io.ontomato.dataengine.dao.VectorResourceDao;
@@ -104,14 +105,15 @@ public class DslSkillTools {
 			BusinessConfig businessConfig = businessConfigService.get(callContext.getDomainId());
 			Map<String, Object> jsonRule = jsonRuleDao.query(callContext.getDomainId());
 			dslStr = DslUtil.normalizeClassNames(dslStr, (List<Map<String, Object>>)jsonRule.get("classDef"));
-			dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), (List<Map<String, Object>>)jsonRule.get("classDef"));
+			DataAdapter timeConditionAdapter = dataAdapterRegistry.create(businessConfig, jsonRule);
+			dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), (List<Map<String, Object>>)jsonRule.get("classDef"), timeConditionAdapter.timeConditionsAsEpochMillis(), timeConditionAdapter.timeConditionZone());
 			JSONObject m3StartedPayload = new JSONObject();
 			m3StartedPayload.put("dsl", safeJson(dslStr));
 			m3StartedPayload.put("m3Mode", "V1");
 			DiagnosticEventLogger.emit("m3.query.started", sessionId, m3StartedPayload);
 			m3Start = System.currentTimeMillis();
 			m3Started = true;
-			DslExecutionResult queryResult = HttpRequestUtil.executeDsl(dataRagConfig, dataAdapterRegistry.create(businessConfig, jsonRule), dslStr, sessionId, false, jsonRule, vectorResourceDao, new UserDataPermission(), DslExecutionMode.OPTIMIZED, callContext.getDomainId())[0];
+			DslExecutionResult queryResult = HttpRequestUtil.executeDsl(dataRagConfig, timeConditionAdapter, dslStr, sessionId, false, jsonRule, vectorResourceDao, new UserDataPermission(), DslExecutionMode.OPTIMIZED, callContext.getDomainId())[0];
 			JSONObject dataMap = queryResult.data();
 			if (queryResult.failed()) {
 				String rawError = MultiThreadAIChatService.rawErrorText(queryResult.failure().cause());

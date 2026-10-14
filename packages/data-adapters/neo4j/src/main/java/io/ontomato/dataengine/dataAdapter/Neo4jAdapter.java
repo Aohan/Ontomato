@@ -412,8 +412,8 @@ public class Neo4jAdapter implements DataAdapter {
 			JSONArray value = condition.getJSONArray("value");
 			String low = query.next();
 			String high = query.next();
-			query.params.put(low, coerce(type, value.get(0)));
-			query.params.put(high, coerce(type, value.get(1)));
+			query.params.put(low, value.get(0));
+			query.params.put(high, value.get(1));
 			return "(" + col + " >= $" + low + " and " + col + " <= $" + high + ")";
 		}
 		if ("in".equals(operator)) {
@@ -421,7 +421,7 @@ public class Neo4jAdapter implements DataAdapter {
 			String param = query.next();
 			List<Object> list = new ArrayList<>();
 			for (int i = 0; i < value.size(); i++) {
-				list.add(coerce(type, value.get(i)));
+				list.add(value.get(i));
 			}
 			query.params.put(param, list);
 			return col + " in $" + param;
@@ -438,7 +438,7 @@ public class Neo4jAdapter implements DataAdapter {
 			return "not like".equals(operator) ? "not " + predicate : predicate;
 		}
 		String param = query.next();
-		query.params.put(param, coerce(type, condition.get("value")));
+		query.params.put(param, condition.get("value"));
 		String cypherOperator = "!=".equals(operator) ? "<>" : operator;
 		return col + " " + cypherOperator + " $" + param;
 	}
@@ -575,19 +575,6 @@ public class Neo4jAdapter implements DataAdapter {
 		return "skip " + offset + " limit " + limit.getInteger("count");
 	}
 
-	/** Date/time DSL conditions carry epoch millis; the write path stores their formatted text, so compare text. */
-	private Object coerce(String type, Object value) {
-		if (value == null) {
-			return null;
-		}
-		if ("date".equals(type)) {
-			return new SimpleDateFormat("yyyy-MM-dd").format(new Date(((Number) value).longValue()));
-		}
-		if ("timestamp".equals(type)) {
-			return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(((Number) value).longValue()));
-		}
-		return value;
-	}
 
 	private JSONArray queryCypher(CypherQuery cypher) throws Exception {
 		log.info(cypher.text);
@@ -918,8 +905,8 @@ public class Neo4jAdapter implements DataAdapter {
 			JSONArray value = condition.getJSONArray("value");
 			String low = cypher.next();
 			String high = cypher.next();
-			cypher.params.put(low, coerce(type, value.get(0)));
-			cypher.params.put(high, coerce(type, value.get(1)));
+			cypher.params.put(low, value.get(0));
+			cypher.params.put(high, value.get(1));
 			return "(" + col + " >= $" + low + " and " + col + " <= $" + high + ")";
 		}
 		if ("in".equals(operator)) {
@@ -927,7 +914,7 @@ public class Neo4jAdapter implements DataAdapter {
 			String param = cypher.next();
 			List<Object> list = new ArrayList<>();
 			for (int i = 0; i < value.size(); i++) {
-				list.add(coerce(type, value.get(i)));
+				list.add(value.get(i));
 			}
 			cypher.params.put(param, list);
 			return col + " in $" + param;
@@ -940,7 +927,7 @@ public class Neo4jAdapter implements DataAdapter {
 			return "not like".equals(operator) ? "not " + predicate : predicate;
 		}
 		String param = cypher.next();
-		cypher.params.put(param, coerce(type, condition.get("value")));
+		cypher.params.put(param, condition.get("value"));
 		String cypherOperator = "!=".equals(operator) ? "<>" : operator;
 		return col + " " + cypherOperator + " $" + param;
 	}
@@ -1043,7 +1030,7 @@ public class Neo4jAdapter implements DataAdapter {
 		dsls.add(dsl);
 		List<Map<String, Object>> classDefs = (List<Map<String, Object>>) jsonRule.get("classDef");
 		String dslStr = DslUtil.normalizeClassNames(JSONArray.toJSONString(dsls, Feature.WriteMapNullValue), classDefs);
-		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs);
+		dslStr = DslUtil.setConditionTimeColumnToCorrectFormat(dslStr, dataRagConfig.getDslMightTimeFormats(), classDefs, timeConditionsAsEpochMillis(), timeConditionZone());
 
 		JSONObject dataMap = new JSONObject();
 		DslExecutionResult result;
