@@ -28,6 +28,7 @@ export const config = {
     timeout: environment.queryTimeout(),
   },
   schedule: {
-    timezone: process.env.SCHEDULE_TIMEZONE || process.env.TZ || "Asia/Shanghai",
+    // Scheduling can override the process time zone independently.
+    timezone: process.env.SCHEDULE_TIMEZONE || Intl.DateTimeFormat().resolvedOptions().timeZone,
   },
 };

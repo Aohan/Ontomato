@@ -55,8 +55,6 @@ export function rowsFromQueryAnswerPayloads(
   return payloads.flatMap((payload) => normalizeAnswerRows(payload.answer));
 }
 
-const TZ_CN = "Asia/Shanghai";
-
 function isISODateTimeString(s: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$/.test(s);
 }
@@ -67,9 +65,8 @@ function isSpaceSeparatedDatetime(s: string): boolean {
   return RE_SPACE_DATETIME.test(s.trim());
 }
 
-function formatInCNTimeZone(date: Date, withTime: boolean, locale?: string): string {
+function formatInTimeZone(date: Date, withTime: boolean, locale?: string): string {
   const dtf = new Intl.DateTimeFormat(locale ? resolveLocale(locale) : "sv-SE", {
-    timeZone: TZ_CN,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -85,9 +82,8 @@ function formatInCNTimeZone(date: Date, withTime: boolean, locale?: string): str
   return dtf.format(date);
 }
 
-function getHMSInCNTimeZone(date: Date): string {
+function getHMSInTimeZone(date: Date): string {
   const dtf = new Intl.DateTimeFormat("sv-SE", {
-    timeZone: TZ_CN,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -96,13 +92,13 @@ function getHMSInCNTimeZone(date: Date): string {
   return dtf.format(date);
 }
 
-function formatISOToCN(iso: string, locale?: string): string {
+function formatISOToLocalTime(iso: string, locale?: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
 
-  const hms = getHMSInCNTimeZone(d);
-  if (hms === "00:00:00") return formatInCNTimeZone(d, false, locale);
-  return formatInCNTimeZone(d, true, locale);
+  const hms = getHMSInTimeZone(d);
+  if (hms === "00:00:00") return formatInTimeZone(d, false, locale);
+  return formatInTimeZone(d, true, locale);
 }
 
 function formatSpaceSepDatetime(raw: string, locale?: string): string {
@@ -110,15 +106,15 @@ function formatSpaceSepDatetime(raw: string, locale?: string): string {
   const d = new Date(cleaned);
   if (Number.isNaN(d.getTime())) return raw;
 
-  const hms = getHMSInCNTimeZone(d);
-  if (hms === "00:00:00") return formatInCNTimeZone(d, false, locale);
-  return formatInCNTimeZone(d, true, locale);
+  const hms = getHMSInTimeZone(d);
+  if (hms === "00:00:00") return formatInTimeZone(d, false, locale);
+  return formatInTimeZone(d, true, locale);
 }
 
 function simplifyTimeString(val: unknown, locale?: string): string | null {
   if (typeof val !== "string") return null;
   const s = val.trim();
-  if (isISODateTimeString(s)) return formatISOToCN(s, locale);
+  if (isISODateTimeString(s)) return formatISOToLocalTime(s, locale);
   if (isSpaceSeparatedDatetime(s)) return formatSpaceSepDatetime(s, locale);
   return null;
 }
@@ -533,7 +529,7 @@ function formatCell(
     if (allowTimestamp && /^-?\d+$/.test(rawStr)) {
       const n = Number(rawStr);
       if (Number.isFinite(n) && n > 0) {
-        const toCN = (ms: number) => formatISOToCN(new Date(ms).toISOString(), locale);
+        const toLocalTime = (ms: number) => formatISOToLocalTime(new Date(ms).toISOString(), locale);
 
         const MIN_MS = Date.UTC(1970, 0, 1);
         const MAX_MS = Date.UTC(2101, 0, 1);
@@ -552,7 +548,7 @@ function formatCell(
           if (isMsInRange(ms2)) ms = ms2;
         }
 
-        if (ms != null) return toCN(ms);
+        if (ms != null) return toLocalTime(ms);
       }
     }
 

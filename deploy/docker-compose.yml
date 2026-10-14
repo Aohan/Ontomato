@@ -15,7 +15,7 @@ services:
       POSTGRES_DB: postgres
       POSTGRES_USER: ontomato
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set}
-      TZ: ${TZ:-Asia/Shanghai}
+      TZ: ${TZ:-UTC}
     volumes:
       - postgres18_data:/var/lib/postgresql
       - ./initdb.sql:/docker-entrypoint-initdb.d/create-databases.sql:ro
@@ -48,7 +48,7 @@ services:
     # env_file keeps unset and empty BACKEND_* distinct. These keys are the
     # internal database connection and override the same names in .env.
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
+      TZ: ${TZ:-UTC}
       POSTGRE_JDBC_URL: jdbc:postgresql://postgres:5432/datarag
       POSTGRE_USER_NAME: ontomato
       POSTGRE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not set}
@@ -94,7 +94,7 @@ services:
       DATA_QUERY_BASE_URL: http://datarag:18087
       PORT: "3000"
       NODE_ENV: production
-      TZ: ${TZ:-Asia/Shanghai}
+      TZ: ${TZ:-UTC}
       ONTOLOGY_MANAGER_URL: ${ONTOLOGY_MANAGER_URL:-http://${PUBLIC_HOST:?PUBLIC_HOST not set}:${ONTOLOGY_MANAGER_PORT:-3005}}
     shm_size: "1gb"
     volumes:

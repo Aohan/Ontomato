@@ -3,7 +3,6 @@ package io.ontomato.dataengine.util;
 import java.io.*;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
-import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.regex.Matcher;
@@ -36,7 +35,7 @@ public class MaintenanceUtil {
         public JSONObject collectAll() {
             JSONObject result = new JSONObject();
             result.put("timestamp",
-                    ZonedDateTime.now(ZoneOffset.ofHours(8))
+                    ZonedDateTime.now()
                             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")));
             result.put("hostname", getHostname());
             result.put("server", getHostInfo());

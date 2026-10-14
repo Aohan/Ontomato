@@ -64,6 +64,10 @@ takes the version from the app images.
    `PUBLIC_HOST` (the address the browser uses, an IP or a hostname).
 4. `docker compose up -d`.
 
+Services default to UTC. To use another timezone, set an IANA timezone in `.env`,
+for example `TZ=Europe/Berlin`. The same setting is passed to PostgreSQL, Node and
+Java/Python; the host's timezone is not detected automatically.
+
 The app and backend images are assembled offline at `up` (`pull_policy: build`):
 each recipe copies a loaded app image into its loaded runtime image. To update only
 the application, import the new app package and run `docker compose up -d` again;

@@ -41,7 +41,7 @@ Please read the content of the `# Actual Data` area:
 
     - **Input**: must be read in JSON array format, with encoding `utf-8`. Reading from stdin is **forbidden**.
 
-    - **Time handling**: timestamp conversion must use the UTC+8 time zone, and the timestamps in the database are nanosecond-level, for example `pd.to_datetime(..., unit='ns', utc=True).dt.tz_convert('Asia/Shanghai')`.
+    - **Time handling**: timestamp conversion must use the deployment time zone (`{{TIMEZONE}}`), and the timestamps in the database are nanosecond-level, for example `pd.to_datetime(..., unit='ns', utc=True).dt.tz_convert('{{TIMEZONE}}')`.
 
     - **Null handling**: when taking values from DataFrame / numpy objects, **calling methods on or type-converting a variable whose null values have not been handled (such as `.tolist()`, `int/float`) is forbidden**; you must explicitly handle `NaN` and `None`, and explicitly write out the **fallback behavior for null values**.
 

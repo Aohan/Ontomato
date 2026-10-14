@@ -20,6 +20,7 @@ import io.ontomato.dataengine.service.LangService;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +30,9 @@ import java.util.Map;
 public class UserMessageUtil {
 	
 	public static final String LANG = "{{LANG}}";
+
+	/** The current JVM time zone used by the calculation prompts. */
+	public static final String TIMEZONE = "{{TIMEZONE}}";
 
 	public static final String  QUESTION_SPLITER_V0_PROMPT ="question_spliter_prompt-v0.md";
 	public static final String  QUESTION_SPLITER_V1_PROMPT ="question_spliter_prompt-v1.md";
@@ -429,6 +433,9 @@ public class UserMessageUtil {
         String langValue = langService.get(lang, "lang");
         pythonCalculatorPrompt = pythonCalculatorPrompt.replace(LANG, langValue);
 
+		//deployment time zone
+		pythonCalculatorPrompt = pythonCalculatorPrompt.replace(TIMEZONE, ZoneId.systemDefault().getId());
+
 		log.info(">>>\n");
 		log.info("sessionid:{}, PythonCalculatorUserMessage:\n{}",sessionid,pythonCalculatorPrompt);
 
@@ -626,6 +633,9 @@ public class UserMessageUtil {
 		//language
         String langValue = langService.get(lang, "lang");
         afterCalculatorPrompt = afterCalculatorPrompt.replace(LANG, langValue);
+
+		//deployment time zone
+		afterCalculatorPrompt = afterCalculatorPrompt.replace(TIMEZONE, ZoneId.systemDefault().getId());
 
 		log.info(">>>\n");
 		log.info("sessionid:{}, afterCalculatorPrompt:\n{}",sessionid,afterCalculatorPrompt);

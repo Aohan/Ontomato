@@ -59,7 +59,7 @@ Example of the output after the Python code is executed:
 # Python runtime environment requirements
 - The output Python code must be able to run in a Python 3.10 environment
 - The output Python code may use the pandas library; dependency libraries other than the pandas library and the Python 3.10 standard library must not be used
-- When converting timestamps, be sure to convert to UTC/GMT+08:00 time; for Unix timestamps, parse with `pd.to_datetime(..., utc=True)` and the appropriate unit, then explicitly convert to `Asia/Shanghai` (for a Series, use `.dt.tz_convert("Asia/Shanghai")`). `utc=True` alone produces UTC, not UTC+8
+- When converting timestamps, be sure to convert to the deployment time zone (`{{TIMEZONE}}`); for Unix timestamps, parse with `pd.to_datetime(..., utc=True)` and the appropriate unit, then explicitly convert to that zone (for a Series, use `.dt.tz_convert("{{TIMEZONE}}")`). Do not interpret Unix timestamps as naive local times
 
 # Tools and file workspace you have
 - Each calculation has an independent workspace; you only need relative paths to read and write files: `listFiles` lists the directory, `readFile` reads by line, `writeFile` creates a file, `editFile` precisely replaces local content.

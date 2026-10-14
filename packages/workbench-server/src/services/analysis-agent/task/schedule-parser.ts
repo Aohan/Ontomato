@@ -52,6 +52,19 @@ function getLastDayOfMonthInTz(year: number, month: number): number {
   return parts.day;
 }
 
+function getOffsetMsInTz(ts: number): number {
+  const parts = getDatePartsInTz(ts);
+  const wallClockAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hours,
+    parts.minutes,
+    parts.seconds
+  );
+  return wallClockAsUtc - ts;
+}
+
 function utcFromTzParts(
   year: number,
   month: number,
@@ -62,17 +75,14 @@ function utcFromTzParts(
   const naiveMs = Date.UTC(year, month - 1, day, hours, minutes, 0);
   if (isNaN(naiveMs)) return 0;
 
-  const tzParts = getDatePartsInTz(naiveMs);
-
-  const d = new Date(naiveMs);
-  const naiveUtcHours = d.getUTCHours();
-  const naiveUtcMinutes = d.getUTCMinutes();
-
-  let offsetMinutes = naiveUtcHours * 60 + naiveUtcMinutes - (tzParts.hours * 60 + tzParts.minutes);
-  if (offsetMinutes < -720) offsetMinutes += 1440;
-  if (offsetMinutes > 720) offsetMinutes -= 1440;
-
-  return naiveMs + offsetMinutes * 60 * 1000;
+  // The zone offset exists only together with an instant, and the offset at the naive instant can
+  // still belong to the other side of a DST change, so resolve the wall clock against the offset
+  // that the first pass lands on. Only a wall clock skipped by a DST change has no fixed point
+  // there; keep the first pass for it, the instant the offset before the change implies.
+  const firstPass = naiveMs - getOffsetMsInTz(naiveMs);
+  const firstPassOffset = getOffsetMsInTz(firstPass);
+  const secondPass = naiveMs - firstPassOffset;
+  return getOffsetMsInTz(secondPass) === firstPassOffset ? secondPass : firstPass;
 }
 
 function nextTimeOfDayWithOffset(
