@@ -24,6 +24,6 @@ BOOTSTRAP ?= 0
 
 # Export already published final images. Keep MIRROR_STATE between releases.
 bundle:
-	$(NODE) scripts/deploy-bundle.mjs --arch $(ARCH) --deploy-dir deploy --name ontomato \
+	$(NODE) scripts/bundle.mjs --arch $(ARCH) \
 	  --version $(VERSION) --image-tag $(IMAGE_TAG) --registry $(IMAGE_REGISTRY) --state "$(MIRROR_STATE)" \
 	  $(if $(filter 1,$(BOOTSTRAP)),--bootstrap,)
