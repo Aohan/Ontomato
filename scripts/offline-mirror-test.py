@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import tempfile
 import unittest
@@ -74,6 +75,63 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(mirror.repository("example.com/a/b@sha256:" + "a" * 64), "example.com/a/b")
         with self.assertRaisesRegex(ValueError, "fully qualified"):
             mirror.repository("pgvector/pgvector:pg18")
+
+    def test_resolve_selects_platform_digest_without_product_policy(self):
+        digest = "sha256:" + "b" * 64
+        manifest = {"manifests": [
+            {"platform": {"os": "linux", "architecture": "amd64"}, "digest": "sha256:" + "a" * 64},
+            {"platform": {"os": "linux", "architecture": "arm64"}, "digest": digest},
+        ]}
+        image = {"Os": "linux", "Architecture": "arm64"}
+        with patch.object(mirror.subprocess, "check_output", return_value=json.dumps(manifest).encode()), \
+                patch.object(mirror, "run", side_effect=["pull output", json.dumps([image])]) as run:
+            ref = mirror.resolve_image("example.com/arbitrary/image:mutable", "arm64")
+        self.assertEqual(ref, "example.com/arbitrary/image@" + digest)
+        self.assertEqual(run.call_args_list[0].args[0], ["docker", "pull", "--platform", "linux/arm64", ref])
+
+    def test_resolve_single_manifest_hashes_exact_bytes(self):
+        raw = b'{"schemaVersion":2}\n'
+        image = {"Os": "linux", "Architecture": "arm64"}
+        with patch.object(mirror.subprocess, "check_output", return_value=raw), \
+                patch.object(mirror, "run", side_effect=["", json.dumps([image])]):
+            ref = mirror.resolve_image("example.com/a:tag", "arm64")
+        self.assertEqual(ref, "example.com/a@sha256:" + hashlib.sha256(raw).hexdigest())
+
+    def test_resolve_rejects_wrong_platform(self):
+        with patch.object(mirror.subprocess, "check_output", return_value=b'{"schemaVersion":2}'), \
+                patch.object(mirror, "run", side_effect=["", json.dumps([{"Os": "linux", "Architecture": "amd64"}])]):
+            with self.assertRaisesRegex(ValueError, "platform"):
+                mirror.resolve_image("example.com/a:tag", "arm64")
+
+    def export_args(self):
+        refs = list(self.data["images"].values())
+        return SimpleNamespace(state=self.root / "state", output=self.root / "exported", arch="arm64",
+                               version="4.0.1", workbench=refs[0], data_engine=refs[1], manager=refs[2],
+                               postgres=refs[3], bootstrap=False, insecure_source=False, network=None, authfile=None)
+
+    def test_export_rejects_mutable_tag_before_creating_state(self):
+        args = self.export_args()
+        args.workbench = "example.com/a:mutable"
+        with patch.object(mirror, "ensure_tool") as tool, self.assertRaisesRegex(ValueError, "immutable"):
+            mirror.export(args)
+        tool.assert_not_called()
+        self.assertFalse(args.state.exists())
+
+    def test_export_preserves_validated_pins_without_resolving_again(self):
+        args = self.export_args()
+        def write_archive(*_):
+            (args.state / "export").mkdir()
+            (args.state / "export/mirror_000001.tar").write_bytes(b"archive")
+        with patch.object(mirror, "resolve_image") as resolve, \
+                patch.object(mirror, "ensure_tool", return_value=self.data["tool"]), \
+                patch.object(mirror, "mirror", side_effect=write_archive):
+            mirror.export(args)
+        resolve.assert_not_called()
+        data = mirror.verify_bundle(args.output)
+        self.assertEqual(data["images"], self.data["images"])
+        names = [item["name"] for item in json.loads((args.output / "imageset.yaml").read_text())["mirror"]["additionalImages"]]
+        self.assertEqual(len(names), 4)
+        self.assertTrue(all(name.endswith("@sha256:" + "a" * 64) for name in names))
 
 
 if __name__ == "__main__":

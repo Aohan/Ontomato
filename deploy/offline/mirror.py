@@ -46,7 +46,7 @@ def repository(ref):
     return first + "/" + path
 
 
-def resolve_image(ref, arch, component=None, version=None, enterprise=False):
+def resolve_image(ref, arch):
     raw = subprocess.check_output(["docker", "buildx", "imagetools", "inspect", ref, "--raw"])
     manifest = json.loads(raw)
     if "manifests" in manifest:
@@ -59,17 +59,18 @@ def resolve_image(ref, arch, component=None, version=None, enterprise=False):
         # imagetools adds no formatting to --raw; hash the original bytes, including newlines.
         digest = "sha256:" + hashlib.sha256(raw).hexdigest()
     resolved = repository(ref) + "@" + digest
-    run(["docker", "pull", "--platform", "linux/" + arch, resolved])
+    run(["docker", "pull", "--platform", "linux/" + arch, resolved], capture=True)
     image = json.loads(run(["docker", "image", "inspect", resolved], capture=True))[0]
     if image["Os"] != "linux" or image["Architecture"] != arch:
         raise ValueError("Wrong image platform: " + resolved)
-    if component:
-        labels = image.get("Config", {}).get("Labels") or {}
-        if labels.get("io.ontomato.component") != component or labels.get("org.opencontainers.image.version") != version:
-            raise ValueError("Wrong component/version: " + resolved)
-        if enterprise and component == "datarag" and labels.get("io.example.license.mode") != "real":
-            raise ValueError("Enterprise delivery requires real license mode")
     return resolved
+
+
+def validate_sources(sources):
+    for ref in sources.values():
+        repository(ref)
+        if not re.fullmatch(r"[a-zA-Z0-9./_:-]+@sha256:[a-f0-9]{64}", ref):
+            raise ValueError("Delivery images must use immutable digests")
 
 
 def ensure_tool(state, arch):
@@ -128,12 +129,10 @@ def export(args):
         raise ValueError("Output already exists; choose a new delivery directory: " + str(output))
     if state == output or state in output.parents or output in state.parents:
         raise ValueError("Delivery output and persistent state must be separate directories")
+    sources = dict(zip(IMAGE_KEYS, (args.workbench, args.data_engine, args.manager, args.postgres)))
+    # The product entry has validated these exact digests before export advances history.
+    validate_sources(sources)
     state.mkdir(parents=True, exist_ok=True)
-    components = ("data-agent", "datarag", "ontology-manager") if args.edition == "enterprise" else ("ontomato", "datarag-opensource", "ontomato-ontology-manager")
-    inputs = (args.workbench, args.data_engine, args.manager, args.postgres)
-    sources = {key: resolve_image(ref, args.arch, components[i] if i < 3 else None,
-                                  args.version, args.edition == "enterprise")
-               for i, (key, ref) in enumerate(zip(IMAGE_KEYS, inputs))}
     # This oc-mirror version needs a destination tag even for digest sources.
     # A digest-derived tag pins the pull and remains stable across exports.
     # JSON is a YAML subset; no YAML dependency is required at the site.
@@ -186,10 +185,7 @@ def verify_bundle(bundle):
         path = bundle / name
         if path.stat().st_size != record["bytes"] or sha256(path) != record["sha256"]:
             raise ValueError("Delivery checksum mismatch: " + name)
-    for ref in data["images"].values():
-        repository(ref)
-        if not re.fullmatch(r"[a-zA-Z0-9./_:-]+@sha256:[a-f0-9]{64}", ref):
-            raise ValueError("Delivery images must use immutable digests")
+    validate_sources(data["images"])
     return data
 
 
@@ -233,12 +229,14 @@ def import_bundle(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    exp = commands.add_parser("export", help="Export published final images; retain --state between versions")
-    for name in ("state", "output", "version", "workbench", "data-engine", "manager"):
+    resolve = commands.add_parser("resolve", help="Pull the selected platform and print immutable references as a JSON array")
+    exp = commands.add_parser("export", help="Export validated immutable images; retain --state between versions")
+    for command in (resolve, exp):
+        for name in ("workbench", "data-engine", "manager", "postgres"):
+            command.add_argument("--" + name, required=True)
+        command.add_argument("--arch", choices=tuple(TOOL_SHA), required=True)
+    for name in ("state", "output", "version"):
         exp.add_argument("--" + name, required=True)
-    exp.add_argument("--arch", choices=tuple(TOOL_SHA), required=True)
-    exp.add_argument("--edition", choices=("public", "enterprise"), required=True)
-    exp.add_argument("--postgres", default="docker.io/pgvector/pgvector:pg18")
     exp.add_argument("--bootstrap", action="store_true", help="Include Registry and oc-mirror images for a first installation")
     exp.add_argument("--authfile", help="Container auth JSON with inline credentials; never copied to a delivery")
     exp.add_argument("--network", help="Docker network for the exporter")
@@ -250,7 +248,10 @@ def main():
     imp.add_argument("--project", default="ontomato-offline")
     args = parser.parse_args()
     try:
-        if args.command == "export":
+        if args.command == "resolve":
+            print(json.dumps([resolve_image(ref, args.arch) for ref in
+                              (args.workbench, args.data_engine, args.manager, args.postgres)]))
+        elif args.command == "export":
             export(args)
         else:
             if not 1 <= args.port <= 65535:

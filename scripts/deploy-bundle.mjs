@@ -2,16 +2,12 @@
 // Node built-ins and the Docker CLI only; no host shell.
 import { chmodSync, cpSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { execute, parseOptions } from "./build-support.mjs";
+import { execute, output, parseOptions } from "./build-support.mjs";
 
 // Only the deploy template goes into the pack. .env, backend_data and
 // frontend_data are onsite state and are never packed.
 export const TEMPLATE_ENTRIES = ["docker-compose.yml", "initdb.sql", "README.md", "offline"];
-// The fresh-install entry is assembled on the enterprise side (its build.sh
-// inlines the shared shell library and injects the version); the pack only
-// stages the assembled files. Paths are relative to --install-dir.
-// The edition hands over one directory of assembled onsite entries (install.sh and any
+// The product hands over one directory of assembled onsite entries (install.sh and any
 // other entry with its helper scripts); the whole directory lands at the pack root, so a
 // new entry needs no change here. Top-level shell entries stay executable whatever the umask.
 export function stageInstallEntry(installDir, staging) {
@@ -26,8 +22,7 @@ export function stageInstallEntry(installDir, staging) {
 }
 
 const FLAGS = {
-  "--arch": "value", "--deploy-dir": "value", "--name": "value",
-  "--install-dir": "value", "--version": "value", "--image-tag": "value",
+  "--arch": "value", "--version": "value", "--image-tag": "value",
   "--registry": "value", "--state": "value", "--bootstrap": "boolean",
   "--network": "value", "--insecure-source": "boolean", "--postgres": "value",
 };
@@ -56,41 +51,40 @@ export function bundleName(name, version, arch, now) {
   return `${name}-${version}-${bundleStamp(now)}-${arch}`;
 }
 
-async function main() {
-  const options = parseOptions(process.argv.slice(2), FLAGS);
-  if (!options["--deploy-dir"]) throw new Error("Required --deploy-dir <deploy directory>");
-  if (!options["--name"]) throw new Error("Required --name <product name>");
+export function parseBundleOptions(argv) {
+  const options = parseOptions(argv, FLAGS);
   for (const name of ["--version", "--image-tag", "--registry", "--state"])
     if (!options[name]) throw new Error(`Required ${name}`);
+  return options;
+}
+
+// Product entries own their image list and validation; this module only transports and packs it.
+export function buildBundle(options, { name, deployDir, installDir, images, validateImages }) {
   const arch = options["--arch"];
   const version = options["--version"];
-  const deployDir = resolve(options["--deploy-dir"]);
-  const enterprise = options["--name"] === "data-agent";
-  const components = enterprise
-    ? ["data-agent", "datarag", "ontology-manager"]
-    : ["ontomato-workbench", "ontomato-data-engine", "ontomato-ontology-manager"];
-  const image = (component) => `${options["--registry"]}/${component}:${options["--image-tag"]}-${arch}`;
-  const base = bundleName(options["--name"], version, arch, new Date());
+  const mirror = join(deployDir, "offline", "mirror.py");
+  const imageArgs = (refs) => refs.flatMap((ref, i) => [
+    ["--workbench", "--data-engine", "--manager", "--postgres"][i], ref,
+  ]);
+  const resolved = JSON.parse(output("python3", [mirror, "resolve", "--arch", arch, ...imageArgs(images)]));
+  validateImages(resolved);
+  const base = bundleName(name, version, arch, new Date());
   const bundleRoot = resolve(".build", "bundle");
   const staging = join(bundleRoot, base);
   mkdirSync(staging, { recursive: true });
   // Dereference the shared offline tool directory; the package is self-contained.
   for (const entry of TEMPLATE_ENTRIES)
     cpSync(realpathSync(join(deployDir, entry)), join(staging, entry), { recursive: true });
-  if (options["--install-dir"])
-    stageInstallEntry(resolve(options["--install-dir"]), staging);
+  if (installDir) stageInstallEntry(installDir, staging);
   writeFileSync(
     join(staging, ".env.example"),
     renderEnvExample(readFileSync(join(deployDir, ".env.example"), "utf8"), arch),
   );
   execute("python3", [
-    join(deployDir, "offline", "mirror.py"), "export", "--arch", arch,
-    "--edition", enterprise ? "enterprise" : "public", "--version", version,
+    mirror, "export", "--arch", arch, "--version", version,
     "--state", resolve(options["--state"]), "--output", join(staging, "package"),
-    "--workbench", image(components[0]), "--data-engine", image(components[1]),
-    "--manager", image(components[2]),
+    ...imageArgs(resolved),
     ...(options["--bootstrap"] ? ["--bootstrap"] : []),
-    ...(options["--postgres"] ? ["--postgres", options["--postgres"]] : []),
     ...(options["--network"] ? ["--network", options["--network"]] : []),
     ...(options["--insecure-source"] ? ["--insecure-source"] : []),
     ...(process.env.REGISTRY_AUTH_FILE ? ["--authfile", resolve(process.env.REGISTRY_AUTH_FILE)] : []),
@@ -102,10 +96,5 @@ async function main() {
     env: { ...process.env, COPYFILE_DISABLE: "1" },
   });
   console.log(`BUNDLE_TAR=${archive}`);
+  return archive;
 }
-
-if (process.argv[1] === fileURLToPath(import.meta.url))
-  main().catch((error) => {
-    console.error(`[bundle] ${error.message}`);
-    process.exitCode = 1;
-  });
