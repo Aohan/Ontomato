@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
-import { bindingIndex, linkPlan, snapshotIndex, writeStage } from "./runtime-layout.mjs";
+import { bindingIndex, checkNoBrokenSymlinks, linkPlan, snapshotIndex, writeStage } from "./runtime-layout.mjs";
 
 function place(root, rel, version) {
   const dir = join(root, rel);
@@ -178,5 +178,19 @@ test("multi-version links resolve to different store packages and a bad stage wr
     rmSync(store, { recursive: true, force: true });
     rmSync(stage, { recursive: true, force: true });
     rmSync(host, { recursive: true, force: true });
+  }
+});
+
+test("checkNoBrokenSymlinks detects broken symlinks and allows valid ones", () => {
+  const root = mkdtempSync(join(tmpdir(), "p4-symlink-test-"));
+  try {
+    writeFileSync(join(root, "real.txt"), "hello");
+    symlinkSync(join(root, "nonexistent"), join(root, "broken"));
+    assert.throws(() => checkNoBrokenSymlinks(root), /Broken symbolic link/);
+    rmSync(join(root, "broken"));
+    symlinkSync(join(root, "real.txt"), join(root, "valid"));
+    checkNoBrokenSymlinks(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

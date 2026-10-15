@@ -1,23 +1,21 @@
-// Container-side app stager for the workbench app image. Runs in web-builder
+// Container-side app stager for the workbench final image. Runs in app-builder
 // against the real workspace after the full frozen install and the web build:
 // it checks pnpm's production selection against the graph closure,
 // materializes /stage (selected own members as real dirs, third-party as
 // absolute /opt/runtime links whose store paths come from this builder's own
-// install of the same lock), copies the built web
-// output, and writes .image-meta.json. The launch script and the empty data
-// mount point are placed by the recipe, not here.
+// install of the same lock), and copies the built web output. The launch
+// script and the empty data mount point are placed by the recipe, not here.
 import {
   cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
-  writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
 import { join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { output } from "../build-support.mjs";
-import { productionClosure } from "./runtime-contract.mjs";
+import { productionClosure } from "./production-graph.mjs";
 import { bindingIndex, linkPlan, writeStage } from "./runtime-layout.mjs";
 
 const SOURCES = "/build/workspace";
@@ -102,15 +100,14 @@ export function assembleAppStage({
   stageRoot,
   storeRoot,
   record,
-  meta,
+  platform,
   lock,
   members,
   selected,
 }) {
-  if (!meta || typeof meta.platform !== "string")
-    throw new Error("meta.platform is required");
+  if (!platform || typeof platform !== "string")
+    throw new Error("platform is required");
   const manifests = Object.fromEntries(members.map((member) => [member.path, member.manifest]));
-  const platform = meta.platform;
   const graph = productionClosure(
     { importer: record.appImporter, manifests },
     lock,
@@ -126,15 +123,13 @@ export function assembleAppStage({
   const { plan, copies } = stagePlan(graph, members, index);
   for (const copy of copies) copyMember(copy.from, join(stageRoot, copy.to));
   cpSync(join(root, "dist/web"), join(stageRoot, "dist/web"), { recursive: true });
-  writeFileSync(join(stageRoot, ".image-meta.json"), `${JSON.stringify(meta)}\n`);
   writeStage(stageRoot, storeRoot, plan);
   return { graph, plan, copies };
 }
 
 function main() {
-  const appMeta = process.env.APP_META_JSON;
-  if (!appMeta) throw new Error("APP_META_JSON is required");
-  const meta = JSON.parse(appMeta);
+  const targetPlatform = process.env.TARGETPLATFORM;
+  if (!targetPlatform) throw new Error("TARGETPLATFORM environment variable is required");
   const record = JSON.parse(readFileSync(INPUTS, "utf8"));
   const root = join(SOURCES, record.workspaceId);
   process.chdir(root);
@@ -156,7 +151,7 @@ function main() {
     stageRoot: STAGE,
     storeRoot: STORE,
     record,
-    meta,
+    platform: targetPlatform,
     lock,
     members,
     selected,

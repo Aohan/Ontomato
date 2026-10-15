@@ -1,85 +1,92 @@
-# Ontomato unified deployment
+# Ontomato deployment
 
-Compose for PostgreSQL, DataRAG, the Node app, and the ontology manager.
-Requires Docker Engine 26+ and the Docker Compose plugin.
+Three final images run the workbench, data engine and ontology manager. PostgreSQL
+is a fourth service. The site needs Docker Engine 26+, Compose v2 and Python 3.8+.
 
-The Node app and DataRAG each ship as a runtime image and an app image, which are
-assembled on the deployment machine at `up` (`pull_policy: build`): each recipe under
-`assemble/` copies the app image into the runtime image and checks that they pair.
-The images come either from GitHub Container Registry (`docker-compose.ghcr.yml`) or
-from an offline pack (`docker-compose.yml`).
-
-## Deploy from GitHub Container Registry
-
-From `deploy/` in the source repository:
+## Online deployment
 
 ```bash
-cp .env.example .env    # set ARCH, POSTGRES_PASSWORD and PUBLIC_HOST
-echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
-docker compose up -d
-```
-
-`ARCH` names this machine's architecture, `amd64` or `arm64`; the assembly checks the
-images against it. `docker-compose.ghcr.yml` is an override layered on
-`docker-compose.yml` through `COMPOSE_FILE`; it only points the runtime, app and
-ontology manager images at `ghcr.io/aohan/ontomato-*`, so every later `docker compose`
-command in this directory uses the registry. They follow `latest` unless `ONTOMATO_VERSION` is set in
-`.env`. A runtime image is published under its compatibility fingerprint, so an update
-downloads new app images and reuses the runtime while the fingerprint is unchanged.
-The layout interface is part of that fingerprint: after a layout upgrade the first
-update builds fresh runtimes once, and an old runtime never pairs with a new app
-(the assembly check rejects the mix).
-
-To update:
-
-```bash
+cp .env.example .env
+# Set ARCH, POSTGRES_PASSWORD and PUBLIC_HOST in .env.
+echo 'COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml' >> .env
+echo 'ONTOMATO_VERSION=4.0.1' >> .env
 docker compose pull
-docker compose build --pull
-docker compose up -d
+docker compose up -d --wait --wait-timeout 600
 ```
 
-## Build the offline pack
+Update `ONTOMATO_VERSION`, then repeat pull and up. Images come from GHCR. Build
+and publication happen before deployment; Compose has no build step.
+
+## Offline delivery
+
+On the connected build host, after CI has published the final images:
 
 ```bash
-make bundle ARCH=arm64   # or amd64
+make bundle ARCH=amd64 VERSION=4.0.1 BOOTSTRAP=1
+# Later versions, using the SAME persistent MIRROR_STATE:
+make bundle ARCH=amd64 VERSION=<next-version>
 ```
 
-The pack is written to `.build/bundle/<product>-<version>-<time>-<arch>.tar.gz`.
-It holds this directory's `docker-compose.yml`, `.env.example`, `initdb.sql` and
-`README.md`, the assembly recipes under `assemble/`, and one `images/*.tar.gz` per
-image. The images of that architecture must already be built or imported on this
-host: the pack is built from those local images, not from the source tree, and it
-takes the version from the app images.
+The default state is `.build/mirror/<arch>`; set `MIRROR_STATE` to a durable path
+for production exports. `IMAGE_REGISTRY` and `IMAGE_TAG` select published sources.
+Each product image is checked for the expected architecture, component and version,
+then resolved to an immutable platform digest. `REGISTRY_AUTH_FILE` can point to
+an oc-mirror-compatible auth JSON; credentials are never copied into a delivery.
 
-## Deploy on site
+The result is `.build/bundle/ontomato-<version>-<time>-<arch>.tar.gz`, including
+this deployment template, `offline/` and `package/`. `package/mirror_*.tar` files
+are oc-mirror's own archives. The initial `bootstrap.tar.gz` contains Registry 3.1.2
+and the pinned oc-mirror 4.22.17 tool image. Subsequent packages omit bootstrap.
+Do not use `docker load` on `mirror_*.tar`.
 
-1. Copy the unpacked pack directory to the server.
-2. Import the images:
+On the disconnected machine, extract the first bundle and run:
 
-   ```bash
-   for f in images/*.tar.gz; do docker load -i "$f"; done
-   ```
+```bash
+python3 offline/mirror.py import --bundle package \
+  --state /var/lib/ontomato-mirror --output-env images.env
+cp .env.example .env
+# Set POSTGRES_PASSWORD and PUBLIC_HOST in .env, then append the image references:
+cat images.env >> .env
+docker compose pull
+docker compose up -d --wait --wait-timeout 600
+```
 
-3. `cp .env.example .env`, then fill in group 1: `POSTGRES_PASSWORD` and
-   `PUBLIC_HOST` (the address the browser uses, an IP or a hostname).
-4. `docker compose up -d`.
+Registry listens only on `127.0.0.1:5000`. The default project is
+`ontomato-offline`; `--port` and `--project` can select an isolated instance. The
+site's application images are pulled by digest from this local Registry.
 
-Services default to UTC. To use another timezone, set an IANA timezone in `.env`,
-for example `TZ=Europe/Berlin`. The same setting is passed to PostgreSQL, Node and
-Java/Python; the host's timezone is not detected automatically.
+For updates, extract the new bundle outside the existing deployment directory.
+Run its import command with the same state directory. After successful import,
+replace the six image/version/architecture values in the existing `.env` with
+those in `images.env`, then pull and up. Keep existing secrets, data directories
+and database volumes. Import failure leaves the previous `.env` and application
+containers untouched. Retain the previous references to select a prior image;
+application/database migration compatibility must be considered separately.
 
-The app and backend images are assembled offline at `up` (`pull_policy: build`):
-each recipe copies a loaded app image into its loaded runtime image. To update only
-the application, import the new app package and run `docker compose up -d` again;
-the runtime stays loaded.
+## State and recovery
 
-## Databases and ports
+- Keep the connected export state (both cache and `export/working-dir`) and each
+  site's import state (cache, incoming working directory and Registry data).
+- Successful Registry imports are recorded under the site state's `imports/` directory.
+  These receipts do not assert that the application upgrade has completed.
+- Copy each completed delivery before the next export: oc-mirror reuses its
+  output directory. The wrapper copies archives into the versioned bundle first.
+- Deliver increments in export order. A site missing a middle version must import
+  the missing archives first. A fresh site or lost cache needs a full delivery:
+  export the required version with a NEW empty `MIRROR_STATE` and `BOOTSTRAP=1`.
+- A populated Registry does not replace oc-mirror's local cache. Do not prune or
+  delete either history during a delivery chain. Retain packages for recovery.
+- This is whole-layer deduplication: changing a file in a large layer transfers
+  that whole new layer. It is not a binary patch format. Keep application changes
+  separate from stable dependencies in the Dockerfiles.
 
-PostgreSQL is published on `127.0.0.1` only (`POSTGRES_PORT`, default 5432). The Node
-app is on `PORT` (default 3000), the ontology manager on `ONTOLOGY_MANAGER_PORT`
-(default 3005), DataRAG on `DATARAG_PORT` (default 18087). The database accounts and
-names are fixed in `docker-compose.yml`: user and database `ontomato` for the Node
-app, database `datarag` for DataRAG. `frontend_data` is mounted at `/app/data` and
-`backend_data` at `/deploy`; on first init `initdb.sql` creates the `ontomato` and
-`datarag` databases. The stack does not attach an existing database or migrate old
-data.
+Official references: [oc-mirror](https://github.com/openshift/oc-mirror),
+[Distribution](https://distribution.github.io/distribution/).
+
+## Data and ports
+
+PostgreSQL uses a named volume and is published on loopback port 5432 by default.
+Workbench port is 3000, manager 3005 and data engine 18087. Override them in `.env`.
+`frontend_data` maps to `/app/data`, and `backend_data` to `/deploy`. Initial
+`initdb.sql` creates the product databases. Services default to UTC; set `TZ` for
+another timezone. This stack does not migrate a pre-existing database.

@@ -7,16 +7,13 @@ const repoRoot = resolve(appRoot, "../..");
 // Every public adapter module is in the reactor (the root pom lists them all); this app installs postgresql, mysql, sqlserver, duckdb, and neo4j.
 const PUBLIC_ADAPTERS = ["postgresql", "mysql", "sqlserver", "gaussdb", "duckdb", "neo4j", "elasticsearch"];
 const HELP =
-  "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=en], make data-engine-app, make pack-data-engine, or make pack-data-engine-app.\ndata-engine-app and pack-data-engine-app compare the sources with the runtime lock and never build a runtime.";
+  "Use make data-engine [ARCH=amd64|arm64] [PROMPT_LANG=en].\nBuilds the final datarag-opensource image, which runs as it is.";
 
 export const app = {
   repoRoot,
-  lockRoot: appRoot,
   versionPom: resolve(repoRoot, "pom.xml"),
   sources: [{ id: "ontomato", root: repoRoot }],
   component: "datarag-opensource",
-  family: "java-app",
-  interfaceVersion: 4,
   promptLang: "en",
   supportedPromptLangs: ["en"],
   reactorDir: "ontomato",
@@ -52,29 +49,22 @@ export const app = {
       ],
     },
   ],
-  // Central export: no settings, native library, license profile or artifact check.
+  // No private export inputs: this component consumes the recipe's central export.
   secretExport: null,
   requirements: { root: repoRoot, path: "packages/data-engine-core/requirements-py310.txt" },
   mcp: { root: repoRoot, path: "packages/data-engine-core/mcp/mcpserver.py" },
-  // Only the pairing checkers ride the runtime context. Product startup files
-  // (entrypoint, sync helper, MCP service) ride the app payload via appBin/mcp.
+  // Product startup files ride the payload at their fixed /app layout.
   bin: [
-    [repoRoot, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"],
-  ],
-  appBin: [
     [repoRoot, "scripts/data-engine/container-entrypoint.sh", "payload/bin/container-entrypoint.sh"],
     [repoRoot, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"],
   ],
-  pairContract: "/opt/datarag/bin/runtime-contract.py",
-  runtimeTarget: "runtime",
   resources: [
     [repoRoot, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"],
     [repoRoot, "packages/data-engine-core/skills", "payload/skills"],
   ],
   requiredSkill: "payload/skills/aftercalculate/trend-forecaster/SKILL.md",
-  payloadFiles: {},
-  appLabels: {},
-  appTagSuffix: "",
+  labels: {},
+  tagSuffix: "",
 };
 
 async function main(args) {

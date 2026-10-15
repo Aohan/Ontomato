@@ -1,4 +1,4 @@
-import { lstatSync, mkdirSync, realpathSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, symlinkSync } from "node:fs";
 import { dirname, join, posix, relative, sep } from "node:path";
 
 function mergedEdges(node) {
@@ -149,4 +149,21 @@ export function writeStage(stageRoot, storeRoot, plan) {
       dest,
     );
   }
+}
+
+export function checkNoBrokenSymlinks(root) {
+  function walk(dir) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink()) {
+        if (!existsSync(path)) {
+          throw new Error(`Broken symbolic link: ${path}`);
+        }
+      } else if (stat.isDirectory()) {
+        walk(path);
+      }
+    }
+  }
+  walk(root);
 }

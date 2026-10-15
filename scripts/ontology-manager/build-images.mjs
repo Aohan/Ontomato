@@ -7,8 +7,8 @@ import { join } from "node:path";
 import {
   buildStamp,
   docker,
-  exportImage,
   imageLabels,
+  imageCacheArgs,
   inspectImage,
   parseOptions,
   readRevision,
@@ -17,7 +17,7 @@ import {
 } from "../build-support.mjs";
 import { collectMetadataContext, copyWorkspace } from "../pnpm-workspace-context.mjs";
 
-const FLAGS = { "--arch": "value", "--pack": "boolean" };
+const FLAGS = { "--arch": "value" };
 const RECIPE = "docker/ontology-manager";
 // Copied to the context root, where the recipe's final stage COPYs them.
 const RUNTIME_FILES = ["config.js.template", "nginx.conf.template", "docker-entrypoint.sh"];
@@ -35,8 +35,7 @@ function assertManagerImage(tag, arch, component, version) {
     !inspected ||
     inspected.Os !== "linux" ||
     inspected.Architecture !== arch ||
-    labels["io.runtime.component"] !== component ||
-    labels["io.runtime.kind"] !== "manager" ||
+    labels["io.ontomato.component"] !== component ||
     labels["org.opencontainers.image.version"] !== version
   )
     throw new Error(`Built image identity mismatch: ${tag}`);
@@ -45,7 +44,7 @@ function assertManagerImage(tag, arch, component, version) {
 export async function buildManagerImage(app, args) {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(
-      "Use make ontology-manager [ARCH=amd64|arm64] or make pack-ontology-manager [ARCH=amd64|arm64].",
+      "Use make ontology-manager [ARCH=amd64|arm64].",
     );
     return;
   }
@@ -75,11 +74,12 @@ export async function buildManagerImage(app, args) {
     "--platform",
     `linux/${arch}`,
     "--load",
+    ...imageCacheArgs(),
     "--build-arg",
     `WORKSPACE=${record.workspaceId}`,
     "--build-arg",
     `APPLICATION=${record.application}`,
-    ...imageLabels(app.component, "manager", version),
+    ...imageLabels(app.component, version),
     "-t",
     tag,
     "-t",
@@ -89,10 +89,4 @@ export async function buildManagerImage(app, args) {
     context,
   ]);
   assertManagerImage(tag, arch, app.component, version);
-  if (parsed["--pack"])
-    await exportImage(
-      [tag, alias],
-      join(app.repoRoot, ".build", "pack", `${app.component}-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`),
-      `linux/${arch}`,
-    );
 }

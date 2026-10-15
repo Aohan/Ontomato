@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { fingerprint } from "../build-support.mjs";
-import { productionGraph } from "./production-graph.mjs";
+import { cpuFor, productionClosure, productionGraph } from "./production-graph.mjs";
 
 const linux = { os: ["linux"], cpu: ["arm64"] };
 
@@ -147,7 +146,6 @@ test("own identity and dev drift do not change the third-party graph", () => {
   };
   const moved = productionGraph(movedLock, "services/app", movedManifests, "arm64");
   assert.deepEqual(moved.packages, base.packages);
-  assert.equal(fingerprint(moved.packages), fingerprint(base.packages));
   assert.equal(moved.bindings["services/app"].links["@moved/lib"], "services/lib");
   assert.equal(moved.bindings["services/lib"].links["@moved/app"], "services/app");
   const devLock = lock();
@@ -161,5 +159,14 @@ test("own identity and dev drift do not change the third-party graph", () => {
   changed.packages["express@4.0.0"].resolution.integrity = "sha512-changed";
   const next = productionGraph(changed, "apps/app", manifests(), "arm64");
   assert.notDeepEqual(next.packages, base.packages);
-  assert.notEqual(fingerprint(next.packages), fingerprint(base.packages));
+});
+
+test("productionClosure wraps productionGraph and parses target platform", () => {
+  const bundle = { importer: "apps/app", manifests: manifests() };
+  const graphArm = productionClosure(bundle, lock(), "linux/arm64");
+  assert.equal(graphArm.bindings["apps/app"].dependencies.express, "express@4.0.0");
+  assert.equal(cpuFor("linux/arm64"), "arm64");
+  assert.equal(cpuFor("linux/amd64"), "x64");
+  assert.throws(() => cpuFor("linux/mips"), /unsupported architecture/);
+  assert.throws(() => productionClosure({}, lock(), "linux/arm64"), /manifest bundle must contain importer/);
 });

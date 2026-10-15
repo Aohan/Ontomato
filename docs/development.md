@@ -13,58 +13,27 @@ credentials.
 
 ## Product build entry points
 
-`make` in the root directory runs `make build` by default, which builds the Node runtime,
-the Node app, the Java data-engine and the Manager in that order. `make pack` exports five
-image packs — Node runtime, Node app, Java runtime, Java app and Manager; `make pack-app`
-exports only the three application packs — Node app, Java app and Manager.
+`make build ARCH=amd64` (or `arm64`) builds three runnable images in order:
+workbench, data engine, ontology manager. Each also has its own Make target. Docker
+caches the dependency layers; application source is copied afterwards. No separate
+runtime image, compatibility lock or deployment-time build is needed.
 
-| Command | Scope |
-| --- | --- |
-| `make build` | workbench-runtime → workbench-app → data-engine → ontology-manager |
-| `make build-app` | workbench-app → data-engine-app → ontology-manager |
-| `make pack` | workbench-runtime-pack → workbench-app-pack → pack-data-engine → pack-ontology-manager |
-| `make pack-app` | workbench-app-pack → pack-data-engine-app → pack-ontology-manager |
-| `make pack-amd64` / `pack-arm64` | run `pack` for the given architecture |
-| `make pack-app-amd64` / `pack-app-arm64` | run `pack-app` for the given architecture |
+Local aliases are `ontomato:deploy-<arch>`, `datarag-opensource:deploy-<arch>` and
+`ontomato-ontology-manager:deploy-<arch>`. Versioned tags include the source revision
+and a dirty marker when any participating source tree has uncommitted changes.
 
-`build-app` and `pack-app` do not rebuild the runtime and do not require a runtime image
-to be present locally: the build script computes the compatibility fingerprint from the
-source, compares it with `runtime-lock.json` and, on a mismatch, tells you to rebuild the
-runtime first. `build-app` only builds images and exports no pack; a deployment machine
-updates day to day with `git pull` → `make build-app` → `docker compose up -d` in the
-deployment directory, and `pack-app` additionally exports the offline pack. The matching
-check runs only once, during deployment assembly.
+The build host needs Node.js 24+, Git, Make and Docker with Buildx. `ARCH` defaults
+to the host architecture. `PROMPT_LANG=en` selects the public Java prompts. Base
+image digests and pnpm versions live in the Dockerfiles. `DEBIAN_MIRROR`,
+`DEBIAN_SECURITY_MIRROR` and `PIP_INDEX_URL` remain host-level build settings.
 
-Layout interface 4 moved the product startup files into the app images (the Java
-entrypoint, sync helper and built-in MCP service; the workbench Python defaults), so
-product startup logic now ships with the small package. The enterprise edition's
-native JVM argument (`-Djna.library.path`) ships the same way, in its own thin app
-entrypoint wrapper delegating to the public lifecycle script; the runtime carries no
-edition-specific target. The first update from an older
-layout needs a fresh runtime, app and assembly together: old and new layouts refuse to
-pair. Afterwards day-to-day updates stay app-only while the fingerprint is unchanged. The Manager still ships as its own
-image; there is no manager runtime. The per-service targets (`workbench-runtime-pack`,
-`workbench-app-pack`, `pack-data-engine`, `pack-data-engine-app`,
-`pack-ontology-manager` and their architecture variants) can still be called on their
-own.
-
-The build host needs Node.js 24+, Git, GNU Make and Docker with the Buildx plugin; `ARCH`
-defaults to the host architecture, and `PROMPT_LANG` only controls the Java prompt
-language, which is `en` in this repository. Base images are
-always written as the official `docker.io/library/…` addresses with pinned digests, and
-pulls use each machine's own Docker mirror configuration; the build scripts do not pass
-base-image environment variables through, so the Dockerfile defaults are the only source.
-`DEBIAN_MIRROR`, `DEBIAN_SECURITY_MIRROR` and `PIP_INDEX_URL` keep environment-variable
-overrides as machine-level settings. The pnpm version is likewise declared only in the
-Dockerfile (currently 9.15.9, and the runtime install and the app build must agree); it
-takes part in the compatibility fingerprint and does not accept an environment-variable
-override. These 5 application artifacts do not contain PostgreSQL: the deployment flow
-provides PostgreSQL separately; `make bundle` packs the images already built or imported
-for one architecture, the `deploy/` templates and the assembly recipes into one offline
-full bundle. There is currently no acceptance conclusion from real private Linux hardware
-or a complete CI either, and a full-stack run on a real Windows machine is likewise
-unverified. Windows packaging is out of scope for this change; images and the offline
-packs continue to use the existing verified build environment.
+CI publishes final images. GitHub runners reuse the previous release's inline BuildKit
+cache through `BUILD_CACHE_REF`; this keeps unchanged dependency layers on a fresh runner.
+The enterprise GitLab runner uses its persistent local BuildKit cache.
+ `make bundle ARCH=amd64 VERSION=<version> BOOTSTRAP=1`
+exports published images with oc-mirror v2; later runs reuse `MIRROR_STATE` and omit
+`BOOTSTRAP=1`. See [deployment](../deploy/README.md) for the offline workflow,
+baseline recovery and state retention. `build` never publishes images.
 
 ## Local development (Node + main web app + Manager)
 

@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildWorkbenchApp } from "../../scripts/workbench/build-images.mjs";
+import { buildWorkbenchImage } from "../../scripts/workbench/build-images.mjs";
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = resolve(appRoot, "../..");
@@ -8,17 +8,14 @@ const repoRoot = resolve(appRoot, "../..");
 export const app = {
   repoRoot,
   publicRoot: repoRoot,
-  lockRoot: appRoot,
   component: "ontomato",
-  // Stable runtime alias <name>:deploy-<arch> and runtime package prefix consumed by deployment.
-  runtimeImageName: "node-app-runtime",
   workspaceId: "ontomato",
   appImporter: "apps/workbench",
   sources: [{ id: "ontomato", root: repoRoot }],
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url))
-  buildWorkbenchApp(app, process.argv.slice(2)).catch((error) => {
+  buildWorkbenchImage(app, process.argv.slice(2)).catch((error) => {
     console.error(`[build] ${error.message}`);
     process.exitCode = 1;
   });

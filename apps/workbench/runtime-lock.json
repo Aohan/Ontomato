@@ -1,8 +1,0 @@
-{
-  "schema": 3,
-  "family": "node-app",
-  "runtimes": {
-    "linux/amd64": "07170699a9d43ce62fcee13d5e720720919becac4aae2e37ef9598cefbda4b9b",
-    "linux/arm64": "b75c6e3feb2be0714bb3cab7fb3000bb1453a74c92762ebf04b28e165849a447"
-  }
-}

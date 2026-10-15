@@ -1,12 +1,12 @@
 name: ${COMPOSE_PROJECT_NAME:-ontomato}
 
-# Offline stack. Composite tags stay off the single-component tags
-# ontomato:assemble-<ARCH> and datarag-opensource:<project>-assemble-<ARCH>.
+# Final runnable images. Build and publish before deployment.
 
 services:
   postgres:
-    image: pgvector/pgvector:pg18
-    pull_policy: never
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg18}
+    platform: linux/${ARCH:?ARCH not set}
+    pull_policy: missing
     restart: unless-stopped
     ports:
       # Published on the loopback address only.
@@ -28,18 +28,9 @@ services:
       retries: 10
 
   datarag:
-    image: datarag-opensource:${COMPOSE_PROJECT_NAME:-ontomato}-unified-${ARCH:?ARCH not set}
-    pull_policy: build
-    build:
-      context: ./assemble/data-engine
-      dockerfile: Dockerfile.assemble
-      pull: false
-      network: none
-      args:
-        APP_COMPONENT: datarag-opensource
-        EXPECTED_ARCH: ${ARCH:?ARCH not set}
-        RUNTIME_IMAGE: ${DATARAG_RUNTIME_IMAGE:-datarag-opensource-runtime:deploy-${ARCH:?ARCH not set}}
-        APP_IMAGE: ${DATARAG_APP_IMAGE:-datarag-opensource-app:deploy}
+    image: ${DATA_ENGINE_IMAGE:-datarag-opensource:deploy-${ARCH:?ARCH not set}}
+    platform: linux/${ARCH:?ARCH not set}
+    pull_policy: missing
     restart: unless-stopped
     ports:
       - "${DATARAG_PORT:-18087}:18087"
@@ -74,18 +65,9 @@ services:
         condition: service_healthy
 
   ontomato:
-    image: ontomato:${COMPOSE_PROJECT_NAME:-ontomato}-unified-${ARCH:?ARCH not set}
-    pull_policy: build
-    build:
-      context: ./assemble/workbench
-      dockerfile: Dockerfile.assemble
-      pull: false
-      network: none
-      args:
-        APP_COMPONENT: ontomato
-        EXPECTED_ARCH: ${ARCH:?ARCH not set}
-        RUNTIME_IMAGE: ${ONTOMATO_RUNTIME_IMAGE:-node-app-runtime:deploy-${ARCH:?ARCH not set}}
-        APP_IMAGE: ${ONTOMATO_APP_IMAGE:-ontomato-app:deploy}
+    image: ${WORKBENCH_IMAGE:-ontomato:deploy-${ARCH:?ARCH not set}}
+    platform: linux/${ARCH:?ARCH not set}
+    pull_policy: missing
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
@@ -111,9 +93,9 @@ services:
         condition: service_healthy
 
   ontology-manager:
-    image: ontomato-ontology-manager:deploy-${ARCH:?ARCH not set}
+    image: ${MANAGER_IMAGE:-ontomato-ontology-manager:deploy-${ARCH:?ARCH not set}}
     platform: linux/${ARCH:?ARCH not set}
-    pull_policy: never
+    pull_policy: missing
     restart: unless-stopped
     ports:
       - "${ONTOLOGY_MANAGER_PORT:-3005}:80"

@@ -1,28 +1,8 @@
-# Online stack: an override file layered on docker-compose.yml. It keeps every service and
-# the on-site assembly and only points the runtime, app and Ontology Manager images at
-# GitHub Container Registry instead of an offline bundle. Use it by setting
-# COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml in .env; every docker compose
-# command then layers both files. It is an override rather than `extends`: Compose 2.24
-# rejects extending a service that declares depends_on, while overrides merge on every
-# Compose v2. ARCH in .env must name this machine's architecture (amd64 or arm64): the
-# assembly checks the images against it.
-
+# Pull final images from the publication registry.
 services:
-  postgres:
-    pull_policy: missing
-
-  datarag:
-    build:
-      args:
-        RUNTIME_IMAGE: ghcr.io/aohan/ontomato-data-engine-runtime:${ONTOMATO_VERSION:-latest}
-        APP_IMAGE: ghcr.io/aohan/ontomato-data-engine-app:${ONTOMATO_VERSION:-latest}
-
   ontomato:
-    build:
-      args:
-        RUNTIME_IMAGE: ghcr.io/aohan/ontomato-workbench-runtime:${ONTOMATO_VERSION:-latest}
-        APP_IMAGE: ghcr.io/aohan/ontomato-workbench-app:${ONTOMATO_VERSION:-latest}
-
+    image: ${WORKBENCH_IMAGE:-ghcr.io/aohan/ontomato-workbench:${ONTOMATO_VERSION:-latest}}
+  datarag:
+    image: ${DATA_ENGINE_IMAGE:-ghcr.io/aohan/ontomato-data-engine:${ONTOMATO_VERSION:-latest}}
   ontology-manager:
-    image: ghcr.io/aohan/ontomato-ontology-manager:${ONTOMATO_VERSION:-latest}
-    pull_policy: missing
+    image: ${MANAGER_IMAGE:-ghcr.io/aohan/ontomato-ontology-manager:${ONTOMATO_VERSION:-latest}}

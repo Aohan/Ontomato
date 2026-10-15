@@ -1,0 +1,16 @@
+services:
+  registry:
+    image: ${MIRROR_REGISTRY_IMAGE:?MIRROR_REGISTRY_IMAGE not set}
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${MIRROR_PORT:-5000}:5000"
+    networks:
+      - default
+      - mirror
+    volumes:
+      - ${MIRROR_STATE:?MIRROR_STATE not set}/registry:/var/lib/registry
+networks:
+  default: {}
+  mirror:
+    internal: true

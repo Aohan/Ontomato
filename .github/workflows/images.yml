@@ -1,17 +1,10 @@
 name: Images
 
-# Builds the runtime, app and Ontology Manager images for amd64 and arm64, starts the
-# stack once on each architecture, and publishes the images to GitHub Container
-# Registry. Runtime and app images are published separately and assembled on the
-# deployment machine, as in the offline bundle. A push to main publishes `edge`; a
-# version tag `v<version>` publishes `<version>` and `latest`.
-# deploy/docker-compose.ghcr.yml is the override that pulls them (selected through COMPOSE_FILE).
+# Formal releases publish three final images; deployments only pull and run them.
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,7 +12,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io/aohan
-  VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'edge' }}
+  VERSION: ${{ github.ref_name }}
 
 jobs:
   build:
@@ -41,42 +34,20 @@ jobs:
         with:
           node-version: 24
 
+      - uses: docker/setup-buildx-action@v4
+
       - name: Log in to the registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      # A runtime is published under its compatibility fingerprint and rebuilt only
-      # when that fingerprint is new. An unchanged runtime keeps its published layers,
-      # so updating a deployment downloads the app images only.
-      - name: Build the images
+      - name: Check offline delivery
+        run: python3 -B scripts/offline-mirror-test.py
+
+      - name: Build the final images
         run: |
-          fingerprint() { node -p "require('./apps/$1/runtime-lock.json').runtimes['linux/$ARCH'].slice(0, 16)"; }
-          workbench_runtime="$REGISTRY/ontomato-workbench-runtime:compat-$(fingerprint workbench)-$ARCH"
-          data_engine_runtime="$REGISTRY/ontomato-data-engine-runtime:compat-$(fingerprint data-engine)-$ARCH"
-          echo "WORKBENCH_RUNTIME=$workbench_runtime" >> "$GITHUB_ENV"
-          echo "DATA_ENGINE_RUNTIME=$data_engine_runtime" >> "$GITHUB_ENV"
+          BUILD_CACHE_REF="$REGISTRY/ontomato-workbench:latest" make workbench ARCH="$ARCH"
+          BUILD_CACHE_REF="$REGISTRY/ontomato-data-engine:latest" make data-engine ARCH="$ARCH"
+          BUILD_CACHE_REF="$REGISTRY/ontomato-ontology-manager:latest" make ontology-manager ARCH="$ARCH"
 
-          if docker manifest inspect "$workbench_runtime" > /dev/null 2>&1; then
-            docker pull "$workbench_runtime"
-            docker tag "$workbench_runtime" "node-app-runtime:deploy-$ARCH"
-          else
-            make workbench-runtime ARCH="$ARCH"
-          fi
-          make workbench-app ARCH="$ARCH"
-
-          if docker manifest inspect "$data_engine_runtime" > /dev/null 2>&1; then
-            docker pull "$data_engine_runtime"
-            docker tag "$data_engine_runtime" "datarag-opensource-runtime:deploy-$ARCH"
-            make data-engine-app ARCH="$ARCH"
-          else
-            make data-engine ARCH="$ARCH"
-          fi
-
-          make ontology-manager ARCH="$ARCH"
-
-          # A runtime build rewrites its lock; a difference means the committed lock is stale.
-          git diff --exit-code -- apps/workbench/runtime-lock.json apps/data-engine/runtime-lock.json
-
-      # The same assembly a deployment runs, from the images just built.
       - name: Start the stack
         working-directory: deploy
         run: |
@@ -102,10 +73,8 @@ jobs:
             docker tag "$1" "$2"
             docker push "$2"
           }
-          publish "node-app-runtime:deploy-$ARCH" "$WORKBENCH_RUNTIME"
-          publish "datarag-opensource-runtime:deploy-$ARCH" "$DATA_ENGINE_RUNTIME"
-          publish ontomato-app:deploy "$REGISTRY/ontomato-workbench-app:$version-$ARCH"
-          publish datarag-opensource-app:deploy "$REGISTRY/ontomato-data-engine-app:$version-$ARCH"
+          publish "ontomato:deploy-$ARCH" "$REGISTRY/ontomato-workbench:$version-$ARCH"
+          publish "datarag-opensource:deploy-$ARCH" "$REGISTRY/ontomato-data-engine:$version-$ARCH"
           publish "ontomato-ontology-manager:deploy-$ARCH" "$REGISTRY/ontomato-ontology-manager:$version-$ARCH"
 
   manifest:
@@ -118,24 +87,18 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           version="${VERSION#v}"
-          fingerprint() { node -p "require('./apps/$1/runtime-lock.json').runtimes['linux/$2'].slice(0, 16)"; }
           # index <image> <amd64 tag> <arm64 tag>
           index() {
-            local tags=(-t "$REGISTRY/$1:$version")
-            if [ "$version" != edge ]; then tags+=(-t "$REGISTRY/$1:latest"); fi
+            local tags=(-t "$REGISTRY/$1:$version" -t "$REGISTRY/$1:latest")
             docker buildx imagetools create \
               --annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
               "${tags[@]}" "$REGISTRY/$1:$2" "$REGISTRY/$1:$3"
           }
-          index ontomato-workbench-runtime \
-            "compat-$(fingerprint workbench amd64)-amd64" "compat-$(fingerprint workbench arm64)-arm64"
-          index ontomato-data-engine-runtime \
-            "compat-$(fingerprint data-engine amd64)-amd64" "compat-$(fingerprint data-engine arm64)-arm64"
-          for image in ontomato-workbench-app ontomato-data-engine-app ontomato-ontology-manager; do
+          for image in ontomato-workbench ontomato-data-engine ontomato-ontology-manager; do
             index "$image" "$version-amd64" "$version-arm64"
           done
 
-  # The path a deployment takes: pull the published images and assemble them.
+  # The deployment path: pull the published final images and start the stack.
   verify:
     needs: manifest
     strategy:

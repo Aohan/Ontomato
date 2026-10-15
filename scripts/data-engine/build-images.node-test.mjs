@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { test } from "node:test";
 import {
   chmodSync,
@@ -16,15 +15,8 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  buildJavaApp,
-  computeDataEngineContract,
-  JAVA_FLAGS,
-  parseJavaArgs,
-  selectPromptLanguage,
-  verifyJavaTarget,
-} from "./build-images.mjs";
-import { fingerprint, loadRuntimeLock, readRevision } from "../build-support.mjs";
+import { buildJavaApp, JAVA_FLAGS, parseJavaArgs, selectPromptLanguage } from "./build-images.mjs";
+import { readRevision } from "../build-support.mjs";
 import { app as publicEntry } from "../../apps/data-engine/build.mjs";
 
 function temporary(fn) {
@@ -35,37 +27,6 @@ function temporary(fn) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-
-test("the Java fingerprint comes from the runtime recipe, the exported jars and the pinned Python list", () => {
-  const dir = mkdtempSync(join(tmpdir(), "de-contract-"));
-  try {
-    writeFileSync(join(dir, "a.jar"), "a");
-    writeFileSync(join(dir, "libx.so"), "native");
-    const recipe = "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim-bookworm@sha256:x\nARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy@sha256:y\n";
-    const input = { dockerfileRuntimeText: recipe, exportedLibDir: dir, requirementsText: "numpy==1.26.4\n", arch: "arm64", interfaceVersion: 4 };
-    const contract = computeDataEngineContract(input);
-    assert.deepEqual(contract, {
-      family: "java-app",
-      interfaceVersion: 4,
-      platform: "linux/arm64",
-      java: { classVersion: 65 },
-      runtimeDependencies: { jars: fingerprint({ "a.jar": createHash("sha256").update("a").digest("hex") }) },
-      python: { version: "3.10", packages: { numpy: "1.26.4" } },
-    });
-    writeFileSync(join(dir, "libx.so"), "other native");
-    assert.deepEqual(computeDataEngineContract(input), contract, "native files are not fingerprinted");
-    assert.throws(() => computeDataEngineContract({ ...input, dockerfileRuntimeText: "ARG PYTHON_RUNTIME_IMAGE=docker.io/library/python:3.10-slim\n" }), /JRE major/);
-    assert.throws(() => computeDataEngineContract({ ...input, dockerfileRuntimeText: "ARG JRE_IMAGE=docker.io/library/eclipse-temurin:21-jre-jammy\n" }), /Python version/);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("the POM's compiler target may not exceed the runtime JRE and must be declared", () => {
-  verifyJavaTarget("<maven.compiler.target>21</maven.compiler.target>", 21);
-  assert.throws(() => verifyJavaTarget("<maven.compiler.release>25</maven.compiler.release>", 21), /target 25 exceeds JRE major version 21/);
-  assert.throws(() => verifyJavaTarget("<project></project>", 21), /declares no Java compiler target/);
-});
 
 test("prompt language staging: the selected variant replaces the plain file, other declared variants are dropped", () => {
   for (const lang of ["zh", "en"])
@@ -98,20 +59,14 @@ test("revision is the single concrete public POM property", () => {
   // The live POM carries one concrete release version; its value changes with each release.
   assert.match(live, /^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/);
 });
-test("pack-app rejects a missing lock before any export or build", () =>
-  temporary((dir) => {
-    assert.throws(
-      () => loadRuntimeLock(dir, "java-app", "arm64"),
-      /missing/,
-    );
-  }));
 
-// ---- CLI, recipes and the fake-Docker build chain (no real Docker, Maven or network) ----
+// ---- CLI, recipe call and the fake-Docker build chain (no real Docker, Maven or network) ----
 // These prove the inputs handed to Docker; real compilation, class checks and images
 // are verified only by a real build.
 const RECIPES = fileURLToPath(new URL("../../docker/data-engine/", import.meta.url));
+const RECIPE = join(RECIPES, "Dockerfile");
+const PUBLIC = fileURLToPath(new URL("../..", import.meta.url));
 const VERSION = "9.9.9-test";
-const LOCK = "apps/data-engine/runtime-lock.json";
 const SETTINGS_MARK = "SYNTHETIC-SETTINGS-CONTENT-MUST-NOT-LEAK";
 
 function git(root, ...args) {
@@ -152,7 +107,6 @@ function fixture(t) {
     "apps/data-engine/pom.xml": "<project/>\n",
     "apps/data-engine/src/main/java/App.java": "class App {}\n",
     "scripts/data-engine/container-entrypoint.sh": "#!/bin/bash\n",
-    "scripts/data-engine/runtime-contract.py": "# public checker\n",
     "scripts/data-engine/sync-product-files.py": "# sync\n",
   });
   repository(ent, {
@@ -168,7 +122,6 @@ function fixture(t) {
     "apps/data-engine/pom.xml": "<project/>\n",
     "apps/data-engine/src/main/java/EntApp.java": "class EntApp {}\n",
     "scripts/data-engine/verify-license-jar.sh": "#!/bin/sh\n",
-    "scripts/data-engine/enterprise-runtime-contract.py": "# enterprise checker\n",
     "scripts/data-engine/enterprise-entrypoint.sh": "#!/bin/sh\n",
   });
   const settings = join(dir, "home/.m2/settings.xml");
@@ -178,20 +131,18 @@ function fixture(t) {
 const publicTree = (pub) => ({ dest: "ontomato", root: pub, paths: ["pom.xml", "mvnw", "mvnw.cmd", ".mvn", "packages/data-engine-core/pom.xml", "packages/data-engine-core/src/main", "apps/data-engine/pom.xml", "apps/data-engine/src/main"] });
 function publicApp({ pub }) {
   return {
-    repoRoot: pub, lockRoot: join(pub, "apps/data-engine"), versionPom: join(pub, "pom.xml"),
+    repoRoot: pub, versionPom: join(pub, "pom.xml"),
     sources: [{ id: "ontomato", root: pub }],
-    component: "datarag-opensource", family: "java-app", interfaceVersion: 4, promptLang: "en", supportedPromptLangs: ["en"],
+    component: "datarag-opensource", promptLang: "en", supportedPromptLangs: ["en"],
     reactorDir: "ontomato", appModule: "apps/data-engine", appLibModules: ["packages/data-engine-core", "apps/data-engine"], excludeArtifactIds: "data-engine-core,data-engine-app",
     contextTrees: [publicTree(pub)],
     secretExport: null,
     requirements: { root: pub, path: "packages/data-engine-core/requirements-py310.txt" },
     mcp: { root: pub, path: "packages/data-engine-core/mcp/mcpserver.py" },
-    bin: [[pub, "scripts/data-engine/runtime-contract.py", "bin/runtime-contract.py"]],
-    appBin: [[pub, "scripts/data-engine/container-entrypoint.sh", "payload/bin/container-entrypoint.sh"], [pub, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"]],
-    pairContract: "/opt/datarag/bin/runtime-contract.py", runtimeTarget: "runtime",
+    bin: [[pub, "scripts/data-engine/container-entrypoint.sh", "payload/bin/container-entrypoint.sh"], [pub, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"]],
     resources: [[pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"], [pub, "packages/data-engine-core/skills", "payload/skills"]],
     requiredSkill: "payload/skills/aftercalculate/trend-forecaster/SKILL.md",
-    payloadFiles: {}, appLabels: {}, appTagSuffix: "",
+    labels: {}, tagSuffix: "",
   };
 }
 // Enterprise-shaped description with the same fields as the private entry's.
@@ -199,7 +150,7 @@ function enterpriseApp({ pub, ent, settings }, mode) {
   const base = publicApp({ pub });
   return {
     ...base,
-    repoRoot: ent, lockRoot: join(ent, "apps/data-engine"),
+    repoRoot: ent,
     sources: [{ id: "ontomato", root: pub }, { id: "enterprise", root: ent }],
     component: "datarag", promptLang: "zh", supportedPromptLangs: ["zh", "en"], reactorDir: "enterprise",
     appLibModules: ["../ontomato/packages/data-engine-core", "packages/data-engine-enterprise", "apps/data-engine"],
@@ -212,64 +163,45 @@ function enterpriseApp({ pub, ent, settings }, mode) {
       mavenSettings: settings, keepNative: "libLicense-native-aarch64-5.4.2.so", licenseProfile: mode === "override" ? "dev-override" : "",
       check: { script: "enterprise/scripts/data-engine/verify-license-jar.sh", jarArtifactId: "data-engine-enterprise", argument: mode },
     },
-    bin: [...base.bin, [ent, "scripts/data-engine/enterprise-runtime-contract.py", "bin/enterprise-runtime-contract.py"]],
     // The enterprise app ships its own thin entrypoint at the fixed path,
     // delegating to the public lifecycle script beside it.
-    appBin: [
+    bin: [
       [ent, "scripts/data-engine/enterprise-entrypoint.sh", "payload/bin/container-entrypoint.sh"],
       [pub, "scripts/data-engine/container-entrypoint.sh", "payload/bin/data-engine-entrypoint.sh"],
       [pub, "scripts/data-engine/sync-product-files.py", "payload/bin/sync-product-files.py"],
     ],
-    pairContract: "/opt/datarag/bin/enterprise-runtime-contract.py", runtimeTarget: "runtime",
     resources: [
       [pub, "packages/data-engine-core/conf-defaults", "payload/conf-defaults"],
       [ent, "packages/data-engine-enterprise/conf-defaults", "payload/conf-defaults"],
       [pub, "packages/data-engine-core/skills", "payload/skills"],
       [ent, "packages/data-engine-enterprise/skills", "payload/skills"],
     ],
-    payloadFiles: { "license-mode": mode }, appLabels: { "io.enterprise.license.mode": mode }, appTagSuffix: mode === "override" ? "-override" : "",
+    labels: { "io.example.license.mode": mode }, tagSuffix: mode === "override" ? "-override" : "",
   };
 }
 
-// Minimal fixture Docker for this builder's calls. It records every argv and each
-// build context's full file set (path -> content), writes plausible export outputs,
-// and answers inspect from the labels it was given. FAKE_MODE=bad-label alters one
-// app label.
+// Minimal fixture Docker for this builder's calls: it records the one build's argv and
+// the full context file set (path -> content), and answers inspect from the labels it
+// was given. FAKE_MODE=bad-label alters one license label.
 const FAKE = `#!/usr/bin/env node
-import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const args = process.argv.slice(2);
 const state = process.env.FAKE_STATE;
-const canonical = (v) => Array.isArray(v) ? "[" + v.map(canonical).join(",") + "]" : v !== null && typeof v === "object" ? "{" + Object.keys(v).sort().map((k) => JSON.stringify(k) + ":" + canonical(v[k])).join(",") + "}" : JSON.stringify(v);
-const contract = { family: "java-app", interfaceVersion: 4, platform: "linux/arm64", java: { version: "21", classVersion: 65 }, runtimeDependencies: { jars: "a", native: "b" }, python: { version: "3.10", packages: { numpy: "2.2.6" } } };
-const fp = createHash("sha256").update(canonical(contract)).digest("hex");
 const images = existsSync(join(state, "images.json")) ? JSON.parse(readFileSync(join(state, "images.json"), "utf8")) : {};
 const save = () => writeFileSync(join(state, "images.json"), JSON.stringify(images));
 const files = (root, prefix = "") => readdirSync(join(root, prefix), { withFileTypes: true }).flatMap((e) => { const rel = prefix ? prefix + "/" + e.name : e.name; return e.isDirectory() ? files(root, rel) : [rel]; });
 const value = (flag) => args.filter((a, i) => args[i - 1] === flag);
-const buildArg = (name) => (value("--build-arg").find((a) => a.startsWith(name + "=")) || "").slice(name.length + 1);
 if (args[0] === "version") { process.stdout.write("1.47\\n"); }
 else if (args[0] === "buildx") {
   const context = args[args.length - 1];
   const snapshot = Object.fromEntries(files(context).sort().map((p) => [p, readFileSync(join(context, p), "utf8")]));
-  const target = value("--target")[0] || "app";
-  appendFileSync(join(state, "builds.jsonl"), JSON.stringify({ target, args, context: snapshot }) + "\\n");
-  const dest = (value("--output")[0] || "").replace("type=local,dest=", "");
-  if (target === "export-central" || target === "export-secret") {
-    mkdirSync(join(dest, "app/lib"), { recursive: true });
-    mkdirSync(join(dest, "runtime-lib"), { recursive: true });
-    for (const m of buildArg("APP_LIB_MODULES").split(" ")) writeFileSync(join(dest, "app/lib", m.split("/").pop() + ".jar"), "jar");
-    writeFileSync(join(dest, "runtime-lib/dep.jar"), "dep");
-    writeFileSync(join(dest, "maven-licenses.json"), "[]");
-    if (buildArg("KEEP_NATIVE")) writeFileSync(join(dest, "runtime-lib", buildArg("KEEP_NATIVE")), "so");
-  } else {
-    const labels = {};
-    for (const l of value("--label")) { const at = l.indexOf("="); labels[l.slice(0, at)] = l.slice(at + 1); }
-    if (process.env.FAKE_MODE === "bad-label" && target === "app") labels["io.enterprise.license.mode"] = "real";
-    for (const tag of value("-t")) images[tag] = labels;
-    save();
-  }
+  appendFileSync(join(state, "builds.jsonl"), JSON.stringify({ target: value("--target")[0], args, context: snapshot }) + "\\n");
+  const labels = {};
+  for (const l of value("--label")) { const at = l.indexOf("="); labels[l.slice(0, at)] = l.slice(at + 1); }
+  if (process.env.FAKE_MODE === "bad-label") labels["io.example.license.mode"] = "real";
+  for (const tag of value("-t")) images[tag] = labels;
+  save();
 } else if (args[0] === "image") {
   const labels = images[args[args.length - 1]];
   if (!labels) { process.stderr.write("Error: No such image\\n"); process.exit(1); }
@@ -284,215 +216,200 @@ function fakeDocker(t, dir, env = {}) {
   chmodSync(join(bin, "docker"), 0o755);
   const set = { PATH: `${bin}${delimiter}${process.env.PATH}`, FAKE_STATE: state, ...env };
   const saved = {};
-  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "DOCKER_API_VERSION"]) {
+  for (const key of ["PATH", "FAKE_STATE", "FAKE_MODE", "DOCKER_API_VERSION", "PIP_INDEX_URL"]) {
     saved[key] = process.env[key];
     if (set[key] === undefined) delete process.env[key];
     else process.env[key] = set[key];
   }
   t.after(() => { for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v; });
   const builds = () => (existsSync(join(state, "builds.jsonl")) ? readFileSync(join(state, "builds.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l)) : []);
-  return {
-    builds,
-    build: (target) => builds().find((b) => b.target === target),
-    images: () => JSON.parse(readFileSync(join(state, "images.json"), "utf8")),
-    importRuntime: (tag, labels) => writeFileSync(join(state, "images.json"), JSON.stringify({ [tag]: labels })),
-  };
+  return { builds, images: () => JSON.parse(readFileSync(join(state, "images.json"), "utf8")) };
 }
 const argOf = (argv, name) => argv.filter((a, i) => argv[i - 1] === "--build-arg" && a.startsWith(`${name}=`)).map((a) => a.slice(name.length + 1));
+const tagsOf = (argv) => argv.filter((a, i) => argv[i - 1] === "-t");
+// Every value the recipe's export script reads, in the order the recipe declares it.
+// The reactor inputs are mandatory for both export stages; the edition inputs only
+// exist for the secret export.
+const reactorBuildArgs = (app) => [
+  `REACTOR_DIR=${app.reactorDir}`,
+  `APP_MODULE=${app.appModule}`,
+  `APP_LIB_MODULES=${app.appLibModules.join(" ")}`,
+  `EXCLUDE_ARTIFACT_IDS=${app.excludeArtifactIds}`,
+];
+const buildArgsOf = (argv) => argv.filter((a, i) => argv[i - 1] === "--build-arg");
 const run = (app, args) => buildJavaApp(app, parseJavaArgs(args, { ...JAVA_FLAGS, "--license-mode": "value" }));
 
-test("the CLI is parsed once; help reads nothing and bad input fails before any build", () => {
+test("the CLI takes flags only: no positional build action, no packaging switch", () => {
   assert.deepEqual(parseJavaArgs(["--help"], JAVA_FLAGS), { help: true });
-  assert.deepEqual(parseJavaArgs(["all", "--arch", "arm64", "--prompt-lang", "zh"], JAVA_FLAGS), { help: false, command: "all", parsed: { "--arch": "arm64", "--prompt-lang": "zh" } });
-  assert.throws(() => parseJavaArgs(["runtime", "--arch", "arm64"], JAVA_FLAGS), /Expected all or app/);
-  assert.throws(() => parseJavaArgs(["all"], JAVA_FLAGS), /Required --arch/);
-  assert.throws(() => parseJavaArgs(["all", "--arch", "arm64", "--license-mode", "real"], JAVA_FLAGS), /Unknown argument/);
-  assert.throws(() => parseJavaArgs(["app", "--arch", "arm64", "--pack-runtime"], JAVA_FLAGS), /does not match build action/);
+  assert.deepEqual(parseJavaArgs(["--arch", "arm64", "--prompt-lang", "zh"], JAVA_FLAGS), { help: false, parsed: { "--arch": "arm64", "--prompt-lang": "zh" } });
+  for (const gone of [["all", "--arch", "arm64"], ["app", "--arch", "arm64"], ["runtime", "--arch", "arm64"]])
+    assert.throws(() => parseJavaArgs(gone, JAVA_FLAGS), /Unknown argument/);
+  assert.throws(() => parseJavaArgs(["--arch", "arm64", "--pack-app"], JAVA_FLAGS), /Unknown argument: --pack-app/);
+  assert.throws(() => parseJavaArgs(["--arch", "arm64", "--pack-runtime"], JAVA_FLAGS), /Unknown argument: --pack-runtime/);
+  assert.throws(() => parseJavaArgs(["--arch", "arm64", "--license-mode", "real"], JAVA_FLAGS), /Unknown argument: --license-mode/);
+  assert.throws(() => parseJavaArgs([], JAVA_FLAGS), /Required --arch/);
 });
 
-test("recipes: the secret export checks one explicit script on the exported jar", () => {
-  const build = readFileSync(join(RECIPES, "Dockerfile.build"), "utf8");
-  const runtime = readFileSync(join(RECIPES, "Dockerfile.runtime"), "utf8");
-  const secret = build.slice(build.indexOf("FROM enterprise-src AS build-secret"), build.indexOf("FROM scratch AS export-secret"));
-  const central = build.slice(build.indexOf("FROM recipe AS build-central"), build.indexOf("FROM scratch AS export-central"));
-  assert.match(secret, /test -n "\$\{APP_CHECK_SCRIPT\}" && test -n "\$\{APP_CHECK_JAR\}" && test -n "\$\{APP_CHECK_ARG\}" \\\n && MAVEN_SETTINGS=\/run\/secrets\/maven-settings \/usr\/local\/bin\/export-java.sh \\\n && sh "\$\{APP_CHECK_SCRIPT\}" "\$\{APP_CHECK_JAR\}" "\$\{APP_CHECK_ARG\}"\n/);
-  assert.doesNotMatch(central, /APP_CHECK/);
-  // Both exports run the one export script, which writes the jar license records.
-  assert.match(build, /org\.codehaus\.mojo:license-maven-plugin:2\.4\.0:add-third-party[\s\S]*cp "\$\{reactor\}\/\$\{APP_MODULE\}\/target\/generated-sources\/license\/maven-licenses\.json" \/out\/maven-licenses\.json\n/);
-  assert.match(runtime, /third_party_notices\.py \/licenses\/THIRD_PARTY_NOTICES\.txt --python --jars \/opt\/datarag\/lib \/tmp\/maven-licenses\.json/);
-  assert.doesNotMatch(build + runtime, /verify-license|data-engine-enterprise|license-mode|LicenseConfig/);
-  // The runtime carries no product entrypoint; the final assembly pins the app's.
-  // No edition-specific runtime target remains: the native JVM argument ships
-  // with the enterprise app entrypoint wrapper (proven by its behavior test).
-  assert.doesNotMatch(runtime, /^ENTRYPOINT\s/m);
-  assert.doesNotMatch(runtime, /mcpserver\.py/);
-  assert.doesNotMatch(runtime, /runtime-native/);
-  const assemble = readFileSync(join(RECIPES, "../../deploy/assemble/data-engine/Dockerfile.assemble"), "utf8");
-  assert.match(assemble, /COPY --from=app_source \/ \/app\//);
-  assert.match(assemble, /ENTRYPOINT \["\/app\/bin\/container-entrypoint\.sh"\]/);
-  // Deployment hosts may lack buildx; the classic builder leaves $BUILDPLATFORM empty.
-  assert.match(assemble, /^FROM --platform=linux\/\$\{EXPECTED_ARCH\} \$\{APP_IMAGE\} AS app_source$/m);
-  assert.doesNotMatch(assemble, /^FROM[^\n]*\$\{?(BUILD|TARGET)PLATFORM/m);
-});
-
-test("public build: central export of the public tree only, runtime target and en prompts", async (t) => {
+// The export script that runs inside the image fails on an empty reactor input, so a
+// description field that never reaches the Docker argv breaks the build. These tests
+// pin the exact build-arg values handed over, on both editions and both license modes.
+test("the public build hands the export its reactor inputs and nothing edition-specific", async (t) => {
   const fx = fixture(t);
-  const docker = fakeDocker(t, fx.dir);
-  await run(publicApp(fx), ["all", "--arch", "arm64", "--prompt-lang", "en"]);
-  const exp = docker.build("export-central");
-  assert.equal(docker.build("export-secret"), undefined);
-  assert.equal(exp.args.some((a) => a === "--secret" || /^(KEEP_NATIVE|LICENSE_PROFILE|APP_CHECK_)/.test(a)), false);
-  assert.deepEqual(Object.keys(exp.context).filter((p) => !p.startsWith("ontomato/")), []);
-  assert.equal(Object.keys(exp.context).some((p) => p.includes("src/test")), false);
-  assert.deepEqual(argOf(exp.args, "APP_LIB_MODULES"), ["packages/data-engine-core apps/data-engine"]);
-  const runtime = docker.build("runtime");
-  assert.ok(runtime);
-  // Only the pairing checker rides the runtime context; product startup files do not.
-  assert.deepEqual(Object.keys(runtime.context).filter((p) => p.startsWith("bin/")), ["bin/runtime-contract.py"]);
-  assert.equal(Object.keys(runtime.context).some((p) => p.startsWith("mcp/")), false);
-  assert.equal(runtime.context["requirements-py310.txt"], "numpy==2.2.6\n");
-  // Third-party notice inputs; the public LICENSE and NOTICE go to both images.
-  const shipped = (name) => readFileSync(join(RECIPES, "../..", name), "utf8");
-  assert.equal(runtime.context["maven-licenses.json"], "[]");
-  assert.equal(runtime.context["tools/third_party_notices.py"], shipped("scripts/third_party_notices.py"));
-  assert.equal(Object.keys(runtime.context).some((p) => p.startsWith("lib/") && p !== "lib/dep.jar"), false);
-  const app = docker.build("app");
-  assert.equal(app.context["payload/conf-defaults/prompt.md"], "public English\n");
-  assert.equal(app.context["payload/conf-defaults/static/login.html"], "oss page\n");
-  assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
-  // Product startup files ride the app payload at their fixed /app layout.
-  assert.equal(app.context["payload/bin/container-entrypoint.sh"], "#!/bin/bash\n");
-  assert.equal(app.context["payload/bin/sync-product-files.py"], "# sync\n");
-  assert.equal(app.context["payload/mcp/mcpserver.py"], "# mcp\n");
-  assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
-  assert.equal("payload/license-mode" in app.context, false);
-  for (const name of ["LICENSE", "NOTICE"]) {
-    assert.equal(runtime.context[name], shipped(name));
-    assert.equal(app.context[`payload/licenses/${name}`], shipped(name));
-  }
+  const docker = fakeDocker(t, fx.dir, { PIP_INDEX_URL: undefined });
+  const app = publicApp(fx);
+  await run(app, ["--arch", "arm64", "--prompt-lang", "en"]);
+  const build = docker.builds()[0];
+  assert.deepEqual(buildArgsOf(build.args).sort(), ["EXPORT_STAGE=build-central", ...reactorBuildArgs(app)].sort());
+  assert.equal(existsSync(RECIPE), true);
+});
+
+test("the real public description names the reactor tree it stages and the app module it packages", () => {
+  const tree = publicEntry.contextTrees.find((entry) => entry.root === publicEntry.repoRoot);
+  assert.equal(publicEntry.reactorDir, tree.dest);
+  assert.ok(publicEntry.appLibModules.includes(publicEntry.appModule));
+  assert.equal(publicEntry.appLibModules.filter((module) => module === publicEntry.appModule).length, 1);
+  // The app's own reactor artifacts stay out of the third-party closure.
+  const pom = readFileSync(join(PUBLIC, "apps/data-engine/pom.xml"), "utf8");
+  const appArtifact = /<\/parent>[\s\S]*?<artifactId>([^<]+)<\/artifactId>/.exec(pom)[1];
+  const excluded = publicEntry.excludeArtifactIds.split(",");
+  assert.ok(excluded.includes(appArtifact), appArtifact);
+  assert.ok(excluded.includes("data-engine-core"));
+});
+
+test("public final image: central export of the public tree only, one image tag and alias, en prompts", async (t) => {
+  const fx = fixture(t);
+  const docker = fakeDocker(t, fx.dir, { PIP_INDEX_URL: undefined });
+  await run(publicApp(fx), ["--arch", "arm64", "--prompt-lang", "en"]);
+  assert.equal(docker.builds().length, 1);
+  const build = docker.builds()[0];
+  assert.equal(build.target, "image");
+  assert.equal(build.args[build.args.indexOf("-f") + 1], RECIPE);
+  assert.ok(build.args.includes("--load"));
+  assert.deepEqual(argOf(build.args, "EXPORT_STAGE"), ["build-central"]);
+  assert.equal(build.args.includes("--secret"), false);
+  assert.equal(build.args.some((a) => /^(KEEP_NATIVE|LICENSE_PROFILE|APP_CHECK_)/.test(a)), false);
+  // The context carries the public source tree, the payload, the pinned list and the
+  // tools the recipe binds; no test sources and no enterprise tree.
+  assert.deepEqual(
+    Object.keys(build.context).filter((p) => !p.startsWith("payload/") && p !== "LICENSE" && p !== "NOTICE").sort(),
+    [
+      "ontomato/.mvn/wrapper/maven-wrapper.properties",
+      "ontomato/apps/data-engine/pom.xml",
+      "ontomato/apps/data-engine/src/main/java/App.java",
+      "ontomato/mvnw",
+      "ontomato/mvnw.cmd",
+      "ontomato/packages/data-engine-core/pom.xml",
+      "ontomato/packages/data-engine-core/src/main/java/Core.java",
+      "ontomato/pom.xml",
+      "requirements-py310.txt",
+      "tools/third_party_notices.py",
+      "tools/verify-image.py",
+    ],
+  );
+  assert.equal(Object.keys(build.context).some((p) => p.startsWith("enterprise/")), false);
+  const shipped = (name) => readFileSync(join(PUBLIC, name), "utf8");
+  for (const name of ["LICENSE", "NOTICE"]) assert.equal(build.context[name], shipped(name));
+  assert.equal(build.context["tools/third_party_notices.py"], shipped("scripts/third_party_notices.py"));
+  assert.equal(build.context["tools/verify-image.py"], shipped("scripts/data-engine/verify-image.py"));
+  assert.equal(build.context["requirements-py310.txt"], "numpy==2.2.6\n");
+  // The payload is the product's own content: resources, startup files and the MCP service.
+  assert.equal(build.context["payload/conf-defaults/prompt.md"], "public English\n");
+  assert.equal(build.context["payload/conf-defaults/static/login.html"], "oss page\n");
+  assert.equal(build.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
+  assert.equal(build.context["payload/bin/container-entrypoint.sh"], "#!/bin/bash\n");
+  assert.equal(build.context["payload/bin/sync-product-files.py"], "# sync\n");
+  assert.equal(build.context["payload/mcp/mcpserver.py"], "# mcp\n");
+  assert.equal(Object.keys(build.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
   const head = git(fx.pub, "rev-parse", "HEAD");
-  const tag = app.args[app.args.indexOf("-t") + 1];
-  assert.match(tag, new RegExp(`^datarag-opensource-app:${VERSION}-\\d{8}-\\d{6}-g${head.slice(0, 12)}-arm64$`));
-  // App and runtime carry the version, component, kind and the runtime pair only.
-  const runtimeFp = argOf(runtime.args, "RUNTIME_COMPAT_FINGERPRINT")[0];
-  assert.deepEqual(docker.images()[tag], {
+  assert.match(
+    tagsOf(build.args)[0],
+    new RegExp(`^datarag-opensource:${VERSION}-\\d{8}-\\d{6}-g${head.slice(0, 12)}-arm64$`),
+  );
+  assert.equal(tagsOf(build.args)[1], "datarag-opensource:deploy-arm64");
+  assert.deepEqual(docker.images()[tagsOf(build.args)[0]], {
     "org.opencontainers.image.version": VERSION,
-    "io.runtime.component": "datarag-opensource",
-    "io.runtime.kind": "app",
-    "io.runtime.compat-fingerprint": runtimeFp,
-    "io.runtime.family": "java-app",
+    "io.ontomato.component": "datarag-opensource",
   });
-  assert.deepEqual(docker.images()[runtime.args[runtime.args.indexOf("-t") + 1]], {
-    "org.opencontainers.image.version": VERSION,
-    "io.runtime.component": "java-app",
-    "io.runtime.kind": "runtime",
-    "io.runtime.compat-fingerprint": runtimeFp,
-    "io.runtime.family": "java-app",
-  });
-  assert.equal(JSON.parse(readFileSync(join(fx.pub, LOCK), "utf8")).runtimes["linux/arm64"].length, 64);
-});
-
-test("product startup file changes enter only the app: no runtime rebuilt, fingerprint and lock unchanged", async (t) => {
-  const fx = fixture(t);
-  const docker = fakeDocker(t, fx.dir);
-  await run(publicApp(fx), ["all", "--arch", "arm64", "--prompt-lang", "en"]);
-  const lock = readFileSync(join(fx.pub, LOCK), "utf8");
-  put(fx.pub, {
-    "scripts/data-engine/container-entrypoint.sh": "#!/bin/bash\n# changed entry\n",
-    "scripts/data-engine/sync-product-files.py": "# changed sync\n",
-    "packages/data-engine-core/mcp/mcpserver.py": "# changed mcp\n",
-  });
-  await run(publicApp(fx), ["app", "--arch", "arm64", "--prompt-lang", "en"]);
-  assert.deepEqual(docker.builds().map((b) => b.target), ["export-central", "runtime", "app", "export-central", "app"]);
-  assert.equal(readFileSync(join(fx.pub, LOCK), "utf8"), lock);
-  const apps = docker.builds().filter((b) => b.target === "app");
-  assert.equal(apps[1].context["payload/bin/container-entrypoint.sh"], "#!/bin/bash\n# changed entry\n");
-  assert.equal(apps[1].context["payload/bin/sync-product-files.py"], "# changed sync\n");
-  assert.equal(apps[1].context["payload/mcp/mcpserver.py"], "# changed mcp\n");
 });
 
 for (const mode of ["real", "override"])
-  test(`enterprise ${mode}: secret export with the explicit jar check, native library, public-then-enterprise resources, one mode everywhere`, async (t) => {
+  test(`enterprise ${mode}: secret export with the jar check, native library, public-then-enterprise resources, one mode everywhere`, async (t) => {
     const fx = fixture(t);
     put(fx.pub, { "packages/data-engine-core/conf-defaults/draft.md": "untracked public\n" });
-    const docker = fakeDocker(t, fx.dir);
-    await run(enterpriseApp(fx, mode), ["all", "--arch", "arm64", "--license-mode", mode, "--prompt-lang", "zh"]);
-    const exp = docker.build("export-secret");
-    assert.deepEqual(exp.args.slice(exp.args.indexOf("--secret"), exp.args.indexOf("--secret") + 2), ["--secret", `id=maven-settings,src=${fx.settings}`]);
-    assert.deepEqual(argOf(exp.args, "APP_CHECK_SCRIPT"), ["enterprise/scripts/data-engine/verify-license-jar.sh"]);
-    assert.deepEqual(argOf(exp.args, "APP_CHECK_JAR"), [`/out/app/lib/data-engine-enterprise-${VERSION}.jar`]);
-    assert.deepEqual(argOf(exp.args, "APP_CHECK_ARG"), [mode]);
-    assert.deepEqual(argOf(exp.args, "LICENSE_PROFILE"), [mode === "override" ? "dev-override" : ""]);
-    assert.deepEqual(argOf(exp.args, "KEEP_NATIVE"), ["libLicense-native-aarch64-5.4.2.so"]);
-    assert.equal(exp.args[exp.args.indexOf("--target") + 1], "export-secret");
-    assert.ok("enterprise/scripts/data-engine/verify-license-jar.sh" in exp.context);
-    assert.ok("enterprise/packages/data-engine-enterprise/src/license-override/java/L.java" in exp.context);
-    assert.equal(Object.keys(exp.context).some((p) => /conf-defaults|skills|runtime-contract|src\/test/.test(p)), false);
-    const everything = JSON.stringify(docker.builds());
-    assert.equal(everything.includes(SETTINGS_MARK), false);
-    const runtime = docker.build("runtime");
-    assert.ok(runtime);
-    assert.deepEqual(argOf(runtime.args, "PAIR_CONTRACT"), ["/opt/datarag/bin/enterprise-runtime-contract.py"]);
-    assert.equal(runtime.context["bin/enterprise-runtime-contract.py"], "# enterprise checker\n");
-    assert.equal(runtime.context["bin/runtime-contract.py"], "# public checker\n");
-    assert.equal(Object.keys(runtime.context).some((p) => p.startsWith("mcp/") || p === "bin/container-entrypoint.sh"), false);
-    assert.equal(runtime.context["lib/libLicense-native-aarch64-5.4.2.so"], "so");
-    const app = docker.build("app");
-    assert.equal(app.context["payload/conf-defaults/prompt.md"], "enterprise Chinese\n");
-    assert.equal(app.context["payload/conf-defaults/application.yml"], "app: public\n");
-    assert.equal(app.context["payload/conf-defaults/draft.md"], "untracked public\n");
-    assert.equal(app.context["payload/conf-defaults/lang/zh-CN.json"], "{}\n");
-    assert.equal(app.context["payload/conf-defaults/static/login.html"], "enterprise page\n");
-    assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
-    assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "enterprise skill Chinese\n");
-    assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/scripts/forecaster.py"], "# py\n");
-    assert.equal(app.context["payload/license-mode"], mode);
+    const docker = fakeDocker(t, fx.dir, { PIP_INDEX_URL: undefined });
+    const app = enterpriseApp(fx, mode);
+    await run(app, ["--arch", "arm64", "--license-mode", mode, "--prompt-lang", "zh"]);
+    assert.equal(docker.builds().length, 1);
+    const build = docker.builds()[0];
+    assert.equal(build.target, "image");
+    // Every export input reaches the recipe, and the reactor ones are the description's.
+    assert.deepEqual(buildArgsOf(build.args).sort(), [
+      "EXPORT_STAGE=build-secret",
+      ...reactorBuildArgs(app),
+      "KEEP_NATIVE=libLicense-native-aarch64-5.4.2.so",
+      `LICENSE_PROFILE=${mode === "override" ? "dev-override" : ""}`,
+      "APP_CHECK_SCRIPT=enterprise/scripts/data-engine/verify-license-jar.sh",
+      `APP_CHECK_JAR=/out/app/lib/data-engine-enterprise-${VERSION}.jar`,
+      `APP_CHECK_ARG=${mode}`,
+    ].sort());
+    assert.deepEqual(argOf(build.args, "EXPORT_STAGE"), ["build-secret"]);
+    assert.deepEqual(build.args.slice(build.args.indexOf("--secret"), build.args.indexOf("--secret") + 2), ["--secret", `id=maven-settings,src=${fx.settings}`]);
+    assert.deepEqual(argOf(build.args, "APP_CHECK_SCRIPT"), ["enterprise/scripts/data-engine/verify-license-jar.sh"]);
+    assert.deepEqual(argOf(build.args, "APP_CHECK_JAR"), [`/out/app/lib/data-engine-enterprise-${VERSION}.jar`]);
+    assert.deepEqual(argOf(build.args, "APP_CHECK_ARG"), [mode]);
+    assert.deepEqual(argOf(build.args, "LICENSE_PROFILE"), [mode === "override" ? "dev-override" : ""]);
+    assert.deepEqual(argOf(build.args, "KEEP_NATIVE"), ["libLicense-native-aarch64-5.4.2.so"]);
+    // The private settings only ever ride the secret: neither the context nor any
+    // recorded docker argument carries their content.
+    assert.equal(JSON.stringify(build).includes(SETTINGS_MARK), false);
+    assert.ok("enterprise/scripts/data-engine/verify-license-jar.sh" in build.context);
+    assert.ok("enterprise/packages/data-engine-enterprise/src/license-override/java/L.java" in build.context);
+    // Resources and startup files only ever enter under payload/.
+    assert.equal(Object.keys(build.context).some((p) => /conf-defaults|skills/.test(p) && !p.startsWith("payload/")), false);
+    assert.equal(build.context["payload/conf-defaults/prompt.md"], "enterprise Chinese\n");
+    assert.equal(build.context["payload/conf-defaults/application.yml"], "app: public\n");
+    assert.equal(build.context["payload/conf-defaults/draft.md"], "untracked public\n");
+    assert.equal(build.context["payload/conf-defaults/lang/zh-CN.json"], "{}\n");
+    assert.equal(build.context["payload/conf-defaults/static/login.html"], "enterprise page\n");
+    assert.equal(Object.keys(build.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
+    assert.equal(build.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "enterprise skill Chinese\n");
+    assert.equal(build.context["payload/skills/aftercalculate/trend-forecaster/scripts/forecaster.py"], "# py\n");
     // The enterprise app entrypoint is the thin wrapper at the fixed path, with
     // the public lifecycle script beside it sharing the sync helper.
-    assert.equal(app.context["payload/bin/container-entrypoint.sh"], "#!/bin/sh\n");
-    assert.equal(app.context["payload/bin/data-engine-entrypoint.sh"], "#!/bin/bash\n");
-    assert.equal(app.context["payload/bin/sync-product-files.py"], "# sync\n");
-    assert.equal(app.context["payload/mcp/mcpserver.py"], "# mcp\n");
-    // The fake names each exported jar after its module directory.
-    assert.deepEqual(Object.keys(app.context).filter((p) => p.startsWith("payload/lib/")), ["payload/lib/data-engine-core.jar", "payload/lib/data-engine-enterprise.jar", "payload/lib/data-engine.jar"]);
-    const tag = app.args[app.args.indexOf("-t") + 1];
+    assert.equal(build.context["payload/bin/container-entrypoint.sh"], "#!/bin/sh\n");
+    assert.equal(build.context["payload/bin/data-engine-entrypoint.sh"], "#!/bin/bash\n");
+    assert.equal(build.context["payload/bin/sync-product-files.py"], "# sync\n");
+    assert.equal(build.context["payload/mcp/mcpserver.py"], "# mcp\n");
     const enterpriseHead = git(fx.ent, "rev-parse", "HEAD");
-    assert.match(tag, new RegExp(`^datarag-app:${VERSION}-\\d{8}-\\d{6}-g${enterpriseHead.slice(0, 12)}-dirty${mode === "override" ? "-override" : ""}-arm64$`));
-    // The deploy alias carries the same suffix: an override build never claims
-    // the alias the deployment assembles from.
-    assert.deepEqual(
-      Object.keys(docker.images()).filter((name) => name.startsWith("datarag-app:deploy")),
-      [`datarag-app:deploy${mode === "override" ? "-override" : ""}`],
+    const suffix = mode === "override" ? "-override" : "";
+    assert.match(
+      tagsOf(build.args)[0],
+      new RegExp(`^datarag:${VERSION}-\\d{8}-\\d{6}-g${enterpriseHead.slice(0, 12)}-dirty${suffix}-arm64$`),
     );
-    // The edition mode is the only app label on top of the shared runtime pair.
-    const runtimeFp = argOf(runtime.args, "RUNTIME_COMPAT_FINGERPRINT")[0];
-    assert.deepEqual(docker.images()[tag], {
+    assert.equal(tagsOf(build.args)[1], `datarag:deploy${suffix}-arm64`);
+    // The deploy alias carries the same suffix: an override build never claims
+    // the alias the deployment runs.
+    assert.deepEqual(
+      Object.keys(docker.images()).filter((name) => name.startsWith("datarag:deploy")),
+      [`datarag:deploy${suffix}-arm64`],
+    );
+    assert.deepEqual(docker.images()[tagsOf(build.args)[0]], {
       "org.opencontainers.image.version": VERSION,
-      "io.runtime.component": "datarag",
-      "io.runtime.kind": "app",
-      "io.runtime.compat-fingerprint": runtimeFp,
-      "io.runtime.family": "java-app",
-      "io.enterprise.license.mode": mode,
-    });
-    assert.deepEqual(docker.images()[runtime.args[runtime.args.indexOf("-t") + 1]], {
-      "org.opencontainers.image.version": VERSION,
-      "io.runtime.component": "java-app",
-      "io.runtime.kind": "runtime",
-      "io.runtime.compat-fingerprint": runtimeFp,
-      "io.runtime.family": "java-app",
+      "io.ontomato.component": "datarag",
+      "io.example.license.mode": mode,
     });
   });
 
 test("enterprise en: the public English defaults stay under the overlay's Chinese variants and the edition page stays", async (t) => {
   const fx = fixture(t);
   const docker = fakeDocker(t, fx.dir);
-  await run(enterpriseApp(fx, "real"), ["all", "--arch", "arm64", "--license-mode", "real", "--prompt-lang", "en"]);
-  const app = docker.build("app");
-  assert.equal(app.context["payload/conf-defaults/prompt.md"], "public English\n");
-  assert.equal(app.context["payload/conf-defaults/static/login.html"], "enterprise page\n");
-  assert.equal(app.context["payload/conf-defaults/lang/zh-CN.json"], "{}\n");
-  assert.equal(app.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
-  assert.equal(Object.keys(app.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
+  await run(enterpriseApp(fx, "real"), ["--arch", "arm64", "--license-mode", "real", "--prompt-lang", "en"]);
+  const build = docker.builds()[0];
+  assert.equal(build.context["payload/conf-defaults/prompt.md"], "public English\n");
+  assert.equal(build.context["payload/conf-defaults/static/login.html"], "enterprise page\n");
+  assert.equal(build.context["payload/conf-defaults/lang/zh-CN.json"], "{}\n");
+  assert.equal(build.context["payload/skills/aftercalculate/trend-forecaster/SKILL.md"], "public skill English\n");
+  assert.equal(Object.keys(build.context).some((p) => /\.(zh|en)\.[^./]+$/.test(p)), false);
 });
 
 // The real public entry declares English only: another language fails before any build step, and
@@ -501,10 +418,10 @@ test("real public entry rejects an undeclared prompt language before building", 
   const fx = fixture(t);
   const docker = fakeDocker(t, fx.dir);
   const app = { ...publicApp(fx), resources: publicEntry.resources, supportedPromptLangs: publicEntry.supportedPromptLangs };
-  await assert.rejects(() => run(app, ["all", "--arch", "arm64", "--prompt-lang", "zh"]), /Expected --prompt-lang en$/);
+  await assert.rejects(() => run(app, ["--arch", "arm64", "--prompt-lang", "zh"]), /Expected --prompt-lang en$/);
   assert.equal(existsSync(join(fx.pub, ".build")), false);
-  await run(app, ["all", "--arch", "arm64", "--prompt-lang", "en"]);
-  const staged = docker.build("app").context;
+  await run(app, ["--arch", "arm64", "--prompt-lang", "en"]);
+  const staged = docker.builds()[0].context;
   for (const [root, source, dest] of publicEntry.resources) {
     const files = readdirSync(join(root, source), { recursive: true, withFileTypes: true })
       .filter((e) => e.isFile()).map((e) => join(e.parentPath, e.name).slice(join(root, source).length + 1));
@@ -513,34 +430,26 @@ test("real public entry rejects an undeclared prompt language before building", 
   }
 });
 
-test("app-only: a missing lock fails before settings or export; with a lock no runtime is ever built", async (t) => {
+// A host-level build setting: the pinned package index passes through only when the
+// environment sets it, because the recipe's own default is the public index.
+test("a host PIP_INDEX_URL reaches the pip stage only when set", async (t) => {
+  const fx = fixture(t);
+  const docker = fakeDocker(t, fx.dir, { PIP_INDEX_URL: "https://mirror.example.invalid/simple" });
+  await run(publicApp(fx), ["--arch", "arm64"]);
+  assert.deepEqual(argOf(docker.builds()[0].args, "PIP_INDEX_URL"), ["https://mirror.example.invalid/simple"]);
+});
+
+test("a missing private Maven settings file fails before any staging or build", async (t) => {
   const fx = fixture(t);
   rmSync(fx.settings);
   const docker = fakeDocker(t, fx.dir);
-  await assert.rejects(() => run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override", "--pack-app"]), /runtime-lock.json missing/);
+  await assert.rejects(() => run(enterpriseApp(fx, "override"), ["--arch", "arm64", "--license-mode", "override"]), /Missing Maven settings/);
   assert.deepEqual(docker.builds(), []);
-  const depHash = createHash("sha256").update("dep").digest("hex");
-  const contract = {
-    family: "java-app",
-    interfaceVersion: 4,
-    platform: "linux/arm64",
-    java: { classVersion: 65 },
-    runtimeDependencies: { jars: fingerprint({ "dep.jar": depHash }) },
-    python: { version: "3.10", packages: { numpy: "2.2.6" } },
-  };
-  const fp = fingerprint(contract);
-  put(fx.ent, { [LOCK]: `${JSON.stringify({ schema: 3, family: "java-app", runtimes: { "linux/arm64": fp } }, null, 2)}\n` });
-  const lock = readFileSync(join(fx.ent, LOCK), "utf8");
-  await assert.rejects(() => run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override"]), /Missing Maven settings/);
-  assert.deepEqual(docker.builds(), []);
-  put(fx.dir, { "home/.m2/settings.xml": "<settings/>\n" });
-  await run(enterpriseApp(fx, "override"), ["app", "--arch", "arm64", "--license-mode", "override"]);
-  assert.deepEqual(docker.builds().map((b) => b.target), ["export-secret", "app"]);
-  assert.equal(readFileSync(join(fx.ent, LOCK), "utf8"), lock);
+  assert.equal(existsSync(join(fx.ent, ".build")), false);
 });
 
-test("an app image whose license label differs from the mode is rejected", async (t) => {
+test("an image whose license label differs from the mode is rejected", async (t) => {
   const fx = fixture(t);
   fakeDocker(t, fx.dir, { FAKE_MODE: "bad-label" });
-  await assert.rejects(() => run(enterpriseApp(fx, "override"), ["all", "--arch", "arm64", "--license-mode", "override"]), /Built image identity mismatch: datarag-app:/);
+  await assert.rejects(() => run(enterpriseApp(fx, "override"), ["--arch", "arm64", "--license-mode", "override"]), /Built image identity mismatch: datarag:/);
 });

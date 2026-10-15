@@ -152,3 +152,28 @@ export function productionGraph(lock, importer, manifests, cpu) {
   walk(importer);
   return { packages, skipped: [...new Set(skipped)].sort(), bindings };
 }
+
+export function cpuFor(arch) {
+  if (arch === "linux/amd64" || arch === "amd64" || arch === "x64") return "x64";
+  if (arch === "linux/arm64" || arch === "arm64") return "arm64";
+  throw new Error(`unsupported architecture ${arch}`);
+}
+
+function bundleOf(value) {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    typeof value.importer !== "string" ||
+    typeof value.manifests !== "object" ||
+    value.manifests === null ||
+    Array.isArray(value.manifests)
+  )
+    throw new Error("manifest bundle must contain importer and manifests");
+  return value;
+}
+
+export function productionClosure(bundle, lock, arch) {
+  const source = bundleOf(bundle);
+  return productionGraph(lock, source.importer, source.manifests, cpuFor(arch));
+}

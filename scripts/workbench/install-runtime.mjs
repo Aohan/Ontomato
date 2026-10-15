@@ -1,4 +1,4 @@
-// Build-time installer for the workbench runtime image. It runs in the installer
+// Build-time installer for the workbench runtime dependencies. It runs in the installer
 // stage against the N4a metadata context under /src and produces the fixed
 // virtual-store runtime tree.
 // Workspace members are resolved by pnpm itself; the host passes no globs.
@@ -24,7 +24,7 @@ import { snapshotIndex } from "./runtime-layout.mjs";
 const SOURCES = "/src";
 const RUNTIME = "/opt/runtime";
 const STORE = join(RUNTIME, "node_modules/.pnpm");
-// pnpm's license report of this installation, read by the runtime stage's
+// pnpm's license report of this installation, read by the image build's
 // third-party notice generator; it never enters the runtime tree.
 const NPM_LICENSES = "/tmp/npm-licenses.json";
 const SERVER = "@ontomato/workbench-server";

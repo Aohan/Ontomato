@@ -6,7 +6,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -16,7 +15,6 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { exportImage } from "../build-support.mjs";
 import { buildManagerImage } from "./build-images.mjs";
 
 // This proves only that the builder hands Docker the agreed context and CLI
@@ -158,8 +156,7 @@ if (args[0] === "version") {
   const labels = image.Config.Labels;
   if (mode === "os") image.Os = "windows";
   if (mode === "arch") image.Architecture = image.Architecture === "arm64" ? "amd64" : "arm64";
-  if (mode === "kind") labels["io.runtime.kind"] = "app";
-  if (mode === "component") labels["io.runtime.component"] = "other";
+  if (mode === "component") labels["io.ontomato.component"] = "other";
   if (mode === "version") labels["org.opencontainers.image.version"] = "0.0.0";
   process.stdout.write(JSON.stringify([image]));
 } else if (args[0] === "save") {
@@ -244,7 +241,7 @@ test("help returns early; the architecture and flags come only from Make", async
 
 test("the recipe pins the workbench Node builder, a default pnpm version on the build platform and the same Nginx version tag upstream", () => {
   const recipe = readFileSync(join(REPO, RECIPE, "Dockerfile"), "utf8");
-  const workbench = readFileSync(join(REPO, "docker/workbench/Dockerfile.app"), "utf8");
+  const workbench = readFileSync(join(REPO, "docker/workbench/Dockerfile"), "utf8");
   const pinned = /^ARG NODE_BUILDER_IMAGE=(\S+@sha256:[a-f0-9]{64})$/m;
   assert.equal(recipe.match(pinned)[1], workbench.match(pinned)[1]);
   assert.match(recipe, /^FROM --platform=\$BUILDPLATFORM \$\{NODE_BUILDER_IMAGE\} AS web-builder$/m);
@@ -254,33 +251,24 @@ test("the recipe pins the workbench Node builder, a default pnpm version on the 
   assert.doesNotMatch(recipe, /corepack|--prod\b|--filter-prod/);
 });
 
-test("the public entry builds ontomato-ontology-manager from its two owners and packs it", (t) => {
+test("the public entry builds ontomato-ontology-manager from its two owners", (t) => {
   const { dir, publicRoot } = fixture(t);
   const docker = fakeDocker(t, dir);
-  const out = execFileSync("node", ["apps/ontology-manager/build.mjs", "--arch", "arm64", "--pack"], {
+  const out = execFileSync("node", ["apps/ontology-manager/build.mjs", "--arch", "arm64"], {
     cwd: publicRoot,
     encoding: "utf8",
   });
   const head = git(publicRoot, "rev-parse", "HEAD");
   const tag = out.match(/^\[build\] manager (\S+)$/m)[1];
   assert.match(tag, new RegExp(`^ontomato-ontology-manager:${VERSION}-\\d{8}-\\d{6}-g${head.slice(0, 12)}-arm64$`));
-  // The pack path comes from the file system; the build line only names it.
-  const tars = readdirSync(join(publicRoot, ".build/pack"));
-  assert.equal(tars.length, 1);
-  const tar = join(publicRoot, ".build/pack", tars[0]);
-  assert.equal(tars[0], `ontomato-ontology-manager-${tag.slice(tag.indexOf(":") + 1)}.tar.gz`);
-  assert.equal(existsSync(tar), true);
-  assert.equal(out.includes(`[build] pack ${tar}`), true);
-
   const calls = docker.calls();
-  assert.deepEqual(calls.map((argv) => argv[0]), ["buildx", "version", "image", "version", "save"]);
+  assert.deepEqual(calls.map((argv) => argv[0]), ["buildx", "version", "image"]);
   const build = calls[0];
   assert.deepEqual(build.slice(0, 5), ["buildx", "build", "--provenance=false", "--platform", "linux/arm64"]);
   assert.equal(build.includes("--load"), true);
   assert.equal(build.includes("--push"), false);
   assert.deepEqual(buildArg(build, "WORKSPACE"), ["ontomato"]);
   assert.deepEqual(buildArg(build, "APPLICATION"), ["@ontomato/ontology-manager-app"]);
-  assert.deepEqual(calls[4], ["save", tag, "ontomato-ontology-manager:deploy-arm64"]);
 
   const listing = docker.context();
   assert.equal(listing.context, join(publicRoot, ".build/contexts/ontology-manager/arm64"));
@@ -321,8 +309,7 @@ test("the public entry builds ontomato-ontology-manager from its two owners and 
   // The manager image carries the version, component and kind only.
   assert.deepEqual(docker.labels(), {
     "org.opencontainers.image.version": VERSION,
-    "io.runtime.component": "ontomato-ontology-manager",
-    "io.runtime.kind": "manager",
+    "io.ontomato.component": "ontomato-ontology-manager",
   });
   assert.equal(existsSync(join(publicRoot, "apps/ontology-manager/runtime-lock.json")), false);
 });
@@ -370,8 +357,7 @@ test("an enterprise build takes its own app plus the public owners and stamps th
   // A dirty public source still marks the stamp; the labels stay the version, component and kind only.
   assert.deepEqual(docker.labels(), {
     "org.opencontainers.image.version": VERSION,
-    "io.runtime.component": "ontology-manager",
-    "io.runtime.kind": "manager",
+    "io.ontomato.component": "ontology-manager",
   });
   const [tag, alias] = build.filter((arg, i) => build[i - 1] === "-t");
   assert.match(tag, new RegExp(`^ontology-manager:${VERSION}-\\d{8}-\\d{6}-g${enterpriseHead.slice(0, 12)}-dirty-amd64$`));
@@ -382,51 +368,16 @@ test("an enterprise build takes its own app plus the public owners and stamps th
 test("a built image with a missing or wrong platform or identity label is rejected", async (t) => {
   const repos = fixture(t);
   const docker = fakeDocker(t, repos.dir);
-  for (const mode of ["missing", "os", "arch", "kind", "component", "version"]) {
+  for (const mode of ["missing", "os", "arch", "component", "version"]) {
     process.env.FAKE_MODE = mode;
     docker.reset();
     await assert.rejects(
-      () => buildManagerImage(enterpriseApp(repos), ["--arch", "arm64", "--pack"]),
+      () => buildManagerImage(enterpriseApp(repos), ["--arch", "arm64"]),
       /Built image identity mismatch: ontology-manager:/,
       mode,
     );
     assert.equal(docker.calls().some((argv) => argv[0] === "save"), false, mode);
   }
-});
-
-test("packing writes the archive and reports it on the build line", async (t) => {
-  const { dir } = fixture(t);
-  const docker = fakeDocker(t, dir, { DOCKER_API_VERSION: "1.52" });
-  const logs = [];
-  t.mock.method(console, "log", (line) => logs.push(line));
-  const file = join(dir, "pack", "ontology-manager.tar.gz");
-  await exportImage(
-    ["ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
-    file,
-    "linux/arm64",
-  );
-  assert.deepEqual(logs, [`[build] pack ${file}`]);
-  assert.equal(existsSync(file), true);
-  assert.deepEqual(
-    docker.calls().find((argv) => argv[0] === "save"),
-    ["save", "--platform", "linux/arm64", "ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
-  );
-});
-
-test("packing omits --platform on servers older than API 1.49", async (t) => {
-  const { dir } = fixture(t);
-  const docker = fakeDocker(t, dir, { DOCKER_API_VERSION: "1.47" });
-  const file = join(dir, "pack", "ontology-manager.tar.gz");
-  await exportImage(
-    ["ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
-    file,
-    "linux/arm64",
-  );
-  assert.equal(existsSync(file), true);
-  assert.deepEqual(
-    docker.calls().find((argv) => argv[0] === "save"),
-    ["save", "ontology-manager:x-arm64", "ontology-manager:deploy-arm64"],
-  );
 });
 
 // The DataRAG proxy the entrypoint renders clears the model runtime service credential, so a

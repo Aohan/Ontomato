@@ -148,11 +148,9 @@ echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
 docker compose up -d
 ```
 
-The workbench and the data engine each come as a runtime image and an app image, which
-are assembled on the server at startup; an update downloads only the app images unless
-the runtime changed. The stack follows `latest`; set `ONTOMATO_VERSION` in `.env`, for
-example `ONTOMATO_VERSION=4.0.0-beta.1`, to stay on one release. For a server without
-internet access, deploy from the offline bundle instead.
+The workbench, data engine and ontology manager are final runnable images. Deployment
+pulls and starts them directly. Set `ONTOMATO_VERSION` in `.env` to select a release.
+Offline sites use [oc-mirror incremental delivery](deploy/README.md#offline-delivery).
 
 When `docker compose ps` shows every service healthy, open `http://<host>:3000` and set the
 chat and embedding models under **Model Configuration** in the Admin Panel. You can also
