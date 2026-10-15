@@ -38,8 +38,9 @@ fits real business data.
    `fix: keep the relationship order when saving the ontomap`.
 6. Open a pull request against `develop` that says what changed, why, and how you verified it.
 
-`develop` is the daily development line; `main` is the release line and only
-receives formal releases.
+`develop` is the daily development line; `main` is the release line. A release
+merges the reviewed and tested `develop` into `main`, preserving ancestry, and
+tags the resulting `main` commit as `v<version>`.
 
 Do not commit real configuration, credentials or business data.
 
