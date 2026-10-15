@@ -238,7 +238,6 @@ public class AdminServiceImpl implements AdminService {
 			primaryKey.put("type", "varchar");
 			primaryKey.put("bizzkey", false);
 			primaryKey.put("enable", true);
-			primaryKey.put("permissionField", false);
 			primaryKey.put("primaryKey", true);
 			List<Map<String, Object>> attrs = new ArrayList<Map<String, Object>>();
 			attrs.add(primaryKey);
@@ -425,7 +424,6 @@ public class AdminServiceImpl implements AdminService {
 				attrDef.put("type", type);
 				attrDef.put("bizzkey", bizzKey);
 				attrDef.put("enable", enable);
-				attrDef.put("permissionField", false);
 				if ("bucket".equals(type)) {
 					attrDef.put("indicators", new ArrayList<Map<String, String>>());
 				}
@@ -636,26 +634,6 @@ public class AdminServiceImpl implements AdminService {
 		}
 	}
 
-	@Override
-	public void setClassAttrPermissionField(String className, String attr, boolean permissionField, User user) {
-		Map<String, Object> jsonRule = getJSONRule(user.getDomainId());
-		List<Map<String, Object>> classDefs = (List<Map<String, Object>>)jsonRule.get("classDef");
-		for (Map<String, Object> classDef : classDefs) {
-			if (!Objects.equals(classDef.get("className"), className)) continue;
-			List<Map<String, Object>> attrs = (List<Map<String, Object>>)classDef.get("attrs");
-			for (Map<String, Object> attrDef : attrs) {
-				if (!Objects.equals(attrDef.get("name"), attr)) continue;
-				String type = String.valueOf(attrDef.get("type"));
-				SystemUtils.assertTrue(!permissionField || "varchar".equals(type) || "text".equals(type),
-						"The parameterized permission field must be of string type!");
-				attrDef.put("permissionField", permissionField);
-				writeJSONRule(jsonRule, user.getDomainId());
-				return;
-			}
-		}
-		throw new IllegalArgumentException("Data class field does not exist: " + className + "." + attr);
-	}
-	
 	@Override
 	public void setClassAttrPrimaryKey(String className, String attr, String lang, User user) throws Exception {
 		Map<String, Object> jsonRule = getJSONRule(user.getDomainId());
@@ -1149,7 +1127,6 @@ public class AdminServiceImpl implements AdminService {
 						attrDefJson.put("type", attrDef.get("type"));
 						attrDefJson.put("bizzKey", attrDef.get("bizzkey"));
 						attrDefJson.put("enable", attrDef.get("enable"));
-						attrDefJson.put("permissionField", Boolean.TRUE.equals(attrDef.get("permissionField")));
 						attrDefJson.put("primaryKey", attrDef.get("primaryKey"));
 						if (attrDef.get("indicators") != null) {
 							JSONArray indicatorDefs = new JSONArray();
@@ -1213,7 +1190,6 @@ public class AdminServiceImpl implements AdminService {
 						attrDef.put("type", ad.get("type"));
 						attrDef.put("bizzkey", ad.get("bizzKey"));
 						attrDef.put("enable", ad.get("enable"));
-						attrDef.put("permissionField", Boolean.TRUE.equals(ad.get("permissionField")));
 						attrDef.put("primaryKey", ad.get("primaryKey"));
 						if (ad.get("indicators") != null) {
 							List<Map<String, Object>> indicatorDefs = new ArrayList<Map<String, Object>>();

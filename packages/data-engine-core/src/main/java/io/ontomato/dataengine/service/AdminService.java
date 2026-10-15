@@ -39,8 +39,6 @@ public interface AdminService {
 	
 	public void setClassAttrShouldReturn(String className, String attr, boolean shouldReturn, User user);
 
-	public void setClassAttrPermissionField(String className, String attr, boolean permissionField, User user);
-	
 	public void setClassAttrPrimaryKey(String className, String attr, String lang, User user) throws Exception;
 	
 	public void addBucketIndicator(String className, String attrName, String indicatorName, String indicatorDesc, String indicatorUnit, String lang, User user) throws Exception;

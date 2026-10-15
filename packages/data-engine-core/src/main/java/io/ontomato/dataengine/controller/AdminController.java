@@ -347,24 +347,6 @@ public class AdminController {
 		return ret;
 	}
 
-	@PostMapping("/admin/setClassAttrPermissionField")
-	@ResponseBody
-	public JSONObject setClassAttrPermissionField(@RequestBody JSONObject param) {
-		JSONObject ret = new JSONObject();
-		try {
-			String className = param.getString("className");
-			String attr = param.getString("attr");
-			boolean permissionField = param.getBooleanValue("permissionField");
-			User user = SystemUtils.getCurUser();
-			adminService.setClassAttrPermissionField(className, attr, permissionField, user);
-			ret.put("success", true);
-		} catch (Exception e) {
-			ret.put("success", false);
-			ret.put("message", e.getMessage());
-		}
-		return ret;
-	}
-	
 	@PostMapping("/admin/editClassAttrPrimaryKey")
     @ResponseBody
     public JSONObject editClassAttrPrimaryKey(@RequestHeader(ControllerConst.LANG_HEADER_KEY) String lang, @RequestBody JSONObject param) {
