@@ -1,18 +1,28 @@
 name: Images
 
 # Formal releases publish three final images; deployments only pull and run them.
+#
+# develop pushes publish the edge version, formal v* tags publish the stripped
+# version plus latest. Pull requests never publish: they run pr-checks.yml.
+#
+# Keep each ref's build, publication and verification together. The head check
+# also rejects stale develop reruns; concurrency does not guarantee FIFO order.
 
 on:
   push:
+    branches: ["develop"]
     tags: ["v*"]
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
   packages: write
 
 env:
-  REGISTRY: ghcr.io/aohan
-  VERSION: ${{ github.ref_name }}
+  REGISTRY: ghcr.io/ontomato-ai
 
 jobs:
   build:
@@ -66,9 +76,21 @@ jobs:
           docker compose ps -a
           docker compose logs --tail 200
 
+      # Edge guard: an outdated develop run must not publish after the branch
+      # has advanced. Release-tag builds do not track develop.
+      - name: Refuse a stale edge publish
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then exit 0; fi
+          head=$(git rev-parse HEAD)
+          remote=$(git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" refs/heads/develop | cut -f1)
+          [ "$head" = "$remote" ] || {
+            echo "develop has advanced to $remote; not publishing edge from stale $head" >&2
+            exit 1
+          }
+
       - name: Publish the images of this architecture
         run: |
-          version="${VERSION#v}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; else version=edge; fi
           publish() {
             docker tag "$1" "$2"
             docker push "$2"
@@ -81,15 +103,23 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - name: Refuse a stale edge publish
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then exit 0; fi
+          remote=$(git ls-remote "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" refs/heads/develop | cut -f1)
+          [ "${{ github.sha }}" = "$remote" ] || {
+            echo "develop has advanced to $remote; not indexing edge from stale ${{ github.sha }}" >&2
+            exit 1
+          }
 
       - name: Publish the multi-architecture images
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          version="${VERSION#v}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then version="${GITHUB_REF_NAME#v}"; else version=edge; fi
           # index <image> <amd64 tag> <arm64 tag>
           index() {
-            local tags=(-t "$REGISTRY/$1:$version" -t "$REGISTRY/$1:latest")
+            local tags=(-t "$REGISTRY/$1:$version")
+            if [ "$GITHUB_REF_TYPE" = tag ]; then tags+=(-t "$REGISTRY/$1:latest"); fi
             docker buildx imagetools create \
               --annotation "index:org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
               "${tags[@]}" "$REGISTRY/$1:$2" "$REGISTRY/$1:$3"
@@ -119,7 +149,7 @@ jobs:
         working-directory: deploy
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          export ONTOMATO_VERSION="${VERSION#v}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then export ONTOMATO_VERSION="${GITHUB_REF_NAME#v}"; else export ONTOMATO_VERSION=edge; fi
           sed "s/^ARCH=.*/ARCH=$ARCH/" .env.example > .env
           echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
           docker compose up -d --wait --wait-timeout 300
@@ -134,3 +164,22 @@ jobs:
         run: |
           docker compose ps -a
           docker compose logs --tail 200
+
+  downstream:
+    needs: verify
+    if: github.repository == 'ontomato-ai/Ontomato' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Request downstream integration checks
+        env:
+          TRIGGER_URL: ${{ secrets.DOWNSTREAM_TRIGGER_URL }}
+          TRIGGER_TOKEN: ${{ secrets.DOWNSTREAM_TRIGGER_TOKEN }}
+        run: |
+          : "${TRIGGER_URL:?Configure DOWNSTREAM_TRIGGER_URL}"
+          : "${TRIGGER_TOKEN:?Configure DOWNSTREAM_TRIGGER_TOKEN}"
+          curl --fail --silent --output /dev/null --request POST \
+            --form-string "token=$TRIGGER_TOKEN" \
+            --form-string "ref=develop" \
+            --form-string "variables[PUBLIC_SHA]=$GITHUB_SHA" \
+            "$TRIGGER_URL"
+          echo "Downstream integration checks requested."

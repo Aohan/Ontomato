@@ -1,8 +1,8 @@
 # Pull final images from the publication registry.
 services:
   ontomato:
-    image: ${WORKBENCH_IMAGE:-ghcr.io/aohan/ontomato-workbench:${ONTOMATO_VERSION:-latest}}
+    image: ${WORKBENCH_IMAGE:-ghcr.io/ontomato-ai/ontomato-workbench:${ONTOMATO_VERSION:-latest}}
   datarag:
-    image: ${DATA_ENGINE_IMAGE:-ghcr.io/aohan/ontomato-data-engine:${ONTOMATO_VERSION:-latest}}
+    image: ${DATA_ENGINE_IMAGE:-ghcr.io/ontomato-ai/ontomato-data-engine:${ONTOMATO_VERSION:-latest}}
   ontology-manager:
-    image: ${MANAGER_IMAGE:-ghcr.io/aohan/ontomato-ontology-manager:${ONTOMATO_VERSION:-latest}}
+    image: ${MANAGER_IMAGE:-ghcr.io/ontomato-ai/ontomato-ontology-manager:${ONTOMATO_VERSION:-latest}}

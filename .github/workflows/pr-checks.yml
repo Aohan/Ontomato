@@ -1,0 +1,46 @@
+name: PR checks
+
+# Pull requests into develop or main never publish images and never touch
+# private resources. They run the repository's own Node checks plus the
+# offline delivery check, all safe on a fork.
+
+on:
+  pull_request:
+    branches: ["develop", "main"]
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        run: npm install --global pnpm@9.15.9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck the workbench
+        run: pnpm typecheck:workbench
+
+      - name: Test the workbench
+        run: pnpm test:workbench
+
+      - name: Test the scripts
+        run: pnpm test:scripts
+
+      - name: Typecheck the UI and the manager
+        run: pnpm --filter @ontomato/workbench-ui --filter @ontomato/ontology-manager --filter @ontomato/ontology-manager-app typecheck
+
+      - name: Test the UI and the manager
+        run: pnpm --filter @ontomato/workbench-ui --filter @ontomato/ontology-manager --filter @ontomato/ontology-manager-app test
+
+      - name: Check offline delivery
+        run: python3 -B scripts/offline-mirror-test.py

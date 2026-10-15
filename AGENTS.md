@@ -40,7 +40,7 @@ results and protect other tasks' changes.
 ## Collaboration and working directories
 
 Use an ordinary outer directory for an isolated pair of checkouts; do not add a third
-repository, lock file or build configuration there. Internal development uses `develop`, and each repository
+repository, lock file or build configuration there. Public development uses `develop`, and each repository
 branches, commits and merges on its own; a branch of the same name is not bound
 automatically. Normal work starts from each repository's own `develop` as
 `feature/<topic>` or `fix/<topic>` and merges back into `develop` when done. The main
@@ -68,17 +68,9 @@ this way.
 
 ## Public history and branches
 
-`main` is this repository's public line: it carries only clean public snapshot history. The
-internal remote's `main` and GitHub's `main` hold the same content, and one push to `main`
-updates both. The internal development line, `develop`, keeps the original development
-history and is never pushed to GitHub. A release publishes to `main` by creating a new
-commit whose tree is the reviewed file tree: do not merge `develop` into `main`, and do not
-publish the internal history branches or the old tags.
-
-The public GitHub repository has `main` only, so public contributors start from `main`;
-`develop` is an internal line that does not exist there. An accepted pull request is not
-merged on GitHub: its own commits (those after the snapshot it started from) are
-cherry-picked onto `develop`, keeping their authors, because `main` and `develop` share no
-history and a plain merge would bring the snapshot commits along. The next snapshot
-carries a `Co-authored-by:` trailer for each contributor, and the pull request is closed
-with a link to it.
+`ontomato-ai/Ontomato` on GitHub is this repository's canonical development and
+CI repository. Both `main` and `develop` live there: `develop` is the daily
+development line, `main` is the release line and only receives formal
+releases. Normal work starts from `develop` as `feature/<topic>` or
+`fix/<topic>` and merges back into `develop` through a pull request against
+`develop`.

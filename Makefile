@@ -18,7 +18,7 @@ ontology-manager:
 
 VERSION ?= $(shell $(NODE) --input-type=module -e 'import {readFileSync} from "node:fs"; import {readRevision} from "./scripts/build-support.mjs"; console.log(readRevision(readFileSync("pom.xml", "utf8")))')
 IMAGE_TAG ?= $(VERSION)
-IMAGE_REGISTRY ?= ghcr.io/aohan
+IMAGE_REGISTRY ?= ghcr.io/ontomato-ai
 MIRROR_STATE ?= $(CURDIR)/.build/mirror/$(ARCH)
 BOOTSTRAP ?= 0
 
