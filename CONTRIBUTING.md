@@ -6,8 +6,8 @@ fits real business data.
 
 ## Before you start
 
-- **Questions and ideas** go to [GitHub Discussions](https://github.com/Aohan/Ontomato/discussions).
-- **Bugs** go to [GitHub Issues](https://github.com/Aohan/Ontomato/issues). Include the
+- **Questions and ideas** go to [GitHub Discussions](https://github.com/ontomato-ai/Ontomato/discussions).
+- **Bugs** go to [GitHub Issues](https://github.com/ontomato-ai/Ontomato/issues). Include the
   Ontomato version or commit, what you did, what you expected and what happened, with the
   relevant logs.
 - **Security vulnerabilities** must not be reported in public; follow [SECURITY.md](SECURITY.md).
@@ -16,7 +16,8 @@ fits real business data.
 
 ## Making a change
 
-1. Fork the repository and branch from `main`.
+1. Fork the repository and branch from `develop` as `feature/<topic>` or
+   `fix/<topic>`.
 2. Set up local development as described in [docs/development.md](docs/development.md).
 3. Keep one topic per pull request, and keep existing behavior unless the change is about
    that behavior.
@@ -26,6 +27,8 @@ fits real business data.
    pnpm typecheck:workbench
    pnpm test:workbench
    pnpm lint:workbench
+   pnpm test:scripts   # build, packaging and dev scripts
+   pnpm lint:scripts
    ```
 
    Java tests that need a database, a model or another external system are not run as a
@@ -33,13 +36,10 @@ fits real business data.
 5. Write commit messages (subjects and bodies) and new or changed code comments in
    English. Use `type: description` for commit subjects, for example
    `fix: keep the relationship order when saving the ontomap`.
-6. Open a pull request against `main` that says what changed, why, and how you verified it.
+6. Open a pull request against `develop` that says what changed, why, and how you verified it.
 
-Pull requests are not merged on GitHub. `main` receives one commit per published
-snapshot of the maintainers' development line, so an accepted pull request is applied
-there, with your commits and authorship kept, and reaches `main` with the next
-snapshot, which credits you as a co-author. The pull request is then closed with a
-link to that commit.
+`develop` is the daily development line; `main` is the release line and only
+receives formal releases.
 
 Do not commit real configuration, credentials or business data.
 

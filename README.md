@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-639c2d" alt="License: Apache 2.0"></a>
-  <a href="https://github.com/Aohan/Ontomato/tags"><img src="https://img.shields.io/github/v/tag/Aohan/Ontomato?include_prereleases&label=version&color=639c2d" alt="Version"></a>
+  <a href="https://github.com/ontomato-ai/Ontomato/tags"><img src="https://img.shields.io/github/v/tag/ontomato-ai/Ontomato?include_prereleases&label=version&color=639c2d" alt="Version"></a>
   <img src="https://img.shields.io/badge/status-beta-639c2d" alt="Status: beta">
 </p>
 
@@ -18,7 +18,7 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="docs/development.md">Development</a> ·
-  <a href="https://github.com/Aohan/Ontomato/discussions">Discussions</a>
+  <a href="https://github.com/ontomato-ai/Ontomato/discussions">Discussions</a>
 </p>
 
 Ontomato is an open-source ontology layer for business data. You define the things your
@@ -141,7 +141,7 @@ documents every field.
 The images are published to GitHub Container Registry for amd64 and arm64. On the server:
 
 ```bash
-git clone https://github.com/Aohan/Ontomato.git
+git clone https://github.com/ontomato-ai/Ontomato.git
 cd Ontomato/deploy
 cp .env.example .env    # set ARCH (amd64 or arm64), POSTGRES_PASSWORD and PUBLIC_HOST
 echo "COMPOSE_FILE=docker-compose.yml:docker-compose.ghcr.yml" >> .env
@@ -173,7 +173,7 @@ agents supported by [`skills`](https://github.com/vercel-labs/skills)) and point
 the Workbench:
 
 ```bash
-npx skills add Aohan/Ontomato --skill ontomato-ontomap-builder ontomato-analyst ontomato-app-builder
+npx skills add ontomato-ai/Ontomato --skill ontomato-ontomap-builder ontomato-analyst ontomato-app-builder
 export ONTOMATO_URL=http://<host>:3000
 ```
 
@@ -262,8 +262,8 @@ Local development and image builds are described in [docs/development.md](docs/d
 
 ## Community
 
-- Questions and ideas: [GitHub Discussions](https://github.com/Aohan/Ontomato/discussions)
-- Bugs: [GitHub Issues](https://github.com/Aohan/Ontomato/issues)
+- Questions and ideas: [GitHub Discussions](https://github.com/ontomato-ai/Ontomato/discussions)
+- Bugs: [GitHub Issues](https://github.com/ontomato-ai/Ontomato/issues)
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security: report vulnerabilities privately as described in [SECURITY.md](SECURITY.md)
 

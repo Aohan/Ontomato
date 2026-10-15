@@ -3,15 +3,13 @@ name: Images
 # Builds the runtime, app and Ontology Manager images for amd64 and arm64, starts the
 # stack once on each architecture, and publishes the images to GitHub Container
 # Registry. Runtime and app images are published separately and assembled on the
-# deployment machine, as in the offline bundle. A push to main publishes `edge`; a
-# version tag `v<version>` publishes `<version>` and `latest`.
+# deployment machine, as in this released version. Only version tags publish
+# `<version>` and `latest`; daily development builds live on develop.
 # deploy/docker-compose.ghcr.yml is the override that pulls them (selected through COMPOSE_FILE).
 
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
   contents: read
