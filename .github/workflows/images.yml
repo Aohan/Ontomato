@@ -167,7 +167,10 @@ jobs:
 
   downstream:
     needs: verify
-    if: github.repository == 'ontomato-ai/Ontomato' && github.ref == 'refs/heads/develop'
+    # Opt-in only: runs solely in the canonical repository on develop, and only
+    # when the DOWNSTREAM_ENABLED repository variable is 'true'. The trigger
+    # secrets below stay required, so enabling without them fails closed.
+    if: github.repository == 'ontomato-ai/Ontomato' && github.ref == 'refs/heads/develop' && vars.DOWNSTREAM_ENABLED == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Request downstream integration checks

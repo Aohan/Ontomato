@@ -18,7 +18,8 @@ the advisory unless you prefer otherwise.
 
 ## Supported versions
 
-Ontomato is an early preview. Security fixes are made on the latest `main`.
+Ontomato is an early preview. Security updates for the latest release are published on `main`;
+ongoing development, including security fixes in progress, happens on `develop`.
 
 ## Deployment assumptions
 
