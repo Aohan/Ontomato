@@ -69,8 +69,12 @@ public interface MQLQuery {
     static MQLQuery parseQuery(JSONObject object) {
         if (object == null) throw new IllegalArgumentException("Query must be an object");
         if (!"logic".equals(object.getString("operator"))) {
+            Object escape = object.get("escape");
+            if (escape != null && !(escape instanceof String)) {
+                throw new IllegalArgumentException("escape must be a one-character string");
+            }
             return new PropertyQuery(object.getString("field"), object.getString("operator"), object.get("value"),
-                    object.getString("escape"));
+                    (String) escape);
         }
 
         List<String> branches = List.of("and", "or", "not").stream()

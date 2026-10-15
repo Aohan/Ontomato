@@ -750,7 +750,7 @@ public abstract class AbstractDataAdapterTest {
 	}
 
 	/** A name holding every pattern character of the SQL, Elasticsearch and SQL Server syntaxes. */
-	private static final String PATTERN_CHARACTERS_NAME = "50%_off\\_[x]*?!";
+	private static final String PATTERN_CHARACTERS_NAME = "50%_off\\_[x]*?!'";
 
 	@Test
 	void readLikeWithEscapeMatchesEscapedCharactersLiterally() throws Exception {
@@ -770,12 +770,30 @@ public abstract class AbstractDataAdapterTest {
 		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("\\%"))));
 		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("\\_ob"))));
 		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("A\\%"))));
-		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("f\\\\\\_[x]*?!"))));
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("f\\\\\\_[x]*?!'"))));
 		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("[x]*?x"))));
 		// Unescaped wildcards around escaped text still match, anchored where written.
 		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("50\\%%"))));
 		assertEquals(Set.of("Alice"), personNames(queryPersons(readLikeEscaped("A_ice"))));
+		// Negated, exactly the other rows remain: a wrong match would show here as a wider result.
+		Set<String> others = new java.util.TreeSet<>();
+		for (Object person : graphSeed().get(graphClass(0))) others.add(((JSONObject) person).getString("name"));
+		assertEquals(others, personNames(queryPersons(readNot(readLikeEscaped("f\\\\\\_[x]*?!'")))));
+		assertEquals(others, personNames(queryPersons(readNot(readLikeEscaped("\\%")))));
+		Set<String> all = new java.util.TreeSet<>(others);
+		all.add(PATTERN_CHARACTERS_NAME);
+		assertEquals(all, personNames(queryPersons(readNot(readLikeEscaped("\\_ob")))));
 		dropGraph();
+	}
+
+	@Test
+	void likeEscapeOtherThanOneCharacterIsRejected() {
+		assume(DataAdapterCapability.READ_QUERY);
+		for (Object escape : new Object[] { "", "!!", 1 }) {
+			JSONObject condition = readCond("name", "like", "A%");
+			condition.put("escape", escape);
+			assertThrows(DslContractViolationException.class, () -> queryPersons(condition), String.valueOf(escape));
+		}
 	}
 
 	private static Set<String> personNames(JSONArray rows) {

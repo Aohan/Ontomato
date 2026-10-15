@@ -26,7 +26,7 @@ public final class LikePattern {
 
 	/** Whether the condition carries an escape character and so must be rendered through this class. */
 	public static boolean escaped(JSONObject condition) {
-		return condition.getString("escape") != null;
+		return condition.get("escape") != null;
 	}
 
 	/**
@@ -34,8 +34,14 @@ public final class LikePattern {
 	 * with a {@code %} wildcard is wrapped in {@code %} on both sides, as the read paths do for a bare value.
 	 */
 	public static LikePattern of(JSONObject condition, boolean containsWhenUnanchored) {
-		String value = condition.getString("value");
-		char escape = condition.getString("escape").charAt(0);
+		// Checked here, at every adapter's entry: only one escape character has a meaning.
+		if (!(condition.get("escape") instanceof String escapeText) || escapeText.length() != 1
+				|| !(condition.get("value") instanceof String value)) {
+			throw new DslContractViolationException(DslContractViolationException.Code.INVALID_GRAMMAR,
+					"conditions.properties", "the like condition on '" + condition.getString("field")
+							+ "' needs a text value and an escape of exactly one character");
+		}
+		char escape = escapeText.charAt(0);
 		List<Object> tokens = new ArrayList<>();
 		for (int i = 0; i < value.length(); i++) {
 			char c = value.charAt(i);

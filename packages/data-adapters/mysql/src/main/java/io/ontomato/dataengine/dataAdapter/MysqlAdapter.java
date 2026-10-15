@@ -1,5 +1,6 @@
 package io.ontomato.dataengine.dataAdapter;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -19,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -176,8 +178,10 @@ public class MysqlAdapter implements DataAdapter {
 									}
 								} else if ("like".equals(cond.getString("operator")) && LikePattern.escaped(cond)) {
 									if ("varchar".equals(type)) {
-										String pattern = LikePattern.of(cond, true).sql("").replace("\\", "\\\\").replace("'", "''");
-										sqlCond = "`" + alias + "`." + attr + " like '" + pattern + "' escape '!'";
+										// A hex literal reads the same whether or not NO_BACKSLASH_ESCAPES is set.
+										String pattern = HexFormat.of().formatHex(
+												LikePattern.of(cond, true).sql("").getBytes(StandardCharsets.UTF_8));
+										sqlCond = "`" + alias + "`." + attr + " like _utf8mb4 X'" + pattern + "' escape '!'";
 									}
 								} else if ("like".equals(cond.getString("operator")) || "not like".equals(cond.getString("operator"))) {
 									if ("varchar".equals(type)) {
