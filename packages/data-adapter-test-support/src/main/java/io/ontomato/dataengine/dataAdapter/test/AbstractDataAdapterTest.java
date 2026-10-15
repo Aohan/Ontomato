@@ -711,6 +711,56 @@ public abstract class AbstractDataAdapterTest {
 	}
 
 	@Test
+	void readWhereNot() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		assertEquals(totalPersonCount() - 1, queryPersons(readNot(readCond("name", "=", "Alice"))).size());
+		// not (Alice or older than 30) leaves only Bob (30)
+		JSONArray rows = queryPersons(readNot(readOr(readCond("name", "=", "Alice"), readCond("age", ">", 30))));
+		assertEquals(1, rows.size());
+		assertEquals("Bob", rows.getJSONObject(0).getString("person_name"));
+		// a negation nested in an and
+		assertEquals(2, queryPersons(readAnd(readCond("age", ">=", 30), readNot(readCond("name", "=", "Dave")))).size());
+		dropGraph();
+	}
+
+	@Test
+	void readGroupByCountsOnlyTheRowsTheConditionKeeps() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		JSONArray objects = new JSONArray();
+		JSONObject p = readObject(0, "p", 0);
+		JSONObject conditions = new JSONObject();
+		conditions.put("properties", readNot(readCond("name", "=", "Alice")));
+		p.put("conditions", conditions);
+		objects.add(p);
+		JSONArray fields = new JSONArray();
+		fields.add(readAggField("p", "id", "count", "cnt"));
+		fields.add(readField("p", "org_id", "org_id"));
+		JSONObject groupBy = new JSONObject();
+		groupBy.put("fields", JSONArray.of(readGroupByField("p", "org_id")));
+		JSONArray rows = readQuery(singleStepDsl(objects, null, fields, groupBy, null, null));
+		java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+		for (int i = 0; i < rows.size(); i++) {
+			counts.put(str(rows.getJSONObject(i).get("org_id")), ((Number) rows.getJSONObject(i).get("cnt")).intValue());
+		}
+		// Alice (o1) is filtered out before counting
+		assertEquals(java.util.Map.of("o1", 1, "o2", 2), counts);
+		dropGraph();
+	}
+
+	@Test
+	void notWithSeveralConditionsIsRejectedNotGuessed() {
+		assume(DataAdapterCapability.READ_QUERY);
+		JSONObject not = new JSONObject();
+		not.put("not", JSONArray.of(readCond("name", "=", "Alice"), readCond("name", "=", "Bob")));
+
+		DslContractViolationException e = assertThrows(DslContractViolationException.class, () -> queryPersons(not));
+		assertTrue(e.getViolations().stream().anyMatch(
+				v -> v.getCode() == DslContractViolationException.Code.INVALID_GRAMMAR), e.getMessage());
+	}
+
+	@Test
 	void readJoinTwoClasses() throws Exception {
 		assume(DataAdapterCapability.READ_QUERY);
 		seedGraph();
@@ -1181,6 +1231,12 @@ public abstract class AbstractDataAdapterTest {
 		}
 		o.put("or", arr);
 		return o;
+	}
+
+	protected JSONObject readNot(JSONObject cond) {
+		JSONObject n = new JSONObject();
+		n.put("not", JSONArray.of(cond));
+		return n;
 	}
 
 	protected JSONObject readField(String variable, String field, String as) {

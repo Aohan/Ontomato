@@ -167,6 +167,13 @@ public class PostgreAdapter implements DataAdapter {
 								newQueue.add(new Object[] { null, ")" });
 								newQueue.addAll(queue);
 								queue = newQueue;
+							} else if (cond.getJSONArray("not") != null && cond.getJSONArray("not").size() > 0) {
+								objWhere += "(not (";
+								List<Object[]> newQueue = new ArrayList<>();
+								newQueue.add(new Object[] { DslGrammarValidator.negated(cond), null });
+								newQueue.add(new Object[] { null, "))" });
+								newQueue.addAll(queue);
+								queue = newQueue;
 							} else {
 								String attr = cond.getString("field");
 								String type = attrTypeMap.get(attr);

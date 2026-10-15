@@ -96,6 +96,21 @@ public final class DslGrammarValidator {
 		}
 	}
 
+	/**
+	 * The one condition a {@code not} negates. {@code not} takes exactly one condition (combine several with
+	 * {@code and}/{@code or} inside it); any other arity has no defined meaning and is rejected.
+	 */
+	public static JSONObject negated(JSONObject condition) {
+		JSONArray negated = condition.getJSONArray("not");
+		if (negated.size() != 1 || negated.getJSONObject(0) == null) {
+			throw new DslContractViolationException(
+					DslContractViolationException.Code.INVALID_GRAMMAR,
+					"conditions.properties",
+					"not takes exactly one condition; combine several with and/or inside it");
+		}
+		return negated.getJSONObject(0);
+	}
+
 	/** The {@code and}/{@code or}/{@code not} list of a timeseries properties block, or null when absent. */
 	private static JSONArray logicList(JSONObject properties) {
 		if (properties == null) {

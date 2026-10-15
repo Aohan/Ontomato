@@ -1461,6 +1461,10 @@ public class EsAdapter implements DataAdapter {
 			bool.put("minimum_should_match", 1);
 			return new JSONObject(Map.of("bool", bool));
 		}
+		if (cond.getJSONArray("not") != null && !cond.getJSONArray("not").isEmpty()) {
+			JSONObject negated = propertyQuery(DslGrammarValidator.negated(cond), attrTypes, readPath, index);
+			return new JSONObject(Map.of("bool", new JSONObject(Map.of("must_not", JSONArray.of(negated)))));
+		}
 		return conditionQuery(cond, attrTypes, readPath, index);
 	}
 
