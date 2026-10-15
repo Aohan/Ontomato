@@ -749,6 +749,49 @@ public abstract class AbstractDataAdapterTest {
 		dropGraph();
 	}
 
+	/** A name holding every pattern character of the SQL, Elasticsearch and SQL Server syntaxes. */
+	private static final String PATTERN_CHARACTERS_NAME = "50%_off\\_[x]*?!";
+
+	@Test
+	void readLikeWithEscapeMatchesEscapedCharactersLiterally() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		DataAdapter adapter = seedGraph();
+		JSONObject extra = new JSONObject();
+		extra.put(primaryKey(), "p9");
+		extra.put("name", PATTERN_CHARACTERS_NAME);
+		extra.put("age", 50);
+		extra.put("org_id", "o2");
+		adapter.insertObjects(namespace(), graphClassDefsWithTime().get(0), JSONArray.of(extra));
+
+		// Without escape the pattern's % and _ are wildcards, as before.
+		assertEquals(totalPersonCount() + 1, queryPersons(readCond("name", "like", "%")).size());
+		assertTrue(personNames(queryPersons(readCond("name", "like", "_ob"))).contains("Bob"));
+		// Escaped, each one is that character only.
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("\\%"))));
+		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("\\_ob"))));
+		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("A\\%"))));
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("f\\\\\\_[x]*?!"))));
+		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("[x]*?x"))));
+		// Unescaped wildcards around escaped text still match, anchored where written.
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("50\\%%"))));
+		assertEquals(Set.of("Alice"), personNames(queryPersons(readLikeEscaped("A_ice"))));
+		dropGraph();
+	}
+
+	private static Set<String> personNames(JSONArray rows) {
+		Set<String> names = new java.util.TreeSet<>();
+		for (int i = 0; i < rows.size(); i++) {
+			names.add(rows.getJSONObject(i).getString("person_name"));
+		}
+		return names;
+	}
+
+	protected JSONObject readLikeEscaped(String pattern) {
+		JSONObject condition = readCond("name", "like", pattern);
+		condition.put("escape", "\\");
+		return condition;
+	}
+
 	@Test
 	void notWithSeveralConditionsIsRejectedNotGuessed() {
 		assume(DataAdapterCapability.READ_QUERY);

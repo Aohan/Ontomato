@@ -184,6 +184,11 @@ public class SqlServerAdapter implements DataAdapter {
 										sqlCond = "[" + alias + "].[" + attr + "] " + cond.getString("operator")
 												+ " " + timeLiteral(cond.get("value"));
 									}
+								} else if ("like".equals(cond.getString("operator")) && LikePattern.escaped(cond)) {
+									if ("varchar".equals(type)) {
+										String pattern = LikePattern.of(cond, true).sql("[").replace("'", "''");
+										sqlCond = "[" + alias + "].[" + attr + "]" + " like '" + pattern + "' escape '!'";
+									}
 								} else if ("like".equals(cond.getString("operator"))
 										|| "not like".equals(cond.getString("operator"))) {
 									if ("varchar".equals(type)) {

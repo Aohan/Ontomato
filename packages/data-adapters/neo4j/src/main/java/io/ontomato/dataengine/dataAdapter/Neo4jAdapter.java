@@ -430,6 +430,12 @@ public class Neo4jAdapter implements DataAdapter {
 			query.params.put(param, list);
 			return col + " in $" + param;
 		}
+		if ("like".equals(operator) && LikePattern.escaped(condition)) {
+			String param = query.next();
+			query.params.put(param, LikePattern.of(condition, true)
+					.render(".*", ".", c -> java.util.regex.Pattern.quote(String.valueOf(c))));
+			return col + " =~ $" + param;
+		}
 		if ("like".equals(operator) || "not like".equals(operator)) {
 			String value = (String) condition.get("value");
 			// The read path wraps a bare value in %..% like the SQL adapters do; the write path does not.
