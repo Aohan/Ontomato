@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.sql.Connection;
@@ -72,6 +73,17 @@ public abstract class AbstractDataAdapterTest {
 	/** The primary-key attribute name of {@link #classDef()}. */
 	protected String primaryKey() {
 		return "id";
+	}
+
+	/**
+	 * Whether the data source itself renders a {@code timeseries} condition. The DSL comes from M3, so M3
+	 * answers yes; a SQL renderer does not implement the construct and keeps the default. A yes-source has
+	 * nothing to reject in {@link #timeseriesConditionIsRejectedNotSilentlyDropped()}: the construct is
+	 * supported, its bucket precondition stays the grammar gate's call, and the grammar itself is covered by
+	 * the adapter's own test (bucket data is out of this suite's scope).
+	 */
+	protected boolean sourceRendersTimeseries() {
+		return false;
 	}
 
 	// ----------------------------------------------------------------------------------
@@ -1205,6 +1217,8 @@ public abstract class AbstractDataAdapterTest {
 	@Test
 	void timeseriesConditionIsRejectedNotSilentlyDropped() {
 		assume(DataAdapterCapability.READ_QUERY);
+		// A source that renders timeseries itself has nothing to reject here.
+		assumeFalse(sourceRendersTimeseries(), "this source renders timeseries conditions itself");
 		JSONObject properties = new JSONObject();
 		properties.put("operator", "logic");
 		JSONArray and = new JSONArray();
