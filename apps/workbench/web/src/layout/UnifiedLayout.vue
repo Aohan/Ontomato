@@ -117,6 +117,7 @@ const qaAgent = computed<WorkbenchAgent>(() => ({
     color: appearance.value?.qa.avatarColor || "",
   }),
   isQA: true,
+  graphScope: { mode: "panorama" },
   summarizerPrompt: "",
   conclusionMakerPrompt: "",
   isEnabled: true,

@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck the workbench
         run: pnpm typecheck:workbench
 
+      - name: Typecheck the workbench web entry
+        run: pnpm --filter @ontomato/workbench typecheck:web
+
       - name: Test the workbench
         run: pnpm test:workbench
 
