@@ -29,10 +29,7 @@ image digests and pnpm versions live in the Dockerfiles. `DEBIAN_MIRROR`,
 
 CI publishes final images. Pushes to `develop` publish the `edge` version; formal
 `v*` tags publish the stripped version plus `latest`. Pull requests run checks
-without publishing (see `.github/workflows/pr-checks.yml`). After a successful
-`develop` build, CI can request downstream integration checks when the repository
-variable `DOWNSTREAM_ENABLED` is `true`; enabling it additionally requires the
-`DOWNSTREAM_TRIGGER_URL` and `DOWNSTREAM_TRIGGER_TOKEN` secrets.
+without publishing (see `.github/workflows/pr-checks.yml`).
 GitHub runners reuse the previous release's inline BuildKit
 cache through `BUILD_CACHE_REF`; this keeps unchanged dependency layers on a fresh runner.
 The enterprise GitLab runner uses its persistent local BuildKit cache.

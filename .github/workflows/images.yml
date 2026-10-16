@@ -166,25 +166,3 @@ jobs:
         run: |
           docker compose ps -a
           docker compose logs --tail 200
-
-  downstream:
-    needs: verify
-    # Opt-in only: runs solely in the canonical repository on develop, and only
-    # when the DOWNSTREAM_ENABLED repository variable is 'true'. The trigger
-    # secrets below stay required, so enabling without them fails closed.
-    if: github.repository == 'ontomato-ai/Ontomato' && github.ref == 'refs/heads/develop' && vars.DOWNSTREAM_ENABLED == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Request downstream integration checks
-        env:
-          TRIGGER_URL: ${{ secrets.DOWNSTREAM_TRIGGER_URL }}
-          TRIGGER_TOKEN: ${{ secrets.DOWNSTREAM_TRIGGER_TOKEN }}
-        run: |
-          : "${TRIGGER_URL:?Configure DOWNSTREAM_TRIGGER_URL}"
-          : "${TRIGGER_TOKEN:?Configure DOWNSTREAM_TRIGGER_TOKEN}"
-          curl --fail --silent --output /dev/null --request POST \
-            --form-string "token=$TRIGGER_TOKEN" \
-            --form-string "ref=develop" \
-            --form-string "variables[PUBLIC_SHA]=$GITHUB_SHA" \
-            "$TRIGGER_URL"
-          echo "Downstream integration checks requested."
