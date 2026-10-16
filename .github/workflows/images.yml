@@ -59,6 +59,7 @@ jobs:
           BUILD_CACHE_REF="$REGISTRY/ontomato-ontology-manager:latest" make ontology-manager ARCH="$ARCH"
 
       - name: Start the stack
+        id: stack-start
         working-directory: deploy
         run: |
           sed "s/^ARCH=.*/ARCH=$ARCH/" .env.example > .env
@@ -70,7 +71,7 @@ jobs:
           done
 
       - name: Show the stack state
-        if: always()
+        if: always() && steps['stack-start'].outcome != 'skipped'
         working-directory: deploy
         run: |
           docker compose ps -a
@@ -146,6 +147,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Start the stack from the published images
+        id: stack-start
         working-directory: deploy
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
@@ -159,7 +161,7 @@ jobs:
           done
 
       - name: Show the stack state
-        if: always()
+        if: always() && steps['stack-start'].outcome != 'skipped'
         working-directory: deploy
         run: |
           docker compose ps -a

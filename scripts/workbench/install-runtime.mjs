@@ -120,6 +120,7 @@ function main() {
     "--frozen-lockfile",
     "--prod",
     "--offline",
+    "--ignore-scripts",
     "--virtual-store-dir",
     STORE,
   ]);
