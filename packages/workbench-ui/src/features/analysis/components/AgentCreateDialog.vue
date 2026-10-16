@@ -702,7 +702,7 @@ watch(isDark, () => {
 </template>
 
 <style scoped>
-:global(.agent-editor-drawer.el-drawer) { border-radius: 0; overflow: hidden; }
+:global(.agent-editor-drawer.el-drawer) { border-radius: 0 !important; overflow: hidden; }
 :global(.el-popper.agent-editor-select-dropdown) { max-width: none !important; box-sizing: border-box; }
 :global(.agent-editor-select-dropdown .el-select-dropdown) { width: 100%; min-width: 0 !important; }
 :global(.agent-editor-select-dropdown .el-select-dropdown__item) { width: 100%; box-sizing: border-box; }
