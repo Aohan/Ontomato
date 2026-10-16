@@ -6,9 +6,11 @@ import type {
   AnalysisGraphScope,
 } from "@ontomato/contracts/analysis-agent";
 
-import { ref, computed, watch } from "vue";
-import { ElMessage } from "element-plus";
-import { BarChart3, Cog, Flame, Settings } from "lucide-vue-next";
+import { ref, computed, watch, onBeforeUnmount } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { ArrowLeft, UserRound, Workflow, FileText, Blocks, Database, BarChart3, Cog, Flame, Settings } from "lucide-vue-next";
+import CodeMirrorEditor from "../../../components/CodeMirrorEditor.vue";
+import { renderAgentMarkdown } from "../../../utils/agent-markdown";
 import { analysisAgentApi, analysisReportApi } from "../api";
 import type { AnalysisReportHotCardSummary } from "@ontomato/contracts/analysis-report";
 import type { AnalysisSkill } from "../../skills/api";
@@ -61,6 +63,45 @@ function normalizeAvatarColor(color: string): string {
 }
 
 const isEditing = computed(() => !!props.editingAgent?.id);
+type Section = "basic" | "execution" | "prompts" | "tools" | "data" | "reports";
+const activeSection = ref<Section>("basic");
+const sections = computed(() => [
+  { id: "basic" as const, label: t("common.basicInfo"), icon: UserRound },
+  { id: "execution" as const, label: t("admin.executionMode"), icon: Workflow },
+  { id: "prompts" as const, label: t("admin.promptConfig"), icon: FileText },
+  { id: "tools" as const, label: t("admin.agentEditorTools"), icon: Blocks },
+  { id: "data" as const, label: t("admin.agentEditorData"), icon: Database },
+  { id: "reports" as const, label: t("admin.agentEditorReports"), icon: BarChart3 },
+]);
+const promptTab = ref<"analysisDimensionPrompt" | "summarizerPrompt" | "conclusionMakerPrompt">("analysisDimensionPrompt");
+const promptPreview = ref(false);
+const baseline = ref("");
+const dirty = computed(() => baseline.value !== JSON.stringify(form.value));
+const currentPrompt = computed({
+  get: () => isLoopMode.value ? form.value.loopPrompt : form.value[promptTab.value],
+  set: (value: string) => { if (isLoopMode.value) form.value.loopPrompt = value; else form.value[promptTab.value] = value; },
+});
+const promptOptions = computed(() => [
+  { value: "analysisDimensionPrompt", label: t("analysis.analysisDimensions") },
+  { value: "summarizerPrompt", label: t("hotData.dimensionReport") },
+  { value: "conclusionMakerPrompt", label: t("hotData.conclusionReport") },
+]);
+async function requestClose() {
+  if (saving.value) return;
+  if (dirty.value) {
+    try {
+      await ElMessageBox.confirm(t("admin.agentEditorDiscard"), t("admin.agentEditorUnsaved"), {
+        confirmButtonText: t("admin.agentEditorDiscardAction"), cancelButtonText: t("common.cancel"), type: "warning",
+      });
+    } catch { return; }
+  }
+  emit("update:visible", false);
+}
+function beforeUnload(event: BeforeUnloadEvent) {
+  if (props.visible && dirty.value) { event.preventDefault(); event.returnValue = ""; }
+}
+window.addEventListener("beforeunload", beforeUnload);
+onBeforeUnmount(() => window.removeEventListener("beforeunload", beforeUnload));
 
 const saving = ref(false);
 const visualizationSkills = ref<AnalysisSkill[] | null>(null);
@@ -152,7 +193,9 @@ function getDefaultVisualizationSkillIds(): string[] | undefined {
 function handleVisualizationSkillsLoaded(skills: AnalysisSkill[]) {
   visualizationSkills.value = skills;
   if (!isEditing.value && form.value.enabledVisualizationSkillIds === undefined) {
+    const wasDirty = dirty.value;
     form.value.enabledVisualizationSkillIds = getDefaultVisualizationSkillIds();
+    if (!wasDirty) baseline.value = JSON.stringify(form.value);
   }
 }
 
@@ -255,6 +298,7 @@ function resetForm() {
 
 async function handleSubmit() {
   if (!form.value.name.trim()) {
+    activeSection.value = "basic";
     ElMessage.warning(t("analysis.agentNameRequired"));
     return;
   }
@@ -262,6 +306,7 @@ async function handleSubmit() {
   const { graphScopeMode, graphScopeRootClassNames, graphScopeMaxDepth, ...agentForm } = form.value;
   if (graphScopeMode === "subgraph") {
     if (!graphScopeRootClassNames.length) {
+      activeSection.value = "data";
       ElMessage.warning(t("admin.graphScopeRootsRequired"));
       return;
     }
@@ -271,6 +316,7 @@ async function handleSubmit() {
       graphScopeMaxDepth < 0 ||
       graphScopeMaxDepth > 10
     ) {
+      activeSection.value = "data";
       ElMessage.warning(t("admin.graphScopeDepthInvalid"));
       return;
     }
@@ -313,6 +359,10 @@ watch(
   () => props.visible,
   (val) => {
     if (val) {
+      activeSection.value = props.editingAgent ? "prompts" : "basic";
+      promptPreview.value = false;
+      promptTab.value = "analysisDimensionPrompt";
+      hotReports.value = [];
       if (objectClasses.value.length === 0) {
         loadObjectClasses();
       }
@@ -325,6 +375,7 @@ watch(
       } else {
         resetForm();
       }
+      baseline.value = JSON.stringify(form.value);
     }
   },
   { immediate: true }
@@ -343,49 +394,64 @@ watch(isDark, () => {
 </script>
 
 <template>
-  <el-dialog
+  <el-drawer
     v-model="showDialog"
     :title="isEditing ? t('admin.editAgent') : t('admin.newAgent')"
-    width="min(1000px, calc(100vw - 24px))"
-    align-center
+    direction="rtl"
+    size="61.8vw"
+    class="agent-editor-drawer"
+    :with-header="false"
+    :show-close="false"
+    :close-on-click-modal="false"
+    :before-close="requestClose"
     @close="resetForm"
   >
+    <header class="agent-editor-header">
+      <el-button :icon="ArrowLeft" :disabled="saving" @click="requestClose">{{ t('admin.agentEditorBack') }}</el-button>
+      <div class="agent-editor-heading"><strong>{{ isEditing ? t('admin.editAgent') : t('admin.newAgent') }}<span v-if="form.name"> · {{ form.name }}</span></strong><small>{{ dirty ? t('admin.agentEditorUnsaved') : t('admin.agentEditorSaved') }}</small></div>
+      <el-button type="primary" :loading="saving" @click="handleSubmit">{{ t('common.save') }}</el-button>
+    </header>
+    <div class="agent-editor-workspace">
+      <nav class="agent-editor-nav" :aria-label="t('admin.agentEditorNavigation')">
+        <button v-for="section in sections" :key="section.id" type="button" :class="{ active: activeSection === section.id }" :aria-current="activeSection === section.id ? 'page' : undefined" @click="activeSection = section.id"><component :is="section.icon" :size="18" /><span>{{ section.label }}</span></button>
+      </nav>
     <div
       :class="[
         'agent-form-layout',
         labelWrap ? 'agent-form-layout--label-wrap' : 'agent-form-layout--label-nowrap',
       ]"
     >
-      <!-- Left: basic info and prompts -->
+      <div class="editor-section-heading">
+        <h2>{{ sections.find(section => section.id === activeSection)?.label }}</h2>
+        <p>{{ t(`admin.agentEditorIntro.${activeSection}`) }}</p>
+      </div>
+      <!-- Configuration forms stay mounted to preserve drafts when navigating. -->
       <div class="form-left">
-        <h4 class="section-title">{{ t("common.basicInfo") }}</h4>
         <el-form
+          v-show="activeSection === 'basic' || activeSection === 'execution' || activeSection === 'data'"
           :model="form"
-          label-width="110px"
+          label-position="top"
           :require-asterisk-position="requireAsteriskPosition"
           size="default"
         >
+          <div v-show="activeSection === 'basic'" class="configuration-card identity-card">
           <AgentBasicInfoFields
             v-model:name="form.name"
             v-model:description="form.description"
             v-model:avatar-key="form.avatarKey"
             v-model:avatar-color="form.avatarColor"
-          >
+          />
+          <div class="setting-row"><div><strong>{{ t('common.enable') }}</strong><p>{{ t('admin.agentEditorEnabledHint') }}</p></div><el-switch v-model="form.isEnabled" :aria-label="t('common.enable')" /></div>
+          </div>
+            <div v-show="activeSection === 'execution'" class="editor-config-section">
             <el-form-item :label="t('admin.productMode')" required>
               <el-radio-group
                 v-model="form.reportDeliverableEnabled"
                 :aria-label="t('admin.productMode')"
               >
-                <el-radio :value="true">{{ t("admin.productModeAnalysis") }}</el-radio>
-                <el-radio :value="false">{{ t("admin.productModeHarness") }}</el-radio>
+                <el-radio :value="true"><span class="mode-title">{{ t("admin.productModeAnalysis") }}</span><small>{{ t('admin.productModeAnalysisHint') }}</small></el-radio>
+                <el-radio :value="false"><span class="mode-title">{{ t("admin.productModeHarness") }}</span><small>{{ t('admin.productModeHarnessHint') }}</small></el-radio>
               </el-radio-group>
-              <p class="form-tip">
-                {{
-                  form.reportDeliverableEnabled
-                    ? t("admin.productModeAnalysisHint")
-                    : t("admin.productModeHarnessHint")
-                }}
-              </p>
             </el-form-item>
             <el-form-item :label="t('admin.executionMode')" required>
               <el-radio-group
@@ -393,8 +459,8 @@ watch(isDark, () => {
                 v-model="form.executionMode"
                 :aria-label="t('admin.executionMode')"
               >
-                <el-radio value="dimension">{{ t("admin.executionModeDimension") }}</el-radio>
-                <el-radio value="loop">{{ t("admin.executionModeLoop") }}</el-radio>
+                <el-radio value="dimension"><span class="mode-title">{{ t("admin.executionModeDimension") }}</span><small>{{ t('admin.agentEditorDimensionHint') }}</small></el-radio>
+                <el-radio value="loop"><span class="mode-title">{{ t("admin.executionModeLoop") }}</span><small>{{ t('admin.agentEditorLoopHint') }}</small></el-radio>
               </el-radio-group>
               <span v-else>{{ t("admin.executionModeLoop") }}</span>
               <p class="form-tip">
@@ -405,8 +471,13 @@ watch(isDark, () => {
                 }}
               </p>
             </el-form-item>
+            </div>
+             <div v-show="activeSection === 'data'" class="editor-config-section data-configuration">
+             <section class="configuration-card">
             <el-form-item :label="t('admin.relatedClasses')">
               <el-select
+                popper-class="agent-editor-select-dropdown"
+                fit-input-width
                 v-model="form.classNames"
                 multiple
                 filterable
@@ -414,7 +485,8 @@ watch(isDark, () => {
                 collapse-tags-tooltip
                 clearable
                 :loading="classesLoading"
-                :placeholder="t('admin.relatedClassesHint')"
+                 :placeholder="t('admin.relatedClasses')"
+                 :max-collapse-tags="3"
                 style="width: 100%"
               >
                 <el-option
@@ -426,6 +498,8 @@ watch(isDark, () => {
               </el-select>
               <p class="form-tip">{{ t("admin.relatedClassesHint") }}</p>
             </el-form-item>
+            </section>
+            <section class="configuration-card">
             <el-form-item :label="t('admin.graphScope')">
               <el-radio-group v-model="form.graphScopeMode" :aria-label="t('admin.graphScope')">
                 <el-radio value="panorama">{{ t("admin.graphScopePanorama") }}</el-radio>
@@ -433,9 +507,11 @@ watch(isDark, () => {
               </el-radio-group>
               <p class="form-tip">{{ t("admin.graphScopeHint") }}</p>
             </el-form-item>
-            <template v-if="form.graphScopeMode === 'subgraph'">
+             <div v-if="form.graphScopeMode === 'subgraph'" class="subgraph-fields">
               <el-form-item :label="t('admin.graphScopeRoots')" required>
                 <el-select
+                  popper-class="agent-editor-select-dropdown"
+                  fit-input-width
                   v-model="form.graphScopeRootClassNames"
                   multiple
                   filterable
@@ -468,123 +544,41 @@ watch(isDark, () => {
                 />
                 <p class="form-tip">{{ t("admin.graphScopeDepthHint") }}</p>
               </el-form-item>
-            </template>
-          </AgentBasicInfoFields>
+             </div>
+             </section>
+            </div>
         </el-form>
 
-        <h4 class="section-title" style="margin-top: 20px">{{ t("admin.promptConfig") }}</h4>
-        <el-form
-          :model="form"
-          label-width="110px"
-          :require-asterisk-position="requireAsteriskPosition"
-          size="default"
-        >
-          <el-form-item v-if="isLoopMode" :label="t('admin.loopPrompt')">
-            <el-input
-              v-model="form.loopPrompt"
-              type="textarea"
-              :rows="12"
-              :placeholder="t('admin.loopPromptHint')"
-            />
-          </el-form-item>
-          <template v-else>
-            <el-form-item :label="t('analysis.analysisDimensions')" required>
-              <el-input
-                v-model="form.analysisDimensionPrompt"
-                type="textarea"
-                :rows="4"
-                :placeholder="t('hotData.dimensionPromptHint')"
-              />
-            </el-form-item>
-            <el-form-item :label="t('hotData.dimensionReport')" required>
-              <el-input
-                v-model="form.summarizerPrompt"
-                type="textarea"
-                :rows="4"
-                :placeholder="t('hotData.dimensionReportHint')"
-              />
-            </el-form-item>
-            <el-form-item :label="t('hotData.conclusionReport')" required>
-              <el-input
-                v-model="form.conclusionMakerPrompt"
-                type="textarea"
-                :rows="4"
-                :placeholder="t('hotData.conclusionPromptHint')"
-              />
-            </el-form-item>
-          </template>
-        </el-form>
+        <section v-if="activeSection === 'prompts'" class="prompt-workspace">
+          <div class="prompt-toolbar"><strong>{{ isLoopMode ? t('admin.loopPrompt') : promptOptions.find(option => option.value === promptTab)?.label }}</strong><el-radio-group v-model="promptPreview" size="small"><el-radio-button :value="false">{{ t('common.edit') }}</el-radio-button><el-radio-button :value="true">{{ t('admin.agentEditorPreview') }}</el-radio-button></el-radio-group></div>
+          <el-segmented v-if="!isLoopMode" v-model="promptTab" :options="promptOptions" />
+          <p class="form-tip">{{ isLoopMode ? t('admin.loopPromptHint') : promptTab === 'analysisDimensionPrompt' ? t('hotData.dimensionPromptHint') : promptTab === 'summarizerPrompt' ? t('hotData.dimensionReportHint') : t('hotData.conclusionPromptHint') }}</p>
+          <div v-if="promptPreview" class="prompt-preview markdown-body" v-html="renderAgentMarkdown(currentPrompt)" />
+          <CodeMirrorEditor v-else :key="isLoopMode ? 'loop' : promptTab" v-model="currentPrompt" language="markdown" :min-height="400" />
+          <small class="prompt-status">{{ t('admin.agentEditorCharacters', { count: currentPrompt.length }) }} · Markdown</small>
+        </section>
       </div>
 
-      <!-- Right: skill configuration -->
-      <div class="form-right">
-        <h4 class="section-title">{{ t("admin.skillConfig") }}</h4>
+      <!-- Tools and report configuration share the same workspace. -->
+      <div v-show="activeSection === 'tools' || activeSection === 'reports'" class="form-right">
 
         <!-- Analysis skill configuration -->
-        <div class="skills-group">
+        <div v-show="activeSection === 'tools'" class="skills-group">
           <div class="skills-group-header">
             <el-icon><Cog /></el-icon>
             <span>{{ t("admin.analysisSkills") }}</span>
+            <el-tag size="small" effect="plain">{{ form.enabledSkillIds.length }}</el-tag>
           </div>
           <p class="skill-hint">{{ t("admin.selectSkillsForAnalysis") }}</p>
           <SkillSelector v-model="form.enabledSkillIds" />
         </div>
 
-        <div v-if="isLoopMode" class="skills-group">
-          <h4 class="skills-group-header">{{ t("admin.externalMcpServices") }}</h4>
-          <a href="#/admin/mcp-service" target="_blank" rel="noopener" class="mcp-manage-link">
-            {{ t("mcp.manageServices") }}
-          </a>
-          <el-button text :loading="mcpServicesLoading" @click="loadExternalMcpServices">
-            {{ t("common.refresh") }}
-          </el-button>
-          <el-select
-            v-model="form.enabledMcpServiceNames"
-            multiple
-            filterable
-            clearable
-            :loading="mcpServicesLoading"
-            :disabled="mcpServicesLoading || mcpServicesLoadFailed"
-            :aria-label="t('admin.externalMcpServices')"
-            :placeholder="t('admin.externalMcpServicesHint')"
-            :fit-input-width="fitInputWidth"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="name in externalMcpServiceNames"
-              :key="name"
-              :label="name"
-              :value="name"
-            />
-            <el-option
-              v-for="name in form.enabledMcpServiceNames.filter(
-                (name) => !externalMcpServiceNames.includes(name)
-              )"
-              :key="name"
-              :label="name"
-              :value="name"
-              disabled
-            />
-          </el-select>
-          <p class="form-tip" :role="mcpServicesLoadFailed ? 'alert' : undefined">
-            {{
-              t(
-                mcpServicesLoadFailed
-                  ? "admin.externalMcpServicesLoadFailed"
-                  : "admin.externalMcpServicesHint"
-              )
-            }}
-          </p>
-          <el-button v-if="mcpServicesLoadFailed" text @click="loadExternalMcpServices">
-            {{ t("common.retry") }}
-          </el-button>
-        </div>
-
         <!-- Visualization skill configuration -->
-        <div class="skills-group">
+        <div v-show="activeSection === 'tools'" class="skills-group">
           <div class="skills-group-header">
             <el-icon><BarChart3 /></el-icon>
             <span>{{ t("admin.visualizationSkills") }}</span>
+            <el-tag size="small" effect="plain">{{ form.enabledVisualizationSkillIds?.length ?? 0 }}</el-tag>
           </div>
           <p class="skill-hint">{{ t("admin.selectVisualSkills") }}</p>
           <SkillSelector
@@ -594,20 +588,19 @@ watch(isDark, () => {
           />
         </div>
 
-        <div class="skills-group">
+        <div v-show="activeSection === 'reports'" class="skills-group">
           <div class="skills-group-header">
             <el-icon><Settings /></el-icon>
             <span>{{ t("admin.reportDeliverable") }}</span>
           </div>
-          <el-checkbox v-model="form.reportDeliverableEnabled">
-            {{ t("admin.reportDeliverableEnabled") }}
-          </el-checkbox>
-          <p class="skill-hint">{{ t("admin.reportDeliverableHint") }}</p>
+          <div class="setting-row"><div><strong>{{ t('admin.reportDeliverableEnabled') }}</strong><p>{{ t('admin.reportDeliverableHint') }}</p></div><el-switch v-model="form.reportDeliverableEnabled" :aria-label="t('admin.reportDeliverableEnabled')" /></div>
           <el-form-item
             v-if="form.reportDeliverableEnabled && !isLoopMode"
             :label="t('admin.summaryPosition')"
           >
             <el-select
+              popper-class="agent-editor-select-dropdown"
+              fit-input-width
               v-model="form.summaryPosition"
               :aria-label="t('admin.summaryPosition')"
               style="width: 100%"
@@ -619,21 +612,21 @@ watch(isDark, () => {
           </el-form-item>
         </div>
 
-        <div class="skills-group">
+        <div v-show="activeSection === 'reports'" class="skills-group">
           <div class="skills-group-header">
             <el-icon><Flame /></el-icon>
             <span>{{ t("admin.hotReport") }}</span>
           </div>
-          <div class="hot-report-toggle">
+          <div class="setting-row">
+            <div><strong>{{ t('admin.hotReportEnabled') }}</strong><p>{{ t('admin.hotReportEnabledHint') }}</p></div>
             <el-switch
               v-model="form.hotReportEnabled"
               :aria-label="t('admin.hotReportEnabled')"
             />
-            <span class="hot-report-toggle-label">{{ t("admin.hotReportEnabled") }}</span>
           </div>
-          <p class="skill-hint">{{ t("admin.hotReportEnabledHint") }}</p>
 
-          <template v-if="isEditing">
+          <div v-if="isEditing" class="published-reports-section">
+            <p class="form-tip">{{ t('admin.agentEditorImmediateReports') }}</p>
             <div v-loading="hotReportsLoading" class="hot-report-list">
               <p v-if="hotReportsLoadFailed" class="skill-hint" role="alert">
                 {{ t("admin.hotReportLoadFailed") }}
@@ -657,15 +650,17 @@ watch(isDark, () => {
                 </div>
               </template>
             </div>
-          </template>
+          </div>
         </div>
 
-        <div class="skills-group">
+        <div v-show="activeSection === 'tools'" class="skills-group">
           <div class="skills-group-header">
             <el-icon><Cog /></el-icon>
             <span>{{ t("admin.externalMcpServices") }}</span>
+            <el-tag size="small" effect="plain">{{ form.enabledMcpServiceNames.length }}</el-tag>
           </div>
           <el-select
+            popper-class="agent-editor-select-dropdown"
             v-model="form.enabledMcpServiceNames"
             multiple
             filterable
@@ -673,9 +668,10 @@ watch(isDark, () => {
             collapse-tags-tooltip
             clearable
             :loading="mcpServicesLoading"
-            :disabled="mcpServicesLoadFailed"
+            :disabled="mcpServicesLoading || mcpServicesLoadFailed"
+            :aria-label="t('admin.externalMcpServices')"
             :placeholder="t('admin.externalMcpServicesPlaceholder')"
-            :fit-input-width="fitInputWidth"
+            fit-input-width
             style="width: 100%"
           >
             <el-option
@@ -684,6 +680,7 @@ watch(isDark, () => {
               :label="serviceName"
               :value="serviceName"
             />
+            <el-option v-for="name in form.enabledMcpServiceNames.filter(name => !externalMcpServiceNames.includes(name))" :key="name" :label="name" :value="name" disabled />
           </el-select>
           <el-alert
             v-if="mcpServicesLoadFailed"
@@ -693,48 +690,96 @@ watch(isDark, () => {
             :title="t('admin.externalMcpServicesLoadFailed')"
           />
           <p class="skill-hint">{{ t("admin.externalMcpServicesHint") }}</p>
+          <div class="mcp-actions">
+          <a href="#/admin/mcp-service" target="_blank" rel="noopener" class="mcp-manage-link">{{ t('mcp.manageServices') }}</a>
+          <el-button text :loading="mcpServicesLoading" @click="loadExternalMcpServices">{{ t('common.refresh') }}</el-button>
+          </div>
         </div>
       </div>
     </div>
-
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button @click="showDialog = false">{{ t("common.cancel") }}</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSubmit">
-          {{ t("common.save") }}
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
+    </div>
+  </el-drawer>
 </template>
 
 <style scoped>
+:global(.agent-editor-drawer.el-drawer) { border-radius: 0; overflow: hidden; }
+:global(.el-popper.agent-editor-select-dropdown) { max-width: none !important; box-sizing: border-box; }
+:global(.agent-editor-select-dropdown .el-select-dropdown) { width: 100%; min-width: 0 !important; }
+:global(.agent-editor-select-dropdown .el-select-dropdown__item) { width: 100%; box-sizing: border-box; }
+:global(.agent-editor-drawer > .el-drawer__body) { display: flex; flex: 1; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.agent-editor-header { display: flex; align-items: center; gap: 20px; padding: 16px 24px; border-bottom: 1px solid var(--el-border-color-light); flex-shrink: 0; }
+.agent-editor-heading { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.agent-editor-heading strong { font-size: 18px; color: var(--el-text-color-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-editor-heading small { font-size: 12px; color: var(--el-text-color-secondary); }
+.agent-editor-workspace { flex: 1; display: grid; grid-template-columns: 184px minmax(0, 1fr); min-height: 0; }
+.agent-editor-nav { padding: 24px 12px; display: flex; flex-direction: column; gap: 6px; border-right: 1px solid var(--el-border-color-light); background: var(--el-fill-color-extra-light); overflow: auto; }
+.agent-editor-nav button { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border: 0; border-radius: 8px; background: transparent; color: var(--el-text-color-regular); cursor: pointer; text-align: left; font: inherit; }
+.agent-editor-nav button.active { color: var(--el-color-primary); background: var(--el-color-primary-light-9); font-weight: 600; }
+.agent-editor-nav button:hover { background: var(--el-fill-color); }
+.prompt-workspace { display: flex; flex-direction: column; gap: 16px; min-height: calc(100dvh - 160px); }
+.prompt-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.prompt-toolbar .section-title { border: 0; padding: 0; }
+.prompt-workspace > .codemirror-editor { flex: 1; min-height: 400px; }
+.prompt-workspace :deep(.cm-editor) { min-height: 400px; height: calc(100dvh - 310px); }
+.prompt-preview { flex: 1; min-height: 400px; padding: 24px; border: 1px solid var(--el-border-color); border-radius: 8px; overflow-wrap: anywhere; line-height: 1.8; }
+.prompt-preview :deep(pre) { overflow: auto; padding: 16px; background: var(--el-fill-color-light); }
+.prompt-status { color: var(--el-text-color-secondary); text-align: right; }
 .mcp-manage-link {
   display: inline-block;
-  margin-bottom: 8px;
   color: var(--el-color-primary);
 }
 .agent-form-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-xl);
-  max-height: 70vh;
+  display: block;
+  min-width: 0;
   overflow-y: auto;
-  padding-right: var(--spacing-md);
+  padding: 28px;
 }
+.editor-section-heading { max-width: 1100px; margin: 0 auto 28px; }
+.editor-section-heading h2 { margin: 0 0 8px; font-size: 22px; color: var(--el-text-color-primary); }
+.editor-section-heading p { margin: 0; color: var(--el-text-color-secondary); line-height: 1.7; font-size: 14px; }
+.configuration-card, .form-right > .skills-group { padding: 24px; border: 1px solid var(--el-border-color-light); border-radius: 12px; background: var(--el-bg-color); }
+.identity-card { max-width: 800px; }
+.identity-card :deep(.el-form-item) { margin-bottom: 24px; }
+.setting-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 0; }
+.setting-row strong { font-size: 14px; font-weight: 500; color: var(--el-text-color-primary); }
+.setting-row p { font-size: 13px; line-height: 1.6; color: var(--el-text-color-secondary); margin: 6px 0 0; }
+.setting-row .el-switch { flex-shrink: 0; }
+.data-configuration { display: grid; gap: 24px; }
+.configuration-card :deep(.el-form-item:last-child) { margin-bottom: 0; }
+.subgraph-fields { border-top: 1px solid var(--el-border-color-light); padding-top: 20px; margin-top: 16px; }
+.form-right > .skills-group { display: flex; flex-direction: column; gap: 16px; margin-top: 0; }
+.form-right > .skills-group > .el-form-item { margin-bottom: 0; }
+.published-reports-section { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--el-border-color-light); }
+.published-reports-section > .form-tip { margin: 0; }
+.mcp-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+.mcp-actions .el-button { margin: 0; padding: 0; }
+.skills-group-header .el-tag { margin-left: auto; }
 
 .form-left,
 .form-right {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 24px;
   min-width: 0;
+  max-width: 1100px;
+  margin: 0 auto;
 }
+.editor-config-section { max-width: 100%; }
+.editor-config-section :deep(.el-radio-group) { display: flex; flex-wrap: wrap; gap: 12px; width: 100%; }
+.editor-config-section :deep(.el-radio) { margin: 0; flex: 1 1 240px; min-width: 0; height: auto; min-height: 64px; padding: 20px; border: 1px solid var(--el-border-color); border-radius: 10px; align-items: flex-start; }
+.editor-config-section :deep(.el-radio__input) { margin-top: 3px; }
+.editor-config-section :deep(.el-radio__label) { white-space: normal; min-width: 0; line-height: 1.6; }
+.editor-config-section :deep(.mode-title) { display: block; font-weight: 600; font-size: 15px; }
+.editor-config-section :deep(.el-radio small) { display: block; margin-top: 6px; color: var(--el-text-color-secondary); line-height: 1.6; font-size: 13px; }
+.editor-config-section :deep(.el-radio.is-checked) { border-color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
+.agent-form-layout :deep(.el-form-item__label) { white-space: normal !important; }
 
 .skill-hint {
   font-size: 13px;
   color: var(--el-text-color-secondary);
-  margin: 0 0 var(--spacing-sm) 0;
+  margin: 0;
+  line-height: 1.6;
 }
 
 .hot-report-toggle {
@@ -754,17 +799,19 @@ watch(isDark, () => {
   overflow-y: auto;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: var(--el-border-radius-base);
-  padding: var(--spacing-sm);
+  padding: 0;
 }
+.hot-report-list > .skill-hint { padding: 16px; }
 
 .hot-report-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) 0;
+  gap: 16px;
+  padding: 16px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
+.hot-report-item .el-switch { flex-shrink: 0; }
 
 .hot-report-item:last-child {
   border-bottom: none;
@@ -777,10 +824,11 @@ watch(isDark, () => {
   color: var(--el-text-color-regular);
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.6;
 }
 
 .mcp-load-alert {
-  margin-top: var(--spacing-sm);
+  margin-top: 0;
 }
 
 .form-tip {
@@ -821,7 +869,7 @@ watch(isDark, () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--el-text-color-primary);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: 0;
 }
 
 .dialog-footer {
@@ -834,10 +882,17 @@ button:focus-visible {
   outline-offset: 3px;
 }
 @media (max-width: 700px) {
+  :global(.agent-editor-drawer.el-drawer) { width: 100vw !important; }
+  .agent-editor-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .agent-editor-nav { flex-direction: row; padding: 8px; border-right: 0; border-bottom: 1px solid var(--el-border-color-light); }
+  .agent-editor-nav button { flex-shrink: 0; padding: 8px; }
+  .agent-editor-header { padding: 12px; gap: 10px; }
+  .agent-editor-heading strong { font-size: 15px; }
   .agent-form-layout {
     grid-template-columns: minmax(0, 1fr);
-    padding-right: 0;
+    padding: 20px 16px;
   }
+  .configuration-card, .form-right > .skills-group { padding: 16px; }
   :deep(.el-form-item) {
     display: block;
   }

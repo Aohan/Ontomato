@@ -2,26 +2,25 @@
 import { Graph } from "@antv/g6";
 import {
   Box,
+  ArrowLeft,
+  Settings2,
   Download,
-  Crosshair,
-  Scan,
+  Maximize,
   Network,
   MousePointerClick,
   RefreshCw,
   Search,
   Unplug,
-  ZoomIn,
-  ZoomOut,
-  Eye,
-  EyeOff,
+  Plus,
+  Minus,
   GitFork,
-  CircleMinus,
+  Waypoints,
   SlidersHorizontal,
   X,
   Info,
 } from "lucide-vue-next";
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
-import { ElButton, ElPopover, ElSelect, ElOption, ElCheckbox, ElSelectV2, vLoading } from "element-plus";
+import { ElButton, ElPopover, ElSelect, ElOption, ElCheckbox, ElSwitch, ElSelectV2, vLoading } from "element-plus";
 import { useManagerFeedback } from "../feedback";
 import type { InstanceGraphEdge, InstanceGraphNode, InstanceGraphResult, InstanceGraphSummary } from "../api";
 import { useManagerClient, useManagerContext, useOntologyText, useSharedText } from "../context";
@@ -34,9 +33,11 @@ import {
   instanceEdgeGeometry,
   instanceGraphNodeLabel,
   overviewPositions,
+  overviewRelations,
 } from "./instance-graph-rendering";
 
 const context = useManagerContext();
+const props = defineProps<{ summaryTarget?: HTMLElement | null }>();
 const { message } = useManagerFeedback();
 const { ot } = useOntologyText();
 const { t } = useSharedText();
@@ -74,6 +75,7 @@ const renderedElements = ref(0);
 const largeGraph = computed(() => isLargeInstanceGraph(nodes.value.length, edges.value.length));
 const summary = shallowRef<InstanceGraphSummary | null>(null);
 const overview = ref(true);
+const aggregateRelations = ref(true);
 const selectedClass = ref("");
 const searchNodes = shallowRef<InstanceGraphNode[]>([]);
 const searching = ref(false);
@@ -93,7 +95,7 @@ let generationTimer: ReturnType<typeof setTimeout> | undefined;
 
 function saveOverviewLayout() {
   if (!overview.value || !graph || !summary.value || rendering.value) return;
-  const positions = Object.fromEntries(graph.getNodeData().map((node) => [node.id, {
+  const positions = Object.fromEntries(graph.getNodeData().filter((node) => !node.data?.anchor).map((node) => [node.id, {
     x: Number(node.style?.x), y: Number(node.style?.y),
   }]).filter(([, position]) => {
     const point = position as { x: number; y: number };
@@ -181,7 +183,7 @@ function nodeOptions(colors: ReturnType<typeof graphColors>) {
       lineWidth: 4,
       shadowColor: colors.shadow,
       shadowBlur: largeGraph.value ? 0 : 10,
-      labelText: (datum: any) => instanceGraphNodeLabel(datum.data.node.name, datum.id),
+      labelText: (datum: any) => datum.data?.anchor ? "" : instanceGraphNodeLabel(datum.data.node.name, datum.id),
       labelFill: colors.text,
       labelFontSize: 12,
       labelFontWeight: 600,
@@ -202,13 +204,45 @@ function edgeOptions(colors: ReturnType<typeof graphColors>) {
       stroke: colors.edge,
       lineWidth: 1.5,
       endArrow: !largeGraph.value,
-      labelText: (datum: any) => showRelationLabels.value ? relationLabels.value[datum.data?.type] || datum.data?.type || "" : "",
+      labelText: (datum: any) => edgeLabel(datum.data),
       labelFill: colors.muted,
       labelBackground: true,
       labelBackgroundFill: colors.surface,
       labelBackgroundPadding: [2, 4] as [number, number],
     },
   };
+}
+
+function edgeLabel(data: any) {
+  if (!showRelationLabels.value) return "";
+  const label = relationLabels.value[data?.type] || data?.type || "";
+  return data?.aggregated ? `${label} · ${Number(data.count).toLocaleString(context.locale)}` : label;
+}
+
+async function updateOverviewRelations() {
+  const target = graph;
+  if (!target || !overview.value) return;
+  const positions = Object.fromEntries(target.getNodeData().filter((node) => !node.data?.anchor)
+    .map((node) => [node.id, { x: Number(node.style?.x || 0), y: Number(node.style?.y || 0) }]));
+  const aggregated = overviewRelations(nodes.value, edges.value, positions, selectedNode.value?.id);
+  const existingAnchors = target.getNodeData().filter((node) => node.data?.anchor);
+  if (!existingAnchors.length) target.addData({ nodes: aggregated.nodes });
+  else target.updateNodeData(aggregated.nodes);
+  target.removeEdgeData(target.getEdgeData().flatMap((edge) => edge.id ? [edge.id] : []));
+  if (aggregateRelations.value) target.addData({ edges: aggregated.edges });
+  else {
+    const geometry = instanceEdgeGeometry(edges.value);
+    target.addData({ edges: edges.value.map((edge, index) => ({
+      id: `edge:${index}:${edge.source}:${edge.target}`, source: edge.source, target: edge.target,
+      data: { type: edge.type, label: edge.label }, ...geometry[index],
+    })) });
+  }
+  await target.draw();
+}
+
+async function toggleAggregation() {
+  aggregateRelations.value = !aggregateRelations.value;
+  await updateOverviewRelations();
 }
 
 async function fitGraph(target: Graph) {
@@ -261,6 +295,7 @@ async function renderGraph(request: number) {
   target.on("afterdraw", updateNodeActionPosition);
   target.on("node:dragend", updateNodeActionPosition);
   target.on("node:dragend", saveOverviewLayout);
+  target.on("node:dragend", () => { void updateOverviewRelations(); });
   target.on("node:dblclick", (event: any) => {
     if (!rendering.value && !expanding.value) {
       void selectNode(event.target.id).then(expandNeighbors);
@@ -272,7 +307,7 @@ async function renderGraph(request: number) {
   try {
     await target.render();
     if (!isCurrent()) return;
-    const complete = await drawInstanceGraphBatches(target, nodes.value, edges.value, colorForClass, {
+    const complete = await drawInstanceGraphBatches(target, nodes.value, overview.value ? [] : edges.value, colorForClass, {
       isCurrent,
       yieldControl: yieldToBrowser,
       onProgress: (completed) => { renderedElements.value = completed; },
@@ -285,6 +320,7 @@ async function renderGraph(request: number) {
       target.updateNodeData(nodes.value.map((node, index) => ({ id: node.id, style: savedLayout[node.id] || defaults[node.id] || instanceNodePosition(index, nodes.value.length) })));
       await target.draw();
     } else if (!overview.value && !largeGraph.value && nodes.value.length) await target.layout(graphLayout());
+    if (isCurrent() && overview.value) await updateOverviewRelations();
     if (isCurrent()) await fitGraph(target);
   } finally {
     if (isCurrent()) rendering.value = false;
@@ -301,6 +337,7 @@ async function relayoutGraph() {
     if (overview.value) {
       const positions = overviewPositions(nodes.value);
       target.updateNodeData(nodes.value.map((node) => ({ id: node.id, style: positions[node.id] })));
+      await updateOverviewRelations();
       await target.draw();
     } else if (largeGraph.value) {
       for (let offset = 0; offset < nodes.value.length; offset += GRAPH_BATCH_SIZE) {
@@ -339,6 +376,7 @@ function clearSelection() {
   }
   selectedId = "";
   selectedNode.value = null;
+  if (!loading.value && !rendering.value) void updateOverviewRelations();
   selectedClassLabel.value = "";
   selectedAttributes.value = [];
   detailsLoading.value = false;
@@ -381,6 +419,7 @@ async function selectNode(id: string) {
   if (!node) return;
   selectedNode.value = node;
   applySelection(id);
+  await updateOverviewRelations();
   updateNodeActionPosition();
   void loadNodeInfo(node);
 }
@@ -400,21 +439,31 @@ function updateNodeActionPosition() {
   };
 }
 
-async function centerOnSelection() {
-  if (!selectedNode.value || rendering.value || expanding.value) return;
+async function showDirectNeighborhood() {
+  if (!selectedNode.value || !summary.value || rendering.value || expanding.value || versionChanged.value) return;
   const node = selectedNode.value;
-  overview.value = false;
-  nodes.value = [node];
-  edges.value = [];
-  neighborPages.value = {};
-  await renderGraph(++graphRequest);
-  await selectNode(node.id);
-}
-
-async function focusSelection() {
-  if (!graph || !selectedNode.value || rendering.value || expanding.value) return;
-  await graph.focusElement(selectedNode.value.id, false);
-  updateNodeActionPosition();
+  const request = graphRequest;
+  expanding.value = true;
+  try {
+    const result = await loadInstanceNeighborhood(node.id, summary.value.version, 0, {});
+    if (request !== graphRequest) return;
+    overview.value = false;
+    neighborClass.value = "";
+    relationType.value = "";
+    direction.value = "both";
+    appliedNeighborFilters.value = {};
+    nodes.value = result.nodes;
+    edges.value = result.edges;
+    neighborPages.value = { [node.id]: {
+      nextOffset: result.nextOffset, total: result.total, loaded: result.edges.length,
+    } };
+    await renderGraph(++graphRequest);
+    await selectNode(node.id);
+  } catch (reason) {
+    if (request === graphRequest) reportGraphError(reason);
+  } finally {
+    expanding.value = false;
+  }
 }
 
 async function focusNode(id: string | undefined) {
@@ -580,7 +629,7 @@ async function toggleRelationLabels() {
   if (!target) return;
   target.updateEdgeData(target.getEdgeData().map((edge) => ({
     id: edge.id,
-    style: { labelText: showRelationLabels.value ? relationLabels.value[String(edge.data?.type)] || String(edge.data?.type || "") : "" },
+    style: { labelText: edgeLabel(edge.data) },
   })));
   await target.draw();
 }
@@ -720,16 +769,15 @@ onBeforeUnmount(() => {
     class="instance-graph"
   >
     <div ref="graphRef" class="graph-canvas" />
+    <el-button v-if="summary && !overview" class="back-to-overview" :icon="ArrowLeft" :disabled="loading || rendering || expanding || layouting" @click="showOverview()">{{ ot('instanceGraphBackToOverview') }}</el-button>
     <div v-if="selectedNode && nodeActionPosition" class="node-actions"
       :style="{ left: `${nodeActionPosition.x}px`, top: `${nodeActionPosition.y}px` }"
       role="toolbar" :aria-label="selectedNode.name || selectedNode.id">
       <button :title="ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand')"
         :aria-label="ot(currentPage ? 'instanceGraphMore' : 'instanceGraphExpand')"
         :disabled="expanding || rendering || filtersDirty || versionChanged || currentPage?.nextOffset === null" @click="expandNeighbors"><GitFork :size="17" /></button>
-      <button :title="ot('instanceGraphCenter')" :aria-label="ot('instanceGraphCenter')"
-        :disabled="expanding || rendering" @click="focusSelection"><Crosshair :size="17" /></button>
       <button :title="ot('instanceGraphCollapse')" :aria-label="ot('instanceGraphCollapse')"
-        :disabled="expanding || rendering || nodes.length <= 1" @click="centerOnSelection"><CircleMinus :size="17" /></button>
+        :disabled="expanding || rendering || versionChanged" @click="showDirectNeighborhood"><Waypoints :size="17" /></button>
     </div>
     <div v-if="error" class="graph-empty" role="alert"><strong>{{ error }}</strong></div>
 
@@ -749,16 +797,32 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="graph-toolbar" role="toolbar" :aria-label="ot('instanceGraphTitle')">
-      <button :title="ot('zoomIn')" :aria-label="ot('zoomIn')" @click="zoomIn"><ZoomIn :size="17" /></button>
-      <button :title="ot('zoomOut')" :aria-label="ot('zoomOut')" @click="zoomOut"><ZoomOut :size="17" /></button>
-      <button :title="ot(showRelationLabels ? 'instanceGraphHideRelationLabels' : 'instanceGraphRelationLabels')" :aria-label="ot(showRelationLabels ? 'instanceGraphHideRelationLabels' : 'instanceGraphRelationLabels')" :aria-pressed="showRelationLabels" :disabled="rendering || expanding" @click="toggleRelationLabels"><Eye v-if="showRelationLabels" :size="17" /><EyeOff v-else :size="17" /></button>
-      <button :title="ot('fitCanvas')" :aria-label="ot('fitCanvas')" @click="fitGraphView"><Scan :size="17" /></button>
+      <button :title="ot('zoomIn')" :aria-label="ot('zoomIn')" @click="zoomIn"><Plus :size="18" /></button>
+      <button :title="ot('zoomOut')" :aria-label="ot('zoomOut')" @click="zoomOut"><Minus :size="18" /></button>
+      <button :title="ot('fitCanvas')" :aria-label="ot('fitCanvas')" @click="fitGraphView"><Maximize :size="18" /></button>
+      <span class="toolbar-separator" aria-hidden="true" />
+      <el-popover trigger="click" :width="260" placement="top-start" :teleported="false">
+        <template #reference>
+          <button :title="ot('instanceGraphDisplaySettings')" :aria-label="ot('instanceGraphDisplaySettings')"><Settings2 :size="18" /></button>
+        </template>
+        <div class="graph-display-settings">
+          <strong>{{ ot('instanceGraphDisplaySettings') }}</strong>
+          <label class="display-setting">
+            <span>{{ ot('instanceGraphRelationLabels') }}</span>
+            <el-switch :model-value="showRelationLabels" :aria-label="ot('instanceGraphRelationLabels')" :disabled="loading || rendering || expanding" size="small" @change="toggleRelationLabels" />
+          </label>
+          <label v-if="summary && overview" class="display-setting" :title="ot('instanceGraphAggregateHint')">
+            <span>{{ ot('instanceGraphAggregateRelations') }}</span>
+            <el-switch :model-value="aggregateRelations" :aria-label="ot('instanceGraphAggregateRelations')" :disabled="loading || rendering || expanding || layouting" size="small" @change="toggleAggregation" />
+          </label>
+        </div>
+      </el-popover>
       <button :title="ot('relayout')" :aria-label="ot('relayout')" :disabled="loading || rendering || layouting || expanding" @click="relayoutGraph">
-        <Network :size="17" />
+        <Network :size="18" />
       </button>
       <span class="toolbar-separator" aria-hidden="true" />
-      <button :title="ot('downloadPng')" :aria-label="ot('downloadPng')" @click="downloadGraph"><Download :size="17" /></button>
-      <button :title="t('common.refresh')" :aria-label="t('common.refresh')" :disabled="expanding" @click="refresh"><RefreshCw :size="17" /></button>
+      <button :title="ot('downloadPng')" :aria-label="ot('downloadPng')" @click="downloadGraph"><Download :size="18" /></button>
+      <button :title="t('common.refresh')" :aria-label="t('common.refresh')" :disabled="expanding" @click="refresh"><RefreshCw :size="18" /></button>
     </div>
 
     <div class="graph-hint">
@@ -766,6 +830,7 @@ onBeforeUnmount(() => {
       {{ ot("instanceGraphHint") }}
     </div>
 
+    <Teleport :to="props.summaryTarget || 'body'" :disabled="!props.summaryTarget">
     <div v-if="summary" class="graph-summary">
       <div class="summary-row">
         <strong class="summary-title">{{ overview ? ot('instanceGraphOverview') : selectedNode?.name }}</strong>
@@ -777,19 +842,21 @@ onBeforeUnmount(() => {
           <div class="summary-details">
             <strong>{{ ot('instanceGraphStatistics') }}</strong>
             <span>{{ ot('instanceGraphLiveDescription') }}</span>
+            <span v-if="overview && aggregateRelations">{{ ot('instanceGraphAggregateHint') }}</span>
             <span v-if="statisticsError">{{ statisticsError }}</span>
             <span v-if="overview">{{ ot('instanceGraphSample', { shown: nodes.length, total: summary.nodeCount == null ? '…' : summary.nodeCount, edges: edges.length }) }}</span>
             <span v-if="overview && summary.overviewEdgesTruncated" class="graph-warning">{{ ot('instanceGraphSampleEdgesLimited') }}</span>
           </div>
         </el-popover>
-        <el-button v-if="!overview" size="small" :disabled="rendering || expanding" @click="showOverview()">{{ ot('instanceGraphOverview') }}</el-button>
       </div>
       <div v-if="overview" class="sample-legend">
-        <button v-for="item in summary.classes" :key="item.class" :title="classLabels[item.class] || item.class" :class="{ 'is-selected': selectedClass === item.class }" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }}</button>
+        <button v-for="item in summary.classes" :key="item.class" :title="classLabels[item.class] || item.class" :class="{ 'is-selected': selectedClass === item.class }" @click="chooseClass(item.class)"><span :style="{ background: colorForClass(item.class) }" />{{ classLabels[item.class] || item.class }} ({{ item.instanceCount == null ? '…' : item.instanceCount.toLocaleString(context.locale) }})</button>
       </div>
+      <small v-if="overview && summary.overviewEdgesTruncated" class="graph-warning">{{ ot('instanceGraphSampleEdgesLimited') }}</small>
       <small v-if="summary.complete === false" role="alert" class="graph-warning">{{ ot('instanceGraphPartial', { failures: (summary.failures || []).join(', ') }) }}</small>
       <el-button v-if="versionChanged" size="small" :icon="RefreshCw" @click="refresh">{{ ot('instanceGraphVersionChanged') }}</el-button>
     </div>
+    </Teleport>
 
     <aside class="inspector-panel">
       <div class="node-search">
@@ -919,7 +986,7 @@ onBeforeUnmount(() => {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--inspector-width);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -936,10 +1003,11 @@ onBeforeUnmount(() => {
 .graph-canvas {
   position: relative;
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1;
   min-width: 0;
   overflow: hidden;
 }
+.back-to-overview { position: absolute; top: 16px; left: 16px; z-index: 3; margin: 0; max-width: calc(100% - var(--inspector-width) - 32px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
 .neighbor-filters {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -978,28 +1046,38 @@ onBeforeUnmount(() => {
   left: 18px;
   display: flex;
   align-items: center;
-  padding: 4px;
+  gap: 3px;
+  max-width: calc(100% - var(--inspector-width) - 36px);
+  flex-wrap: wrap;
+  z-index: 2;
+  padding: 6px;
   border: 1px solid var(--el-border-color);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: var(--el-bg-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
-.toolbar-separator { width: 1px; height: 18px; margin: 0 4px; background: var(--el-border-color-light); }
+.toolbar-separator { flex: 0 0 1px; height: 18px; margin: 0 3px; background: var(--el-border-color-light); }
 .graph-toolbar button[aria-expanded="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
 .graph-toolbar button[aria-pressed="true"] { color: var(--el-color-primary); background: var(--el-color-primary-light-9); }
 .graph-toolbar button {
   display: grid;
   width: 34px;
-  height: 32px;
+  height: 34px;
+  flex: 0 0 34px;
+  padding: 0;
   place-items: center;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   color: var(--el-text-color-secondary);
   background: transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
-.graph-toolbar button:hover {
+.graph-toolbar button:hover:not(:disabled) {
   color: var(--el-color-primary);
   background: var(--el-fill-color-light);
 }
+.graph-toolbar button[aria-pressed="true"]:hover:not(:disabled) { background: var(--el-color-primary-light-8); }
 .graph-hint {
   position: absolute;
   right: calc(var(--inspector-width) + 18px);
@@ -1050,7 +1128,7 @@ onBeforeUnmount(() => {
   background: var(--el-bg-color);
   overflow: auto;
   grid-column: 2;
-  grid-row: 1 / 3;
+  grid-row: 1;
 }
 .panel-heading {
   display: flex;
@@ -1061,6 +1139,11 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--el-border-color-light);
   color: var(--el-text-color-secondary);
 }
+.graph-display-settings { display: grid; gap: var(--spacing-sm); }
+.graph-display-settings > strong { color: var(--el-text-color-primary); font-size: var(--text-sm); }
+.display-setting { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); min-height: 28px; color: var(--el-text-color-secondary); font-size: var(--text-xs); }
+.display-setting > span { min-width: 0; }
+.display-setting .el-switch { flex-shrink: 0; }
 .node-search {
   display: grid;
   min-width: 0;
@@ -1123,27 +1206,26 @@ onBeforeUnmount(() => {
 }
 .graph-summary {
   position: relative;
-  grid-column: 1;
-  grid-row: 1;
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
-  display: grid;
+  padding: 0;
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   min-width: 0;
-  gap: 4px;
+  gap: var(--spacing-sm);
   color: var(--el-text-color-secondary);
   font-size: var(--text-xs);
 }
 .graph-summary .el-button { pointer-events: auto; }
-.summary-row { display: flex; align-items: center; min-width: 0; gap: var(--spacing-sm); min-height: 24px; }
+.summary-row { display: flex; flex-wrap: wrap; align-items: center; min-width: 0; gap: var(--spacing-sm); min-height: 24px; }
 .summary-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--el-text-color-primary); }
-.summary-counts { flex-shrink: 0; font-size: var(--text-xs); }
+.summary-counts { font-size: var(--text-xs); line-height: var(--leading-relaxed); overflow-wrap: anywhere; }
 .summary-row > .el-button { margin-left: auto; flex-shrink: 0; }
 .summary-info { display: grid; place-items: center; flex-shrink: 0; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--el-text-color-secondary); }
 .summary-info:hover { color: var(--el-color-primary); background: var(--el-fill-color-light); }
 .summary-details { display: grid; gap: var(--spacing-sm); font-size: var(--text-xs); line-height: var(--leading-relaxed); }
 .summary-details strong { font-size: var(--text-sm); }
-.sample-legend { display: flex; flex-wrap: wrap; align-content: start; min-width: 0; max-height: 112px; overflow-y: auto; gap: 4px 12px; }
+.sample-legend { display: flex; flex: 1 1 240px; flex-wrap: wrap; justify-content: flex-end; align-content: start; margin-left: auto; min-width: 0; max-height: 64px; overflow-y: auto; gap: 4px 12px; }
 .sample-legend button { pointer-events: auto; display: inline-flex; max-width: 100%; align-items: center; gap: 5px; padding: 2px 0; border: 0; background: transparent; color: var(--el-text-color-secondary); font-size: var(--text-xs); line-height: 18px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .sample-legend button:hover, .sample-legend button.is-selected { color: var(--el-color-primary); }
 .sample-legend button > span { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; }
@@ -1329,7 +1411,8 @@ code {
   background: var(--el-color-primary-light-9);
 }
 @container ontology-manager (max-width: 768px) {
-  .instance-graph { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 320px auto; overflow: auto; }
+  .back-to-overview { max-width: calc(100% - 32px); }
+  .instance-graph { grid-template-columns: minmax(0, 1fr); grid-template-rows: 320px auto; overflow: auto; }
   .graph-canvas,
   .graph-empty {
     right: 0;
@@ -1342,7 +1425,7 @@ code {
     flex: 0 0 auto;
     margin-top: 0;
     grid-column: 1;
-    grid-row: 3;
+    grid-row: 2;
     border-left: 0;
     border-top: 1px solid var(--el-border-color);
     overflow: visible;
@@ -1350,6 +1433,6 @@ code {
   .graph-hint {
     display: none;
   }
-  .graph-toolbar { position: relative; grid-column: 1; grid-row: 2; align-self: end; justify-self: start; z-index: 2; top: auto; bottom: 10px; left: 10px; }
+  .graph-toolbar { position: relative; grid-column: 1; grid-row: 1; align-self: end; justify-self: start; z-index: 2; top: auto; bottom: 10px; left: 10px; max-width: calc(100% - 20px); }
 }
 </style>

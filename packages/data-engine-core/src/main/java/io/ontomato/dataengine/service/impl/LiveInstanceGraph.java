@@ -81,6 +81,11 @@ public class LiveInstanceGraph {
                 statisticsCache.entrySet().removeIf(entry -> entry.getValue().expiresAt <= System.currentTimeMillis());
                 statisticsCache.put(cacheKey, new CachedStatistics(System.currentTimeMillis() + 60_000, data));
             }
+            if ("summary".equals(operation)) {
+                statisticsCache.entrySet().removeIf(entry -> entry.getValue().expiresAt <= System.currentTimeMillis());
+                statisticsCache.put(cacheKey, new CachedStatistics(System.currentTimeMillis() + 60_000,
+                        JSONObject.of("nodeCount", data.get("nodeCount"), "classes", data.get("classes"))));
+            }
             return JSONObject.of("success", true, "status", "READY", "data", data);
         } catch (Exception e) {
             return JSONObject.of("success", false, "message", e.getMessage());
@@ -142,19 +147,29 @@ public class LiveInstanceGraph {
     // ----------------------------------------------------------------------------------
 
     private JSONObject overview(DataAdapter adapter, Map<String, ObjectType> types, List<Relation> relations, String version) throws Exception {
+        JSONObject statistics = statistics(adapter, types);
+        Map<String, Long> counts = new LinkedHashMap<>();
+        for (Object raw : statistics.getJSONArray("classes")) {
+            JSONObject item = (JSONObject) raw;
+            counts.put(item.getString("class"), item.getLongValue("instanceCount"));
+        }
+        Map<String, Integer> quotas = InstanceGraphSampling.quotas(counts);
         Map<String, List<String>> ids = new LinkedHashMap<>();
         JSONArray nodes = new JSONArray(), edges = new JSONArray(), classes = new JSONArray();
         for (ObjectType type : types.values()) {
             List<String> keys = new ArrayList<>();
-            JSONObject dsl = dsl(objects(object(0, "n", type.name, null)), null,
+            int quota = quotas.get(type.name);
+            if (quota > 0) {
+                JSONObject dsl = dsl(objects(object(0, "n", type.name, null)), null,
                     fields(field("n", type.pk, "pk"), field("n", type.label, "name")),
-                    sort(sortField("pk")), limit(50, 0));
-            for (JSONObject row : runDsl(adapter, dsl)) {
-                nodes.add(node(type, row));
-                keys.add(row.getString("pk"));
+                    sort(sortField("pk")), limit(quota, 0));
+                for (JSONObject row : runDsl(adapter, dsl)) {
+                    nodes.add(node(type, row));
+                    keys.add(row.getString("pk"));
+                }
             }
             ids.put(type.name, keys);
-            classes.add(JSONObject.of("class", type.name, "sampleCount", keys.size(), "instanceCount", null));
+            classes.add(JSONObject.of("class", type.name, "sampleCount", keys.size(), "instanceCount", counts.get(type.name)));
         }
         boolean truncated = false;
         for (Relation relation : relations) {
@@ -174,7 +189,7 @@ public class LiveInstanceGraph {
             }
         }
         return JSONObject.of("classes", classes, "overviewNodes", nodes, "overviewEdges", edges,
-                "overviewEdgesTruncated", truncated, "nodeCount", null, "edgeCount", null,
+                "overviewEdgesTruncated", truncated, "nodeCount", statistics.get("nodeCount"), "edgeCount", null,
                 "version", version, "live", true,
                 "relationTypes", new JSONArray(relations.stream().map(Relation::type).toList()));
     }

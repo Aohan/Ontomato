@@ -59,8 +59,8 @@ class InstanceGraphIndexTest {
         assertEquals(50000, index.summary().getIntValue("nodeCount"));
         assertEquals(50000, index.summary().getIntValue("edgeCount"));
         assertEquals(1, index.summary().getJSONArray("classes").size());
-        assertEquals(50, index.summary().getJSONArray("overviewNodes").size());
-        assertTrue(index.summary().getJSONArray("overviewEdges").size() <= 50);
+        assertEquals(500, index.summary().getJSONArray("overviewNodes").size());
+        assertTrue(index.summary().getJSONArray("overviewEdges").size() <= 500);
         JSONObject page = index.neighborhood(JSONObject.parseObject("{\"id\":\"C:0\",\"limit\":100}"));
         assertEquals(100, page.getJSONArray("edges").size());
         assertTrue(page.getJSONArray("nodes").size() <= 101);
