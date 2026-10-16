@@ -816,8 +816,8 @@ export default {
     "monthly": "Monthly"
   },
   "service": {
-    "defaultAgentName": "General Agent",
-    "defaultAgentDescription": "A general-purpose agent suitable for various business scenarios, capable of automatically decomposing question dimensions and generating professional analysis reports"
+    "defaultAgentName": "Data Analysis Agent",
+    "defaultAgentDescription": "An agent for business data analysis that automatically decomposes questions into analysis dimensions and generates professional reports"
   },
   "app": {
     "fullScenarioAnalysis": "Full-scenario Data Analysis",
