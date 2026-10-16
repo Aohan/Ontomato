@@ -73,5 +73,7 @@ CI repository. Both `main` and `develop` live there: `develop` is the daily
 development line, `main` is the release line. A release merges the reviewed and
 tested `develop` into `main`, preserving ancestry, and tags the resulting
 `main` commit as `v<version>`. Normal work starts from `develop` as `feature/<topic>` or
-`fix/<topic>` and merges back into `develop` through a pull request against
-`develop`.
+`fix/<topic>`. Maintainers validate their changes locally, merge them into
+`develop`, check the combined result and push `develop` directly. A pull request
+is not required for the team's normal workflow. External contributions follow
+[CONTRIBUTING.md](CONTRIBUTING.md).
