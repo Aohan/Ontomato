@@ -8,7 +8,7 @@ import type {
 
 import { ref, computed, watch, onBeforeUnmount } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { ArrowLeft, UserRound, Workflow, FileText, Blocks, Database, BarChart3, Cog, Flame, Settings } from "lucide-vue-next";
+import { ArrowLeft, UserRound, Workflow, FileText, Blocks, Database, BarChart3, Cog, Flame, Settings, ZoomIn, ZoomOut, Maximize } from "lucide-vue-next";
 import CodeMirrorEditor from "../../../components/CodeMirrorEditor.vue";
 import { renderAgentMarkdown } from "../../../utils/agent-markdown";
 import { analysisAgentApi, analysisReportApi } from "../api";
@@ -159,6 +159,65 @@ interface ObjectClassOption {
   showName?: string;
   classDesc?: string;
 }
+interface OntologyRelationOption { fromclass?: string; toclass?: string; }
+const ontologyRelations = ref<OntologyRelationOption[]>([]);
+const scopeGraphNodes = computed(() => {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(objectClasses.value.length)));
+  return objectClasses.value.map((item, index) => ({
+    ...item, x: 96 + (index % columns) * 210, y: 54 + Math.floor(index / columns) * 86,
+  }));
+});
+const scopeGraphEdges = computed(() => {
+  const names = new Set(objectClasses.value.map((item) => item.className));
+  const seen = new Set<string>();
+  return ontologyRelations.value.flatMap((relation) => {
+    const from = String(relation.fromclass || "").trim();
+    const to = String(relation.toclass || "").trim();
+    if (!names.has(from) || !names.has(to)) return [];
+    const key = [from, to].sort().join("|");
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{ from, to }];
+  });
+});
+const scopeReachableClasses = computed(() => {
+  if (form.value.graphScopeMode !== "subgraph") return new Set(objectClasses.value.map(item => item.className));
+  const adjacency = new Map<string, Set<string>>();
+  for (const edge of scopeGraphEdges.value) {
+    for (const [from, to] of [[edge.from, edge.to], [edge.to, edge.from]]) {
+      const values = adjacency.get(from) || new Set<string>();
+      values.add(to); adjacency.set(from, values);
+    }
+  }
+  const result = new Set(form.value.graphScopeRootClassNames);
+  let frontier = new Set(result);
+  for (let depth = 0; depth < (form.value.graphScopeMaxDepth || 0); depth++) {
+    const next = new Set<string>();
+    frontier.forEach((name) => adjacency.get(name)?.forEach((neighbor) => {
+      if (!result.has(neighbor)) { result.add(neighbor); next.add(neighbor); }
+    }));
+    frontier = next;
+  }
+  return result;
+});
+const scopeGraphWidth = computed(() => Math.max(300, ...scopeGraphNodes.value.map(node => node.x + 105)));
+const scopeGraphHeight = computed(() => Math.max(160, ...scopeGraphNodes.value.map(node => node.y + 60)));
+const scopeGraphZoom = ref(1);
+const scopeGraphViewBox = computed(() => {
+  const width = scopeGraphWidth.value;
+  const height = scopeGraphHeight.value;
+  const viewWidth = width / scopeGraphZoom.value;
+  const viewHeight = height / scopeGraphZoom.value;
+  return `${(width - viewWidth) / 2} ${(height - viewHeight) / 2} ${viewWidth} ${viewHeight}`;
+});
+function zoomScopeGraph(delta: number) { scopeGraphZoom.value = Math.min(2.5, Math.max(0.75, Number((scopeGraphZoom.value + delta).toFixed(2)))); }
+function resetScopeGraphZoom() { scopeGraphZoom.value = 1; }
+function toggleScopeRoot(className: string) {
+  if (form.value.graphScopeMode !== "subgraph") return;
+  const roots = new Set(form.value.graphScopeRootClassNames);
+  if (roots.has(className)) roots.delete(className); else roots.add(className);
+  form.value.graphScopeRootClassNames = [...roots];
+}
 
 function getClassLabel(cls: ObjectClassOption): string {
   const displayName = cls.showName || cls.classDesc || cls.className;
@@ -169,6 +228,10 @@ async function loadObjectClasses() {
   classesLoading.value = true;
   try {
     const json = await queryViewApi.getMetas();
+    const relationRule = json.data?.relationship_rule || {};
+    ontologyRelations.value = Object.values(relationRule).map((relation: any) => ({
+      fromclass: relation.fromclass, toclass: relation.toclass,
+    }));
     objectClasses.value = Array.isArray(json.data?.classDef)
       ? json.data.classDef
           .map((cls: any) => ({
@@ -359,6 +422,7 @@ watch(
   (val) => {
     if (val) {
       activeSection.value = props.editingAgent ? "prompts" : "basic";
+      resetScopeGraphZoom();
       promptPreview.value = false;
       promptTab.value = "analysisDimensionPrompt";
       hotReports.value = [];
@@ -506,8 +570,34 @@ watch(isDark, () => {
               </el-radio-group>
               <p class="form-tip">{{ t("admin.graphScopeHint") }}</p>
             </el-form-item>
-             <div v-if="form.graphScopeMode === 'subgraph'" class="subgraph-fields">
-              <el-form-item :label="t('admin.graphScopeRoots')" required>
+              <div class="subgraph-fields">
+               <div class="scope-graph-card">
+                 <div class="scope-graph-toolbar">
+                    <div><strong>{{ t(form.graphScopeMode === 'subgraph' ? 'admin.graphScopeVisualSelector' : 'admin.graphScopePanorama') }}</strong><span>{{ t('admin.graphScopeVisualSummary', { roots: form.graphScopeMode === 'subgraph' ? form.graphScopeRootClassNames.length : 0, classes: scopeReachableClasses.size }) }}</span></div>
+                   <div class="scope-graph-actions">
+                     <button type="button" :title="t('admin.graphScopeZoomIn')" :aria-label="t('admin.graphScopeZoomIn')" @click="zoomScopeGraph(0.25)"><ZoomIn :size="15" /></button>
+                     <button type="button" :title="t('admin.graphScopeZoomOut')" :aria-label="t('admin.graphScopeZoomOut')" @click="zoomScopeGraph(-0.25)"><ZoomOut :size="15" /></button>
+                     <button type="button" :title="t('admin.graphScopeResetView')" :aria-label="t('admin.graphScopeResetView')" @click="resetScopeGraphZoom"><Maximize :size="15" /></button>
+                   </div>
+                 </div>
+                 <div v-if="scopeGraphNodes.length" class="scope-graph-scroll">
+                   <svg :viewBox="scopeGraphViewBox" preserveAspectRatio="xMidYMid meet" role="group" :aria-label="t('admin.graphScopeVisualSelector')">
+                     <line v-for="edge in scopeGraphEdges" :key="`${edge.from}-${edge.to}`" class="scope-graph-edge" :class="{ active: scopeReachableClasses.has(edge.from) && scopeReachableClasses.has(edge.to) }" :x1="scopeGraphNodes.find(node => node.className === edge.from)?.x" :y1="scopeGraphNodes.find(node => node.className === edge.from)?.y" :x2="scopeGraphNodes.find(node => node.className === edge.to)?.x" :y2="scopeGraphNodes.find(node => node.className === edge.to)?.y" />
+                      <g v-for="node in scopeGraphNodes" :key="node.className" class="scope-graph-node" :class="{ root: form.graphScopeMode === 'subgraph' && form.graphScopeRootClassNames.includes(node.className), reachable: scopeReachableClasses.has(node.className), readonly: form.graphScopeMode === 'panorama' }" :role="form.graphScopeMode === 'subgraph' ? 'button' : 'img'" :aria-label="getClassLabel(node)" :aria-pressed="form.graphScopeMode === 'subgraph' ? form.graphScopeRootClassNames.includes(node.className) : undefined" :tabindex="form.graphScopeMode === 'subgraph' ? 0 : undefined" @click="toggleScopeRoot(node.className)" @keydown.enter="toggleScopeRoot(node.className)" @keydown.space.prevent="toggleScopeRoot(node.className)">
+                        <title>{{ getClassLabel(node) }}</title>
+                        <circle :cx="node.x" :cy="node.y" r="25" /><text :x="node.x" :y="node.y + 4" text-anchor="middle">{{ (node.showName || node.className).length > 16 ? `${(node.showName || node.className).slice(0, 15)}…` : node.showName || node.className }}</text>
+                     </g>
+                   </svg>
+                 </div>
+                  <el-empty v-else :description="t('admin.graphScopeNoClasses')" />
+                  <div class="scope-graph-legend">
+                    <span v-if="form.graphScopeMode === 'subgraph'"><i class="root" />{{ t('admin.graphScopeRoots') }}</span>
+                    <span><i class="reachable" />{{ t('admin.graphScopeIncluded') }}</span>
+                    <span v-if="form.graphScopeMode === 'subgraph'"><i />{{ t('admin.graphScopeExcluded') }}</span>
+                  </div>
+                </div>
+                <div v-if="form.graphScopeMode === 'subgraph'" class="scope-parameters">
+               <el-form-item :label="t('admin.graphScopeRoots')" required>
                 <el-select
                   popper-class="agent-editor-select-dropdown"
                   fit-input-width
@@ -542,8 +632,9 @@ watch(isDark, () => {
                   :aria-label="t('admin.graphScopeMaxDepth')"
                 />
                 <p class="form-tip">{{ t("admin.graphScopeDepthHint") }}</p>
-              </el-form-item>
-             </div>
+               </el-form-item>
+                </div>
+              </div>
              </section>
             </div>
         </el-form>
@@ -747,6 +838,29 @@ watch(isDark, () => {
 .data-configuration { display: grid; gap: 24px; }
 .configuration-card :deep(.el-form-item:last-child) { margin-bottom: 0; }
 .subgraph-fields { border-top: 1px solid var(--el-border-color-light); padding-top: 20px; margin-top: 16px; }
+.scope-graph-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--el-border-color-light); border-radius: 10px; background: var(--el-fill-color-extra-light); margin-bottom: 20px; }
+.scope-graph-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; color: var(--el-text-color-secondary); font-size: 12px; }
+.scope-graph-toolbar > div:first-child { display: grid; gap: 6px; }
+.scope-graph-actions { display: flex; align-items: center; gap: 4px; }
+.scope-graph-legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--el-text-color-secondary); font-size: 12px; }
+.scope-graph-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.scope-graph-legend i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--el-border-color); background: var(--el-bg-color); }
+.scope-graph-legend i.root { background: var(--el-color-primary); border-color: var(--el-color-primary); }
+.scope-graph-legend i.reachable { background: var(--el-color-primary-light-9); border-color: var(--el-color-primary-light-5); }
+.scope-graph-node.readonly { cursor: default; }
+.scope-graph-actions button { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--el-border-color-light); border-radius: 5px; background: var(--el-bg-color); color: var(--el-text-color-regular); cursor: pointer; }
+.scope-graph-toolbar strong { color: var(--el-text-color-primary); font-size: 13px; }
+.scope-graph-scroll { width: 100%; overflow: hidden; padding: 8px 0; }
+.scope-graph-scroll svg { display: block; width: 100%; height: 320px; max-width: 100%; margin: 0 auto; }
+.scope-graph-edge { stroke: var(--el-border-color); stroke-width: 2; opacity: .7; transition: stroke .15s, opacity .15s; }
+.scope-graph-edge.active { stroke: var(--el-color-primary-light-5); opacity: 1; }
+.scope-graph-node { cursor: pointer; outline: none; }
+.scope-graph-node circle { fill: var(--el-bg-color); stroke: var(--el-border-color); stroke-width: 2; transition: fill .15s, stroke .15s, stroke-width .15s; }
+.scope-graph-node text { fill: var(--el-text-color-regular); font-size: 11px; pointer-events: none; }
+.scope-graph-node.reachable circle { fill: var(--el-color-primary-light-9); stroke: var(--el-color-primary-light-5); }
+.scope-graph-node.root circle { fill: var(--el-color-primary); stroke: var(--el-color-primary); stroke-width: 3; }
+.scope-graph-node.root text { fill: #fff; font-weight: 600; }
+.scope-graph-node:focus-visible circle { stroke: var(--el-color-primary); stroke-width: 4; }
 .form-right > .skills-group { display: flex; flex-direction: column; gap: 16px; margin-top: 0; }
 .form-right > .skills-group > .el-form-item { margin-bottom: 0; }
 .published-reports-section { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--el-border-color-light); }

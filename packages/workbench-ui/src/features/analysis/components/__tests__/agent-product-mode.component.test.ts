@@ -80,7 +80,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.apiGet.mockResolvedValue({ data: [] });
   mocks.listMcpServiceNames.mockResolvedValue(["orders"]);
-  mocks.apiPost.mockResolvedValue({ data: { classDef: [] } });
+    mocks.apiPost.mockResolvedValue({ data: { classDef: [], relationship_rule: {} } });
   mocks.createAgent.mockResolvedValue({ id: "new" });
   mocks.updateAgent.mockResolvedValue(dimensionAgent);
   mocks.listHotReports.mockResolvedValue([]);
@@ -290,6 +290,24 @@ describe("agent product and execution modes", () => {
       graphScope: { mode: "subgraph", rootClassNames: ["Order"], maxDepth: 0 },
       classNames: [],
     }));
+    wrapper.unmount();
+  });
+
+  it("selects subgraph roots from the ontology graph and previews the reachable class range", async () => {
+    mocks.apiPost.mockResolvedValue({ data: {
+      classDef: [{ className: "Order", showName: "Orders" }, { className: "Invoice", showName: "Invoices" }, { className: "Customer", showName: "Customers" }],
+      relationship_rule: { orderInvoice: { fromclass: "Order", toclass: "Invoice" }, invoiceCustomer: { fromclass: "Invoice", toclass: "Customer" } },
+    } });
+    const wrapper = await dialog();
+    await choose(wrapper, "Subgraph");
+    expect(wrapper.findAll(".scope-graph-node")).toHaveLength(3);
+    await wrapper.find(".scope-graph-node[aria-label='Orders (Order)']").trigger("click");
+    expect(wrapper.find(".scope-graph-node[aria-label='Orders (Order)']").attributes("aria-pressed")).toBe("true");
+    expect(wrapper.text()).toContain("1 roots · 2 classes in range");
+    const roots = wrapper.findAllComponents(ElSelect).find((select) => select.props("ariaLabel") === "Root Classes")!;
+    expect(roots.props("modelValue")).toEqual(["Order"]);
+    await wrapper.findComponent(ElInputNumber).vm.$emit("update:modelValue", 2);
+    expect(wrapper.text()).toContain("1 roots · 3 classes in range");
     wrapper.unmount();
   });
 
