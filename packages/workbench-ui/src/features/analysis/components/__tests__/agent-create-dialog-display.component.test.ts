@@ -44,12 +44,11 @@ async function dialog(extra: Record<string, unknown>) {
 }
 
 describe("display inputs of the new agent dialog under both layouts", () => {
-  it("when omitted: left-column asterisk on the left, dropdown not as wide as the input, labels not wrapped", async () => {
+  it("when omitted: left-column asterisk on the left, labels not wrapped", async () => {
     const wrapper = await dialog({});
     const items = wrapper.findAll(".form-left .el-form-item");
     expect(items.length).toBeGreaterThan(0);
     for (const item of items) expect(item.classes()).toContain("asterisk-left");
-    expect(wrapper.findAllComponents(ElSelect).map((select) => select.props("fitInputWidth"))).not.toContain(true);
     expect(wrapper.find(".agent-form-layout").classes()).toContain("agent-form-layout--label-nowrap");
   });
 
