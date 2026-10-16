@@ -105,14 +105,21 @@ final class InstanceGraphIndex {
         summary.put("version", version);
         summary.put("generatedAt", generatedAt);
         Map<String, Integer> sampledCounts = new HashMap<>();
+        Map<String, Long> instanceCounts = new LinkedHashMap<>();
+        counts.forEach((name, count) -> instanceCounts.put(name, count.longValue()));
+        Map<String, Integer> quotas = InstanceGraphSampling.quotas(instanceCounts);
         Map<String, JSONObject> sampled = new LinkedHashMap<>();
         nodes.forEach((id, node) -> {
             String className = node.getString("class");
-            if (sampledCounts.getOrDefault(className, 0) < 50) {
+            if (sampledCounts.getOrDefault(className, 0) < quotas.get(className)) {
                 sampled.put(id, node);
                 sampledCounts.merge(className, 1, Integer::sum);
             }
         });
+        for (Object raw : classes) {
+            JSONObject item = (JSONObject) raw;
+            item.put("sampleCount", sampledCounts.getOrDefault(item.getString("class"), 0));
+        }
         JSONArray sampledEdges = new JSONArray();
         java.util.Set<String> seenEdges = new java.util.HashSet<>();
         boolean edgesTruncated = false;

@@ -29,6 +29,7 @@ const { ot } = useOntologyText();
 const { message } = useManagerFeedback();
 const { getMetas, loadObjectData } = useManagerClient();
 const props = defineProps<{ initialClass?: string }>();
+const graphSummaryTarget = ref<HTMLElement | null>(null);
 
 interface ClassDef {
   className: string;
@@ -348,6 +349,7 @@ watch(
   <div class="data-browser">
     <div class="mode-bar">
       <el-segmented v-model="viewMode" :options="viewModeOptions" />
+      <div v-show="viewMode === 'graph'" ref="graphSummaryTarget" class="graph-summary-slot" />
     </div>
     <template v-if="viewMode === 'table'">
       <div class="toolbar">
@@ -515,7 +517,7 @@ watch(
       </template>
       </el-drawer>
     </template>
-    <InstanceGraph v-else />
+    <InstanceGraph v-else :summary-target="graphSummaryTarget" />
   </div>
 </template>
 
@@ -533,7 +535,12 @@ watch(
   align-items: center;
   flex-shrink: 0;
   margin-bottom: var(--spacing-lg);
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
 }
+
+.mode-bar :deep(.el-segmented) { flex-shrink: 0; }
+.graph-summary-slot { flex: 1; min-width: min(360px, 100%); }
 
 .mode-bar :deep(.el-segmented) {
   --el-segmented-item-selected-bg-color: var(--el-color-primary);

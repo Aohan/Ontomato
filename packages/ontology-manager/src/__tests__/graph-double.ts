@@ -59,6 +59,11 @@ export class GraphDouble {
             return id ? nodes.find((node) => node.id === id) : nodes;
           };
           if (key === "getEdgeData") return () => graphRecord.dataBatches.flatMap((batch) => batch.edges || []);
+          if (key === "removeEdgeData") return (ids: string[]) => {
+            for (const batch of graphRecord.dataBatches) {
+              if (batch.edges) batch.edges = batch.edges.filter((edge: any) => !ids.includes(edge.id));
+            }
+          };
           if (key === "zoomTo") {
             return (...args: unknown[]) => {
               graphRecord.zoomTo.push(args);
