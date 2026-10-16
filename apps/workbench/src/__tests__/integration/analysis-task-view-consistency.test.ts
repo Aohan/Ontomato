@@ -6,7 +6,7 @@ import {
   plan,
   presentation,
 } from "@ontomato/contracts/__tests__/presentation-fixtures";
-import type { AnalysisTaskDetail } from "@ontomato/contracts/analysis-task";
+import type { AnalysisTask } from "@ontomato/contracts/analysis-task";
 import type { AnalysisActivityStatus } from "@ontomato/contracts/analysis-presentation";
 import type { ResponseSnapshot } from "@ontomato/workbench-ui/types/chat";
 import { buildAnalysisTaskTerminalEvent } from "@ontomato/workbench-server/services/analysis-agent/task/events";
@@ -126,7 +126,7 @@ it.each(["dimension", "loop"] as const)(
   }
 );
 
-const task: AnalysisTaskDetail = {
+const task: AnalysisTask = {
   id: "t",
   agentId: "a",
   userId: "u",
