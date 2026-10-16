@@ -70,6 +70,13 @@ const currentMeta = computed(() => {
     create: ot(item.create),
   };
 });
+function operationLabel(operation?: unknown) {
+  return operation === "OPERATION_WRITE"
+    ? ot("assetOperationWrite")
+    : operation === "OPERATION_READ"
+      ? ot("assetOperationRead")
+      : "-";
+}
 const filteredAssets = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   if (!keyword) return assets.value;
@@ -139,18 +146,19 @@ onMounted(() => void loadCatalog());
     </div>
 
     <div class="resource-table">
-      <div class="resource-table-head">
+      <div :class="['resource-table-head', { 'function-grid': kind === 'functions' }]">
         <span>{{ currentMeta.title }}</span>
-        <span>{{ ot("linkedFunction") }}</span>
-        <span>{{ ot("source") }}</span>
-        <span>{{ ot("status") }}</span>
-        <span>{{ ot("lastUpdated") }}</span>
+        <span v-if="kind === 'functions'">{{ ot("assetOperationType") }}</span>
+        <span v-else>{{ ot("linkedFunction") }}</span>
+        <span v-if="kind !== 'functions'">{{ ot("source") }}</span>
+        <span v-if="kind !== 'functions'">{{ ot("status") }}</span>
+        <span v-if="kind !== 'functions'">{{ ot("lastUpdated") }}</span>
         <span></span>
       </div>
       <button
         v-for="asset in filteredAssets"
         :key="asset.id || asset.name"
-        class="resource-table-row"
+        :class="['resource-table-row', { 'function-grid': kind === 'functions' }]"
         @click="emit('select', asset)"
       >
         <span class="resource-name">
@@ -159,18 +167,19 @@ onMounted(() => void loadCatalog());
             <small>{{ asset.description || ot("notFilledDescription") }}</small>
           </span>
         </span>
-        <span>{{ asset.function?.name || "-" }}</span>
-        <span>
+        <span v-if="kind === 'functions'">{{ operationLabel(asset.operation) }}</span>
+        <span v-else>{{ asset.function?.name || "-" }}</span>
+        <span v-if="kind !== 'functions'">
           {{
             asset.origin === "SYSTEM" ? ot("system") : asset.origin === "USER" ? ot("user") : "-"
           }}
         </span>
-        <span>
+        <span v-if="kind !== 'functions'">
           <span :class="['status-pill', statusClass(asset.status)]">
             {{ statusLabel(asset.status) }}
           </span>
         </span>
-        <span>{{ formatTime(asset.modifyTimestamp) }}</span>
+        <span v-if="kind !== 'functions'">{{ formatTime(asset.modifyTimestamp) }}</span>
         <ChevronRight :size="16" class="row-chevron" />
       </button>
       <el-empty
@@ -243,6 +252,10 @@ p {
   align-items: center;
   column-gap: var(--spacing-md);
   text-align: left;
+}
+.resource-table-head.function-grid,
+.resource-table-row.function-grid {
+  grid-template-columns: minmax(250px, 1.7fr) minmax(140px, 1fr) 20px;
 }
 .resource-table-head {
   min-height: 40px;
@@ -330,12 +343,28 @@ p {
   .resource-table-row {
     grid-template-columns: minmax(180px, 1fr) 100px 20px;
   }
+  .resource-table-head.function-grid,
+  .resource-table-row.function-grid {
+    grid-template-columns: minmax(150px, 1fr) minmax(115px, 0.8fr) 20px;
+  }
   .resource-table-head span:nth-child(2),
   .resource-table-head span:nth-child(3),
   .resource-table-head span:nth-child(5),
   .resource-table-row > span:nth-child(2),
   .resource-table-row > span:nth-child(3),
   .resource-table-row > span:nth-child(5) {
+    display: none;
+  }
+  .resource-table-head.function-grid span:nth-child(2),
+  .resource-table-row.function-grid > span:nth-child(2) {
+    display: block;
+  }
+  .resource-table-head.function-grid span:nth-child(3),
+  .resource-table-head.function-grid span:nth-child(4),
+  .resource-table-head.function-grid span:nth-child(5),
+  .resource-table-row.function-grid > span:nth-child(3),
+  .resource-table-row.function-grid > span:nth-child(4),
+  .resource-table-row.function-grid > span:nth-child(5) {
     display: none;
   }
 }

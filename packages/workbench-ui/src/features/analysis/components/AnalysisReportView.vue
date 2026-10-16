@@ -684,6 +684,7 @@ onUnmounted(() => {
 .report-feedback-btn.active {
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary-light-7);
 }
 
 .report-meta span::after {

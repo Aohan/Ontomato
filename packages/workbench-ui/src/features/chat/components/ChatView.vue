@@ -467,10 +467,15 @@ watch(
 }
 
 .action-btn:hover,
-.action-btn.active,
 .action-btn.copied {
   background: var(--el-fill-color-light);
   color: var(--el-text-color-primary);
+}
+
+.action-btn.active {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary-light-7);
 }
 
 @keyframes streaming-glow {
