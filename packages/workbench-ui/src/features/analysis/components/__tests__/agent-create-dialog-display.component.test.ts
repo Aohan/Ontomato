@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
-import ElementPlus, { ElSelect } from "element-plus";
+import ElementPlus from "element-plus";
 import AgentCreateDialog from "../AgentCreateDialog.vue";
 import en from "../../../../locales/en";
 
@@ -52,11 +52,10 @@ describe("display inputs of the new agent dialog under both layouts", () => {
     expect(wrapper.find(".agent-form-layout").classes()).toContain("agent-form-layout--label-nowrap");
   });
 
-  it("open-source input: left-column asterisk on the right, MCP dropdown as wide as the input, labels wrapped", async () => {
-    const wrapper = await dialog({ requireAsteriskPosition: "right", fitInputWidth: true, labelWrap: true });
+  it("open-source input: left-column asterisk on the right, labels wrapped", async () => {
+    const wrapper = await dialog({ requireAsteriskPosition: "right", labelWrap: true });
     const items = wrapper.findAll(".form-left .el-form-item");
     for (const item of items) expect(item.classes()).toContain("asterisk-right");
-    expect(wrapper.findAllComponents(ElSelect).map((select) => select.props("fitInputWidth"))).toContain(true);
     expect(wrapper.find(".agent-form-layout").classes()).toContain("agent-form-layout--label-wrap");
   });
 });

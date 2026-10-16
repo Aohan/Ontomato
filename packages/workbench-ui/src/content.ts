@@ -44,10 +44,10 @@ export interface WorkbenchContent {
   /**
    * Original display of the agent edit dialog (AgentCreateDialog); the chat and admin entries pass the same value: the
    * open-source chat layout and the admin "analysis agents" page (AnalysisAgentManager, whose own form labels also follow
-   * labelWrap) both pass it to the dialog as-is. Open source: required asterisk on the right, MCP dropdown as wide as the
-   * input, wrapping labels; when omitted, all are left unset and labels do not wrap.
+   * labelWrap) both pass it to the dialog as-is. Open source: required asterisk on the right and wrapping labels;
+   * when omitted, the asterisk position is left unset and labels do not wrap.
    */
-  agentDialogDisplay: { requireAsteriskPosition?: "right"; fitInputWidth?: boolean; labelWrap?: boolean };
+  agentDialogDisplay: { requireAsteriskPosition?: "right"; labelWrap?: boolean };
   /** Original separator between "failed to load" and the error message in the analysis agent list load failure message (AnalysisAgentManager.vue). */
   analysisAgentLoadErrorSeparator: string;
   /** Default input example for debugging the echarts skill (the original JSON.stringify(…, null, 2) result, SkillDebugDialog.vue), independent of the UI locale. */

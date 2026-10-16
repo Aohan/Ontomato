@@ -45,7 +45,7 @@ export const workbenchContent: WorkbenchContent = {
   skillListSeparator: ",",
   analysisMcpServerName: ossProduct.analysisMcpServerName,
   opsMcpServerName: ossProduct.opsMcpServerName,
-  agentDialogDisplay: { requireAsteriskPosition: "right", fitInputWidth: true, labelWrap: true },
+  agentDialogDisplay: { requireAsteriskPosition: "right", labelWrap: true },
   analysisAgentLoadErrorSeparator: ": ",
   skillDebugEchartsInput: JSON.stringify(
     {

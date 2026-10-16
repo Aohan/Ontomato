@@ -37,11 +37,10 @@ const props = defineProps<{
   visible: boolean;
   editingAgent: AnalysisAgent | null;
   /**
-   * Original display passed by the open-source layout: required asterisk on the right, MCP dropdown as wide as the input,
-   * wrapping form labels. Layouts that omit it keep both Element Plus attributes unset and labels unwrapped.
+   * Original display passed by the open-source layout: required asterisk on the right and wrapping form labels.
+   * Layouts that omit it keep the Element Plus asterisk position unset and labels unwrapped.
    */
   requireAsteriskPosition?: "left" | "right";
-  fitInputWidth?: boolean;
   labelWrap?: boolean;
 }>();
 
