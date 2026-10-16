@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
-import ElementPlus, { ElInputNumber, ElSelect, ElOption } from "element-plus";
+import ElementPlus, { ElInputNumber, ElSelect, ElOption, ElMessageBox, ElSwitch } from "element-plus";
+import CodeMirrorEditor from "../../../../components/CodeMirrorEditor.vue";
 import AgentCreateDialog from "../AgentCreateDialog.vue";
 import en from "../../../../locales/en";
 import type { AnalysisAgent } from "@ontomato/contracts/analysis-agent";
@@ -12,12 +13,14 @@ const mocks = vi.hoisted(() => ({
   apiGet: vi.fn(),
   apiPost: vi.fn(),
   listMcpServiceNames: vi.fn(),
+  listHotReports: vi.fn(),
+  updateCardStatus: vi.fn(),
 }));
 vi.mock("../../../mcp/api", () => ({ listMcpServiceNames: mocks.listMcpServiceNames }));
 vi.mock("../../api", () => ({
   analysisAgentApi: mocks,
   analysisTaskApi: {},
-  analysisReportApi: {},
+  analysisReportApi: { updateCardStatus: mocks.updateCardStatus },
   streamDeepAnalysis: vi.fn(),
   streamFollowUp: vi.fn(),
   streamFollowUpRun: vi.fn(),
@@ -55,8 +58,9 @@ async function dialog(editingAgent: AnalysisAgent | null = null) {
     global: {
       plugins: plugins(),
       stubs: {
-        ElDialog: { template: "<div><slot/><slot name='footer'/></div>" },
+        ElDrawer: { template: "<div><slot/><slot name='footer'/></div>" },
         SkillSelector: true,
+        CodeMirrorEditor: true,
       },
     },
   });
@@ -67,7 +71,7 @@ async function dialog(editingAgent: AnalysisAgent | null = null) {
 function choose(wrapper: Awaited<ReturnType<typeof dialog>>, label: string) {
   return wrapper
     .findAll(".el-radio")
-    .find((radio) => radio.text() === label)!
+    .find((radio) => (radio.find('.mode-title').exists() ? radio.find('.mode-title').text() : radio.text()) === label)!
     .find("input")
     .setValue(true);
 }
@@ -79,17 +83,108 @@ beforeEach(() => {
   mocks.apiPost.mockResolvedValue({ data: { classDef: [] } });
   mocks.createAgent.mockResolvedValue({ id: "new" });
   mocks.updateAgent.mockResolvedValue(dimensionAgent);
+  mocks.listHotReports.mockResolvedValue([]);
+  mocks.updateCardStatus.mockResolvedValue({});
 });
 
 describe("agent product and execution modes", () => {
+  it("preserves all persisted configuration when editing without changes", async () => {
+    const agent = {
+      ...dimensionAgent,
+      description: "Existing description",
+      loopPrompt: "Loop instructions",
+      analysisDimensionPrompt: "Dimensions",
+      enabledSkillIds: ["analysis-skill"],
+      enabledVisualizationSkillIds: ["chart-skill"],
+      hotReportEnabled: false,
+      summaryPosition: "top" as const,
+      classNames: ["Invoice"],
+      isEnabled: false,
+      sortOrder: 7,
+      icon: JSON.stringify({ key: "Brain", color: "#not-a-palette-color" }),
+    };
+    const wrapper = await dialog(agent);
+    await wrapper.findAll("button").find(button => button.text() === "Save")!.trigger("click");
+    await flushPromises();
+    const payload = mocks.updateAgent.mock.calls[0][1];
+    for (const key of ["name", "description", "executionMode", "loopPrompt", "analysisDimensionPrompt",
+      "summarizerPrompt", "conclusionMakerPrompt", "enabledSkillIds", "enabledVisualizationSkillIds",
+      "enabledMcpServiceNames", "reportDeliverableEnabled", "hotReportEnabled", "summaryPosition",
+      "classNames", "graphScope", "isEnabled", "sortOrder"] as const) {
+      expect(payload[key], key).toEqual(agent[key]);
+    }
+    expect(payload).not.toHaveProperty("activeSection");
+    expect(payload).not.toHaveProperty("promptTab");
+    wrapper.unmount();
+  });
+
+  it("retains drafts on save failure and keeps report publication immediate", async () => {
+    mocks.listHotReports.mockResolvedValue([{ id: "report-1", question: "Sales", status: "UNUSED" }]);
+    mocks.updateAgent.mockRejectedValueOnce(new Error("Save failed"));
+    const wrapper = await dialog(dimensionAgent);
+    await wrapper.findAll(".agent-editor-nav button").find(button => button.text() === "Reports & display")!.trigger("click");
+    wrapper.find(".hot-report-list").findComponent(ElSwitch).vm.$emit("change", true);
+    await flushPromises();
+    expect(mocks.updateCardStatus).toHaveBeenCalledWith("report-1", "PUBLISHED");
+    expect(mocks.updateAgent).not.toHaveBeenCalled();
+    await wrapper.findAll(".agent-editor-nav button").find(button => button.text() === "Basic Info")!.trigger("click");
+    await wrapper.find("input.el-input__inner").setValue("Unsaved agent");
+    await wrapper.findAll("button").find(button => button.text() === "Save")!.trigger("click");
+    await flushPromises();
+    expect(wrapper.emitted("update:visible")).toBeUndefined();
+    expect((wrapper.find("input.el-input__inner").element as HTMLInputElement).value).toBe("Unsaved agent");
+    wrapper.unmount();
+  });
+  it("opens editing on prompts, preserves separate prompt drafts and previews Markdown", async () => {
+    const wrapper = await dialog(dimensionAgent);
+    expect(wrapper.find('.agent-editor-nav button[aria-current="page"]').text()).toBe("Prompt Configuration");
+    const editor = () => wrapper.findComponent(CodeMirrorEditor);
+    editor().vm.$emit("update:modelValue", "# Evidence\n\nUse source data.");
+    await flushPromises();
+    await wrapper.findAll(".el-segmented__item").find(item => item.text() === "Dimension Report")!.find("input").setValue(true);
+    expect(editor().props("modelValue")).toBe("Dimension report");
+    editor().vm.$emit("update:modelValue", "Updated dimension report");
+    await flushPromises();
+    await wrapper.findAll(".el-segmented__item")[0].find("input").setValue(true);
+    expect(editor().props("modelValue")).toBe("# Evidence\n\nUse source data.");
+    await wrapper.findAll(".el-radio-button").find(item => item.text() === "Preview")!.find("input").setValue(true);
+    expect(wrapper.find(".prompt-preview h1").text()).toBe("Evidence");
+    await wrapper.findAll(".agent-editor-nav button").find(button => button.text() === "Skills & tools")!.trigger("click");
+    expect(wrapper.findAllComponents(ElSelect).filter(select => select.props("ariaLabel") === "External MCP Services")).toHaveLength(1);
+    expect(wrapper.findAllComponents(ElSelect).every(select => select.props("fitInputWidth") === true)).toBe(true);
+    await wrapper.findAll("button").find(button => button.text() === "Save")!.trigger("click");
+    await flushPromises();
+    expect(mocks.updateAgent).toHaveBeenCalledWith("dimension", expect.objectContaining({
+      analysisDimensionPrompt: "# Evidence\n\nUse source data.", summarizerPrompt: "Updated dimension report",
+    }));
+    wrapper.unmount();
+  });
+
+  it("keeps drafts when leaving is cancelled and closes only after discarding", async () => {
+    const confirm = vi.spyOn(ElMessageBox, "confirm");
+    const wrapper = await dialog();
+    await wrapper.find("input.el-input__inner").setValue("Draft");
+    const back = () => wrapper.findAll("button").find(button => button.text() === "Back")!;
+    confirm.mockRejectedValueOnce("cancel");
+    await back().trigger("click");
+    await flushPromises();
+    expect(wrapper.emitted("update:visible")).toBeUndefined();
+    confirm.mockResolvedValueOnce("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>);
+    await back().trigger("click");
+    await flushPromises();
+    expect(wrapper.emitted("update:visible")).toEqual([[false]]);
+    confirm.mockRestore();
+    wrapper.unmount();
+  });
   it("defaults to analysis + loop and persists the selected product with one flag", async () => {
     const wrapper = await dialog();
-    expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.text())).toEqual([
+    expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.find('.mode-title').exists() ? item.find('.mode-title').text() : item.text())).toEqual([
       "Analysis",
       "Loop Execution",
       "Panorama",
     ]);
     await choose(wrapper, "Dimension Orchestration");
+    await wrapper.findAll(".agent-editor-nav button").find(button => button.text() === "Prompt Configuration")!.trigger("click");
     expect(wrapper.text()).toContain("Dimension Report");
     await choose(wrapper, "General agent");
     expect(
@@ -117,7 +212,7 @@ describe("agent product and execution modes", () => {
   it("preserves a stored dimension agent, and MCP list failure only disables MCP selection", async () => {
     mocks.listMcpServiceNames.mockRejectedValue(new Error("MCP unavailable"));
     const wrapper = await dialog(dimensionAgent);
-    expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.text())).toEqual([
+    expect(wrapper.findAll(".el-radio.is-checked").map((item) => item.find('.mode-title').exists() ? item.find('.mode-title').text() : item.text())).toEqual([
       "Analysis",
       "Dimension Orchestration",
       "Panorama",

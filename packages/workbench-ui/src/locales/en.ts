@@ -1,6 +1,29 @@
 // Generated from the original frontend messages using the keys the migrated pages actually use; extended as more pages are migrated.
 export default {
   "admin": {
+    "agentEditorTools": "Skills & tools",
+    "agentEditorIntro": {
+      "basic": "Define how this agent appears in your workspace and whether it is available.",
+      "execution": "Choose the agent's purpose, then decide how it carries out its work.",
+      "prompts": "Write the agent's instructions, constraints and expected output. Preview Markdown before saving.",
+      "tools": "Select the skills and external services this agent can use.",
+      "data": "Configure related object classes and the starting scope for ontology exploration independently.",
+      "reports": "Configure report delivery and reuse, and manage published analysis plans."
+    },
+    "agentEditorEnabledHint": "Allow this agent to be selected and used in the workspace.",
+    "agentEditorDimensionHint": "Analyze predefined dimensions, then assemble their reports and a conclusion.",
+    "agentEditorLoopHint": "Let the agent decide when to collect evidence, call tools and respond.",
+    "agentEditorBack": "Back",
+    "agentEditorData": "Data scope",
+    "agentEditorReports": "Reports & display",
+    "agentEditorNavigation": "Agent configuration",
+    "agentEditorPreview": "Preview",
+    "agentEditorUnsaved": "Unsaved changes",
+    "agentEditorSaved": "No unsaved changes",
+    "agentEditorDiscard": "Discard your unsaved changes and leave the editor?",
+    "agentEditorDiscardAction": "Discard changes",
+    "agentEditorCharacters": "{count} characters",
+    "agentEditorImmediateReports": "Report publication switches take effect immediately and are not reverted when you cancel editing.",
     "opsAgent": "Operations Agent",
     "opsAgentDescription": "Diagnoses issues in queries and analyses from logs and runtime records, and suggests fixes.",
     "openEntry": "Open",

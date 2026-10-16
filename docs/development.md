@@ -68,11 +68,15 @@ starts only the three processes above and is not a full-stack start.
 ## Local development (Java data engine)
 
 Instance graph browsing queries PostgreSQL on demand. Startup does not scan business
-tables or build an in-memory instance graph. Overview reads up to 50 records per
-`inStarChart` object type and at most 2,000 connections between those records; search
+tables or build an in-memory instance graph. Overview counts instances per `inStarChart`
+object type, then reads at most 500 records in total, allocated proportionally using
+largest remainders (ties use class name order). If the total is at most 500, all records
+are shown; very small classes may receive no overview nodes and remain searchable.
+Overview reads at most 2,000 connections between sampled records; search
 returns up to 50 matches, and neighborhood expansion returns 100 connections per page.
 Queries are read-only, have a 10-second statement timeout and share a four-request
-concurrency limit. Instance counts load separately and are cached for 60 seconds;
+concurrency limit. Overview refresh recounts instances; these counts are also cached
+for the statistics endpoint for 60 seconds;
 full connection counts and connectivity statistics are not calculated during browsing.
 Refresh reads current data; the legacy star-chart generation endpoint remains an
 explicit operation for its existing callers. Stable ordering makes pages reproducible

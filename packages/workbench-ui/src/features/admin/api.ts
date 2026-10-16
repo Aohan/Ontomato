@@ -43,8 +43,6 @@ export const adminApi = {
     apiPost("/admin/editClassAttrShowName", payload),
   editClassAttributeShouldReturn: (payload: unknown) =>
     apiPost("/admin/editClassAttrShouldReturn", payload),
-  setClassAttrPermissionField: (payload: unknown) =>
-    apiPost("/admin/setClassAttrPermissionField", payload),
   addClass: (payload: unknown) => apiPost("/admin/addClass", payload),
   deleteClass: (className: string) => apiPost("/admin/delClass", { className }),
   addClassAttribute: (payload: unknown) => apiPost("/admin/addClassAttr", payload),

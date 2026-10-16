@@ -198,6 +198,13 @@ public class DuckDBAdapter implements DataAdapter {
 								newQueue.add(new Object[] { null, ")" });
 								newQueue.addAll(queue);
 								queue = newQueue;
+							} else if (cond.getJSONArray("not") != null && cond.getJSONArray("not").size() > 0) {
+								objWhere += "(not (";
+								List<Object[]> newQueue = new ArrayList<>();
+								newQueue.add(new Object[] { DslGrammarValidator.negated(cond), null });
+								newQueue.add(new Object[] { null, "))" });
+								newQueue.addAll(queue);
+								queue = newQueue;
 							} else {
 								String attr = cond.getString("field");
 								String type = attrTypeMap.get(attr);
@@ -213,6 +220,11 @@ public class DuckDBAdapter implements DataAdapter {
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										sqlCond = "\"" + alias + "\"." + attr + " " + cond.getString("operator")
 												+ " " + timeLiteral(cond.get("value"));
+									}
+								} else if ("like".equals(cond.getString("operator")) && LikePattern.escaped(cond)) {
+									if ("varchar".equals(type) || "text".equals(type)) {
+										String pattern = LikePattern.of(cond, true).sql("").replace("'", "''");
+										sqlCond = "\"" + alias + "\"." + attr + " like '" + pattern + "' escape '!'";
 									}
 								} else if ("like".equals(cond.getString("operator"))
 										|| "not like".equals(cond.getString("operator"))) {

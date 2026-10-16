@@ -69,7 +69,12 @@ public interface MQLQuery {
     static MQLQuery parseQuery(JSONObject object) {
         if (object == null) throw new IllegalArgumentException("Query must be an object");
         if (!"logic".equals(object.getString("operator"))) {
-            return new PropertyQuery(object.getString("field"), object.getString("operator"), object.get("value"));
+            Object escape = object.get("escape");
+            if (escape != null && !(escape instanceof String)) {
+                throw new IllegalArgumentException("escape must be a one-character string");
+            }
+            return new PropertyQuery(object.getString("field"), object.getString("operator"), object.get("value"),
+                    (String) escape);
         }
 
         List<String> branches = List.of("and", "or", "not").stream()
@@ -100,12 +105,22 @@ public interface MQLQuery {
         final String operator;
         @JSONField(serializeFeatures = Feature.WriteNulls)
         final Object value;
+        /**
+         * A like pattern's escape character: it makes the next character literal, as SQL's {@code LIKE ... ESCAPE}
+         * does. Without it every {@code %} and {@code _} is a wildcard.
+         */
+        final String escape;
 
         public PropertyQuery(String field, String operator, Object value) {
+            this(field, operator, value, null);
+        }
+
+        public PropertyQuery(String field, String operator, Object value, String escape) {
             super();
             this.field = field;
             this.operator = operator;
             this.value = value;
+            this.escape = escape;
 
             if (field == null || field.isBlank()) {
                 throw new IllegalArgumentException("Field must not be blank");
@@ -115,6 +130,9 @@ public interface MQLQuery {
             }
             // Validate that value matches the operator
             MQLQuery.validateValueForOperator(operator, value);
+            if (escape != null && (!"like".equals(operator) || escape.length() != 1 || !(value instanceof String))) {
+                throw new IllegalArgumentException("escape is one character of a like condition with a text value");
+            }
         }
 
         public String getField() {
@@ -128,6 +146,10 @@ public interface MQLQuery {
 
         public Object getValue() {
             return value;
+        }
+
+        public String getEscape() {
+            return escape;
         }
     }
 
@@ -247,6 +269,7 @@ public interface MQLQuery {
                         child.put("field", property.getField());
                         child.put("operator", property.getOperator());
                         child.put("value", property.getValue());
+                        if (property.getEscape() != null) child.put("escape", property.getEscape());
                         children.add(child);
                     } else {
                         throw new IllegalArgumentException("Unsupported query type: " + value.getClass().getName());

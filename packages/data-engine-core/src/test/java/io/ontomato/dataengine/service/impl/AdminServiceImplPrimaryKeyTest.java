@@ -81,7 +81,7 @@ class AdminServiceImplPrimaryKeyTest {
 
 		Map<String, Object> pump = savedClass("/ns/pump");
 		assertEquals(List.of(Map.of("name", "pump_no", "showName", "pump_no", "attrDesc", "", "type", "varchar",
-				"bizzkey", false, "enable", true, "permissionField", false, "primaryKey", true)), pump.get("attrs"));
+				"bizzkey", false, "enable", true, "primaryKey", true)), pump.get("attrs"));
 		// Design 2: the adapter only checks the name and the key; no class is created in the data source.
 		verify(adapter).validateClassNameFormat("/ns/pump");
 		verify(adapter).validatePrimaryKeyName("pump_no");

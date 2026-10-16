@@ -365,7 +365,7 @@ public class Neo4jAdapter implements DataAdapter {
 		return where.toString();
 	}
 
-	/** Recursively build a Cypher predicate for an and/or nested condition tree. */
+	/** Recursively build a Cypher predicate for an and/or/not nested condition tree. */
 	private String buildConditionTree(JSONObject condition, String alias, Map<String, String> attrTypeMap, CypherQuery query) {
 		JSONArray ands = condition.getJSONArray("and");
 		if (ands != null && !ands.isEmpty()) {
@@ -382,6 +382,10 @@ public class Neo4jAdapter implements DataAdapter {
 				parts.add(buildConditionTree(ors.getJSONObject(i), alias, attrTypeMap, query));
 			}
 			return "(" + String.join(" or ", parts) + ")";
+		}
+		JSONArray nots = condition.getJSONArray("not");
+		if (nots != null && !nots.isEmpty()) {
+			return "(not " + buildConditionTree(DslGrammarValidator.negated(condition), alias, attrTypeMap, query) + ")";
 		}
 		return buildLeafCondition(condition, alias, attrTypeMap, query);
 	}
@@ -425,6 +429,12 @@ public class Neo4jAdapter implements DataAdapter {
 			}
 			query.params.put(param, list);
 			return col + " in $" + param;
+		}
+		if ("like".equals(operator) && LikePattern.escaped(condition)) {
+			String param = query.next();
+			query.params.put(param, LikePattern.of(condition, true)
+					.render(".*", ".", c -> java.util.regex.Pattern.quote(String.valueOf(c))));
+			return col + " =~ $" + param;
 		}
 		if ("like".equals(operator) || "not like".equals(operator)) {
 			String value = (String) condition.get("value");

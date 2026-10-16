@@ -1461,6 +1461,10 @@ public class EsAdapter implements DataAdapter {
 			bool.put("minimum_should_match", 1);
 			return new JSONObject(Map.of("bool", bool));
 		}
+		if (cond.getJSONArray("not") != null && !cond.getJSONArray("not").isEmpty()) {
+			JSONObject negated = propertyQuery(DslGrammarValidator.negated(cond), attrTypes, readPath, index);
+			return new JSONObject(Map.of("bool", new JSONObject(Map.of("must_not", JSONArray.of(negated)))));
+		}
 		return conditionQuery(cond, attrTypes, readPath, index);
 	}
 
@@ -1522,7 +1526,10 @@ public class EsAdapter implements DataAdapter {
 				return new JSONObject(Map.of("terms", new JSONObject(Map.of(exact, values))));
 			}
 			case "like", "not like": {
-				String pattern = wildcardPattern(String.valueOf(cond.get("value")), readPath);
+				// A pattern with an escape character keeps its escaped characters literal, including * and ?.
+				String pattern = LikePattern.escaped(cond)
+						? LikePattern.of(cond, readPath).render("*", "?", c -> "*?\\".indexOf(c) >= 0 ? "\\" + c : String.valueOf(c))
+						: wildcardPattern(String.valueOf(cond.get("value")), readPath);
 				JSONObject wildcard = new JSONObject();
 				JSONObject inner = new JSONObject();
 				inner.put("value", pattern);

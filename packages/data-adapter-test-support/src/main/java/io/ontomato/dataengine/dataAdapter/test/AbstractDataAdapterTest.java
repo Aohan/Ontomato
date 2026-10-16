@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.sql.Connection;
@@ -72,6 +73,17 @@ public abstract class AbstractDataAdapterTest {
 	/** The primary-key attribute name of {@link #classDef()}. */
 	protected String primaryKey() {
 		return "id";
+	}
+
+	/**
+	 * Whether the data source itself renders a {@code timeseries} condition. The DSL comes from M3, so M3
+	 * answers yes; a SQL renderer does not implement the construct and keeps the default. A yes-source has
+	 * nothing to reject in {@link #timeseriesConditionIsRejectedNotSilentlyDropped()}: the construct is
+	 * supported, its bucket precondition stays the grammar gate's call, and the grammar itself is covered by
+	 * the adapter's own test (bucket data is out of this suite's scope).
+	 */
+	protected boolean sourceRendersTimeseries() {
+		return false;
 	}
 
 	// ----------------------------------------------------------------------------------
@@ -711,6 +723,117 @@ public abstract class AbstractDataAdapterTest {
 	}
 
 	@Test
+	void readWhereNot() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		assertEquals(totalPersonCount() - 1, queryPersons(readNot(readCond("name", "=", "Alice"))).size());
+		// not (Alice or older than 30) leaves only Bob (30)
+		JSONArray rows = queryPersons(readNot(readOr(readCond("name", "=", "Alice"), readCond("age", ">", 30))));
+		assertEquals(1, rows.size());
+		assertEquals("Bob", rows.getJSONObject(0).getString("person_name"));
+		// a negation nested in an and
+		assertEquals(2, queryPersons(readAnd(readCond("age", ">=", 30), readNot(readCond("name", "=", "Dave")))).size());
+		dropGraph();
+	}
+
+	@Test
+	void readGroupByCountsOnlyTheRowsTheConditionKeeps() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		seedGraph();
+		JSONArray objects = new JSONArray();
+		JSONObject p = readObject(0, "p", 0);
+		JSONObject conditions = new JSONObject();
+		conditions.put("properties", readNot(readCond("name", "=", "Alice")));
+		p.put("conditions", conditions);
+		objects.add(p);
+		JSONArray fields = new JSONArray();
+		fields.add(readAggField("p", "id", "count", "cnt"));
+		fields.add(readField("p", "org_id", "org_id"));
+		JSONObject groupBy = new JSONObject();
+		groupBy.put("fields", JSONArray.of(readGroupByField("p", "org_id")));
+		JSONArray rows = readQuery(singleStepDsl(objects, null, fields, groupBy, null, null));
+		java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+		for (int i = 0; i < rows.size(); i++) {
+			counts.put(str(rows.getJSONObject(i).get("org_id")), ((Number) rows.getJSONObject(i).get("cnt")).intValue());
+		}
+		// Alice (o1) is filtered out before counting
+		assertEquals(java.util.Map.of("o1", 1, "o2", 2), counts);
+		dropGraph();
+	}
+
+	/** A name holding every pattern character of the SQL, Elasticsearch and SQL Server syntaxes. */
+	private static final String PATTERN_CHARACTERS_NAME = "50%_off\\_[x]*?!'";
+
+	@Test
+	void readLikeWithEscapeMatchesEscapedCharactersLiterally() throws Exception {
+		assume(DataAdapterCapability.READ_QUERY);
+		DataAdapter adapter = seedGraph();
+		JSONObject extra = new JSONObject();
+		extra.put(primaryKey(), "p9");
+		extra.put("name", PATTERN_CHARACTERS_NAME);
+		extra.put("age", 50);
+		extra.put("org_id", "o2");
+		adapter.insertObjects(namespace(), graphClassDefsWithTime().get(0), JSONArray.of(extra));
+
+		// Without escape the pattern's % and _ are wildcards, as before.
+		assertEquals(totalPersonCount() + 1, queryPersons(readCond("name", "like", "%")).size());
+		assertTrue(personNames(queryPersons(readCond("name", "like", "_ob"))).contains("Bob"));
+		// Escaped, each one is that character only.
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("\\%"))));
+		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("\\_ob"))));
+		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("A\\%"))));
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("f\\\\\\_[x]*?!'"))));
+		assertEquals(Set.of(), personNames(queryPersons(readLikeEscaped("[x]*?x"))));
+		// Unescaped wildcards around escaped text still match, anchored where written.
+		assertEquals(Set.of(PATTERN_CHARACTERS_NAME), personNames(queryPersons(readLikeEscaped("50\\%%"))));
+		assertEquals(Set.of("Alice"), personNames(queryPersons(readLikeEscaped("A_ice"))));
+		// Negated, exactly the other rows remain: a wrong match would show here as a wider result.
+		Set<String> others = new java.util.TreeSet<>();
+		for (Object person : graphSeed().get(graphClass(0))) others.add(((JSONObject) person).getString("name"));
+		assertEquals(others, personNames(queryPersons(readNot(readLikeEscaped("f\\\\\\_[x]*?!'")))));
+		assertEquals(others, personNames(queryPersons(readNot(readLikeEscaped("\\%")))));
+		Set<String> all = new java.util.TreeSet<>(others);
+		all.add(PATTERN_CHARACTERS_NAME);
+		assertEquals(all, personNames(queryPersons(readNot(readLikeEscaped("\\_ob")))));
+		dropGraph();
+	}
+
+	@Test
+	void likeEscapeOtherThanOneCharacterIsRejected() {
+		assume(DataAdapterCapability.READ_QUERY);
+		for (Object escape : new Object[] { "", "!!", 1 }) {
+			JSONObject condition = readCond("name", "like", "A%");
+			condition.put("escape", escape);
+			assertThrows(DslContractViolationException.class, () -> queryPersons(condition), String.valueOf(escape));
+		}
+	}
+
+	private static Set<String> personNames(JSONArray rows) {
+		Set<String> names = new java.util.TreeSet<>();
+		for (int i = 0; i < rows.size(); i++) {
+			names.add(rows.getJSONObject(i).getString("person_name"));
+		}
+		return names;
+	}
+
+	protected JSONObject readLikeEscaped(String pattern) {
+		JSONObject condition = readCond("name", "like", pattern);
+		condition.put("escape", "\\");
+		return condition;
+	}
+
+	@Test
+	void notWithSeveralConditionsIsRejectedNotGuessed() {
+		assume(DataAdapterCapability.READ_QUERY);
+		JSONObject not = new JSONObject();
+		not.put("not", JSONArray.of(readCond("name", "=", "Alice"), readCond("name", "=", "Bob")));
+
+		DslContractViolationException e = assertThrows(DslContractViolationException.class, () -> queryPersons(not));
+		assertTrue(e.getViolations().stream().anyMatch(
+				v -> v.getCode() == DslContractViolationException.Code.INVALID_GRAMMAR), e.getMessage());
+	}
+
+	@Test
 	void readJoinTwoClasses() throws Exception {
 		assume(DataAdapterCapability.READ_QUERY);
 		seedGraph();
@@ -1094,6 +1217,8 @@ public abstract class AbstractDataAdapterTest {
 	@Test
 	void timeseriesConditionIsRejectedNotSilentlyDropped() {
 		assume(DataAdapterCapability.READ_QUERY);
+		// A source that renders timeseries itself has nothing to reject here.
+		assumeFalse(sourceRendersTimeseries(), "this source renders timeseries conditions itself");
 		JSONObject properties = new JSONObject();
 		properties.put("operator", "logic");
 		JSONArray and = new JSONArray();
@@ -1181,6 +1306,12 @@ public abstract class AbstractDataAdapterTest {
 		}
 		o.put("or", arr);
 		return o;
+	}
+
+	protected JSONObject readNot(JSONObject cond) {
+		JSONObject n = new JSONObject();
+		n.put("not", JSONArray.of(cond));
+		return n;
 	}
 
 	protected JSONObject readField(String variable, String field, String as) {

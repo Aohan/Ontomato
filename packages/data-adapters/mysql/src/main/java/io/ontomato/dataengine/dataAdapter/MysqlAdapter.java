@@ -1,5 +1,6 @@
 package io.ontomato.dataengine.dataAdapter;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
@@ -19,6 +20,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -155,6 +157,13 @@ public class MysqlAdapter implements DataAdapter {
 								newQueue.add(new Object[] {null, ")"});
 								newQueue.addAll(queue);
 								queue = newQueue;
+							} else if (cond.getJSONArray("not") != null && cond.getJSONArray("not").size() > 0) {
+								objWhere += "(not (";
+								List<Object[]> newQueue = new ArrayList<Object[]>();
+								newQueue.add(new Object[] {DslGrammarValidator.negated(cond), null});
+								newQueue.add(new Object[] {null, "))"});
+								newQueue.addAll(queue);
+								queue = newQueue;
 							} else {
 								String attr = cond.getString("field");
 								String type = attrTypeMap.get(attr);
@@ -166,6 +175,13 @@ public class MysqlAdapter implements DataAdapter {
 										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + cond.get("value");
 									} else if ("date".equals(type) || "timestamp".equals(type)) {
 										sqlCond = "`" + alias + "`." + attr + " " + cond.getString("operator") + " " + timeLiteral(cond.get("value"));
+									}
+								} else if ("like".equals(cond.getString("operator")) && LikePattern.escaped(cond)) {
+									if ("varchar".equals(type)) {
+										// A hex literal reads the same whether or not NO_BACKSLASH_ESCAPES is set.
+										String pattern = HexFormat.of().formatHex(
+												LikePattern.of(cond, true).sql("").getBytes(StandardCharsets.UTF_8));
+										sqlCond = "`" + alias + "`." + attr + " like _utf8mb4 X'" + pattern + "' escape '!'";
 									}
 								} else if ("like".equals(cond.getString("operator")) || "not like".equals(cond.getString("operator"))) {
 									if ("varchar".equals(type)) {
