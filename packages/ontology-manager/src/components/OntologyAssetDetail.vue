@@ -600,7 +600,7 @@ onMounted(() => void loadDetail());
             />
           </el-form-item>
           <el-form-item v-if="isFunction" :label="ot('assetOperationType')">
-            <el-radio-group v-model="record.operation">
+            <el-radio-group v-model="record.operation" :disabled="Boolean(record.id)">
               <el-radio value="OPERATION_READ">{{ ot("assetOperationRead") }}</el-radio>
               <el-radio value="OPERATION_WRITE">{{ ot("assetOperationWrite") }}</el-radio>
             </el-radio-group>

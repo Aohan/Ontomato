@@ -322,9 +322,9 @@ export const en = {
   "dataResolver.cannotGetData": "Unable to get data, please provide data or request mock data",
 
   // Default agent
-  "service.defaultAgentName": "General Agent",
+  "service.defaultAgentName": "Data Analysis Agent",
   "service.defaultAgentDescription":
-    "A general-purpose agent suitable for various business scenarios, capable of automatically decomposing question dimensions and generating professional analysis reports",
+    "An agent for business data analysis that automatically decomposes questions into analysis dimensions and generates professional reports",
   "api.noFileUploaded": "No file uploaded",
   "api.onlyZipSupported": "Only .zip files are supported",
   "api.testBatchRunning": "Test batch is running, please stop it first",

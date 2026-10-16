@@ -24,6 +24,7 @@ import {
 } from "../../workbench";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../../../composables/useTheme";
+import { displayAgentName } from "../../workbench/utils/agentDisplay";
 
 const { t } = useI18n();
 
@@ -471,7 +472,7 @@ watch(isDark, () => {
   >
     <header class="agent-editor-header">
       <el-button :icon="ArrowLeft" :disabled="saving" @click="requestClose">{{ t('admin.agentEditorBack') }}</el-button>
-      <div class="agent-editor-heading"><strong>{{ isEditing ? t('admin.editAgent') : t('admin.newAgent') }}<span v-if="form.name"> · {{ form.name }}</span></strong><small>{{ dirty ? t('admin.agentEditorUnsaved') : t('admin.agentEditorSaved') }}</small></div>
+      <div class="agent-editor-heading"><strong>{{ isEditing ? t('admin.editAgent') : t('admin.newAgent') }}<span v-if="form.name"> · {{ displayAgentName(form.name, t) }}</span></strong><small>{{ dirty ? t('admin.agentEditorUnsaved') : t('admin.agentEditorSaved') }}</small></div>
       <el-button type="primary" :loading="saving" @click="handleSubmit">{{ t('common.save') }}</el-button>
     </header>
     <div class="agent-editor-workspace">
