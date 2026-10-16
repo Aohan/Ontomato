@@ -148,11 +148,31 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
 | `bizzKey` | On the DSL question path, `true` adds this column to the result when the query left it out. The SQL built for `ask` does not read this flag. Use `true` for columns that path should keep, and `false` otherwise. |
 | `enable` | `true` includes the column in the schema text and in SQL. `false` omits it. A missing value counts as enabled. Use `true`. |
 | `primaryKey` | Exactly one `true` on each class. The schema text marks it, and insert and object lookup use it as the id column. |
-| relationship key | Relationship type name. A join looks the relationship up by this key. The prompt table calls it the relationship type. |
-| `fromClass`, `toClass` | Class `name` of the two ends. |
+| relationship key | Relationship type name: the machine name a join and the DSL look the relationship up by, and the content of the "relationship type" column of the prompt table. Keep it short, stable and identifier-like (letters, digits, `_`). It is what the model copies into the DSL; the meaning it reads is the `desc`, not the key. |
+| `fromClass`, `toClass` | Class `name` of the two ends. The direction runs from `fromClass` to `toClass` and is part of the meaning; the prompt asks the model to check it. |
 | `fromField` | Column/field `name` on `fromClass`. Both relational databases and search engines (Elasticsearch / OpenSearch) require this join field. |
 | `toField` | Column/field `name` on `toClass`. The join is `fromClass.fromField = toClass.toField`. Both relational databases and search engines require this join field. |
-| relationship `desc` | Relationship description in the prompt table. Write the business meaning. |
+| relationship `desc` | Relationship description, the "relationship description" column of the prompt table. Write it as a predicate, the verb phrase that holds from `fromClass` to `toClass`: `belongs to`, `is located in`, `contains`, `is parent of`. See "Write relationship descriptions as predicates" below. |
+
+## Write relationship descriptions as predicates
+
+A relationship tells the model three things: which two classes, which direction, and what the link means. The key carries the first two as a name; the `desc` carries the meaning, and the prompt shows it in the "relationship description" column next to the key. Write it as a **predicate** — the verb phrase that holds from `fromClass` to `toClass`, not a noun phrase naming the two ends:
+
+| Write (predicate) | Do not write (noun phrase) |
+| --- | --- |
+| `belongs to` | `employee and department` |
+| `is located in` | `company city relation` |
+| `contains` | `order items` |
+| `is parent of` | `parent child` |
+| `is managed by` | `manager` |
+
+- Read it from `fromClass` to `toClass`. `emp --belongs to--> dept` is right; the same two tables related the other way need `dept --has--> emp`. A relation that reads naturally in both directions is usually a sign the direction is undecided; pick the direction the questions use.
+- A self-relationship has both ends on the same class, so the predicate is the only thing that separates the two directions: `is managed by`, `reports to`, `is part of`.
+- When two relationships connect the same pair of classes, the predicate is what keeps them apart: `is project manager of` and `is a member of` on the same staff-to-project pair.
+- Write it in the language the model should answer in. In a Chinese deployment that means `属于`, `位于`, `包含`, `是…的上级`; the predicate stays a word or short phrase, not a sentence.
+- This rule is for relationship `desc` only. `datasetDesc`, class `desc` and attr `desc` stay business descriptions — nouns, units and enumerations.
+
+Why it matters: the question splitter and the programmer match the user's wording against the relationship definitions. A predicate is the phrase the user actually types ("which city is the company located in"), so it is matched directly; a noun phrase names the pair but leaves the direction and the meaning to be guessed.
 
 ```json
 {
@@ -225,7 +245,7 @@ Do not put regional JDBC parameters such as `serverTimezone=Asia/Shanghai` in th
     "emp_dept": {
       "fromClass": "emp",
       "toClass": "dept",
-      "desc": "Employee belongs to department",
+      "desc": "belongs to",
       "fromField": "dept_id",
       "toField": "id"
     }
